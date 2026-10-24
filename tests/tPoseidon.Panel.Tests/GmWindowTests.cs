@@ -139,11 +139,12 @@ public sealed class GmWindowTests
     }
 
     [AvaloniaFact]
-    public void TheHelpTabListsTheChatCommands()
+    public async Task TheHelpTabListsTheChatCommands()
     {
         using var window = new Owned(Services(new Transport(), new Accounts()));
         window.Window.Show();
         window.Window.ShowTab(window.Window.Tabs.Count - 1);
+        await window.Window.Model.CatalogAsync();
         Dispatcher.UIThread.RunJobs();
 
         var texts = window.Window.GetLogicalDescendants().OfType<SelectableTextBlock>().Select(block => block.Text ?? "").ToList();

@@ -130,16 +130,16 @@ internal sealed class GuardHarness : IAsyncDisposable
 internal sealed class ScriptedClient : IDisposable
 {
     private readonly TcpClient _client;
-    private readonly NetworkStream _stream;
+    private readonly Stream _stream;
     private readonly S2PacketCipher _cipher;
     private readonly SessionInfo _session = new() { IsStrict = false };
     private readonly S2StreamFramer _framer;
     private readonly List<byte> _received = [];
 
-    private ScriptedClient(TcpClient client)
+    private ScriptedClient(TcpClient client, bool refusedAtConnect = false)
     {
         _client = client;
-        _stream = client.GetStream();
+        _stream = refusedAtConnect ? Stream.Null : client.GetStream();
         var (table, derivation) = GuardHarness.Cipher();
         _cipher = new S2PacketCipher(table, derivation);
         _framer = new S2StreamFramer(table, derivation, _session.RecvKey);
@@ -150,7 +150,15 @@ internal sealed class ScriptedClient : IDisposable
     public static async Task<ScriptedClient> ConnectAsync(int port)
     {
         var client = new TcpClient();
-        await client.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+        try
+        {
+            await client.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
+        }
+        catch (SocketException)
+        {
+            return new ScriptedClient(client, refusedAtConnect: true);
+        }
+
         return new ScriptedClient(client);
     }
 

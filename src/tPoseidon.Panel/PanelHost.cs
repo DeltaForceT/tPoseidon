@@ -64,6 +64,7 @@ public sealed class PanelHost
     private readonly ProcessMeter _meter = new();
     private List<ServiceModel> _services = [];
     private bool _sampling;
+    private bool _ended;
     private bool _firstSample = true;
     private int _tick;
     private string? _lastDatabaseState;
@@ -125,10 +126,15 @@ public sealed class PanelHost
         Poll();
     }
 
-    public void Begin() => _poll.Start();
+    public void Begin()
+    {
+        _ended = false;
+        _poll.Start();
+    }
 
     public void End()
     {
+        _ended = true;
         _poll.Stop();
         LogHub.StopFollowing();
     }
@@ -386,7 +392,7 @@ public sealed class PanelHost
                     return;
                 }
 
-                if (services == _services)
+                if (!_ended && services == _services)
                 {
                     Apply(task.Result);
                 }
