@@ -7,7 +7,7 @@ body:
       value: |
         Thanks for testing. One bug per report, please.
         Take personal stuff out of logs and screenshots before you send (real names, passwords, IP addresses, paths with your user name).
-        Security bugs don't go here; report them privately, see [SECURITY.md](https://github.com/DeltaForceT/modern-trickster/blob/main/SECURITY.md).
+        Security bugs don't go here; report them privately, see [SECURITY.md](https://github.com/DeltaForceT/tPoseidon/blob/main/SECURITY.md).
 
   - type: checkboxes
     id: checks

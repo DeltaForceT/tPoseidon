@@ -5,18 +5,18 @@
 <p align="center"><strong>A server emulator for the Trickster Online KR 2014 client. Run your own world, the way it used to be.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/DeltaForceT/modern-trickster/actions/workflows/ci.yml"><img alt="Build" src="https://github.com/DeltaForceT/modern-trickster/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/DeltaForceT/modern-trickster/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/DeltaForceT/modern-trickster?include_prereleases&label=release"></a>
+  <a href="https://github.com/DeltaForceT/tPoseidon/actions/workflows/ci.yml"><img alt="Build" src="https://github.com/DeltaForceT/tPoseidon/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/DeltaForceT/tPoseidon/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/DeltaForceT/tPoseidon?include_prereleases&label=release"></a>
   <a href="LICENSE"><img alt="License: beta license" src="https://img.shields.io/badge/license-beta%20license-blue"></a>
   <img alt="Platforms: Windows, Linux, macOS" src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey">
 </p>
 
 <p align="center">
-  <a href="https://github.com/DeltaForceT/modern-trickster/releases">Download</a> &middot;
+  <a href="https://github.com/DeltaForceT/tPoseidon/releases">Download</a> &middot;
   <a href="#getting-started">Getting started</a> &middot;
   <a href="docs/beta/SYSTEMS.md">Systems status</a> &middot;
-  <a href="https://github.com/DeltaForceT/modern-trickster/issues/new?template=bug_report.yml">Report a bug</a> &middot;
-  <a href="https://github.com/DeltaForceT/modern-trickster/discussions">Discussions</a>
+  <a href="https://github.com/DeltaForceT/tPoseidon/issues/new?template=bug_report.yml">Report a bug</a> &middot;
+  <a href="https://github.com/DeltaForceT/tPoseidon/discussions">Discussions</a>
 </p>
 
 tPoseidon runs every server the game needs (login, channel, master, system, game) on your own machine, so you can play again and host for your friends. We aim for the original game: same screens, same flow, same mechanics, 1x rates out of the box.
@@ -55,7 +55,7 @@ Most of our testing happens on Windows. The Linux and macOS builds come from the
 ## Getting started
 
 1. Install PostgreSQL if you don't have it yet. Note the admin login and its password.
-2. Download the package for your system from the [Releases](https://github.com/DeltaForceT/modern-trickster/releases) page and unpack it somewhere you can write to, like your home folder.
+2. Download the package for your system from the [Releases](https://github.com/DeltaForceT/tPoseidon/releases) page and unpack it somewhere you can write to, like your home folder.
 3. Run setup in a terminal in that folder: `tposeidon setup` (`./tposeidon setup` on Linux and macOS).
 4. Setup asks where your client is, who is going to play (this PC, your LAN or the internet), how to reach PostgreSQL, and a name and password for your game account. It then reads the game data it needs from your client and creates the database tables. The PostgreSQL admin password is only used for that and isn't saved.
 5. Start the servers:
@@ -89,9 +89,9 @@ The [scripting reference](docs/scripting/README.md) has the language, and [four 
 
 ## Reporting bugs and ideas
 
-- **Bug:** use the [Bug report form](https://github.com/DeltaForceT/modern-trickster/issues/new?template=bug_report.yml), or post on the forum with [our template](docs/beta/forum-bug-report-template.md). Include your version, your system, the steps and the server logs.
-- **Idea:** use the [Feature request form](https://github.com/DeltaForceT/modern-trickster/issues/new?template=feature_request.yml).
-- **Stuck on setup?** Ask on the forum or in [Discussions](https://github.com/DeltaForceT/modern-trickster/discussions). The issue tracker is for bugs.
+- **Bug:** use the [Bug report form](https://github.com/DeltaForceT/tPoseidon/issues/new?template=bug_report.yml), or post on the forum with [our template](docs/beta/forum-bug-report-template.md). Include your version, your system, the steps and the server logs.
+- **Idea:** use the [Feature request form](https://github.com/DeltaForceT/tPoseidon/issues/new?template=feature_request.yml).
+- **Stuck on setup?** Ask on the forum or in [Discussions](https://github.com/DeltaForceT/tPoseidon/discussions). The issue tracker is for bugs.
 - **Security problem?** See [SECURITY.md](SECURITY.md).
 
 ## Building from source
