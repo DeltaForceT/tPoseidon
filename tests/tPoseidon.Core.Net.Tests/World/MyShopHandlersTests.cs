@@ -12,6 +12,7 @@ public sealed class MyShopHandlersTests
         public List<(Opcode Opcode, byte[] Payload)> Sent { get; } = [];
         public MyShopReturn? Position { get; set; } = new MyShopReturn(148, 949, 2228);
         public List<string> Log { get; } = [];
+        public List<string> Events { get; } = [];
 
         public Harness()
         {
@@ -20,9 +21,20 @@ public sealed class MyShopHandlersTests
                 (opcode, payload, _) =>
                 {
                     Sent.Add((opcode, payload));
+                    Events.Add($"send {opcode}");
                     return Task.CompletedTask;
                 },
                 () => Position,
+                () =>
+                {
+                    Events.Add("depart");
+                    return Task.CompletedTask;
+                },
+                () =>
+                {
+                    Events.Add("restore");
+                    return Task.CompletedTask;
+                },
                 Encoding.ASCII,
                 Log.Add);
         }
@@ -57,6 +69,27 @@ public sealed class MyShopHandlersTests
     }
 
     [Fact]
+    public async Task EveryRoundHidesThePlayerOnEntryAndRestoresTheViewAfterTheLeaveAck()
+    {
+        var shop = new Harness();
+
+        for (var round = 0; round < 3; round++)
+        {
+            await shop.Send(Opcode.C2S_MYSHOP_OPEN);
+            await shop.Send(Opcode.C2S_MYSHOP_CLOSE);
+            await shop.Send(Opcode.C2S_MYSHOP_LEFT);
+        }
+
+        string[] round1 =
+        [
+            "depart", "send S2C_MYSHOP_OPENED",
+            "depart", "send S2C_MYSHOP_LEAVE",
+            "send S2C_MYSHOP_LEFT", "restore",
+        ];
+        Assert.Equal(round1.Concat(round1).Concat(round1), shop.Events);
+    }
+
+    [Fact]
     public async Task LeavingPurchaseStorageDoesNotReleaseThePlayer()
     {
         var shop = new Harness();
@@ -78,6 +111,7 @@ public sealed class MyShopHandlersTests
         await shop.Send(Opcode.C2S_MYSHOP_CLOSE);
 
         Assert.Empty(shop.Sent);
+        Assert.Empty(shop.Events);
     }
 
     [Fact]

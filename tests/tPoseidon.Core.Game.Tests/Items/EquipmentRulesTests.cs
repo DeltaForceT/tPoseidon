@@ -154,9 +154,9 @@ public sealed class EquipmentRulesTests
         var staff = Definition(3100, 2) with { MinStatType = 4, MinStatLevel = 60 };
         var totals = new[] { 0, 0, 0, 0, 59, 0, 0, 0, 0, 0, 0, 0 };
 
-        Assert.Equal(EquipRefusal.StatTooLow, EquipmentRules.CheckEquip(staff, Item(1, 3100), EquipmentSlot.Weapon, Array.Empty<WornItem>(), 50, 1, totals));
+        Assert.Equal(EquipRefusal.StatTooLow, EquipmentRules.CheckEquip(staff, Item(1, 3100), EquipmentSlot.Weapon, Array.Empty<WornItem>(), 50, 1, totals, _ => true));
         totals[4] = 60;
-        Assert.Null(EquipmentRules.CheckEquip(staff, Item(1, 3100), EquipmentSlot.Weapon, Array.Empty<WornItem>(), 50, 1, totals));
+        Assert.Null(EquipmentRules.CheckEquip(staff, Item(1, 3100), EquipmentSlot.Weapon, Array.Empty<WornItem>(), 50, 1, totals, _ => true));
     }
 
     [Fact]
@@ -347,12 +347,60 @@ public sealed class EquipmentRulesTests
         Assert.Equal(ReleaseRefusal.NotLoaded, EquipmentRules.CheckReleaseCommon(bullet, loaded.Item, EquipmentSlot.Weapon, new[] { loaded }));
     }
 
+    [Fact]
+    public void AGunNeedsTheGunCarrierAbility()
+    {
+        var gun = Definition(3500, EquipmentRules.WeaponType, subType: EquipmentRules.GunSubType);
+
+        Assert.Equal(EquipRefusal.MissingWeaponAbility, Check(gun, Item(1, 3500), EquipmentSlot.Weapon, holdsAbility: _ => false));
+        Assert.Equal(EquipRefusal.MissingWeaponAbility, Check(gun, Item(1, 3500), EquipmentSlot.Weapon, holdsAbility: ability => ability != EquipmentRules.GunCarrierAbility));
+        Assert.Null(Check(gun, Item(1, 3500), EquipmentSlot.Weapon, holdsAbility: ability => ability == EquipmentRules.GunCarrierAbility));
+    }
+
+    [Fact]
+    public void AHammerNeedsTheHammerAbility()
+    {
+        var hammer = Definition(4700, EquipmentRules.WeaponType, subType: EquipmentRules.HammerSubType);
+
+        Assert.Equal(EquipRefusal.MissingWeaponAbility, Check(hammer, Item(1, 4700), EquipmentSlot.Weapon, holdsAbility: _ => false));
+        Assert.Equal(EquipRefusal.MissingWeaponAbility, Check(hammer, Item(1, 4700), EquipmentSlot.Weapon, holdsAbility: ability => ability == EquipmentRules.GunCarrierAbility));
+        Assert.Null(Check(hammer, Item(1, 4700), EquipmentSlot.Weapon, holdsAbility: ability => ability == EquipmentRules.HammerAbility));
+    }
+
+    [Theory]
+    [InlineData(EquipmentRules.WeaponType, 2)]
+    [InlineData(EquipmentRules.WeaponType, 0)]
+    [InlineData(EquipmentRules.WeaponType, 61)]
+    [InlineData(EquipmentRules.AccessoryType, EquipmentRules.HammerSubType)]
+    [InlineData(EquipmentRules.ShieldType, 0)]
+    [InlineData(3, 0)]
+    public void EveryOtherItemIsNotAskedForAnAbility(int type, int subType)
+    {
+        var definition = Definition(900, type, subType);
+        var slot = (byte)(type == EquipmentRules.AccessoryType ? EquipmentSlot.Accessory : EquipmentRules.SlotOfType(type));
+
+        Assert.Null(EquipmentRules.RequiredAbility(definition));
+        Assert.Null(Check(definition, Item(1, 900), slot, holdsAbility: _ => false));
+    }
+
+    [Fact]
+    public void TheAbilityCheckComesAfterTheSlotCheckAndBeforeTheShieldRule()
+    {
+        var gun = Definition(3500, EquipmentRules.WeaponType, subType: EquipmentRules.GunSubType);
+        var shield = Definition(6530, EquipmentRules.ShieldType);
+        var worn = new[] { Worn(EquipmentSlot.Weapon, 1, gun) };
+
+        Assert.Equal(EquipRefusal.WrongSlot, Check(gun, Item(2, 3500), EquipmentSlot.Shield, holdsAbility: _ => false));
+        Assert.Equal(EquipRefusal.ShieldWithGun, Check(shield, Item(3, 6530), EquipmentSlot.Shield, worn, holdsAbility: _ => false));
+    }
+
     private static EquipRefusal? Check(
         ItemParamEntry definition,
         Item item,
         byte slot,
         IReadOnlyList<WornItem>? worn = null,
         int level = 50,
-        int characterType = 1) =>
-        EquipmentRules.CheckEquip(definition, item, slot, worn ?? Array.Empty<WornItem>(), level, characterType, NoStats);
+        int characterType = 1,
+        Func<int, bool>? holdsAbility = null) =>
+        EquipmentRules.CheckEquip(definition, item, slot, worn ?? Array.Empty<WornItem>(), level, characterType, NoStats, holdsAbility ?? (_ => true));
 }

@@ -45,6 +45,8 @@ public sealed class MasterRoutedGmBlockStore : IGmBlockStore
 
     public GmRunningBlock? LatestRunningBlock(ulong characterId) => _direct.LatestRunningBlock(characterId);
 
+    public IReadOnlyList<GmActiveBlock> ActiveBlocks() => _direct.ActiveBlocks();
+
     private bool MasterConnected() => _client() is { IsConnected: true };
 
     private static int Result(MasterAnswer? answer)

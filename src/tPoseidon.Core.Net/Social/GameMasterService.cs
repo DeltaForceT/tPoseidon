@@ -30,6 +30,8 @@ public sealed class GameMasterOutbox
     public List<string> Notes { get; } = new();
 
     public bool Disconnect { get; set; }
+
+    public bool Refused { get; set; }
 }
 
 public sealed class GameMasterService
@@ -91,7 +93,7 @@ public sealed class GameMasterService
         return outbox;
     }
 
-    public GameMasterOutbox? Login(ulong characterId, string characterName, ReadOnlySpan<byte> payload, string clientIp, bool tool = false)
+    public GameMasterOutbox? Login(ulong characterId, string characterName, ReadOnlySpan<byte> payload, string clientIp, bool tool = false, bool kickOnRefusal = true)
     {
         ArgumentNullException.ThrowIfNull(characterName);
         ArgumentNullException.ThrowIfNull(clientIp);
@@ -117,8 +119,12 @@ public sealed class GameMasterService
         if (!_authority.IsGmClientLoginPermitted(characterName, _text.GetString(password), clientIp))
         {
             lock (_gate) _sessions.Remove((characterId, tool));
-            if (!tool) outbox.Kicks.Add(characterId);
-            outbox.Disconnect = true;
+            outbox.Refused = true;
+            if (kickOnRefusal)
+            {
+                if (!tool) outbox.Kicks.Add(characterId);
+                outbox.Disconnect = true;
+            }
             outbox.Notes.Add($"login refused for '{characterName}' from {clientIp}");
             return outbox;
         }
@@ -131,6 +137,41 @@ public sealed class GameMasterService
         outbox.Messages.Add(new CoupleMessage(characterId, GameMasterFrames.LoginOk, Array.Empty<byte>()));
         if (!tool) outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderSetGmAttribute, 0, GameMasterFrames.GmAttribute(true)));
         outbox.Notes.Add($"'{characterName}' logged in as GM from {clientIp}{(tool ? " (tool connection)" : string.Empty)}");
+        return outbox;
+    }
+
+    public GameMasterOutbox GameFlag(ulong gameMaster, bool on, bool characterOnline)
+    {
+        var outbox = new GameMasterOutbox();
+        if (!characterOnline)
+        {
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.GameFlagFail, Array.Empty<byte>()));
+            outbox.Notes.Add("GM flag refused: the GM character is not in the game");
+            return outbox;
+        }
+        if (on)
+        {
+            lock (_gate)
+            {
+                if (!_sessions.TryGetValue((gameMaster, false), out var session))
+                {
+                    session = NewSession();
+                    _sessions[(gameMaster, false)] = session;
+                }
+                session.LoggedIn = true;
+            }
+            outbox.Orders.Add(new PartyOrder(gameMaster, GameMasterFrames.OrderSetGmAttribute, 0, GameMasterFrames.GmAttribute(true)));
+        }
+        else
+        {
+            foreach (var order in Logout(gameMaster).Orders) outbox.Orders.Add(order);
+            if (!outbox.Orders.Any(order => order.OrderType == GameMasterFrames.OrderSetGmAttribute))
+            {
+                outbox.Orders.Add(new PartyOrder(gameMaster, GameMasterFrames.OrderSetGmAttribute, 0, GameMasterFrames.GmAttribute(false)));
+            }
+        }
+        outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.GameFlagOk, Array.Empty<byte>()));
+        outbox.Notes.Add($"GM flag {(on ? "set" : "cleared")} for the GM character");
         return outbox;
     }
 
@@ -376,7 +417,7 @@ public sealed class GameMasterService
         return outbox;
     }
 
-    public static GameMasterOutbox? SummonMonster(ulong gameMaster, uint chrType, byte count)
+    public static GameMasterOutbox? SummonMonster(ulong gameMaster, uint chrType, uint zone, byte count)
     {
         if (count == 0) return null;
         var outbox = new GameMasterOutbox();
@@ -386,12 +427,58 @@ public sealed class GameMasterService
             outbox.Notes.Add($"summon monster {chrType} refused: monster type");
             return outbox;
         }
-        outbox.Orders.Add(new PartyOrder(gameMaster, GameMasterFrames.OrderSummonMonster, 0, GameMasterFrames.Summon(chrType, 0, count)));
-        outbox.Notes.Add($"summon monster {chrType} x{count}");
+        if (zone >= GameMasterFrames.ZoneLimit)
+        {
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.SummonMonsterFail, new[] { (byte)GameMasterFrames.AckBadZone }));
+            outbox.Notes.Add($"summon monster {chrType} refused: zone {zone}");
+            return outbox;
+        }
+        outbox.Orders.Add(new PartyOrder(gameMaster, GameMasterFrames.OrderSummonMonster, 0, GameMasterFrames.Summon(chrType, zone, count)));
+        outbox.Notes.Add(zone == 0 ? $"summon monster {chrType} x{count}" : $"summon monster {chrType} x{count} in zone {zone}");
+        return outbox;
+    }
+
+    public static GameMasterOutbox? SummonMonsterArea(ulong gameMaster, SummonAreaRequest request)
+    {
+        if (request.Count == 0) return null;
+        var outbox = new GameMasterOutbox();
+        if (!GameMasterFrames.IsSummonableMonster(request.ChrType))
+        {
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.SummonMonsterFail, new[] { (byte)GameMasterFrames.AckBadMonsterType }));
+            outbox.Notes.Add($"summon monster {request.ChrType} refused: monster type");
+            return outbox;
+        }
+        if (request.Map >= GameMasterFrames.ZoneLimit)
+        {
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.SummonMonsterFail, new[] { (byte)GameMasterFrames.AckBadZone }));
+            outbox.Notes.Add($"summon monster {request.ChrType} refused: map {request.Map}");
+            return outbox;
+        }
+        outbox.Orders.Add(new PartyOrder(gameMaster, GameMasterFrames.OrderSummonMonsterArea, 0, GameMasterFrames.SummonArea(request)));
+        outbox.Notes.Add($"summon monster {request.ChrType} x{request.Count} over radius {request.Radius} ({request.Anchor}, map {request.Map}, {request.X},{request.Y})");
+        return outbox;
+    }
+
+    public static GameMasterOutbox RemoveOwnMonsters(ulong gameMaster)
+    {
+        var outbox = new GameMasterOutbox();
+        outbox.Orders.Add(new PartyOrder(gameMaster, GameMasterFrames.OrderRemoveOwnMonsters, 0, Array.Empty<byte>()));
+        outbox.Notes.Add("remove the monsters this GM spawned");
         return outbox;
     }
 
     public GameMasterBlocks Blocks { get; } = new();
+
+    public int RestoreBlocks()
+    {
+        if (BlockRecords is not { } records) return 0;
+        var active = records.ActiveBlocks();
+        foreach (var block in active)
+        {
+            Blocks.Add(new GameMasterBlockEntry(block.Type, block.CharacterId, block.Name, (uint)Math.Max(0, block.MinutesLeft), block.From.ToLocalTime().ToString("T", System.Globalization.CultureInfo.CurrentCulture)));
+        }
+        return active.Count;
+    }
 
     public GameMasterOutbox Block(ulong gameMaster, ushort type, uint minutes, string name, Func<string, ulong?> online, string time)
     {
@@ -1142,7 +1229,7 @@ public sealed class GameMasterService
         lock (_gate)
         {
             if (!_sessions.TryGetValue((characterId, tool), out var session) || !session.LoggedIn) return false;
-            if (!session.Password.AsSpan().SequenceEqual(password)) return false;
+            if (session.Password.Length == 0 || !session.Password.AsSpan().SequenceEqual(password)) return false;
         }
         consumed = length;
         return true;

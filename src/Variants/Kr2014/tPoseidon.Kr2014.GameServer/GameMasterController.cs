@@ -6,8 +6,9 @@ using tPoseidon.Core.Net.Social;
 using tPoseidon.Kr2014.Wire;
 
 internal sealed record GameMasterWorldActions(
-    Func<InGameSessionState, uint, byte, Task<bool>> SummonMonsters,
+    Func<InGameSessionState, SummonAreaRequest, Task<uint>> SummonMonsters,
     Func<ushort, ushort, Task<int>> RemoveObjects,
+    Func<ulong, Task<int>> RemoveOwnMonsters,
     Func<ushort, ushort, bool, Task<int?>> SetNpcActive,
     Func<ushort, Task> RefreshNpcs,
     Func<ushort, ushort, uint, ushort, bool> SetIssueItem,
@@ -75,7 +76,7 @@ internal sealed class GameMasterController : IDisposable
         return player.GameMasterAttribute ? PlayerSpawnLoginPacket.GmEagleFlag : (byte)0;
     }
 
-    public bool IsCommand(string line) => _chat.IsCommand(line);
+    public static bool IsCommand(string line) => GameMasterChat.IsCommand(line);
 
     public void Dispose()
     {
@@ -255,14 +256,30 @@ internal sealed class GameMasterController : IDisposable
                 break;
             case GameMasterFrames.OrderSummonMonster when GameMasterFrames.TryReadSummon(order.Data, out var summonType, out var summonZone, out var summonCount):
                 if (_playerById(order.CharacterId) is not { } summoner || World is null) return;
-                if (summonZone != 0 || !GameMasterFrames.IsSummonableMonster(summonType))
+                if (!GameMasterFrames.IsSummonableMonster(summonType) || summonZone >= GameMasterFrames.ZoneLimit)
                 {
                     Console.WriteLine($"{_logTag} [gm] summon {summonType} in zone {summonZone} refused");
-                    await AcknowledgeAsync(order, GameMasterFrames.ReportSummonMonster, GameMasterFrames.AckBadMonsterType, ct).ConfigureAwait(false);
+                    await AcknowledgeAsync(order, GameMasterFrames.ReportSummonMonster, summonZone >= GameMasterFrames.ZoneLimit ? GameMasterFrames.AckBadZone : GameMasterFrames.AckBadMonsterType, ct).ConfigureAwait(false);
                     return;
                 }
-                var summoned = await World.SummonMonsters(summoner, summonType, summonCount).ConfigureAwait(false);
-                await AcknowledgeAsync(order, GameMasterFrames.ReportSummonMonster, summoned ? GameMasterFrames.AckOk : GameMasterFrames.AckFailed, ct).ConfigureAwait(false);
+                var zoneRequest = new SummonAreaRequest(summonType, summonCount, 0, summonZone == 0 ? SummonAnchor.GameMaster : SummonAnchor.MapArrival, (ushort)summonZone, 0, 0);
+                await AcknowledgeAsync(order, GameMasterFrames.ReportSummonMonster, await World.SummonMonsters(summoner, zoneRequest).ConfigureAwait(false), ct).ConfigureAwait(false);
+                break;
+            case GameMasterFrames.OrderSummonMonsterArea when GameMasterFrames.TryReadSummonArea(order.Data, out var areaRequest):
+                if (_playerById(order.CharacterId) is not { } areaSummoner || World is null) return;
+                if (!GameMasterFrames.IsSummonableMonster(areaRequest.ChrType) || areaRequest.Map >= GameMasterFrames.ZoneLimit)
+                {
+                    Console.WriteLine($"{_logTag} [gm] summon {areaRequest.ChrType} on map {areaRequest.Map} refused");
+                    await AcknowledgeAsync(order, GameMasterFrames.ReportSummonMonster, areaRequest.Map >= GameMasterFrames.ZoneLimit ? GameMasterFrames.AckBadZone : GameMasterFrames.AckBadMonsterType, ct).ConfigureAwait(false);
+                    return;
+                }
+                await AcknowledgeAsync(order, GameMasterFrames.ReportSummonMonster, await World.SummonMonsters(areaSummoner, areaRequest).ConfigureAwait(false), ct).ConfigureAwait(false);
+                break;
+            case GameMasterFrames.OrderRemoveOwnMonsters:
+                if (World is null) return;
+                var ownRemoved = await World.RemoveOwnMonsters(order.CharacterId).ConfigureAwait(false);
+                Console.WriteLine($"{_logTag} [gm] 0x{order.CharacterId:X} removed {ownRemoved} monster(s) it spawned");
+                await AcknowledgeAsync(order, GameMasterFrames.ReportRemoveObject, ownRemoved > 0 ? GameMasterFrames.AckOk : GameMasterFrames.AckRemoveObjectFailed, ct).ConfigureAwait(false);
                 break;
             case GameMasterFrames.OrderSummonNpc when GameMasterFrames.TryReadSummonNpc(order.Data, _text, out var npcType, out var npcLines):
                 if (World is null) return;

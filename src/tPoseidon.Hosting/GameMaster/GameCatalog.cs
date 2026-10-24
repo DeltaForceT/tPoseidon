@@ -10,14 +10,14 @@ public sealed record CatalogNpc(uint Type, string Name);
 
 public sealed record CatalogMap(ushort Id, string Name, IReadOnlySet<uint> Monsters);
 
-public sealed record ChatCommandHelp(string Name, string? Keyword, string Arguments, string Description)
+public sealed record ChatCommandHelp(string Name, string Keyword, string Arguments, string Description)
 {
-    public string Typed => Keyword is null ? string.Empty : $"{GameMasterChat.CommandMark}{Keyword}{(Arguments.Length == 0 ? string.Empty : " " + Arguments)}";
+    public string Typed => $"{GameMasterChat.CommandMark}{Keyword}{(Arguments.Length == 0 ? string.Empty : " " + Arguments)}";
 }
 
 public sealed class GameCatalog
 {
-    private GameCatalog(string? source, string? problem, ItemNames items, IReadOnlyList<CatalogMonster> monsters, IReadOnlyList<CatalogNpc> npcs, IReadOnlyList<CatalogMap> maps, GameMasterChat chat)
+    private GameCatalog(string? source, string? problem, ItemNames items, IReadOnlyList<CatalogMonster> monsters, IReadOnlyList<CatalogNpc> npcs, IReadOnlyList<CatalogMap> maps)
     {
         Source = source;
         Problem = problem;
@@ -25,7 +25,7 @@ public sealed class GameCatalog
         Monsters = monsters;
         Npcs = npcs;
         Maps = maps;
-        ChatCommands = GameMasterChat.Commands.Select(command => new ChatCommandHelp(command.Name, chat.KeywordOf(command.Name), command.Arguments, command.Description)).ToList();
+        ChatCommands = GameMasterChat.Commands.Select(command => new ChatCommandHelp(command.Name, command.Keyword, command.Arguments, command.Description)).ToList();
     }
 
     public string? Source { get; }
@@ -43,7 +43,7 @@ public sealed class GameCatalog
     public IReadOnlyList<ChatCommandHelp> ChatCommands { get; }
 
     public static GameCatalog Empty(string problem) =>
-        new(null, problem, new ItemNames(Array.Empty<(string, ItemParamEntry)>()), Array.Empty<CatalogMonster>(), Array.Empty<CatalogNpc>(), Array.Empty<CatalogMap>(), NoChat());
+        new(null, problem, new ItemNames(Array.Empty<(string, ItemParamEntry)>()), Array.Empty<CatalogMonster>(), Array.Empty<CatalogNpc>(), Array.Empty<CatalogMap>());
 
     public static GameCatalog For(HostSettings settings)
     {
@@ -80,8 +80,7 @@ public sealed class GameCatalog
             .Select(map => new CatalogMap(map.Id, map.Name.Trim(), MonstersOf(map, pools)))
             .OrderBy(map => map.Id)
             .ToList();
-        var chat = new GameMasterChat(reader.LoadNameStringTable(GameMasterChat.KeywordTable), new Dictionary<string, string>());
-        return new GameCatalog(libconfigPath, null, ItemNames.Load(libconfigPath), monsters, npcs, maps, chat);
+        return new GameCatalog(libconfigPath, null, ItemNames.Load(libconfigPath), monsters, npcs, maps);
     }
 
     public string? MapName(int id) => Maps.FirstOrDefault(map => map.Id == id)?.Name;
@@ -138,6 +137,4 @@ public sealed class GameCatalog
 
         return monsters;
     }
-
-    private static GameMasterChat NoChat() => new(new Dictionary<string, string>(), new Dictionary<string, string>());
 }

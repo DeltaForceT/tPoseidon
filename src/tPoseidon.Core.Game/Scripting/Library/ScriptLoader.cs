@@ -13,7 +13,7 @@ public static class ScriptLoader
     public const int MaximumFileBytes = 256 * 1024;
     public static readonly TimeSpan MinimumInterval = TimeSpan.FromSeconds(5);
 
-    public static ScriptLoadResult LoadDirectory(string directory)
+    public static ScriptLoadResult LoadDirectory(string directory, IReadOnlySet<string>? reservedCommands = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(directory);
         if (!Directory.Exists(directory))
@@ -47,11 +47,11 @@ public static class ScriptLoader
                 failed++;
             }
         }
-        var result = Load(sources);
+        var result = Load(sources, reservedCommands);
         return result with { Errors = errors.Concat(result.Errors).ToList(), FilesFailed = result.FilesFailed + failed };
     }
 
-    public static ScriptLoadResult Load(IEnumerable<ScriptSource> sources)
+    public static ScriptLoadResult Load(IEnumerable<ScriptSource> sources, IReadOnlySet<string>? reservedCommands = null)
     {
         ArgumentNullException.ThrowIfNull(sources);
         var errors = new List<string>();
@@ -59,7 +59,7 @@ public static class ScriptLoader
         var failed = 0;
         foreach (var source in sources)
         {
-            var file = CompileOne(source, errors);
+            var file = CompileOne(source, reservedCommands, errors);
             if (file is null) failed++;
             else files.Add(file);
         }
@@ -67,7 +67,7 @@ public static class ScriptLoader
         return new ScriptLoadResult(Assemble(files), errors, files.Count, failed);
     }
 
-    private static CompiledFile? CompileOne(ScriptSource source, List<string> errors)
+    private static CompiledFile? CompileOne(ScriptSource source, IReadOnlySet<string>? reservedCommands, List<string> errors)
     {
         CompiledFile compiled;
         try
@@ -79,13 +79,13 @@ public static class ScriptLoader
             errors.Add($"{source.File}:{exception.Line}:{exception.Column}: {exception.Message}");
             return null;
         }
-        var problems = Validate(compiled).ToList();
+        var problems = Validate(compiled, reservedCommands).ToList();
         if (problems.Count == 0) return compiled;
         errors.AddRange(problems);
         return null;
     }
 
-    private static IEnumerable<string> Validate(CompiledFile file)
+    private static IEnumerable<string> Validate(CompiledFile file, IReadOnlySet<string>? reservedCommands)
     {
         foreach (var npc in file.Npcs)
         {
@@ -110,6 +110,10 @@ public static class ScriptLoader
             if (name.Length == 0 || name.Length > 24 || !name.All(char.IsLetterOrDigit))
             {
                 yield return Problem(file, command.Declaration, "a command name is 1 to 24 letters or digits");
+            }
+            else if (reservedCommands is not null && reservedCommands.Contains(name))
+            {
+                yield return Problem(file, command.Declaration, $"the command name '{name}' is a built-in GM chat keyword and cannot be defined by a script");
             }
         }
         foreach (var function in file.Functions)

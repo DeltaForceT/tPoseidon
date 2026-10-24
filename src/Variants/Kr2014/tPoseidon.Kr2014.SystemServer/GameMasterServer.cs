@@ -27,6 +27,7 @@ public sealed class GameMasterServer
     private readonly ConcurrentDictionary<S2SessionContext, Tool?> _tools = new();
     private readonly ConcurrentDictionary<(ulong CharacterId, ushort Report), PendingReply> _pending = new();
     private readonly GameMasterRateControl _rates;
+    private readonly GameMasterChatRouter _router;
 
     public Func<uint, ulong, CancellationToken, Task<int>>? GuildDissolver { get; set; }
 
@@ -54,6 +55,10 @@ public sealed class GameMasterServer
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _toolsFromLoopbackOnly = toolsFromLoopbackOnly;
         _log = log ?? throw new ArgumentNullException(nameof(log));
+        _router = new GameMasterChatRouter(_gameMasters, _authority, _text, Online, OnlineName, BlockTime, () => _chat.HelpNames)
+        {
+            InstantChatRemover = RemoveInstantChat,
+        };
     }
 
     public void Register(OpcodeDispatcher dispatcher, S2SessionContext ctx)
@@ -89,7 +94,13 @@ public sealed class GameMasterServer
         Command(dispatcher, ctx, GameMasterFrames.PresentItem, (_, p) =>
             ReadPresent(p) is { } present ? GameMasterService.PresentItem(present.Name, present.ItemId, present.Count, Online) : null);
         Command(dispatcher, ctx, GameMasterFrames.SummonMonster, (gm, p) =>
-            GameMasterFrames.TryReadSummon(p, out var chrType, out var zone, out var count) && zone == 0 ? GameMasterService.SummonMonster(gm.CharacterId, chrType, count) : null);
+            GameMasterFrames.TryReadSummon(p, out var chrType, out var zone, out var count) ? GameMasterService.SummonMonster(gm.CharacterId, chrType, zone, count) : null);
+        Command(dispatcher, ctx, GameMasterFrames.SummonMonsterArea, (gm, p) =>
+            gm.Tool && GameMasterFrames.TryReadSummonArea(p, out var area) ? GameMasterService.SummonMonsterArea(gm.CharacterId, area) : null);
+        Command(dispatcher, ctx, GameMasterFrames.RemoveOwnMonsters, (gm, _) =>
+            gm.Tool ? GameMasterService.RemoveOwnMonsters(gm.CharacterId) : null);
+        Command(dispatcher, ctx, GameMasterFrames.GameFlag, (gm, p) =>
+            gm.Tool && GameMasterFrames.TryReadToggle(p, out var flagOn) ? _gameMasters.GameFlag(gm.CharacterId, flagOn, IsOnline(gm.CharacterId)) : null);
         Command(dispatcher, ctx, GameMasterFrames.Block, (gm, p) =>
             GameMasterFrames.TryReadBlock(p, _text, out var blockType, out var blockMinutes, out var blocked)
                 ? _gameMasters.Block(gm.CharacterId, blockType, blockMinutes, blocked, Online, BlockTime())
@@ -292,53 +303,20 @@ public sealed class GameMasterServer
     public async Task ChatAsync(ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (!GameMasterFrames.TryReadChatLine(payload.Span, _text, out var characterId, out var line)) return;
-        if (_room.Find(characterId) is not { } member || _chat.Parse(line) is not { } command) return;
-        var args = command.Arguments;
-        GameMasterOutbox? outbox = command.Name switch
-        {
-            GameMasterChat.Login when args.Count == 1 =>
-                _gameMasters.Login(characterId, member.Character.Name, GameMasterChat.Password(args[0], _text), ClientIp(member.Context)),
-            GameMasterChat.Logout => _gameMasters.Logout(characterId),
-            _ when !_gameMasters.IsLoggedIn(characterId) => null,
-            GameMasterChat.TeleportChrToZone when args.Count is 1 or 2 && ushort.TryParse(args[^1], out var zone) =>
-                _gameMasters.TeleportToZone(characterId, args.Count == 2 ? args[0] : string.Empty, zone, Online),
-            GameMasterChat.TeleportSelfToChr when args.Count is 1 or 2 =>
-                _gameMasters.TeleportToChr(characterId, args.Count == 2 ? args[0] : string.Empty, args[^1], Online),
-            GameMasterChat.Kick when args.Count == 1 => GameMasterService.Kick(characterId, args[0], Online),
-            GameMasterChat.Kick when args.Count == 2 => _gameMasters.KickWithCause(characterId, false, args[0], args[1], Online),
-            GameMasterChat.Memo when args.Count == 2 => _gameMasters.Memo(args[0], args[1]),
-            GameMasterChat.RemovePlayerShop when args.Count == 1 => GameMasterService.RemovePersonalShop(args[0], Online),
-            GameMasterChat.RemoveMyCamp when args.Count == 1 => GameMasterService.RemoveMyCamp(args[0], Online),
-            GameMasterChat.RemoveMyChat when args.Count == 1 => RemoveInstantChat(characterId, args[0]),
-            GameMasterChat.Speed when args.Count == 1 && byte.TryParse(args[0], out var speed) =>
-                _gameMasters.SuperRun(characterId, false, speed),
-            GameMasterChat.Immortal when args.Count == 1 && GameMasterChat.TryParseSwitch(args[0], out var immortal) =>
-                _gameMasters.Immortal(characterId, false, immortal),
-            GameMasterChat.Invisible when args.Count == 1 && GameMasterChat.TryParseSwitch(args[0], out var invisible) =>
-                _gameMasters.Invisible(characterId, false, invisible),
-            GameMasterChat.SuperNotice when args.Count == 1 => _gameMasters.SuperNotice(0, args[0]),
-            GameMasterChat.SuperNotice when args.Count == 2 && ushort.TryParse(args[0], out var scrolls) => _gameMasters.SuperNotice(scrolls, args[1]),
-            GameMasterChat.Block when args.Count is 2 or 3 && int.TryParse(args[1], out var days) =>
-                _gameMasters.NormalBlockFromChat(characterId, args[0], days, args.Count == 3 ? args[2] : null, Online, BlockTime()),
-            _ when GameMasterChatBlocks.TypeOf(command.Name) is { } blockType && args.Count == 2 && int.TryParse(args[1], out var minutes) =>
-                _gameMasters.TimedBlockFromChat(characterId, blockType, args[0], minutes, Online, BlockTime()),
-            _ when GameMasterChatBlocks.ListOf(command.Name) is { } list && args.Count == 0 =>
-                _gameMasters.BlockListFromChat(list.Type, list.Header, OnlineName),
-            GameMasterChat.SummonMonster when args.Count is 1 or 2 && uint.TryParse(args[0], out var monsterType) =>
-                args.Count == 1 ? GameMasterService.SummonMonster(characterId, monsterType, 1)
-                    : byte.TryParse(args[1], out var monsterCount) ? GameMasterService.SummonMonster(characterId, monsterType, monsterCount) : null,
-            GameMasterChat.CommandHelp when args.Count == 0 => GameMasterService.CommandHelp(_chat.HelpNames),
-            _ => null,
-        };
-        if (outbox is null)
-        {
-            _log($"[gm] chat '{command.Name}' from 0x{characterId:X} ignored ({args.Count} arguments, GM login {(_gameMasters.IsLoggedIn(characterId) ? "on" : "off")})");
-            return;
-        }
-        foreach (var note in outbox.Notes) _log($"[gm] chat '{command.Name}' from 0x{characterId:X}: {note}");
-        await DeliverAsync(outbox, characterId, ct, subject: args.Count > 0 ? args[0] : member.Character.Name).ConfigureAwait(false);
+        if (_room.Find(characterId) is not { } member) return;
+        if (_router.Route(characterId, member.Character.Name, ClientIp(member.Context), line) is not { } outcome) return;
+        foreach (var entry in outcome.Audit) _log(entry);
+        if (outcome.Reply is { } reply) await TellAsync(characterId, reply, ct).ConfigureAwait(false);
+        if (outcome.Outbox is not { } outbox) return;
+        await DeliverAsync(outbox, characterId, ct, subject: SubjectOf(line, member.Character.Name)).ConfigureAwait(false);
         if (outbox.Disconnect) await member.Context.Session.DisposeAsync().ConfigureAwait(false);
     }
+
+    private static string SubjectOf(string line, string fallback) =>
+        GameMasterChat.Parse(line) is { Arguments.Count: > 0 } command ? command.Arguments[0] : fallback;
+
+    private Task TellAsync(ulong characterId, string line, CancellationToken ct) =>
+        _games.SendDirectAsync(characterId, GameMasterFrames.LinkChatReply, GameMasterFrames.ChatLine(characterId, line, _text), ct);
 
     public async Task ReportAsync(OfficerOrder report, CancellationToken ct)
     {

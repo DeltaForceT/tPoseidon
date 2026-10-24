@@ -10,7 +10,7 @@ Scripting is opt-in. With no scripts, every NPC behaves exactly as before. A scr
 2. Check them: `tposeidon scripts check` lists every error as `file:line:column: message`.
 3. Reload a running server with either of these:
    - `tposeidon scripts reload` (checks, then asks the server to reload within a second), or
-   - the chat command `/script reload`, typed by a game master in game. `/script` alone prints what is loaded.
+   - the chat command `@script reload`, typed by a game master in game. `@script` alone prints what is loaded.
 
 A file with an error is skipped and reported in the server log and in the check output. The other files still load.
 
@@ -143,7 +143,7 @@ cron "*/15 8-22 * * 1-5" { ... }  // minute hour day-of-month month day-of-week
 
 To act on players from a timer, call `trigger("name")` and handle it with `on event "name"`.
 
-**`command "name" [gm]`** adds a chat command. A player types `@name arg1 arg2`; quote an argument that contains spaces. Add `gm` to restrict it to game masters. Use `arg(n)` (text, starting at 1) and `argc()` inside.
+**`command "name" [gm]`** adds a chat command. A player types `@name arg1 arg2`; quote an argument that contains spaces. Add `gm` to restrict it to game masters. The built-in GM chat keywords (`login`, `logout`, `kick`, `speed`, `block`, ... the list is in the GM window's Help tab) always win: a script cannot define a command with one of those names, and `tposeidon scripts check` reports it. Use `arg(n)` (text, starting at 1) and `argc()` inside.
 
 **`function name(a, b) { ... return x; }`** defines a function you can call from any script file. A function cannot have the name of a built in function. Functions can nest up to 24 deep and may use `menu`, `mes` and `next`.
 

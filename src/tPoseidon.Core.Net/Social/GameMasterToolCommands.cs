@@ -17,6 +17,7 @@ public static class GameMasterToolCommands
         new GameMasterToolCommand("teleport", "[who] <to>", "Send a character (default: the GM character) next to another online character.", "tposeidon gm teleport Friend Other --gm Boss", true),
         new GameMasterToolCommand("kick", "<name> [reason]", "Disconnect an online character. With a reason the player sees it first and is disconnected when his client confirms it (10 seconds), and his account is marked sanctioned.", "tposeidon gm kick Friend \"spamming\" --gm Boss", true),
         new GameMasterToolCommand("account-block", "on|off <name>", "Mark the account of a character as sanctioned (user authority 1), or back to normal.", "tposeidon gm account-block on Friend --gm Boss", true),
+        new GameMasterToolCommand("game-flag", "on|off", "Log the GM character in or out as GM in the game: on sets the GM flag and shows the GM eagle and enables the @ chat commands without typing @login; off clears them. The character must be in the game.", "tposeidon gm game-flag on --gm Boss", true),
         new GameMasterToolCommand("speed", "<1..4>", "Set the GM character's movement speed.", "tposeidon gm speed 3 --gm Boss", true),
         new GameMasterToolCommand("immortal", "on|off", "Turn the GM character's immortal mode on or off.", "tposeidon gm immortal on --gm Boss", true),
         new GameMasterToolCommand("invisible", "on|off", "Turn the GM character's invisible mode on or off.", "tposeidon gm invisible off --gm Boss", true),
@@ -26,7 +27,9 @@ public static class GameMasterToolCommands
         new GameMasterToolCommand("zone-counts", "", "List every zone with characters in it and how many.", "tposeidon gm zone-counts --gm Boss", true),
         new GameMasterToolCommand("char-info", "<name>", "Show the account, id, zone, level and money of an online character.", "tposeidon gm char-info Friend --gm Boss", true),
         new GameMasterToolCommand("present", "<name> <itemId> [count]", "Put items in an online character's bag (count defaults to 1).", "tposeidon gm present Friend 1001 5 --gm Boss", false),
-        new GameMasterToolCommand("summon-monster", "<monsterType> [count]", "Summon monsters at the GM character's position (monster type 2000 to 3434; count defaults to 1).", "tposeidon gm summon-monster 2001 3 --gm Boss", true),
+        new GameMasterToolCommand("summon-monster", "<monsterType> [count] [mapId]", "Summon monsters (monster type 2000 to 3434; count defaults to 1). Without a map they appear at the GM character's position; with a map id (1 to 999) they appear at a random arrival point of that map and the GM stays where he is.", "tposeidon gm summon-monster 2001 3 23 --gm Boss", true),
+        new GameMasterToolCommand("spawn-monsters", "<monsterType> <count> <radius> [mapId [x y]]", "Summon monsters spread over a circle of radius world units (0 for one spot). Without a map the circle is centred on the GM character; with only a map id on a random arrival point of that map; with a map id and x y on those coordinates (map id 0 means the GM character's map). The GM stays where he is, and the server remembers the monsters for remove-my-monsters.", "tposeidon gm spawn-monsters 2001 10 150 23 800 600 --gm Boss", true),
+        new GameMasterToolCommand("remove-my-monsters", "", "Remove only the monsters this GM character summoned (with summon-monster or spawn-monsters) that are still alive.", "tposeidon gm remove-my-monsters --gm Boss", true),
         new GameMasterToolCommand("issue-item", "<npcObjectId> <itemId> <count>", "Let an NPC on the GM character's map hand out an item, one per talk, up to count times (NPC function 65).", "tposeidon gm issue-item 4100 1001 10 --gm Boss", true),
         new GameMasterToolCommand("set-music", "<fileName>", "Play a music file from data/music (name without .mp3) for everyone on the GM character's map.", "tposeidon gm set-music town --gm Boss", true),
         new GameMasterToolCommand("remove-monsters", "", "Remove every monster on the GM character's map.", "tposeidon gm remove-monsters --gm Boss", true),
@@ -129,11 +132,22 @@ public static class GameMasterToolCommands
                 w.WriteUInt16(args.Count == 3 ? ushort.Parse(args[2], CultureInfo.InvariantCulture) : (ushort)1);
                 w.WriteNulTerminated(args[0], text);
                 return new(GameMasterFrames.PresentItem, w.ToArray());
-            case "summon-monster" when args.Count is 1 or 2 && uint.TryParse(args[0], out var monsterType) && (args.Count == 1 || byte.TryParse(args[1], out _)):
+            case "summon-monster" when args.Count is >= 1 and <= 3 && uint.TryParse(args[0], out var monsterType) && (args.Count < 2 || byte.TryParse(args[1], out _)) && (args.Count < 3 || ushort.TryParse(args[2], out _)):
                 w.WriteUInt32(monsterType);
-                w.WriteUInt32(0);
-                w.WriteByte(args.Count == 2 ? byte.Parse(args[1], CultureInfo.InvariantCulture) : (byte)1);
+                w.WriteUInt32(args.Count == 3 ? uint.Parse(args[2], CultureInfo.InvariantCulture) : 0);
+                w.WriteByte(args.Count >= 2 ? byte.Parse(args[1], CultureInfo.InvariantCulture) : (byte)1);
                 return new(GameMasterFrames.SummonMonster, w.ToArray());
+            case "spawn-monsters" when args.Count is 3 or 4 or 6 && uint.TryParse(args[0], out var areaType) && byte.TryParse(args[1], out var areaCount) && ushort.TryParse(args[2], out var areaRadius)
+                && (args.Count < 4 || ushort.TryParse(args[3], out _)) && (args.Count < 6 || (ushort.TryParse(args[4], out _) && ushort.TryParse(args[5], out _))):
+                var areaMap = args.Count >= 4 ? ushort.Parse(args[3], CultureInfo.InvariantCulture) : (ushort)0;
+                var anchor = args.Count == 6 ? SummonAnchor.Coordinates : args.Count == 4 ? SummonAnchor.MapArrival : SummonAnchor.GameMaster;
+                var areaX = args.Count == 6 ? ushort.Parse(args[4], CultureInfo.InvariantCulture) : (ushort)0;
+                var areaY = args.Count == 6 ? ushort.Parse(args[5], CultureInfo.InvariantCulture) : (ushort)0;
+                return new(GameMasterFrames.SummonMonsterArea, GameMasterFrames.SummonArea(new SummonAreaRequest(areaType, areaCount, areaRadius, anchor, areaMap, areaX, areaY)));
+            case "game-flag" when args.Count == 1 && GameMasterChat.TryParseSwitch(args[0], out var flagOn):
+                return new(GameMasterFrames.GameFlag, GameMasterFrames.Toggle(flagOn));
+            case "remove-my-monsters" when args.Count == 0:
+                return new(GameMasterFrames.RemoveOwnMonsters, Array.Empty<byte>());
             case "issue-item" when args.Count == 3 && ushort.TryParse(args[0], out var issuer) && issuer != 0 && uint.TryParse(args[1], out var issuedItem) && ushort.TryParse(args[2], out var issuedCount):
                 w.WriteBytes(GameMasterFrames.IssueItem(issuer, issuedItem, issuedCount));
                 return new(GameMasterFrames.SetIssueItem, w.ToArray());

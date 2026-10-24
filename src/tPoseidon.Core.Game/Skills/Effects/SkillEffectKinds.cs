@@ -117,6 +117,10 @@ public sealed record SkillEffectKind(
 
     public bool Holds { get; init; }
 
+    public bool Roots { get; init; }
+
+    public bool ChangesSpeed { get; init; }
+
     public string? TickColumn { get; init; }
 
     public SkillPeriodicHit Periodic { get; init; }
@@ -332,6 +336,8 @@ public static class SkillEffectKinds
     public const string DpReductionColumn = "DPRatio";
     public const string GuardCountColumn = "Gnum";
     public const string SlowRatioColumn = "RunSpeed";
+    public const string ParalysisRatioColumn = "PRatio";
+    public const string ParalysisSecondsColumn = "PSeconds";
     public const string PartyDpRatioColumn = "PDpRatio";
     public const int BestShield = 1544;
     public const int CrazyHammerMode = 1533;
@@ -946,6 +952,10 @@ public static class SkillEffectKinds
         {
             HeaderClass = 1, GrantsTm = false,
         },
+        new(SkillRiders.QuakeParalysis, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Duration, ParalysisRatioColumn, OnTarget: true, ParalysisSecondsColumn)
+        {
+            RollsChance = true, ChanceColumn = ParalysisRatioColumn, Roots = true, HeaderClass = 1, GrantsTm = false,
+        },
         new(SkillRiders.ElectricSwordStun, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, StunTimeColumn, OnTarget: true, StunTimeColumn)
         {
             Holds = true, HeaderClass = 1, GrantsTm = false,
@@ -1018,7 +1028,10 @@ public static class SkillEffectKinds
         },
         new(Boiling, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, StressColumn, OnTarget: false, SecondColumn),
         new(ThirdEye, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: false, SecondColumn),
-        new(CrazyHammerMode, StatDx, SkillEffectRule.FixedAtNegative, SkillEffectTail.Duration, DxColumn, OnTarget: false),
+        new(CrazyHammerMode, StatDx, SkillEffectRule.FixedAtNegative, SkillEffectTail.Duration, DxColumn, OnTarget: false)
+        {
+            ChangesSpeed = true,
+        },
         new(BestShield, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Duration, DpRatioColumn, OnTarget: false)
         {
             SpreadsAs = BestShieldOnMember,

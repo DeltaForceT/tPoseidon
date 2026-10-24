@@ -26,6 +26,29 @@ public sealed class CrazyHammerTests
         ["KillNum"] = "2", ["Radius"] = "90", ["Seconds"] = "20",
     });
 
+    [Theory]
+    [InlineData("0.350000", 1.35f)]
+    [InlineData("0.750000", 1.75f)]
+    public void DoubleCrazyRaisesTheMoveSpeedByItsRunSpeedColumn(string runSpeed, float factor)
+    {
+        var row = Row("ESAction_DoubleCrazy", 1, new() { ["RunSpeed"] = runSpeed, ["Seconds"] = "20" });
+
+        Assert.Equal(factor, CrazyHammer.SpeedFactor(row), 3);
+    }
+
+    [Fact]
+    public void WithoutDoubleCrazyTheSpeedIsUnchanged()
+    {
+        Assert.Equal(1f, CrazyHammer.SpeedFactor(null));
+    }
+
+    [Fact]
+    public void TheCrazyModeEffectAnnouncesTheNewSpeedWhenItStartsAndEnds()
+    {
+        Assert.True(SkillEffectKinds.Find(SkillEffectKinds.CrazyHammerMode)!.ChangesSpeed);
+        Assert.False(SkillEffectKinds.Find(SkillEffectKinds.BestShield)!.ChangesSpeed);
+    }
+
     [Fact]
     public void TheGaugeFillsUpToItsMaximumAndThenBurstsBackToZero()
     {

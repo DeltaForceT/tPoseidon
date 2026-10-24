@@ -1,5 +1,6 @@
 using tPoseidon.Core.Game.Scripting.Library;
 using tPoseidon.Core.Net.Dialogs;
+using tPoseidon.Core.Net.Social;
 using tPoseidon.Hosting;
 
 namespace tPoseidon.Cli.Commands;
@@ -48,7 +49,7 @@ internal static class ScriptsCommand
             return 0;
         }
 
-        var result = ScriptLoader.LoadDirectory(directory);
+        var result = ScriptLoader.LoadDirectory(directory, GameMasterChat.Keywords);
         foreach (var error in result.Errors) Console.Error.WriteLine(error);
         var library = result.Library;
         Console.WriteLine($"{result.FilesLoaded} file(s) compiled, {result.FilesFailed} with errors: {library.Npcs.Count} npc(s), {library.OverrideCount} override(s), {library.EventCount} event(s), {library.Timers.Count} timer(s), {library.CommandCount} command(s), {library.FunctionCount} function(s).");

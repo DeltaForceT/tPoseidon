@@ -17,6 +17,7 @@ public enum EquipRefusal
     SameAccessory,
     WrongSlot,
     ShieldWithGun,
+    MissingWeaponAbility,
     OccupantInWrongSlot,
     NotCommonItem,
     BulletWithoutGun,
@@ -45,6 +46,10 @@ public static class EquipmentRules
     public const int EarsType = 17;
     public const int TailType = 18;
     public const int GunSubType = 54;
+    public const int HammerSubType = 82;
+    public const int WeaponType = 2;
+    public const int GunCarrierAbility = 1;
+    public const int HammerAbility = 13;
     public const int SpeedAccessorySubType = 53;
     public const int EarsAndTailReleaseLevel = 20;
     public const int CharacterTypeCount = 27;
@@ -146,12 +151,14 @@ public static class EquipmentRules
         IReadOnlyList<WornItem> worn,
         int level,
         int characterType,
-        IReadOnlyList<int> statTotals)
+        IReadOnlyList<int> statTotals,
+        Func<int, bool> holdsAbility)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(item);
         ArgumentNullException.ThrowIfNull(worn);
         ArgumentNullException.ThrowIfNull(statTotals);
+        ArgumentNullException.ThrowIfNull(holdsAbility);
 
         if ((definition.ExtendedOptions & GmOnlyExtendedOption) != 0) return EquipRefusal.GmOnly;
         if ((definition.Options & EquipableOption) == 0
@@ -183,11 +190,20 @@ public static class EquipmentRules
         }
         if (worn.Any(held => IsAccessorySlot(held.Slot) && held.Item.ItemIndex == definition.Id)) return EquipRefusal.SameAccessory;
         if (definition.Type == AccessoryType ? !IsAccessorySlot(slot) : slot != SlotOfType(definition.Type)) return EquipRefusal.WrongSlot;
+        if (RequiredAbility(definition) is { } ability && !holdsAbility(ability)) return EquipRefusal.MissingWeaponAbility;
         if (definition.Type == ShieldType
             && worn.Any(held => Array.IndexOf(WeaponAndAccessorySlots, held.Slot) >= 0 && held.Definition.SubType == GunSubType))
         {
             return EquipRefusal.ShieldWithGun;
         }
+        return null;
+    }
+
+    public static int? RequiredAbility(ItemParamEntry definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        if (definition.SubType == GunSubType) return GunCarrierAbility;
+        if (definition.Type == WeaponType && definition.SubType == HammerSubType) return HammerAbility;
         return null;
     }
 

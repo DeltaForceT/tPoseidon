@@ -57,6 +57,11 @@ public static class GameMasterFrames
     public const ushort SetMusic = 0x14AD;
     public const ushort RemoveMonsters = 0x14B0;
     public const ushort SummonNpc = 0x14B3;
+    public const ushort SummonMonsterArea = 0x1505;
+    public const ushort RemoveOwnMonsters = 0x1506;
+    public const ushort GameFlag = 0x1507;
+    public const ushort GameFlagOk = 0x1508;
+    public const ushort GameFlagFail = 0x1509;
     public const ushort SummonNpcOk = 0x14B4;
     public const ushort SummonNpcFail = 0x14B5;
     public const ushort RemoveObject = 0x14B6;
@@ -143,6 +148,7 @@ public static class GameMasterFrames
     public const int NpcOnOffAckLength = 15;
     public const uint AckOk = 0;
     public const uint AckBadMonsterType = 1;
+    public const uint AckBadZone = 2;
     public const uint AckFailed = 4;
     public const uint AckRemoveObjectFailed = 1;
     public const uint AckNoSuchNpc = 1;
@@ -155,6 +161,8 @@ public static class GameMasterFrames
     public const ushort OrderRemovePersonalShop = 0x65;
     public const ushort OrderSummonMonster = 0x66;
     public const ushort OrderSummonNpc = 0x69;
+    public const ushort OrderSummonMonsterArea = 0x70;
+    public const ushort OrderRemoveOwnMonsters = 0x71;
     public const ushort OrderSetIssueItem = 0x67;
     public const ushort OrderSetMusic = 0x68;
     public const ushort OrderRemoveObject = 0x6A;
@@ -216,6 +224,8 @@ public static class GameMasterFrames
         OrderRemovePersonalShop,
         OrderSummonMonster,
         OrderSummonNpc,
+        OrderSummonMonsterArea,
+        OrderRemoveOwnMonsters,
         OrderSetIssueItem,
         OrderSetMusic,
         OrderRemoveObject,
@@ -233,6 +243,8 @@ public static class GameMasterFrames
         OrderCharInfo => ReportCharInfo,
         OrderSummonMonster => ReportSummonMonster,
         OrderSummonNpc => ReportSummonNpc,
+        OrderSummonMonsterArea => ReportSummonMonster,
+        OrderRemoveOwnMonsters => ReportRemoveObject,
         OrderSetIssueItem => ReportSetIssueItem,
         OrderOxGiveItem => ReportOxGiveItem,
         OrderSetMusic => ReportSetMusic,
@@ -707,6 +719,35 @@ public static class GameMasterFrames
         return true;
     }
 
+    public const int SummonAreaLength = sizeof(uint) + sizeof(byte) + sizeof(ushort) + sizeof(byte) + sizeof(ushort) * 3;
+
+    public static byte[] SummonArea(SummonAreaRequest request)
+    {
+        var w = new PacketWriter(SummonAreaLength);
+        w.WriteUInt32(request.ChrType);
+        w.WriteByte(request.Count);
+        w.WriteUInt16(request.Radius);
+        w.WriteByte((byte)request.Anchor);
+        w.WriteUInt16(request.Map);
+        w.WriteUInt16(request.X);
+        w.WriteUInt16(request.Y);
+        return w.ToArray();
+    }
+
+    public static bool TryReadSummonArea(ReadOnlySpan<byte> data, out SummonAreaRequest request)
+    {
+        request = default;
+        if (data.Length < SummonAreaLength) return false;
+        var r = new PacketReader(data);
+        var chrType = r.ReadUInt32();
+        var count = r.ReadByte();
+        var radius = r.ReadUInt16();
+        var anchor = r.ReadByte();
+        if (!Enum.IsDefined((SummonAnchor)anchor)) return false;
+        request = new SummonAreaRequest(chrType, count, radius, (SummonAnchor)anchor, r.ReadUInt16(), r.ReadUInt16(), r.ReadUInt16());
+        return true;
+    }
+
     public const ushort ZoneCountLimit = 1000;
 
     public static byte[] ZoneCountsBody(IEnumerable<ushort> zonesOfOnlineCharacters)
@@ -998,3 +1039,12 @@ public static class GameMasterFrames
         return w.ToArray();
     }
 }
+
+public enum SummonAnchor : byte
+{
+    GameMaster = 0,
+    MapArrival = 1,
+    Coordinates = 2,
+}
+
+public readonly record struct SummonAreaRequest(uint ChrType, byte Count, ushort Radius, SummonAnchor Anchor, ushort Map, ushort X, ushort Y);

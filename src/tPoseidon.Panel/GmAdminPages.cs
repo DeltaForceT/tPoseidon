@@ -99,6 +99,13 @@ public static class GmAccountsPage
                     arguments => new GmConfirm($"Take GM away from {arguments[0]}?", "Its GM login addresses are removed and the account becomes a normal account.", "Unregister"),
                     async _ => await ShowAsync().ConfigureAwait(true)))));
 
+        page.Children.Add(GmKit.Section(
+            "GM in the game",
+            "Turns the connected GM character into a GM in the game, or back into a normal character, without typing anything in the game's chat: the GM eagle appears over the character and the @ chat commands work. The character has to be in the game.",
+            GmKit.Line(
+                kit.Tool("Log my GM in as GM", "game-flag", _ => ["on"], primary: true),
+                kit.Tool("Log my GM out", "game-flag", _ => ["off"]))));
+
         var refresh = GmKit.Plain("Refresh");
         refresh.Click += async (_, _) => await ShowAsync().ConfigureAwait(true);
         page.Children.Add(GmKit.Section(
@@ -141,11 +148,9 @@ public static class GmHelpPage
         ArgumentNullException.ThrowIfNull(kit);
         var page = new StackPanel { Spacing = 10 };
         var chat = new StackPanel { Spacing = 2 };
-        var source = GmKit.Hint("Reading the client's GM keywords...");
         page.Children.Add(GmKit.Section(
             "GM chat commands in game",
-            "Type these in the game's chat as your GM character. Log in first with the login command; every other command needs it. Words in <> are needed, words in [] are optional, and text with spaces goes in quotes.",
-            source,
+            "The KR 2014 client has no GM chat of its own, so the server reads GM commands from normal chat lines that start with @. Type them as your GM character. Log in first with @login and your account password; every other command needs it. The line is never shown to other players. Words in <> are needed, words in [] are optional, and text with spaces goes in quotes.",
             chat));
         page.AttachedToVisualTree += async (_, _) =>
         {
@@ -155,12 +160,9 @@ public static class GmHelpPage
             }
 
             var catalog = await kit.Model.CatalogAsync().ConfigureAwait(true);
-            source.Text = catalog.Source is { } file
-                ? $"The keywords come from the client's game data ({file}), the same file the servers read."
-                : catalog.Problem ?? "";
             foreach (var command in catalog.ChatCommands)
             {
-                chat.Children.Add(Entry(command.Keyword is null ? $"{command.Name} (no keyword in the client data, so it is not a chat command)" : command.Typed, command.Description, command.Keyword is not null));
+                chat.Children.Add(Entry(command.Typed, command.Description, true));
             }
         };
 

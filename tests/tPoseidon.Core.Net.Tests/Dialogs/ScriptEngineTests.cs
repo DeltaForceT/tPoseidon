@@ -58,6 +58,37 @@ public sealed class ScriptEngineTests : IDisposable
     }
 
     [Fact]
+    public void Reload_RefusesAScriptCommandWithAGmChatKeywordNameAndKeepsOtherCommands()
+    {
+        Write("clash.tscript", "command \"kick\" { end; }");
+        Write("fine.tscript", "command \"bonus\" { end; }");
+        var engine = Engine();
+
+        var result = engine.Reload();
+
+        Assert.Equal(1, result.FilesLoaded);
+        Assert.Equal(1, result.FilesFailed);
+        Assert.Contains(_log, line => line.StartsWith("[scripts] clash.tscript:1:", StringComparison.Ordinal) && line.Contains("GM chat keyword", StringComparison.Ordinal));
+        Assert.Null(engine.Library.FindCommand("kick"));
+        Assert.NotNull(engine.Library.FindCommand("bonus"));
+    }
+
+    [Fact]
+    public void EveryGmKeywordWinsOverAScriptCommandBecauseNoScriptCanOwnIt()
+    {
+        foreach (var keyword in tPoseidon.Core.Net.Social.GameMasterChat.Keywords)
+        {
+            Write(keyword + ".tscript", $"command \"{keyword}\" {{ end; }}");
+        }
+        var engine = Engine();
+
+        engine.Reload();
+
+        Assert.Equal(0, engine.Library.CommandCount);
+        Assert.All(tPoseidon.Core.Net.Social.GameMasterChat.Keywords, keyword => Assert.Null(engine.Library.FindCommand(keyword)));
+    }
+
+    [Fact]
     public void SyncNpcs_InstallsMovesAndRemovesScriptNpcs()
     {
         Write("mira.tscript", "npc \"Mira\" sprite 1301 map 1 at 120, 340 face east { end; }");

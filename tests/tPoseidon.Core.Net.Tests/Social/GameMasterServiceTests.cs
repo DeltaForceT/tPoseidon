@@ -68,6 +68,10 @@ public sealed class GameMasterServiceTests
 
         public GmRunningBlock? LatestRunningBlock(ulong characterId) => null;
 
+        public IReadOnlyList<GmActiveBlock> ActiveBlocks() => Active;
+
+        public List<GmActiveBlock> Active { get; } = new();
+
         public int SetUserAuthority(string characterName, byte authority)
         {
             if (characterName is not ("Other" or "Third")) return 0;
@@ -552,12 +556,11 @@ public sealed class GameMasterServiceTests
     public void CommandHelpRepliesWithEveryHelpLine()
     {
         var chat = new GameMasterChat(
-            new Dictionary<string, string> { [GameMasterChat.CommandHelp] = "commandhelp", [GameMasterChat.ChatBlock] = "chatblock" },
             new Dictionary<string, string>(),
             new Dictionary<string, string> { ["Help_Login"] = "/Login:Password", ["Help_Logout"] = "/Logout" });
 
-        Assert.Equal(GameMasterChat.CommandHelp, chat.Parse("/commandhelp")!.Name);
-        Assert.Equal(GameMasterChat.ChatBlock, chat.Parse("/chatblock Other 30")!.Name);
+        Assert.Equal(GameMasterChat.CommandHelp, GameMasterChat.Parse("@commandhelp")!.Name);
+        Assert.Equal(GameMasterChat.ChatBlock, GameMasterChat.Parse("@chatblock Other 30")!.Name);
         Assert.Equal(HelpNames, GameMasterService.CommandHelp(chat.HelpNames).Texts.Select(text => text.Name));
         Assert.Equal("/Login:Password", chat.Result("Help_Login"));
     }
@@ -671,15 +674,15 @@ public sealed class GameMasterServiceTests
     [Fact]
     public void SummonMonsterOrdersTheGmsServerWithinTheMonsterRanges()
     {
-        var order = Assert.Single(GameMasterService.SummonMonster(Gm, 2001, 3)!.Orders);
+        var order = Assert.Single(GameMasterService.SummonMonster(Gm, 2001, 0, 3)!.Orders);
         Assert.Equal((Gm, GameMasterFrames.OrderSummonMonster), (order.CharacterId, order.OrderType));
         Assert.True(GameMasterFrames.TryReadSummon(order.Data, out var type, out var zone, out var count));
         Assert.Equal((2001u, 0u, (byte)3), (type, zone, count));
 
-        Assert.Empty(GameMasterService.SummonMonster(Gm, 1999, 1)!.Orders);
-        Assert.Empty(GameMasterService.SummonMonster(Gm, 3435, 1)!.Orders);
-        Assert.Null(GameMasterService.SummonMonster(Gm, 2001, 0));
-        Assert.Empty(GameMasterService.SummonMonster(Gm, 16998, 1)!.Orders);
+        Assert.Empty(GameMasterService.SummonMonster(Gm, 1999, 0, 1)!.Orders);
+        Assert.Empty(GameMasterService.SummonMonster(Gm, 3435, 0, 1)!.Orders);
+        Assert.Null(GameMasterService.SummonMonster(Gm, 2001, 0, 0));
+        Assert.Empty(GameMasterService.SummonMonster(Gm, 16998, 0, 1)!.Orders);
     }
 
     [Fact]
@@ -1161,7 +1164,7 @@ public sealed class GameMasterServiceTests
         produced.AddRange(service.Immortal(Gm, false, true)!.Orders.Select(order => order.OrderType));
         produced.AddRange(service.Invisible(Gm, false, true)!.Orders.Select(order => order.OrderType));
         produced.AddRange(GameMasterService.PresentItem("Other", 1001, 1, _ => 0x5001UL)!.Orders.Select(order => order.OrderType));
-        produced.AddRange(GameMasterService.SummonMonster(Gm, 2001, 1)!.Orders.Select(order => order.OrderType));
+        produced.AddRange(GameMasterService.SummonMonster(Gm, 2001, 0, 1)!.Orders.Select(order => order.OrderType));
         produced.AddRange(service.SetMusic(Gm, "town")!.Orders.Select(order => order.OrderType));
         produced.AddRange(GameMasterService.RemoveObject(Gm, 0).Orders.Select(order => order.OrderType));
         produced.AddRange(GameMasterService.RemovePersonalShop("Other", _ => 0x5001UL)!.Orders.Select(order => order.OrderType));
@@ -1178,7 +1181,7 @@ public sealed class GameMasterServiceTests
     [Fact]
     public void ARefusedMonsterTypeAnswersWithReasonOne()
     {
-        var reply = Assert.Single(GameMasterService.SummonMonster(Gm, 1999, 1)!.Messages);
+        var reply = Assert.Single(GameMasterService.SummonMonster(Gm, 1999, 0, 1)!.Messages);
 
         Assert.Equal(GameMasterFrames.SummonMonsterFail, reply.Opcode);
         Assert.Equal(new byte[] { 1 }, reply.Payload);
@@ -1220,5 +1223,172 @@ public sealed class GameMasterServiceTests
         Assert.Equal(GameMasterFrames.ReportSetIssueItem, GameMasterFrames.ReportOf(GameMasterFrames.OrderSetIssueItem));
         Assert.Equal(GameMasterFrames.ReportOxGiveItem, GameMasterFrames.ReportOf(GameMasterFrames.OrderOxGiveItem));
         Assert.Null(GameMasterFrames.ReportOf(GameMasterFrames.OrderOxQuestion));
+    }
+
+    [Fact]
+    public void ASummonInAZoneCarriesTheZoneAndAZoneOutOfRangeIsRefusedWithReasonTwo()
+    {
+        var order = Assert.Single(GameMasterService.SummonMonster(Gm, 2001, 23, 3)!.Orders);
+        Assert.True(GameMasterFrames.TryReadSummon(order.Data, out var type, out var zone, out var count));
+        Assert.Equal((2001u, 23u, (byte)3), (type, zone, count));
+
+        var refused = GameMasterService.SummonMonster(Gm, 2001, 1000, 1)!;
+        Assert.Empty(refused.Orders);
+        var reply = Assert.Single(refused.Messages);
+        Assert.Equal(GameMasterFrames.SummonMonsterFail, reply.Opcode);
+        Assert.Equal(new byte[] { 2 }, reply.Payload);
+    }
+
+    [Fact]
+    public void ASpreadSummonRoundTripsItsBodyAndOrdersTheGmsServer()
+    {
+        var request = new SummonAreaRequest(2001, 10, 150, SummonAnchor.Coordinates, 23, 800, 600);
+
+        var order = Assert.Single(GameMasterService.SummonMonsterArea(Gm, request)!.Orders);
+
+        Assert.Equal((Gm, GameMasterFrames.OrderSummonMonsterArea), (order.CharacterId, order.OrderType));
+        Assert.Equal(GameMasterFrames.SummonAreaLength, order.Data?.Length);
+        Assert.True(GameMasterFrames.TryReadSummonArea(order.Data, out var read));
+        Assert.Equal(request, read);
+        Assert.Equal(GameMasterFrames.ReportSummonMonster, GameMasterFrames.ReportOf(GameMasterFrames.OrderSummonMonsterArea));
+        Assert.True(GameMasterFrames.IsGameServerOrder(GameMasterFrames.OrderSummonMonsterArea));
+        Assert.False(GameMasterFrames.TryReadSummonArea(order.Data.AsSpan(0, GameMasterFrames.SummonAreaLength - 1), out _));
+    }
+
+    [Fact]
+    public void ASpreadSummonRefusesABadMonsterTypeAndAMapOutOfRangeAndIgnoresACountOfZero()
+    {
+        Assert.Equal(new byte[] { 1 }, Assert.Single(GameMasterService.SummonMonsterArea(Gm, new SummonAreaRequest(1999, 1, 0, SummonAnchor.GameMaster, 0, 0, 0))!.Messages).Payload);
+        Assert.Equal(new byte[] { 2 }, Assert.Single(GameMasterService.SummonMonsterArea(Gm, new SummonAreaRequest(2001, 1, 0, SummonAnchor.MapArrival, 1000, 0, 0))!.Messages).Payload);
+        Assert.Null(GameMasterService.SummonMonsterArea(Gm, new SummonAreaRequest(2001, 0, 0, SummonAnchor.GameMaster, 0, 0, 0)));
+    }
+
+    [Fact]
+    public void RemovingOwnMonstersOrdersTheGmsServerAndIsAnsweredLikeRemoveObject()
+    {
+        var order = Assert.Single(GameMasterService.RemoveOwnMonsters(Gm).Orders);
+
+        Assert.Equal((Gm, GameMasterFrames.OrderRemoveOwnMonsters), (order.CharacterId, order.OrderType));
+        Assert.Equal(GameMasterFrames.ReportRemoveObject, GameMasterFrames.ReportOf(GameMasterFrames.OrderRemoveOwnMonsters));
+        Assert.True(GameMasterFrames.IsGameServerOrder(GameMasterFrames.OrderRemoveOwnMonsters));
+    }
+
+    [Fact]
+    public void ToolCommandsBuildTheSpawnAndRemoveOwnBodies()
+    {
+        var onMap = GameMasterToolCommands.Build("summon-monster", ["2001", "3", "23"], Text)!;
+        Assert.True(GameMasterFrames.TryReadSummon(onMap.Body, out var type, out var zone, out var count));
+        Assert.Equal((GameMasterFrames.SummonMonster, 2001u, 23u, (byte)3), (onMap.Opcode, type, zone, count));
+        Assert.Null(GameMasterToolCommands.Build("summon-monster", ["2001", "3", "x"], Text));
+
+        var here = GameMasterToolCommands.Build("spawn-monsters", ["2001", "10", "150"], Text)!;
+        Assert.Equal(GameMasterFrames.SummonMonsterArea, here.Opcode);
+        Assert.True(GameMasterFrames.TryReadSummonArea(here.Body, out var hereRequest));
+        Assert.Equal(new SummonAreaRequest(2001, 10, 150, SummonAnchor.GameMaster, 0, 0, 0), hereRequest);
+
+        var arrival = GameMasterToolCommands.Build("spawn-monsters", ["2001", "10", "0", "23"], Text)!;
+        Assert.True(GameMasterFrames.TryReadSummonArea(arrival.Body, out var arrivalRequest));
+        Assert.Equal(new SummonAreaRequest(2001, 10, 0, SummonAnchor.MapArrival, 23, 0, 0), arrivalRequest);
+
+        var at = GameMasterToolCommands.Build("spawn-monsters", ["2001", "10", "150", "23", "800", "600"], Text)!;
+        Assert.True(GameMasterFrames.TryReadSummonArea(at.Body, out var atRequest));
+        Assert.Equal(new SummonAreaRequest(2001, 10, 150, SummonAnchor.Coordinates, 23, 800, 600), atRequest);
+
+        Assert.Null(GameMasterToolCommands.Build("spawn-monsters", ["2001", "10", "150", "23", "800"], Text));
+        Assert.Null(GameMasterToolCommands.Build("spawn-monsters", ["2001", "256", "150"], Text));
+        Assert.Equal(GameMasterFrames.RemoveOwnMonsters, GameMasterToolCommands.Build("remove-my-monsters", [], Text)!.Opcode);
+        Assert.Null(GameMasterToolCommands.Build("remove-my-monsters", ["1"], Text));
+    }
+
+    [Fact]
+    public void TheToolOnlyOpcodesAreOutsideEveryOriginalOpcode()
+    {
+        var toolOnly = new[]
+        {
+            nameof(GameMasterFrames.SummonMonsterArea),
+            nameof(GameMasterFrames.RemoveOwnMonsters),
+            nameof(GameMasterFrames.GameFlag),
+            nameof(GameMasterFrames.GameFlagOk),
+            nameof(GameMasterFrames.GameFlagFail),
+        };
+        var original = typeof(GameMasterFrames).GetFields()
+            .Where(field => field.FieldType == typeof(ushort) && field.IsLiteral && !toolOnly.Contains(field.Name))
+            .Select(field => (ushort)field.GetRawConstantValue()!)
+            .ToHashSet();
+
+        foreach (var name in toolOnly)
+        {
+            Assert.DoesNotContain((ushort)typeof(GameMasterFrames).GetField(name)!.GetRawConstantValue()!, original);
+        }
+    }
+
+    [Fact]
+    public void TheGmFlagToolCommandSetsAndClearsTheFlagThroughTheSetGmOrderAndTheChatSession()
+    {
+        var service = new GameMasterService(new FakeAuthority(), Text);
+        var request = GameMasterToolCommands.Build("game-flag", ["on"], Text)!;
+        Assert.Equal(GameMasterFrames.GameFlag, request.Opcode);
+        Assert.True(GameMasterFrames.TryReadToggle(request.Body, out var on));
+        Assert.True(on);
+        Assert.Null(GameMasterToolCommands.Build("game-flag", ["maybe"], Text));
+
+        var set = service.GameFlag(Gm, true, true);
+        var setOrder = Assert.Single(set.Orders);
+        Assert.Equal(GameMasterFrames.OrderSetGmAttribute, setOrder.OrderType);
+        Assert.True(GameMasterFrames.TryReadGmAttribute(setOrder.Data, out var flagOn));
+        Assert.True(flagOn);
+        Assert.Equal(GameMasterFrames.GameFlagOk, Assert.Single(set.Messages).Opcode);
+        Assert.True(service.IsLoggedIn(Gm));
+
+        var cleared = service.GameFlag(Gm, false, true);
+        var clearOrder = Assert.Single(cleared.Orders);
+        Assert.True(GameMasterFrames.TryReadGmAttribute(clearOrder.Data, out var flagStill));
+        Assert.False(flagStill);
+        Assert.False(service.IsLoggedIn(Gm));
+
+        var clearedAgain = service.GameFlag(Gm, false, true);
+        Assert.Equal(GameMasterFrames.OrderSetGmAttribute, Assert.Single(clearedAgain.Orders).OrderType);
+    }
+
+    [Fact]
+    public void TheGmFlagIsRefusedWhenTheCharacterIsNotInTheGame()
+    {
+        var service = new GameMasterService(new FakeAuthority(), Text);
+
+        var refused = service.GameFlag(Gm, true, false);
+
+        Assert.Empty(refused.Orders);
+        Assert.Equal(GameMasterFrames.GameFlagFail, Assert.Single(refused.Messages).Opcode);
+        Assert.False(service.IsLoggedIn(Gm));
+    }
+
+    [Fact]
+    public void ASessionSetByTheToolHasNoPasswordSoNoClientCanAuthorizeWithAnEmptyOne()
+    {
+        var service = new GameMasterService(new FakeAuthority(), Text);
+        service.GameFlag(Gm, true, true);
+
+        Assert.False(service.TryAuthorize(Gm, [0], out _));
+    }
+
+    [Fact]
+    public void ActiveBlocksInTheDatabaseAreInTheListAfterARestart()
+    {
+        var store = new FakeBlockStore();
+        store.Active.Add(new GmActiveBlock(GameMasterBlocks.Chat, 0x4002, "Other", 25, new DateTimeOffset(2026, 10, 24, 10, 0, 0, TimeSpan.Zero)));
+        store.Active.Add(new GmActiveBlock(GameMasterBlocks.Move, 0x4003, "Third", 90, new DateTimeOffset(2026, 10, 24, 11, 0, 0, TimeSpan.Zero)));
+        var service = new GameMasterService(new FakeAuthority(), Text) { BlockRecords = store };
+
+        Assert.Equal(2, service.RestoreBlocks());
+
+        var chat = Assert.Single(service.Blocks.OfType(GameMasterBlocks.Chat));
+        Assert.Equal((0x4002ul, "Other", 25u), (chat.CharacterId, chat.Name, chat.Minutes));
+        Assert.Equal(["Other", "Third"], service.Blocks.Listed().Select(entry => entry.Name));
+    }
+
+    [Fact]
+    public void RestoringBlocksWithoutADatabaseLoadsNothing()
+    {
+        Assert.Equal(0, new GameMasterService(new FakeAuthority(), Text).RestoreBlocks());
     }
 }

@@ -175,12 +175,10 @@ var rankServer = new tPoseidon.Kr2014.SystemServer.RankServer(
 
 var gameMasterReader = libConfigPath is null ? null : new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath);
 var gameMasterChat = new GameMasterChat(
-    gameMasterReader?.LoadNameStringTable(GameMasterChat.KeywordTable) ?? new Dictionary<string, string>(),
     gameMasterReader?.LoadNameStringTable(GameMasterChat.ResultTable) ?? new Dictionary<string, string>(),
     gameMasterReader?.LoadNameStringTable(GameMasterChat.HelpTable) ?? new Dictionary<string, string>());
 MasterServerClient? masterClient = null;
-var gameMasterServer = new tPoseidon.Kr2014.SystemServer.GameMasterServer(
-    new GameMasterService(postgres.GmAuthority, System.Text.Encoding.GetEncoding(949))
+var gameMasterService = new GameMasterService(postgres.GmAuthority, System.Text.Encoding.GetEncoding(949))
     {
         Friends = new tPoseidon.Core.Data.Postgres.PostgresFriendStore(postgres.DataSource),
         Guilds = new tPoseidon.Core.Data.Postgres.PostgresGuildStore(postgres.DataSource),
@@ -190,7 +188,10 @@ var gameMasterServer = new tPoseidon.Kr2014.SystemServer.GameMasterServer(
             new tPoseidon.Core.Data.Postgres.PostgresGmBlockStore(postgres.DataSource),
             ServerIdentity.System1.ServerIndex,
             Log),
-    },
+    };
+Log($"[gm] {gameMasterService.RestoreBlocks()} active block(s) loaded from the database");
+var gameMasterServer = new tPoseidon.Kr2014.SystemServer.GameMasterServer(
+    gameMasterService,
     gameMasterChat,
     postgres.GmAuthority,
     socialRoom,

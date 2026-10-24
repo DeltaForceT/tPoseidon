@@ -6,6 +6,7 @@ using tPoseidon.Core.Game.Scripting.Host;
 using tPoseidon.Core.Game.Scripting.Lang;
 using tPoseidon.Core.Game.Scripting.Library;
 using tPoseidon.Core.Game.Scripting.Vm;
+using tPoseidon.Core.Net.Social;
 
 namespace tPoseidon.Core.Net.Dialogs;
 
@@ -43,7 +44,7 @@ public sealed class ScriptEngine
 
     public ScriptLoadResult Reload()
     {
-        var result = ScriptLoader.LoadDirectory(_directory);
+        var result = ScriptLoader.LoadDirectory(_directory, GameMasterChat.Keywords);
         lock (_gate)
         {
             _library = result.Library;

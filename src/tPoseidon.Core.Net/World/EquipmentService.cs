@@ -14,6 +14,7 @@ public sealed record EquipmentPlayer
     public required Func<IReadOnlyList<int>> StatTotals { get; init; }
     public required Func<ushort, Opcode, byte[], Task> SendToMap { get; init; }
     public required Func<Task> EquipmentChanged { get; init; }
+    public required Func<int, bool> HoldsAbility { get; init; }
 }
 
 public sealed class EquipmentService
@@ -68,7 +69,7 @@ public sealed class EquipmentService
         }
 
         var worn = EquipmentRules.WornBy(_items, _catalog, character.CharacterId);
-        if (EquipmentRules.CheckEquip(definition, item, slot, worn, character.Level, (int)character.Species, _player.StatTotals()) is { } refusal)
+        if (EquipmentRules.CheckEquip(definition, item, slot, worn, character.Level, (int)character.Species, _player.StatTotals(), _player.HoldsAbility) is { } refusal)
         {
             await RefuseEquipAsync(wireUid, slot, $"item {item.ItemIndex}: {refusal}", ct).ConfigureAwait(false);
             return;

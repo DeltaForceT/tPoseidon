@@ -149,7 +149,7 @@ public sealed class GmWindowTests
 
         var texts = window.Window.GetLogicalDescendants().OfType<SelectableTextBlock>().Select(block => block.Text ?? "").ToList();
 
-        Assert.Contains(texts, text => text.StartsWith(GameMasterChat.Login + " (no keyword", StringComparison.Ordinal));
+        Assert.Contains(texts, text => text.StartsWith("@login <password>", StringComparison.Ordinal));
         Assert.Contains(texts, text => text.StartsWith("summon-monster <monsterType> [count]", StringComparison.Ordinal));
     }
 

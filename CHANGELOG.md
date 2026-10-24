@@ -10,6 +10,10 @@ This update changes the database (migration 075 widens `hp`, `mp` and `tm_exp` o
 - The caps in `data/server_rates.json` are optional and `0` means no limit. A new `MaxBankGalder` limit was added.
 - The bank, carried-Galder, pick-up and NPC shop limits of 2,100,000,000 and 100,000,000 are gone; set `MaxGalder` or `MaxBankGalder` to bring a limit back.
 - A player's attack, magic attack and accuracy are no longer cut at 65,535 when the server works out damage.
+- GM chat commands now start with `@` (`@login <password>`, `@kick`, ...): the KR 2014 client keeps every `/` line for itself. A GM line is never shown to other players, and only the registered GM character with its account password from a permitted address can log in. `tposeidon gm game-flag on|off` and a panel button set the GM flag and eagle without typing. NPC scripts can no longer define a command with a GM keyword name, and the script reload chat command is now `@script reload`.
+- GM monster spawning: `summon-monster` takes a map id, and the new `spawn-monsters` spreads monsters over a radius on the GM's position, on a map or on chosen coordinates without moving the GM; `remove-my-monsters` removes only what the GM spawned. The panel's Spawn tab has the same choices.
+- The GM block lists are loaded from the database when the SystemServer starts.
+- Polar bear: Double Crazy raises the move speed during the Crazy mode, Quake Hammer can paralyse monsters, and hammers need the Hammer Equip passive; guns now need the Gun Carrier passive, as on the original servers.
 
 ## 0.55.0-beta
 

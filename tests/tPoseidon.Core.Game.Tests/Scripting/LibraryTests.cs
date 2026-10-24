@@ -12,6 +12,21 @@ public class LibraryTests
         ScriptLoader.Load(files.Select(file => new ScriptSource(file.File, file.Text)));
 
     [Fact]
+    public void Load_RefusesACommandWhoseNameIsReserved()
+    {
+        var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "kick" };
+
+        var result = ScriptLoader.Load([new ScriptSource("a.tscript", "command \"Kick\" { end; }"), new ScriptSource("b.tscript", "command \"hi\" { end; }")], reserved);
+
+        var error = Assert.Single(result.Errors);
+        Assert.StartsWith("a.tscript:1:", error, StringComparison.Ordinal);
+        Assert.Contains("GM chat keyword", error, StringComparison.Ordinal);
+        Assert.Equal(1, result.FilesLoaded);
+        Assert.Null(result.Library.FindCommand("kick"));
+        Assert.NotNull(result.Library.FindCommand("hi"));
+    }
+
+    [Fact]
     public void Load_CollectsEveryDeclarationKind()
     {
         var result = Load(("a.tscript",

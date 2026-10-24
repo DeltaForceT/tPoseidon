@@ -11,6 +11,8 @@ public static class SkillRiders
     public const int GravityCrush = 1215;
     public const int Uppercut = 1167;
     public const int ElectricSword = 1470;
+    public const int QuakeHammer = 1530;
+    public const int QuakeHammerSkill = 4708;
 
     public const int Faint = 1201;
     public const int GuardBreak = 1101;
@@ -27,6 +29,7 @@ public static class SkillRiders
     public const int FearOnMonster = 1279;
     public const int UnableRecovery = 1332;
     public const int ElectricSwordStun = 1471;
+    public const int QuakeParalysis = 1531;
 
     public const string StunRatioColumn = "StunRatio";
     public const string PowerColumn = "AP";
@@ -42,6 +45,7 @@ public static class SkillRiders
         [Hellfire] = new[] { new SkillRider(WickedFlame, CruelFlame, NeedsLevel: true) },
         [Scythe] = new[] { new SkillRider(Fear, FearOnMonster, NeedsLevel: true) },
         [GravityCrush] = new[] { new SkillRider(WitheringDisease, UnableRecovery, NeedsLevel: false) },
+        [QuakeHammer] = new[] { new SkillRider(QuakeHammerSkill, QuakeParalysis, NeedsLevel: true) },
     };
 
     public static IReadOnlyList<SkillRider> Of(int actionId) => Riders.TryGetValue(actionId, out var riders) ? riders : Array.Empty<SkillRider>();

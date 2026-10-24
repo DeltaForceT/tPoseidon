@@ -83,9 +83,9 @@ Opening your server to the internet? Read [Hosting securely](docs/install/hostin
 
 ## Game master tools
 
-Make a character your GM character with `tposeidon gm --character <name>`. After that you can run the GM commands from the command line (`tposeidon gm <command>`), from the panel's **GM** button, or by typing the GM chat commands in game.
+Make a character your GM character with `tposeidon gm --character <name>`. After that you can run the GM commands from the command line (`tposeidon gm <command>`), from the panel's **GM** button, or by typing the GM chat commands in game. The KR 2014 client has no GM chat of its own, so the server reads them from normal chat lines that start with `@` (`@login <password>`, `@kick`, `@speed`, and so on; the panel's Help tab lists them). `tposeidon gm game-flag on` (or the panel's GM accounts tab) turns the GM flag and the GM eagle on without typing anything.
 
-The GM window finds a player and lets you kick, block, sanction, move, penalize or give items. It spawns monsters, NPCs and items by name from pickers, sends notices, runs OX quizzes, plans EXP and ability events, looks after guilds and registers GM characters. Every action shows what the server answered, and the ones you can't take back ask first. Its Help tab lists the chat commands.
+The GM window finds a player and lets you kick, block, sanction, move, penalize or give items. It spawns monsters, NPCs and items by name from pickers, sends notices, runs OX quizzes, plans EXP and ability events, looks after guilds and registers GM characters. Every action shows what the server answered, and the ones you can't take back ask first. Its Help tab lists the `@` chat commands.
 
 ## NPC scripting
 

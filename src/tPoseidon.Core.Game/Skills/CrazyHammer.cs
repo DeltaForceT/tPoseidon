@@ -54,6 +54,7 @@ public sealed class CrazyHammerGauge
 public static class CrazyHammer
 {
     public const int CrazyHammerSkill = 4801;
+    public const int DoubleCrazySkill = 4804;
     public const int TripleCrazySkill = 4806;
     public const int QuadrupleCrazySkill = 4908;
     public const int QuintupleCrazySkill = 4910;
@@ -64,6 +65,7 @@ public static class CrazyHammer
     public const string AttackPointColumn = "AtPoint";
     public const string SkillPointColumn = "SkillPoint";
     public const string RatioColumn = "Ratio";
+    public const string RunSpeedColumn = "RunSpeed";
     public const string CriticalRatioColumn = "CriticalRatio";
 
     private const double PercentPerRatio = 100.0;
@@ -79,6 +81,8 @@ public static class CrazyHammer
         var bonus = baseAp * (crazy.Value(RatioColumn) ?? 0f) + baseAp * (triple?.Value(RatioColumn) ?? 0f);
         return ap + (int)bonus;
     }
+
+    public static float SpeedFactor(SkillTableRow? doubleCrazy) => 1f + (doubleCrazy?.Value(RunSpeedColumn) ?? 0f);
 
     public static int CriticalBonus(SkillTableRow? quadruple) =>
         (int)Math.Round((quadruple?.Value(CriticalRatioColumn) ?? 0f) * PercentPerRatio);

@@ -253,8 +253,8 @@ public sealed class GameMasterTests
         Assert.Equal(["Red potion"], catalog.FindItems("", ItemNames.ItemTable).Select(item => item.Name));
         Assert.Equal([1001, 9001], catalog.FindItems("", null).Select(item => item.Id));
         var login = catalog.ChatCommands.Single(command => command.Name == GameMasterChat.Login);
-        Assert.Equal("/login <password>", login.Typed);
-        Assert.Null(catalog.ChatCommands.Single(command => command.Name == GameMasterChat.Kick).Keyword);
+        Assert.Equal("@login <password>", login.Typed);
+        Assert.Equal("kick", catalog.ChatCommands.Single(command => command.Name == GameMasterChat.Kick).Keyword);
     }
 
     [Fact]
@@ -290,9 +290,6 @@ public sealed class GameMasterTests
         </TABLE>
         <TABLE name="ItemParamCM2" RowCount="1" TableInfoID="6" FieldCnt="2">
             <ROW><ID>9001</ID><Name><![CDATA[Gift box]]></Name></ROW>
-        </TABLE>
-        <TABLE name="GMKeywordStrings" RowCount="1" TableInfoID="7" FieldCnt="2">
-            <ROW><Name><![CDATA[Login]]></Name><String><![CDATA[login]]></String></ROW>
         </TABLE>
         </INI>
         """;

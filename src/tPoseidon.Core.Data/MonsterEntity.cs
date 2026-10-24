@@ -53,6 +53,7 @@ public sealed class MonsterEntity
     public int AiViewRange { get; init; }
 
     private DateTimeOffset _heldUntil;
+    private DateTimeOffset _rootedUntil;
     private float _slowRatio;
 
     public const float WalkSlowStep = 100f;
@@ -77,6 +78,22 @@ public sealed class MonsterEntity
     public bool IsHeld(DateTimeOffset now)
     {
         lock (_lock) return now < _heldUntil;
+    }
+
+    public bool IsRooted(DateTimeOffset now)
+    {
+        lock (_lock) return now < _heldUntil || now < _rootedUntil;
+    }
+
+    public (ushort X, ushort Y) RootUntil(DateTimeOffset until, DateTimeOffset now)
+    {
+        lock (_lock)
+        {
+            if (until > _rootedUntil) _rootedUntil = until;
+            var (x, y) = GetInterpolatedPosition(now);
+            InitPosition(x, y);
+            return (x, y);
+        }
     }
 
     public (ushort X, ushort Y) HoldUntil(DateTimeOffset until, DateTimeOffset now)

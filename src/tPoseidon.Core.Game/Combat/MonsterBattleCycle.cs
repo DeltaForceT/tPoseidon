@@ -239,7 +239,7 @@ public sealed class MonsterBattleCycle
 
                 var decision = MeleeApproach.Decide(
                     reach, monster.CurrentX, monster.CurrentY, target.X, target.Y, fight.Settled, _rng);
-                var canMove = monster.WalkSpeedOf(definition.WalkSpeed) > 0 && monster.RunSpeedOf(definition.RunSpeed) > 0;
+                var canMove = monster.WalkSpeedOf(definition.WalkSpeed) > 0 && monster.RunSpeedOf(definition.RunSpeed) > 0 && !monster.IsRooted(now);
                 var backingOff = decision.Kind == MeleeApproachKind.BackOff;
 
                 if (decision.Kind == MeleeApproachKind.GiveUp)
@@ -253,6 +253,8 @@ public sealed class MonsterBattleCycle
                     Swing(monster, fight, definition, reach, target, hpLeftByTarget, now, events);
                     continue;
                 }
+
+                if (monster.IsRooted(now)) continue;
 
                 var gap = backingOff ? MeleeApproach.BackOffGap : MeleeApproach.OrderGap;
                 var moveType = !backingOff && fight.Settled ? MeleeApproach.ChaseMoveType : StoredMoveType;

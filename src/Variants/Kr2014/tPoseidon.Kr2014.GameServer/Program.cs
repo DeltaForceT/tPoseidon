@@ -472,7 +472,6 @@ IReadOnlyList<CompounderList> compounderLists = Array.Empty<CompounderList>();
 var exchangeOffers = new Dictionary<int, ExchangeOffer>();
 IReadOnlyDictionary<string, IReadOnlyList<int>> exchangeLists = new Dictionary<string, IReadOnlyList<int>>();
 var vipShopOffers = new Dictionary<int, VipShopOffer>();
-IReadOnlyDictionary<string, string> gameMasterKeywords = new Dictionary<string, string>();
 IReadOnlyDictionary<string, IReadOnlyList<int>> vipShopLists = new Dictionary<string, IReadOnlyList<int>>();
 try
 {
@@ -500,8 +499,6 @@ try
     foreach (var rebirthItem in reader.LoadRebirthItems()) rebirthItemsById[rebirthItem.ItemId] = rebirthItem;
     foreach (var mapKind in reader.LoadMapKinds()) mapKindById[mapKind.Id] = mapKind;
     honorTitleBook = new HonorTitleBook(reader.LoadHonorTitles());
-    gameMasterKeywords = reader.LoadNameStringTable(tPoseidon.Core.Net.Social.GameMasterChat.KeywordTable);
-    Console.WriteLine($"{LogTag} GM chat keywords from libconfig: {gameMasterKeywords.Count} rows ({tPoseidon.Core.Net.Social.GameMasterChat.KeywordTable})");
     memoryPortRows = reader.LoadMemoryPorts().GroupBy(row => row.ItemId).ToDictionary(rows => rows.Key, rows => rows.First());
     Console.WriteLine($"{LogTag} memory ports from libconfig: {memoryPortRows.Count} rows (Item_MemoryPortParam)");
     disguiseKits = reader.LoadTransScrolls().GroupBy(kit => kit.ItemId).ToDictionary(kits => kits.Key, kits => kits.First().TransChrType);
@@ -1272,7 +1269,7 @@ using var gameMasters = new GameMasterController(
     systemLink,
     characterId => liveSessions.Values.FirstOrDefault(gmSt => gmSt.Character?.CharacterId == characterId),
     gmSt => SendToViewersAsync(gmSt.MapId, gmSt.PlayerX, gmSt.PlayerY, Opcode.S2C_PLAYER_SPAWN_POST_WARP, PlayerSpawnOf(gmSt)),
-    new tPoseidon.Core.Net.Social.GameMasterChat(gameMasterKeywords, new Dictionary<string, string>()),
+    new tPoseidon.Core.Net.Social.GameMasterChat(new Dictionary<string, string>()),
     async kicked =>
     {
         foreach (var kickedSession in liveSessions.ToArray())
@@ -1282,7 +1279,7 @@ using var gameMasters = new GameMasterController(
             await kickedSession.Key.Session.DisposeAsync().ConfigureAwait(false);
         }
     },
-    AnnounceGameMasterSpeedAsync,
+    AnnounceSpeedAsync,
     ApplyGameMasterVisibilityAsync,
     PresentGameMasterItemAsync,
     SendToMapAsync,
@@ -1838,9 +1835,9 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         async Task<bool> TryHandleScriptChatAsync(InGameSessionState speaker, string chatText)
         {
             var trimmed = chatText.Trim();
-            if (speaker.GameMasterAttribute && trimmed.StartsWith("/script", StringComparison.OrdinalIgnoreCase))
+            if (speaker.GameMasterAttribute && trimmed.StartsWith("@script", StringComparison.OrdinalIgnoreCase))
             {
-                var action = trimmed[7..].Trim();
+                var action = trimmed["@script".Length..].Trim();
                 var library = scriptEngine.Library;
                 if (action.Equals("reload", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1849,7 +1846,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                     foreach (var reloadError in reloaded.Errors.Take(3)) await TellScriptLineAsync(speaker, reloadError, sessionCt).ConfigureAwait(false);
                     return true;
                 }
-                await TellScriptLineAsync(speaker, $"Scripts: {library.Npcs.Count} npc(s), {library.OverrideCount} override(s), {library.EventCount} event(s), {library.Timers.Count} timer(s), {library.CommandCount} command(s). Use /script reload.", sessionCt).ConfigureAwait(false);
+                await TellScriptLineAsync(speaker, $"Scripts: {library.Npcs.Count} npc(s), {library.OverrideCount} override(s), {library.EventCount} event(s), {library.Timers.Count} timer(s), {library.CommandCount} command(s). Use @script reload.", sessionCt).ConfigureAwait(false);
                 return true;
             }
             if (!ScriptEngine.TryParseChatCommand(trimmed, out var commandName, out var commandArguments)) return false;
@@ -1891,6 +1888,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                     : tPoseidon.Core.Game.Items.EquipmentRules.Totals(StatsWithEquipment(currentChar)),
                 SendToMap = SendToMapAsync,
                 EquipmentChanged = ApplyEquipmentChangeAsync,
+                HoldsAbility = ability => liveSessions.TryGetValue(ctx, out var equipSt) && skillBook.GrantsAbility(equipSt.Skills, ability),
             },
             moveRng,
             LogTag);
@@ -2231,7 +2229,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 moveSt.PlayerMoveType = move.Flag;
                 moveSt.Walk = route is { } walkRoute
                     ? tPoseidon.Core.Game.Pets.OwnerWalk.Along(serverX, serverY, walkRoute,
-                        playerMoveSpeeds is { } walkSpeeds ? SpeedOfMoveType(walkSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(move.Flag), moveSt.GameMasterSpeed) : 0f,
+                        playerMoveSpeeds is { } walkSpeeds ? SpeedOfMoveType(walkSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(move.Flag), SpeedFactorOf(moveSt)) : 0f,
                         moveNow)
                     : null;
                 moveSt.PickupItemEntityId = 0;
@@ -2278,7 +2276,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 return;
             }
 
-            var moveSpeedQuarter = ScaledSpeedQuarter(move.Flag == 0x02 ? EntitySpeedPacket.RunSpeedQuarter : EntitySpeedPacket.WalkSpeedQuarter, moveSt?.GameMasterSpeed ?? 1f);
+            var moveSpeedQuarter = ScaledSpeedQuarter(move.Flag == 0x02 ? EntitySpeedPacket.RunSpeedQuarter : EntitySpeedPacket.WalkSpeedQuarter, moveSt is null ? 1f : SpeedFactorOf(moveSt));
             if ((move.Flag == 0x01 || move.Flag == 0x02)
                 && (move.Flag != sessionMovType || (moveSt is not null && moveSt.AnnouncedSpeedQuarter != moveSpeedQuarter)))
             {
@@ -2968,6 +2966,10 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             () => liveSessions.TryGetValue(ctx, out var shopper)
                 ? new tPoseidon.Core.Net.World.MyShopReturn(shopper.MapId, shopper.PlayerX, shopper.PlayerY)
                 : null,
+            () => liveSessions.TryGetValue(ctx, out var leaver)
+                ? SendToOthersOnMapAsync(leaver, Opcode.S2C_PLAYER_LEFT_MAP, tPoseidon.Core.Net.World.MyCampFrames.ObjectId(leaver.PlayerEntityId))
+                : Task.CompletedTask,
+            () => liveSessions.TryGetValue(ctx, out var returner) ? RestoreViewAsync(returner) : Task.CompletedTask,
             clientTextEncoding,
             line => Console.WriteLine($"{LogTag} {ctx.Remote} {line}"));
         ctx.Dispatcher.Register(Opcode.C2S_CASH_BOX_TAKE, (_, payload, _) =>
@@ -3212,7 +3214,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             if (playerMoveSpeeds is { } digSpeeds && zoneGeometryByMap.TryGetValue(digSt.MapId, out var digGeometry))
             {
                 var digWalkType = tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(digMoveType);
-                var digWalkSpeed = SpeedOfMoveType(digSpeeds, digWalkType, digSt.GameMasterSpeed);
+                var digWalkSpeed = SpeedOfMoveType(digSpeeds, digWalkType, SpeedFactorOf(digSt));
                 var digWalk = digWalkSpeed > 0 ? WanderRoute.Find(digGeometry, digSt.PlayerX, digSt.PlayerY, digX, digY) : null;
                 if (digWalk is not null)
                 {
@@ -3715,7 +3717,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 && zoneGeometryByMap.TryGetValue(portalSt.MapId, out var portalGeometry))
             {
                 var portalMoveType = tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(req.ChangeType);
-                var portalSpeed = SpeedOfMoveType(portalSpeeds, portalMoveType, portalSt.GameMasterSpeed);
+                var portalSpeed = SpeedOfMoveType(portalSpeeds, portalMoveType, SpeedFactorOf(portalSt));
                 var portalRoute = portalSpeed > 0 ? WanderRoute.Find(portalGeometry, portalSt.PlayerX, portalSt.PlayerY, clickX, clickY) : null;
                 if (portalRoute is not null)
                 {
@@ -4614,7 +4616,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             atkSt.PlayerMoveType = attackOrderType;
             if (playerMoveSpeeds is { } attackSpeeds)
             {
-                var attackSpeed = SpeedOfMoveType(attackSpeeds, attackOrderType, atkSt.GameMasterSpeed);
+                var attackSpeed = SpeedOfMoveType(attackSpeeds, attackOrderType, SpeedFactorOf(atkSt));
                 var attackSpeedQuarter = ProgressFrames.SpeedQuarter(attackSpeed);
                 if (attackSpeedQuarter != atkSt.AnnouncedSpeedQuarter)
                 {
@@ -5000,7 +5002,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
             if (playerMoveSpeeds is { } castSpeeds && zoneGeometryByMap.TryGetValue(aimSt.MapId, out var castGeometry))
             {
-                var walkSpeed = SpeedOfMoveType(castSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.RunMoveType, aimSt.GameMasterSpeed);
+                var walkSpeed = SpeedOfMoveType(castSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.RunMoveType, SpeedFactorOf(aimSt));
                 var (stopX, stopY) = SkillChecks.ChaseEnd(range, walkSpeed, aimSt.PlayerX, aimSt.PlayerY, aimedX, aimedY);
                 var walk = walkSpeed > 0
                     ? WanderRoute.FindToPoint(castGeometry, aimSt.PlayerX, aimSt.PlayerY, stopX, stopY)
@@ -5105,7 +5107,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 (ushort X, ushort Y) walkEnd;
                 lock (moveRng) walkEnd = PickupRules.WalkEnd(pickupGeometry, wanted, moveRng);
                 var walkType = tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(pickupMoveType);
-                var walkSpeed = SpeedOfMoveType(pickupSpeeds, walkType, pickSt.GameMasterSpeed);
+                var walkSpeed = SpeedOfMoveType(pickupSpeeds, walkType, SpeedFactorOf(pickSt));
                 var walk = walkSpeed > 0
                     ? WanderRoute.Find(pickupGeometry, pickSt.PlayerX, pickSt.PlayerY, walkEnd.X, walkEnd.Y)
                     : null;
@@ -5280,14 +5282,14 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         {
             if (currentChar is null || !liveSessions.TryGetValue(ctx, out var speaker)) return;
             var text = tPoseidon.Core.Net.Social.ChatFrames.ReadText(payload.Span, clientTextEncoding);
-            if (await TryHandleScriptChatAsync(speaker, text).ConfigureAwait(false)) return;
-            if (gameMasters.IsCommand(text))
+            if (GameMasterController.IsCommand(text))
             {
                 await systemLink.SendAsync(tPoseidon.Core.Net.Social.GameMasterFrames.LinkChatCommand,
                     tPoseidon.Core.Net.Social.GameMasterFrames.ChatLine(currentChar.CharacterId, text, clientTextEncoding), default).ConfigureAwait(false);
                 Console.WriteLine($"{LogTag} {ctx.Remote} [chat] '{currentChar.Name}' GM command passed to the SystemServer");
                 return;
             }
+            if (await TryHandleScriptChatAsync(speaker, text).ConfigureAwait(false)) return;
             await SendToMapAsync(speaker.MapId, (Opcode)replyOpcode,
                 tPoseidon.Core.Net.Social.ChatFrames.Line(speaker.PlayerEntityId, currentChar.Name, text, clientTextEncoding)).ConfigureAwait(false);
             Console.WriteLine($"{LogTag} {ctx.Remote} [chat] 0x{replyOpcode:X4} '{currentChar.Name}': {text}");
@@ -5301,6 +5303,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         {
             if (!liveSessions.TryGetValue(ctx, out var speaker)) return;
             var text = tPoseidon.Core.Net.Social.ChatFrames.ReadText(payload.Span, clientTextEncoding);
+            if (GameMasterController.IsCommand(text)) return;
             await SendToMapAsync(speaker.MapId, (Opcode)tPoseidon.Core.Net.Social.ChatFrames.HeadMessageShown,
                 tPoseidon.Core.Net.Social.ChatFrames.Head(speaker.PlayerEntityId, text, clientTextEncoding)).ConfigureAwait(false);
         });
@@ -5767,6 +5770,17 @@ int WeaponDaOf(ulong characterId) =>
         ? weaponStats[tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatDa]
         : 0;
 
+tPoseidon.Core.LibConfig.SkillTableRow? LearnedAction(InGameSessionState learner, int skillId) =>
+    learner.Skills.TryGetValue(skillId, out var learnedLevel) && skillBook.Find(skillId)?.ActionAt(learnedLevel) is { } learnedRow
+        ? learnedRow
+        : null;
+
+bool InCrazyMode(InGameSessionState player) =>
+    player.Effects.Snapshot().Any(held => held.IsApplied && held.Kind.ActionId == CrazyHammer.ModeAction);
+
+float SpeedFactorOf(InGameSessionState player) =>
+    player.GameMasterSpeed * (InCrazyMode(player) ? CrazyHammer.SpeedFactor(LearnedAction(player, CrazyHammer.DoubleCrazySkill)) : 1f);
+
 static float SpeedOfMoveType(MoveSpeedParamEntry speeds, byte effectiveMoveType, float gameMasterSpeed = 1f) => gameMasterSpeed * effectiveMoveType switch
 {
     tPoseidon.Core.Game.Combat.MeleeApproach.ChaseMoveType => speeds.ChaseSpeed,
@@ -5777,10 +5791,10 @@ static float SpeedOfMoveType(MoveSpeedParamEntry speeds, byte effectiveMoveType,
 static byte ScaledSpeedQuarter(byte quarter, float gameMasterSpeed) =>
     (byte)Math.Min(byte.MaxValue, (int)Math.Round(quarter * gameMasterSpeed));
 
-async Task AnnounceGameMasterSpeedAsync(InGameSessionState player)
+async Task AnnounceSpeedAsync(InGameSessionState player)
 {
     if (playerMoveSpeeds is not { } speeds) return;
-    var speed = SpeedOfMoveType(speeds, tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(player.PlayerMoveType), player.GameMasterSpeed);
+    var speed = SpeedOfMoveType(speeds, tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(player.PlayerMoveType), SpeedFactorOf(player));
     player.AnnouncedSpeedQuarter = ProgressFrames.SpeedQuarter(speed);
     await SendToMapAsync(player.MapId, Opcode.S2C_ENTITY_SPEED, ProgressFrames.Speed(player.PlayerEntityId, speed)).ConfigureAwait(false);
 }
@@ -6025,6 +6039,7 @@ byte[] DespawnOf(ushort entityId)
 }
 
 const int SummonedMonsterRegion = -1;
+var gmSpawnLedger = new tPoseidon.Core.Game.Monsters.GameMasterSpawnLedger();
 
 Task<int> QueueNpcSkill(InGameSessionState player, int skillId)
 {
@@ -6060,20 +6075,39 @@ async Task SummonNpcMonstersAsync(InGameSessionState player, int setId)
     Console.WriteLine($"{LogTag} [npc] 0x{player.PlayerEntityId:X4} monster summon {setId} on map {player.MapId}: {string.Join(", ", summons.Select(entry => $"{entry.Count} x {entry.MonsterId}"))}");
 }
 
-async Task<bool> SummonGameMasterMonstersAsync(InGameSessionState gm, uint chrType, byte count)
+async Task<uint> SummonGameMasterMonstersAsync(InGameSessionState gm, tPoseidon.Core.Net.Social.SummonAreaRequest request)
 {
-    var (summonX, summonY) = PlayerPositionAt(gm, DateTimeOffset.UtcNow);
-    for (var i = 0; i < count; i++)
+    if (gm.Character is not { } gmCharacter) return tPoseidon.Core.Net.Social.GameMasterFrames.AckFailed;
+    var ownMap = request.Anchor == tPoseidon.Core.Net.Social.SummonAnchor.GameMaster || request.Map == 0;
+    var mapId = ownMap ? gm.MapId : request.Map;
+    if (!ownMap && mapInfoLookup.GetById(mapId) is null)
     {
-        var born = monsterManager.Spawn((int)chrType, gm.MapId, (ushort)summonX, (ushort)summonY, null, null, SummonedMonsterRegion);
+        Console.WriteLine($"{LogTag} [gm] summon: map {mapId} is not on this game server");
+        return tPoseidon.Core.Net.Social.GameMasterFrames.AckFailed;
+    }
+    zoneGeometryByMap.TryGetValue(mapId, out var geometry);
+    var perMonsterArrival = request.Anchor == tPoseidon.Core.Net.Social.SummonAnchor.MapArrival && !ownMap && request.Radius == 0;
+    var (centreX, centreY) = request.Anchor switch
+    {
+        tPoseidon.Core.Net.Social.SummonAnchor.GameMaster => PlayerPositionAt(gm, DateTimeOffset.UtcNow),
+        tPoseidon.Core.Net.Social.SummonAnchor.Coordinates => (request.X, request.Y),
+        _ => tPoseidon.Core.Game.Warp.RestartArrival.Pick(geometry, Random.Shared),
+    };
+    var spots = tPoseidon.Core.Game.Monsters.GameMasterSpawnArea.Scatter((ushort)centreX, (ushort)centreY, request.Radius, request.Count, geometry, Random.Shared);
+    for (var i = 0; i < spots.Count; i++)
+    {
+        var (spotX, spotY) = perMonsterArrival ? tPoseidon.Core.Game.Warp.RestartArrival.Pick(geometry, Random.Shared) : spots[i];
+        var born = monsterManager.Spawn((int)request.ChrType, mapId, spotX, spotY, null, null, SummonedMonsterRegion);
         if (born is null)
         {
-            Console.WriteLine($"{LogTag} [gm] summon: monster {chrType} is not in the monster table");
-            return false;
+            Console.WriteLine($"{LogTag} [gm] summon: monster {request.ChrType} is not in the monster table");
+            return tPoseidon.Core.Net.Social.GameMasterFrames.AckFailed;
         }
-        await SendToMapAsync(gm.MapId, Opcode.NPC_SPAWN, MobSpawnFrames.Encode(born, monsterCatalog.GetById(born.MonsterParamId))).ConfigureAwait(false);
+        gmSpawnLedger.Record(gmCharacter.CharacterId, born);
+        await SendToMapAsync(mapId, Opcode.NPC_SPAWN, MobSpawnFrames.Encode(born, monsterCatalog.GetById(born.MonsterParamId))).ConfigureAwait(false);
     }
-    return true;
+    Console.WriteLine($"{LogTag} [gm] 0x{gmCharacter.CharacterId:X} summoned {request.Count} x {request.ChrType} on map {mapId} ({request.Anchor}, radius {request.Radius})");
+    return tPoseidon.Core.Net.Social.GameMasterFrames.AckOk;
 }
 
 async Task SummonGameMasterNpcAsync(InGameSessionState gm, uint chrType, IReadOnlyList<string> lines)
@@ -6083,6 +6117,16 @@ async Task SummonGameMasterNpcAsync(InGameSessionState gm, uint chrType, IReadOn
     await SendToMapAsync(gm.MapId, Opcode.NPC_SPAWN, EnterWorldBatchSynthesizer.NpcSpawn(npc, characterInfoCatalog)).ConfigureAwait(false);
 }
 
+async Task RemoveMonsterAsync(MonsterEntity target)
+{
+    monsterManager.Remove(target.EntityId);
+    monsterWanderCycle.Forget(target.EntityId);
+    monsterBattleCycle.Forget(target.EntityId);
+    DropMonsterEffects(target.EntityId);
+    monsterRegenCycle.Release(target);
+    await SendToMapAsync(target.MapId, Opcode.S2C_ENTITY_DESPAWN, DespawnOf(target.EntityId)).ConfigureAwait(false);
+}
+
 async Task<int> RemoveGameMasterObjectsAsync(ushort mapId, ushort objectId)
 {
     var targets = objectId == 0
@@ -6090,14 +6134,21 @@ async Task<int> RemoveGameMasterObjectsAsync(ushort mapId, ushort objectId)
         : monsterManager.Get(objectId) is { MapId: var foundMap } found && foundMap == mapId ? new[] { found } : Array.Empty<MonsterEntity>();
     foreach (var target in targets)
     {
-        monsterManager.Remove(target.EntityId);
-        monsterWanderCycle.Forget(target.EntityId);
-        monsterBattleCycle.Forget(target.EntityId);
-        DropMonsterEffects(target.EntityId);
-        monsterRegenCycle.Release(target);
-        await SendToMapAsync(mapId, Opcode.S2C_ENTITY_DESPAWN, DespawnOf(target.EntityId)).ConfigureAwait(false);
+        await RemoveMonsterAsync(target).ConfigureAwait(false);
     }
     return targets.Length;
+}
+
+async Task<int> RemoveGameMasterOwnMonstersAsync(ulong gameMaster)
+{
+    var removed = 0;
+    foreach (var spawned in gmSpawnLedger.Take(gameMaster))
+    {
+        if (monsterManager.Get(spawned.EntityId) is not { } live || !ReferenceEquals(live, spawned) || live.IsDead) continue;
+        await RemoveMonsterAsync(live).ConfigureAwait(false);
+        removed++;
+    }
+    return removed;
 }
 
 List<(int ChrType, SectorObject Object)> NpcObjectsOn(ushort mapId)
@@ -6254,6 +6305,7 @@ async Task RefreshGameMasterNpcsAsync(ushort mapId)
 gameMasters.World = new GameMasterWorldActions(
     SummonGameMasterMonstersAsync,
     RemoveGameMasterObjectsAsync,
+    RemoveGameMasterOwnMonstersAsync,
     SetGameMasterNpcActiveAsync,
     RefreshGameMasterNpcsAsync,
     SetGameMasterIssueItem,
@@ -6427,6 +6479,20 @@ async Task ShowPlayersAsync(InGameSessionState arriving, Opcode arrivalOpcode)
             await InstantChatSignController.ShowToAsync(present, arriving).ConfigureAwait(false);
         }
     }
+}
+
+async Task RestoreViewAsync(InGameSessionState returning)
+{
+    if (returning.Character is null) return;
+    var shownAt = DateTimeOffset.UtcNow;
+    var (viewerX, viewerY) = PlayerPositionAt(returning, shownAt);
+    foreach (var seen in SectorObjectsOn(returning.MapId, shownAt))
+    {
+        if (!InViewOn(returning.MapId, viewerX, viewerY, seen.X, seen.Y)) continue;
+        await SendSectorFrameAsync(returning, seen.Opcode, seen.Payload()).ConfigureAwait(false);
+    }
+    await ShowPlayersAsync(returning, Opcode.S2C_PLAYER_SPAWN_POST_WARP).ConfigureAwait(false);
+    await SendSectorFrameAsync(returning, Opcode.S2C_PLAYER_SPAWN_POST_WARP, PlayerSpawnOf(returning)).ConfigureAwait(false);
 }
 
 async Task ShowGuardiansAsync(InGameSessionState viewer)
@@ -7556,9 +7622,10 @@ var npcLoopTask = Task.Run(async () =>
             var cleansed = SupportSkills.CleansedBy(action, kind.CleansesFromRow).Where(cleansedId => cleansedId != kind.ActionId).ToList();
             if (!(await RemoveEffectsAsync(cleansedOwner, null, cleansed, sessions).ConfigureAwait(false)).Sent) return false;
         }
-        if (kind.Holds && kind.HoldDelayMs == 0 && effect.IsApplied && targetMonster is not null)
+        if ((kind.Holds || kind.Roots) && kind.HoldDelayMs == 0 && effect.IsApplied && targetMonster is not null)
         {
-            var (heldX, heldY) = targetMonster.HoldUntil(now.AddMilliseconds(effect.DurationMs), now);
+            var heldUntil = now.AddMilliseconds(effect.DurationMs);
+            var (heldX, heldY) = kind.Roots ? targetMonster.RootUntil(heldUntil, now) : targetMonster.HoldUntil(heldUntil, now);
             if (!await SendFromLoopAsync(
                     sessions, Opcode.S2C_OP_0019_TBD,
                     new Packet0019Tbd { EntityId = targetMonster.EntityId, WorldX = heldX, WorldY = heldY, StateFlag = targetMonster.MoveType }.EncodePayload(),
@@ -7578,6 +7645,7 @@ var npcLoopTask = Task.Run(async () =>
         {
             return false;
         }
+        if (kind.ChangesSpeed && effect.IsApplied && ownerSession is { } speedOwner) await AnnounceSpeedAsync(speedOwner.Value).ConfigureAwait(false);
         if (openingHit is { } prisonHit && effect.IsApplied && targetMonster is not null
             && !await OpeningStrikeAsync(caster, targetMonster, prisonHit, sessions, now).ConfigureAwait(false))
         {
@@ -8078,6 +8146,7 @@ var npcLoopTask = Task.Run(async () =>
     {
         if (!ended.IsApplied) return true;
         if (ended.Kind.HidesOwner && !await SendVisibilityAsync(owner.Value, UtilitySkills.VisibleMask, sessions).ConfigureAwait(false)) return false;
+        if (ended.Kind.ChangesSpeed) await AnnounceSpeedAsync(owner.Value).ConfigureAwait(false);
         if (ended.Kind.Morph != MorphRule.None && !await EndMorphAsync(owner, ended).ConfigureAwait(false)) return false;
         if (ended.ResistDeltas.Count > 0)
         {
@@ -9839,7 +9908,7 @@ var npcLoopTask = Task.Run(async () =>
         }
         var targetAt = target.GetInterpolatedPosition(now);
         var restoredSpeed = playerMoveSpeeds is { } flashSpeeds
-            ? SpeedOfMoveType(flashSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.RunMoveType, caster.GameMasterSpeed)
+            ? SpeedOfMoveType(flashSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.RunMoveType, SpeedFactorOf(caster))
             : 0f;
         var distance = SkillAreaRules.Distance(caster.PlayerX, caster.PlayerY, targetAt.x, targetAt.y);
         var arrivalMs = distance >= ObjectHits.FlashArrivalDistance
@@ -12698,7 +12767,7 @@ var npcLoopTask = Task.Run(async () =>
             if (approach.Kind != tPoseidon.Core.Game.Combat.MeleeApproachKind.InRange)
             {
                 var moveType = tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(order.MoveType);
-                var speed = playerMoveSpeeds is { } shooterSpeeds ? SpeedOfMoveType(shooterSpeeds, moveType, shooter.GameMasterSpeed) : 0f;
+                var speed = playerMoveSpeeds is { } shooterSpeeds ? SpeedOfMoveType(shooterSpeeds, moveType, SpeedFactorOf(shooter)) : 0f;
                 var route = speed > 0 && geometry is not null
                     ? tPoseidon.Core.Game.Monsters.WanderRoute.FindToPoint(geometry, shooter.PlayerX, shooter.PlayerY, approach.X, approach.Y)
                     : null;
@@ -12887,14 +12956,6 @@ var npcLoopTask = Task.Run(async () =>
             strike.AttackerEntityId, strike.TargetEntityId, ownerEntityId, sessions).ConfigureAwait(false);
     }
 
-    tPoseidon.Core.LibConfig.SkillTableRow? LearnedAction(InGameSessionState learner, int skillId) =>
-        learner.Skills.TryGetValue(skillId, out var learnedLevel) && skillBook.Find(skillId)?.ActionAt(learnedLevel) is { } learnedRow
-            ? learnedRow
-            : null;
-
-    bool InCrazyMode(InGameSessionState player) =>
-        player.Effects.Snapshot().Any(held => held.IsApplied && held.Kind.ActionId == CrazyHammer.ModeAction);
-
     async Task<bool> FillCrazyGaugeAsync(
         KeyValuePair<S2SessionContext, InGameSessionState> session,
         List<KeyValuePair<S2SessionContext, InGameSessionState>> sessions,
@@ -13011,7 +13072,7 @@ var npcLoopTask = Task.Run(async () =>
         }
         if (playerMoveSpeeds is { } fighterSpeeds)
         {
-            var runSpeed = SpeedOfMoveType(fighterSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.RunMoveType, fighter.GameMasterSpeed);
+            var runSpeed = SpeedOfMoveType(fighterSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.RunMoveType, SpeedFactorOf(fighter));
             var runSpeedQuarter = ProgressFrames.SpeedQuarter(runSpeed);
             if (runSpeedQuarter != fighter.AnnouncedSpeedQuarter)
             {
@@ -13384,7 +13445,7 @@ var npcLoopTask = Task.Run(async () =>
                     .Select(s => ((int)s.Value.PlayerX, (int)s.Value.PlayerY))
                     .ToArray();
                 var wanderers = monsterManager.GetByMap(mapId)
-                    .Where(m => !monsterBattleCycle.IsFighting(m.EntityId) && !m.IsHeld(now))
+                    .Where(m => !monsterBattleCycle.IsFighting(m.EntityId) && !m.IsRooted(now))
                     .ToArray();
                 foreach (var wanderEvent in monsterWanderCycle.Tick(zoneGeometry, wanderers, playerPositions, now))
                 {
@@ -13452,7 +13513,7 @@ var npcLoopTask = Task.Run(async () =>
                             ? tPoseidon.Core.Game.Combat.MeleeApproach.ChaseMoveType
                             : attackerState.AttackMoveType;
                         var effectiveOrderType = tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(orderType);
-                        var chaseSpeed = SpeedOfMoveType(moveSpeeds, effectiveOrderType, attackerState.GameMasterSpeed);
+                        var chaseSpeed = SpeedOfMoveType(moveSpeeds, effectiveOrderType, SpeedFactorOf(attackerState));
                         var route = chaseSpeed > 0
                             && now - attackerState.LastChaseOrderAt >= orderGap
                             && zoneGeometryByMap.TryGetValue(mapId, out var chaseGeometry)
@@ -13671,7 +13732,7 @@ var npcLoopTask = Task.Run(async () =>
                         else
                         {
                             var walkSpeed = playerMoveSpeeds is { } chaseSpeeds
-                                ? SpeedOfMoveType(chaseSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.RunMoveType, caster.GameMasterSpeed)
+                                ? SpeedOfMoveType(chaseSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.RunMoveType, SpeedFactorOf(caster))
                                 : 0f;
                             var (stopX, stopY) = SkillChecks.ChaseEnd(castRange, walkSpeed, caster.PlayerX, caster.PlayerY, reachedX, reachedY);
                             var walk = walkSpeed > 0 && zoneGeometry is not null

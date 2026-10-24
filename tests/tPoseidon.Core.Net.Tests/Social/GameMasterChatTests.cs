@@ -5,18 +5,6 @@ namespace tPoseidon.Core.Net.Tests.Social;
 
 public sealed class GameMasterChatTests
 {
-    private static readonly Dictionary<string, string> Keywords = new()
-    {
-        ["Login"] = "login",
-        ["Logout"] = "Logout",
-        ["Kick"] = "kick",
-        ["TeleportChrToZone"] = "teleportchrtozone",
-        ["TeleportSelfToChr"] = "teleportselftochr",
-        ["Speed"] = "Speed",
-        ["Immortal"] = "immortal",
-        ["SearchMonster"] = "searchmonster",
-    };
-
     private static readonly Dictionary<string, string> Results = new()
     {
         ["GM_Kick"] = "%s is forced to kick out",
@@ -25,27 +13,29 @@ public sealed class GameMasterChatTests
 
     private static readonly string[] KickArguments = { "Bad", "spamming the square" };
 
-    private static GameMasterChat Chat => new(Keywords, Results);
+    private static GameMasterChat Chat => new(Results);
 
     [Fact]
     public void KeywordsFromTheTableAreCommandsAndPlainChatIsNot()
     {
-        Assert.True(Chat.IsCommand("/login secret"));
-        Assert.True(Chat.IsCommand("/LOGIN secret"));
-        Assert.False(Chat.IsCommand("login secret"));
-        Assert.False(Chat.IsCommand("/hello there"));
+        Assert.True(GameMasterChat.IsCommand("@login secret"));
+        Assert.True(GameMasterChat.IsCommand("@LOGIN secret"));
+        Assert.True(GameMasterChat.IsCommand("  @login secret"));
+        Assert.False(GameMasterChat.IsCommand("login secret"));
+        Assert.False(GameMasterChat.IsCommand("/login secret"));
+        Assert.False(GameMasterChat.IsCommand("@hello there"));
     }
 
     [Fact]
     public void KeywordsWithoutABuiltCommandStayPlainChat()
     {
-        Assert.False(Chat.IsCommand("/searchmonster Wolf"));
+        Assert.False(GameMasterChat.IsCommand("@searchmonster Wolf"));
     }
 
     [Fact]
     public void QuotedArgumentsStayTogether()
     {
-        var command = Chat.Parse("/kick Bad \"spamming the square\"");
+        var command = GameMasterChat.Parse("@kick Bad \"spamming the square\"");
 
         Assert.NotNull(command);
         Assert.Equal("Kick", command!.Name);
@@ -63,7 +53,7 @@ public sealed class GameMasterChatTests
     [Fact]
     public void ResultsFillEveryPlaceholderInOrder()
     {
-        var chat = new GameMasterChat(Keywords, new Dictionary<string, string>
+        var chat = new GameMasterChat(new Dictionary<string, string>
         {
             ["GM_SpeedSet"] = "Speed is set to %d.",
             ["GM_KickReason"] = "%s is forced to kick out after 5 seconds for'%s'.",
@@ -91,21 +81,39 @@ public sealed class GameMasterChatTests
     }
 
     [Fact]
-    public void EveryUsageRowIsACommandAndKeywordsAreLookedUpByName()
+    public void EveryUsageRowIsACommandWithItsLowerCaseNameAsKeyword()
     {
-        var keywords = GameMasterChat.Commands.ToDictionary(command => command.Name, command => "kw" + command.Name.ToLowerInvariant());
-        var chat = new GameMasterChat(keywords, Results);
-
         Assert.Equal(GameMasterChat.Commands.Count, GameMasterChat.Commands.Select(command => command.Name).Distinct().Count());
+        Assert.Equal(GameMasterChat.Commands.Count, GameMasterChat.Keywords.Count);
         foreach (var command in GameMasterChat.Commands)
         {
-            Assert.Equal(command.Name, chat.Parse("/kw" + command.Name.ToLowerInvariant())!.Name);
-            Assert.Equal("kw" + command.Name.ToLowerInvariant(), chat.KeywordOf(command.Name));
+            Assert.Equal(command.Name.ToLowerInvariant(), command.Keyword);
+            Assert.Equal(command.Name, GameMasterChat.Parse("@" + command.Keyword)!.Name);
+            Assert.Contains(command.Keyword, GameMasterChat.Keywords);
             Assert.False(string.IsNullOrWhiteSpace(command.Description));
         }
+    }
 
-        Assert.Equal("login", Chat.KeywordOf(GameMasterChat.Login));
-        Assert.Null(Chat.KeywordOf("SearchMonster"));
+    [Theory]
+    [InlineData("@login secret", GameMasterChat.Login)]
+    [InlineData("@logout", GameMasterChat.Logout)]
+    [InlineData("@kick Bad", GameMasterChat.Kick)]
+    [InlineData("@speed 3", GameMasterChat.Speed)]
+    [InlineData("@teleportchrtozone Bad 23", GameMasterChat.TeleportChrToZone)]
+    [InlineData("@summonmonster 2001 3", GameMasterChat.SummonMonster)]
+    [InlineData("@commandhelp", GameMasterChat.CommandHelp)]
+    public void EachGameMasterLineIsRoutedToItsCommand(string line, string name)
+    {
+        Assert.True(GameMasterChat.IsCommand(line));
+        Assert.Equal(name, GameMasterChat.Parse(line)!.Name);
+    }
+
+    [Fact]
+    public void ALineWithTheWrongArgumentsIsStillAGameMasterLineSoItIsNeverBroadcast()
+    {
+        Assert.True(GameMasterChat.IsCommand("@login"));
+        Assert.True(GameMasterChat.IsCommand("@login wrong password with spaces"));
+        Assert.Empty(GameMasterChat.Parse("@login")!.Arguments);
     }
 
     [Fact]

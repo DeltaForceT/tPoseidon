@@ -4,14 +4,16 @@ namespace tPoseidon.Core.Net.Social;
 
 public sealed record GameMasterChatCommand(string Name, IReadOnlyList<string> Arguments);
 
-public sealed record GameMasterChatUsage(string Name, string Arguments, string Description);
+public sealed record GameMasterChatUsage(string Name, string Arguments, string Description)
+{
+    public string Keyword => Name.ToLowerInvariant();
+}
 
 public sealed class GameMasterChat
 {
-    public const string KeywordTable = "GMKeywordStrings";
     public const string ResultTable = "ChatStrings";
     public const string HelpTable = "GMStrings";
-    public const char CommandMark = '/';
+    public const char CommandMark = '@';
 
     public const string Login = "Login";
     public const string Logout = "Logout";
@@ -55,6 +57,8 @@ public sealed class GameMasterChat
     public const string RemovePersonalShopText = "GM_RemovePersonalShop";
     public const string RemoveMyCampText = "GM_RemoveMyCamp";
     public const string RemoveInstantChatText = "GM_RemoveInstantChat";
+    public const string NotAllowedLine = "You are not allowed to do that.";
+    public const string BadArgumentsLine = "The command was not understood; type @commandhelp for the list.";
 
     private static readonly System.Text.RegularExpressions.Regex Placeholder = new(@"%\s?(?:I64u|s|d)", System.Text.RegularExpressions.RegexOptions.Compiled);
 
@@ -87,42 +91,31 @@ public sealed class GameMasterChat
         new GameMasterChatUsage(CommandHelp, "", "Print the GM command help lines of the client data."),
     };
 
-    private readonly Dictionary<string, string> _nameByKeyword;
-    private readonly Dictionary<string, string> _keywordByName;
+    private static readonly Dictionary<string, string> NameByKeyword =
+        Commands.ToDictionary(command => command.Keyword, command => command.Name, StringComparer.OrdinalIgnoreCase);
+
     private readonly IReadOnlyDictionary<string, string> _results;
     private readonly IReadOnlyDictionary<string, string> _help;
 
-    public GameMasterChat(IReadOnlyDictionary<string, string> keywords, IReadOnlyDictionary<string, string> results, IReadOnlyDictionary<string, string>? help = null)
+    public GameMasterChat(IReadOnlyDictionary<string, string> results, IReadOnlyDictionary<string, string>? help = null)
     {
-        ArgumentNullException.ThrowIfNull(keywords);
         _results = results ?? throw new ArgumentNullException(nameof(results));
         _help = help ?? new Dictionary<string, string>();
-        _nameByKeyword = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        _keywordByName = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var command in Commands)
-        {
-            if (!keywords.TryGetValue(command.Name, out var keyword) || keyword.Trim().Length == 0) continue;
-            if (_nameByKeyword.TryAdd(keyword.Trim(), command.Name)) _keywordByName[command.Name] = keyword.Trim();
-        }
     }
+
+    public static IReadOnlySet<string> Keywords { get; } = new HashSet<string>(NameByKeyword.Keys, StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyList<string> HelpNames => _help.Keys.ToArray();
 
-    public string? KeywordOf(string name)
-    {
-        ArgumentNullException.ThrowIfNull(name);
-        return _keywordByName.TryGetValue(name, out var keyword) ? keyword : null;
-    }
+    public static bool IsCommand(string line) => Parse(line) is not null;
 
-    public bool IsCommand(string line) => Parse(line) is not null;
-
-    public GameMasterChatCommand? Parse(string line)
+    public static GameMasterChatCommand? Parse(string line)
     {
         ArgumentNullException.ThrowIfNull(line);
         var text = line.Trim();
         if (text.Length < 2 || text[0] != CommandMark) return null;
         var words = Split(text[1..]);
-        if (words.Count == 0 || !_nameByKeyword.TryGetValue(words[0], out var name)) return null;
+        if (words.Count == 0 || !NameByKeyword.TryGetValue(words[0], out var name)) return null;
         return new GameMasterChatCommand(name, words.Skip(1).ToArray());
     }
 

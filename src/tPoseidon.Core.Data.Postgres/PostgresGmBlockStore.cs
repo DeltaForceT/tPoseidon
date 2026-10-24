@@ -67,4 +67,26 @@ public sealed class PostgresGmBlockStore : IGmBlockStore
         if (!reader.Read()) return null;
         return new GmRunningBlock((byte)reader.GetInt16(0), reader.GetInt32(1));
     }
+
+    public IReadOnlyList<GmActiveBlock> ActiveBlocks()
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand(
+            """
+            SELECT b.block_type, b.uid, c.name, b.block_from,
+                   (floor(extract(epoch FROM b.block_to) / 60) - floor(extract(epoch FROM now()) / 60))::integer
+              FROM gm_block1 AS b
+              JOIN characters AS c ON c.character_id = b.uid
+             WHERE b.uid_type = 2 AND b.block_to > now()
+             ORDER BY b.block_to
+            """,
+            conn);
+        using var reader = cmd.ExecuteReader();
+        var blocks = new List<GmActiveBlock>();
+        while (reader.Read())
+        {
+            blocks.Add(new GmActiveBlock((byte)reader.GetInt16(0), unchecked((ulong)reader.GetInt64(1)), reader.GetString(2), reader.GetInt32(4), new DateTimeOffset(reader.GetDateTime(3))));
+        }
+        return blocks;
+    }
 }

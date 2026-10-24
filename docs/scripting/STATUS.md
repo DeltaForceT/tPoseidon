@@ -16,7 +16,7 @@ We kept that code in place, untouched and unused, and built the working engine n
 - Language: lexer, parser, bytecode compiler, resumable machine. Variables, expressions, loops, functions, menus with conditions.
 - Library: loads a folder of `.tscript` files, reports `file:line:column` errors, skips bad files, resolves functions across files, schedules timers and cron entries.
 - Variables: character, account and server scope, persisted through migration 067 (`script_variable`).
-- Server (KR 2014): script NPCs placed in the world, overrides by type, map and position, hooks for login, level up, map enter, monster kill and named events, timers, chat commands, `/script reload`, and the CLI commands `tposeidon scripts check|reload|folder`.
+- Server (KR 2014): script NPCs placed in the world, overrides by type, map and position, hooks for login, level up, map enter, monster kill and named events, timers, chat commands, `@script reload`, and the CLI commands `tposeidon scripts check|reload|folder`.
 - Tests: parser, compiler, machine, library, scheduler and variables in `tests/tPoseidon.Core.Game.Tests/Scripting`, dialog frames and the engine in `tests/tPoseidon.Core.Net.Tests/Dialogs`, and the four example scripts are compiled and run in `ExampleScriptTests`.
 
 ## Not done or not verified

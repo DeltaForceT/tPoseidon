@@ -9,9 +9,13 @@ public interface IGmBlockStore
     int SetUserAuthority(string characterName, byte authority);
 
     GmRunningBlock? LatestRunningBlock(ulong characterId);
+
+    IReadOnlyList<GmActiveBlock> ActiveBlocks();
 }
 
 public readonly record struct GmRunningBlock(byte Type, int MinutesLeft);
+
+public readonly record struct GmActiveBlock(byte Type, ulong CharacterId, string Name, int MinutesLeft, DateTimeOffset From);
 
 public static class GmBlockRules
 {

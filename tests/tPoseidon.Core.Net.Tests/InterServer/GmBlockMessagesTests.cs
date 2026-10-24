@@ -28,6 +28,10 @@ public sealed class GmBlockMessagesTests
         public int SetUserAuthority(string characterName, byte authority) => 1;
 
         public GmRunningBlock? LatestRunningBlock(ulong characterId) => null;
+
+        public IReadOnlyList<GmActiveBlock> ActiveBlocks() => Active;
+
+        public List<GmActiveBlock> Active { get; } = new();
     }
 
     private static InterServerFrame Request(InterServerOpcode opcode, byte[] body) => new()
