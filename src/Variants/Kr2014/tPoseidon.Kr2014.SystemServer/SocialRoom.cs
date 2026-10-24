@@ -15,7 +15,13 @@ public sealed class SocialMember
 
     public S2SessionContext Context { get; }
 
-    public Character Character { get; }
+    public Character Character { get; private set; }
+
+    public void Rename(string newName)
+    {
+        ArgumentNullException.ThrowIfNull(newName);
+        Character = Character.WithName(newName);
+    }
 
     public bool FriendLoggedIn { get; set; }
 

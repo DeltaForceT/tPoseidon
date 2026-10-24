@@ -196,6 +196,23 @@ public sealed class MasterRoutedCharStore : ICharStore
         }
     }
 
+    public uint EditCharacter(ulong characterId, CharacterEdit edit)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        try
+        {
+            var reply = Invoke(characterId, CharStoreSubOp.EditCharacter, CharStoreWire.EncodeEdit(edit), out var ok);
+            if (ok) return new PacketReader(reply).ReadUInt32();
+            _log($"char EditCharacter char 0x{characterId:X16}: master CANCEL; using local fallback");
+            return _fallback.EditCharacter(characterId, edit);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log($"char EditCharacter char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
+            return _fallback.EditCharacter(characterId, edit);
+        }
+    }
+
     private byte[] Invoke(ulong charUid, CharStoreSubOp subOp, byte[] body, out bool ok)
     {
         if (!_client.IsConnected)

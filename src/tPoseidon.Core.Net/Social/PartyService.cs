@@ -888,6 +888,20 @@ public sealed class PartyService
         return outbox;
     }
 
+    public PartyOutbox MemberRenamed(ulong characterId, string newName)
+    {
+        ArgumentNullException.ThrowIfNull(newName);
+        var outbox = new PartyOutbox();
+        lock (_gate)
+        {
+            if (!_online.TryGetValue(characterId, out var member)) return outbox;
+            member.Name = newName;
+            if (member.Party is not { } party) return outbox;
+            Broadcast(outbox, party, PartyFrames.MemberRenamed, PartyFrames.MemberNameFor(member.MemberId, newName, _text), except: null);
+        }
+        return outbox;
+    }
+
     public PartyOutbox SetDead(ulong characterId, bool dead)
     {
         var outbox = new PartyOutbox();
@@ -1198,7 +1212,7 @@ public sealed class PartyService
         }
 
         public ulong CharacterId { get; }
-        public string Name { get; }
+        public string Name { get; set; }
         public ushort Kind { get; set; }
         public ushort Level { get; set; }
         public ushort Zone { get; set; }

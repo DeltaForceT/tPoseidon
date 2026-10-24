@@ -118,6 +118,9 @@ public sealed class PostgresAccountStore : IAccountStore
     public bool SaveCharacterStats(ulong characterId, CharacterStatsSnapshot snapshot) =>
         _chars.SaveCharacterStats(characterId, snapshot);
 
+    public uint EditCharacter(ulong characterId, CharacterEdit edit) =>
+        _chars.EditCharacter(characterId, edit);
+
     public bool DeleteCharacter(ulong characterId, uint ownerAccountId) =>
         _chars.DeleteCharacter(characterId, ownerAccountId);
 

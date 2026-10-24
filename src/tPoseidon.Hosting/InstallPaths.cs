@@ -36,6 +36,8 @@ public sealed class InstallPaths
 
     public string ServerData => Path.Combine(Root, "server-data");
 
+    public string KeyTable => Path.Combine(ServerData, "keytable-s2v2010.bin");
+
     public string Migrations => Path.Combine(App, "migrations");
 
     public string SettingsFile => Path.Combine(Root, "tposeidon.json");

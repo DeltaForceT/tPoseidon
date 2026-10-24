@@ -481,6 +481,66 @@ public sealed class LibConfigXmlReader
         return entries;
     }
 
+    public IReadOnlyDictionary<int, ImprintEntry> LoadImprints()
+    {
+        var imprints = new Dictionary<int, ImprintEntry>();
+        LoadTable(ImprintEntry.TableName, row => imprints.TryAdd(ReadInt(row, "Id"), new ImprintEntry(
+            ReadInt(row, "Id"), ReadInt(row, "Time"), ReadInt(row, "Type"), ReadFloat(row, "Value"))));
+        return imprints;
+    }
+
+    public IReadOnlyDictionary<int, ExpBoostEntry> LoadExpBoosts()
+    {
+        var boosts = new Dictionary<int, ExpBoostEntry>();
+        LoadTable(ExpBoostEntry.TableName, row => boosts.TryAdd(ReadInt(row, "ItemId"), new ExpBoostEntry(
+            ReadInt(row, "ItemId"), ReadFloat(row, "ExpAdvantage"), ReadFloat(row, "TmxpAdvantage"))));
+        return boosts;
+    }
+
+    public BoxTables LoadBoxTables()
+    {
+        var bonuses = new Dictionary<int, BonusPresentEntry>();
+        var keyboxes = new Dictionary<int, KeyboxEntry>();
+        LoadTablesNamed(BoxTables.TableNames, (table, row) =>
+        {
+            if (table == BonusPresentEntry.TableName)
+            {
+                bonuses.TryAdd(ReadInt(row, "PresentId"), new BonusPresentEntry(
+                    ReadInt(row, "PresentId"), ReadInt(row, "SelectItemId"), ReadInt(row, "PickBonusPresentId"), ReadInt(row, "UnpickBonusPresentId")));
+                return;
+            }
+            var keys = ReadString(row, "KeyItemID")
+                .Split(KeyboxEntry.KeySeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(key => int.TryParse(key, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var id) ? id : 0)
+                .Where(id => id > 0)
+                .ToArray();
+            keyboxes.TryAdd(ReadInt(row, "KeyBoxID"), new KeyboxEntry(
+                ReadInt(row, "KeyBoxID"), keys, ReadInt(row, "OnlyKeyitem") != 0, ReadInt(row, "NoramlItemID"),
+                ReadInt(row, "RareItemID_TypeA"), ReadInt(row, "RareItemID_TypeB"), ReadInt(row, "RareItem_TypeB_Droprate")));
+        });
+        return new BoxTables(bonuses, keyboxes);
+    }
+
+    public SpecialPortTables LoadSpecialPortTables()
+    {
+        var advanced = new Dictionary<int, TeleportAdvEntry>();
+        var random = new Dictionary<int, RandomPortEntry>();
+        LoadTablesNamed(SpecialPortTables.TableNames, (table, row) =>
+        {
+            if (table == SpecialPortTables.AdvancedTable)
+            {
+                advanced.TryAdd(ReadInt(row, "ZoneIndex"), new TeleportAdvEntry(ReadInt(row, "ZoneIndex"), ReadInt(row, "ZoneType"), ReadInt(row, "ZoneID")));
+                return;
+            }
+            var zones = Enumerable.Range(0, SpecialPortTables.RandomZoneSlots)
+                .Select(slot => new RandomPortZone(ReadInt(row, $"ZoneID_{slot}"), ReadInt(row, $"Ratio_{slot}")))
+                .Where(zone => zone.Ratio > 0)
+                .ToArray();
+            random.TryAdd(ReadInt(row, "ID"), new RandomPortEntry(ReadInt(row, "ID"), ReadString(row, "Notice"), zones));
+        });
+        return new SpecialPortTables(advanced, random);
+    }
+
     public FortuneTables LoadFortuneTables()
     {
         var cards = new Dictionary<int, FortuneCardEntry>();

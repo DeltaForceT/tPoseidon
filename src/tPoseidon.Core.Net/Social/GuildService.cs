@@ -56,6 +56,15 @@ public sealed class GuildService
         return outbox;
     }
 
+    public void MemberRenamed(ulong characterId, string newName)
+    {
+        ArgumentNullException.ThrowIfNull(newName);
+        lock (_gate)
+        {
+            if (_online.TryGetValue(characterId, out var member)) member.Name = newName;
+        }
+    }
+
     public GuildOutbox Logout(ulong characterId)
     {
         lock (_gate) _online.Remove(characterId);
@@ -581,7 +590,7 @@ public sealed class GuildService
 
         public ulong CharacterId { get; }
 
-        public string Name { get; }
+        public string Name { get; set; }
 
         public bool SessionOpen { get; set; }
 

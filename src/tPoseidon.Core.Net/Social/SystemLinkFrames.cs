@@ -48,6 +48,8 @@ public static class SystemLinkFrames
     public const ushort LevelChanged = 0x15A0;
     public const ushort Died = 0x15A1;
     public const ushort Revived = 0x15A5;
+    public const ushort CharacterRenamed = 0x15A6;
+    public const ushort Megaphone = 0x15A7;
     public const ushort BeginPartyQuest = 0x15B1;
     public const ushort PartyQuestBegun = 0x15B2;
     public const ushort PartyQuestNotBegun = 0x15B3;
@@ -90,6 +92,43 @@ public static class SystemLinkFrames
     {
         var r = new PacketReader(body);
         return (r.ReadUInt64(), r.ReadByte(), r.ReadByte());
+    }
+
+    public static byte[] CharacterRenamedFor(ulong characterId, string oldName, string newName, System.Text.Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(oldName);
+        ArgumentNullException.ThrowIfNull(newName);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(40);
+        w.WriteUInt64(characterId);
+        w.WriteNulTerminated(oldName, text);
+        w.WriteNulTerminated(newName, text);
+        return w.ToArray();
+    }
+
+    public static (ulong CharacterId, string OldName, string NewName) ReadCharacterRenamed(ReadOnlySpan<byte> body, System.Text.Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var r = new PacketReader(body);
+        return (r.ReadUInt64(), r.ReadNulTerminated(text), r.ReadNulTerminated(text));
+    }
+
+    public static byte[] MegaphoneFor(ulong characterId, ushort style, string message, System.Text.Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(16 + message.Length);
+        w.WriteUInt64(characterId);
+        w.WriteUInt16(style);
+        w.WriteNulTerminated(message, text);
+        return w.ToArray();
+    }
+
+    public static (ulong CharacterId, ushort Style, string Message) ReadMegaphone(ReadOnlySpan<byte> body, System.Text.Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var r = new PacketReader(body);
+        return (r.ReadUInt64(), r.ReadUInt16(), r.ReadNulTerminated(text));
     }
 
     public static byte[] CharacterAndZone(ulong characterId, ushort zone)

@@ -80,6 +80,7 @@ public static class PartyFrames
     public const ushort InviteCancelled = 0x1BAB;
     public const ushort LevelChanged = 0x1BAC;
     public const ushort MemberStateChanged = 0x1BAD;
+    public const ushort MemberRenamed = 0x1BAF;
     public const ushort PartyBonus = 0x1BAE;
 
     public const int MemberInfoLength = 60;
@@ -290,6 +291,16 @@ public static class PartyFrames
     }
 
     public static byte[] ZoneFor(ushort memberId, ushort zone) => MemberPair(memberId, zone);
+
+    public static byte[] MemberNameFor(ushort memberId, string name, Encoding encoding)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(encoding);
+        var w = new PacketWriter(24);
+        w.WriteUInt16(memberId);
+        w.WriteNulTerminated(name, encoding);
+        return w.ToArray();
+    }
 
     public static byte[] MemberStateFor(ushort memberId, byte kind, byte detail)
     {

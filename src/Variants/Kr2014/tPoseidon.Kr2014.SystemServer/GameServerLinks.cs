@@ -41,6 +41,12 @@ public sealed class GameServerLinks
 
     public Func<ulong, byte, byte, CancellationToken, Task>? OnKindChanged { get; set; }
 
+    public Func<ulong, string, string, CancellationToken, Task>? OnRenamed { get; set; }
+
+    public Func<ulong, ushort, string, CancellationToken, Task>? OnMegaphone { get; set; }
+
+    public System.Text.Encoding Text { get; init; } = System.Text.Encoding.UTF8;
+
     public Func<ushort, ReadOnlyMemory<byte>, CancellationToken, Task>? OnCoupleMessage { get; set; }
 
     public Func<OfficerOrder, CancellationToken, Task>? OnReport { get; set; }
@@ -49,7 +55,7 @@ public sealed class GameServerLinks
 
     public Func<ReadOnlyMemory<byte>, CancellationToken, Task>? OnGuildRoomInvalid { get; set; }
 
-    public Func<ReadOnlyMemory<byte>, CancellationToken, Task>? OnGameMasterChat { get; set; }
+    public Func<S2SessionContext, ReadOnlyMemory<byte>, CancellationToken, Task>? OnGameMasterChat { get; set; }
 
     public ushort? ZoneOf(ulong characterId) => _whereabouts.TryGetValue(characterId, out var where) ? where.Zone : null;
 
@@ -67,6 +73,7 @@ public sealed class GameServerLinks
                     RegisterPartyQuests(ctx);
                     RegisterCouple(ctx);
                     RegisterReports(ctx);
+                    RegisterNames(ctx);
                     RegisterGuildGames(ctx);
                     RegisterGameMasters(ctx);
                     OnConnected?.Invoke(ctx);
@@ -146,7 +153,7 @@ public sealed class GameServerLinks
     private void RegisterGameMasters(S2SessionContext link)
     {
         link.Dispatcher.Register(GameMasterFrames.LinkChatCommand, (_, payload, ct) =>
-            OnGameMasterChat is { } handle ? handle(payload, ct) : Task.CompletedTask);
+            OnGameMasterChat is { } handle ? handle(link, payload, ct) : Task.CompletedTask);
         link.Dispatcher.Register(GameMasterFrames.LinkTeleportRelay, (_, payload, ct) =>
         {
             if (payload.Length < GameMasterFrames.ChrToChrLength || !GameMasterFrames.TryReadChrToChr(payload.Span, out var who, out ulong _))
@@ -207,7 +214,11 @@ public sealed class GameServerLinks
     public async Task SendDirectAsync(ulong characterId, ushort opcode, byte[] body, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(body);
-        if (!_whereabouts.TryGetValue(characterId, out var where)) return;
+        if (!_whereabouts.TryGetValue(characterId, out var where))
+        {
+            _log($"[game-link] message 0x{opcode:X4} for 0x{characterId:X} skipped: the character is not on a game server");
+            return;
+        }
         try
         {
             await where.Link.SendFrameAsync(opcode, body, (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
@@ -224,6 +235,21 @@ public sealed class GameServerLinks
         {
             var (_, report) = SystemLinkFrames.DecodeOrder(payload.Span);
             return OnReport is { } handle ? handle(report, ct) : Task.CompletedTask;
+        });
+    }
+
+    private void RegisterNames(S2SessionContext link)
+    {
+        link.Dispatcher.Register(SystemLinkFrames.CharacterRenamed, async (opcode, payload, ct) =>
+        {
+            var (characterId, oldName, newName) = SystemLinkFrames.ReadCharacterRenamed(payload.Span, Text);
+            _log($"[game-link] 0x{characterId:X} renamed '{oldName}' to '{newName}'");
+            if (OnRenamed is not null) await OnRenamed(characterId, oldName, newName, ct).ConfigureAwait(false);
+        });
+        link.Dispatcher.Register(SystemLinkFrames.Megaphone, async (opcode, payload, ct) =>
+        {
+            var (characterId, style, message) = SystemLinkFrames.ReadMegaphone(payload.Span, Text);
+            if (OnMegaphone is not null) await OnMegaphone(characterId, style, message, ct).ConfigureAwait(false);
         });
     }
 

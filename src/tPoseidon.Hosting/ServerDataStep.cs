@@ -12,7 +12,6 @@ public static class ServerDataStep
     public const int Steps = 3;
     private const string SnapshotVariant = "kr2014";
     private const string ZoneRoutingFile = "master-zone-routing.json";
-    private const string KeyTableFile = "keytable-s2v2010.bin";
     private const string ZoneRouting = "{\n  \"default\": 2,\n  \"zones\": {\n    \"148\": 2,\n    \"153\": 3\n  }\n}\n";
 
     public static void Run(InstallPaths paths, HostSettings settings, IProgress<StepProgress>? progress = null)
@@ -30,7 +29,7 @@ public static class ServerDataStep
         progress?.Report(new StepProgress(1, Steps, $"Reading the packet key table from {settings.ClientExecutable}..."));
         var extraction = KeyTableExtractor.Extract(File.ReadAllBytes(Path.Combine(settings.ClientFolder, settings.ClientExecutable)));
         Directory.CreateDirectory(paths.ServerData);
-        var keyTablePath = Path.Combine(paths.ServerData, KeyTableFile);
+        var keyTablePath = paths.KeyTable;
         if (extraction.Table is not null)
         {
             File.WriteAllBytes(keyTablePath, extraction.Table);

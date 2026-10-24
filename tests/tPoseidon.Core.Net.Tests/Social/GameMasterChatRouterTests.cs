@@ -186,13 +186,38 @@ public sealed class GameMasterChatRouterTests
     }
 
     [Fact]
-    public void ALineThatIsNotAGmKeywordIsLeftAlone()
+    public void AnUnknownAtCommandIsToldSoAndItsWordsAreNeverLogged()
     {
         var setup = new Setup();
 
-        Assert.Null(setup.Say("@hello there"));
+        var outcome = setup.Say("@" + Password)!;
+
+        Assert.Equal(GameMasterChat.UnknownCommandLine, outcome.Reply);
+        Assert.Null(outcome.Outbox);
+        Assert.Contains(outcome.Audit, line => line.Contains(GmName, StringComparison.Ordinal) && line.Contains("unknown", StringComparison.Ordinal));
+        Assert.DoesNotContain(outcome.Audit, line => line.Contains(Password, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ALineThatDoesNotStartWithAtIsLeftAlone()
+    {
+        var setup = new Setup();
+
         Assert.Null(setup.Say("/login " + Password));
         Assert.Null(setup.Say("login " + Password));
+        Assert.Null(setup.Say("@"));
+    }
+
+    [Fact]
+    public void AKeywordWithTheWrongArgumentsNeverLogsTheArguments()
+    {
+        var setup = new Setup();
+
+        var outcome = setup.LoggedInSay("@speed " + OtherPassword)!;
+
+        Assert.Equal(GameMasterChat.BadArgumentsLine, outcome.Reply);
+        Assert.DoesNotContain(outcome.Audit, line => line.Contains(OtherPassword, StringComparison.Ordinal));
+        Assert.Contains(outcome.Audit, line => line.Contains("not understood", StringComparison.Ordinal));
     }
 
     [Fact]

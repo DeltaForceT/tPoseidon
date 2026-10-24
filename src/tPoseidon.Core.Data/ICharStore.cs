@@ -10,4 +10,5 @@ public interface ICharStore
     bool SetCharacterHome(ulong characterId, ushort homeMapId);
     bool SetCharacterPosition(ulong characterId, ushort mapId, ushort positionX, ushort positionY);
     bool SaveCharacterStats(ulong characterId, CharacterStatsSnapshot snapshot);
+    uint EditCharacter(ulong characterId, CharacterEdit edit);
 }

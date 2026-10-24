@@ -50,7 +50,7 @@ public sealed class GmServices
         return new GmServices
         {
             Transport = GmToolTransport.Shared,
-            Endpoint = GmToolEndpoint.For(settings),
+            Endpoint = GmToolEndpoint.For(settings, paths),
             Accounts = new DatabaseGmAccountBook(settings.Database),
             Penalties = new DatabasePenaltyBook(settings.Database),
             Catalog = () => GameCatalog.For(settings),

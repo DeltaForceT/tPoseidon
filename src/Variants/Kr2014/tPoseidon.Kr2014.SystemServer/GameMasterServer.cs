@@ -300,23 +300,35 @@ public sealed class GameMasterServer
         if (_tools.TryRemove(ctx, out var tool) && tool is not null) _gameMasters.Closed(tool.CharacterId, tool: true);
     }
 
-    public async Task ChatAsync(ReadOnlyMemory<byte> payload, CancellationToken ct)
+    public async Task ChatAsync(S2SessionContext link, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
-        if (!GameMasterFrames.TryReadChatLine(payload.Span, _text, out var characterId, out var line)) return;
-        if (_room.Find(characterId) is not { } member) return;
-        if (_router.Route(characterId, member.Character.Name, ClientIp(member.Context), line) is not { } outcome) return;
+        ArgumentNullException.ThrowIfNull(link);
+        if (!GameMasterFrames.TryReadChatCommand(payload.Span, _text, out var chat))
+        {
+            _log($"[gm] chat line from {link.Remote} dropped: {payload.Length} B is not a chat command frame");
+            return;
+        }
+        if (_games.ZoneOf(chat.CharacterId) is null)
+        {
+            _log($"[gm] chat line from 0x{chat.CharacterId:X} '{chat.Name}': the character has not entered a zone on a game server yet");
+        }
+        if (_router.Route(chat.CharacterId, chat.Name, chat.Address, chat.Line) is not { } outcome)
+        {
+            _log($"[gm] chat line from 0x{chat.CharacterId:X} '{chat.Name}' ignored: not an @ command");
+            return;
+        }
         foreach (var entry in outcome.Audit) _log(entry);
-        if (outcome.Reply is { } reply) await TellAsync(characterId, reply, ct).ConfigureAwait(false);
+        if (outcome.Reply is { } reply) await TellAsync(link, chat.CharacterId, reply, ct).ConfigureAwait(false);
         if (outcome.Outbox is not { } outbox) return;
-        await DeliverAsync(outbox, characterId, ct, subject: SubjectOf(line, member.Character.Name)).ConfigureAwait(false);
-        if (outbox.Disconnect) await member.Context.Session.DisposeAsync().ConfigureAwait(false);
+        await DeliverAsync(outbox, chat.CharacterId, ct, subject: SubjectOf(chat.Line, chat.Name)).ConfigureAwait(false);
+        if (outbox.Disconnect && _room.Find(chat.CharacterId) is { } member) await member.Context.Session.DisposeAsync().ConfigureAwait(false);
     }
 
     private static string SubjectOf(string line, string fallback) =>
         GameMasterChat.Parse(line) is { Arguments.Count: > 0 } command ? command.Arguments[0] : fallback;
 
-    private Task TellAsync(ulong characterId, string line, CancellationToken ct) =>
-        _games.SendDirectAsync(characterId, GameMasterFrames.LinkChatReply, GameMasterFrames.ChatLine(characterId, line, _text), ct);
+    private Task TellAsync(S2SessionContext link, ulong characterId, string line, CancellationToken ct) =>
+        _games.SendToLinkAsync(link, GameMasterFrames.LinkChatReply, GameMasterFrames.ChatLine(characterId, line, _text), ct);
 
     public async Task ReportAsync(OfficerOrder report, CancellationToken ct)
     {

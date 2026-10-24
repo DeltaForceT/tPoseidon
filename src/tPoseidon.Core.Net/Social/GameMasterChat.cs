@@ -59,6 +59,8 @@ public sealed class GameMasterChat
     public const string RemoveInstantChatText = "GM_RemoveInstantChat";
     public const string NotAllowedLine = "You are not allowed to do that.";
     public const string BadArgumentsLine = "The command was not understood; type @commandhelp for the list.";
+    public const string UnknownCommandLine = "Unknown command; type @commandhelp for the list.";
+    public const string UnavailableLine = "The GM service is not available right now.";
 
     private static readonly System.Text.RegularExpressions.Regex Placeholder = new(@"%\s?(?:I64u|s|d)", System.Text.RegularExpressions.RegexOptions.Compiled);
 
@@ -108,6 +110,20 @@ public sealed class GameMasterChat
     public IReadOnlyList<string> HelpNames => _help.Keys.ToArray();
 
     public static bool IsCommand(string line) => Parse(line) is not null;
+
+    public static bool IsCommandLine(string line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        var text = line.Trim();
+        return text.Length >= 2 && text[0] == CommandMark;
+    }
+
+    public static int WordCount(string line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        var text = line.Trim();
+        return text.Length >= 2 && text[0] == CommandMark ? Split(text[1..]).Count : 0;
+    }
 
     public static GameMasterChatCommand? Parse(string line)
     {

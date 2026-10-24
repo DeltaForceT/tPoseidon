@@ -8,6 +8,8 @@ public interface ISkillStore
 
     void Upsert(Skill skill);
 
+    bool Delete(ulong characterId, int skillId);
+
     int DeleteAllForCharacter(ulong characterId);
 
     int DeleteAboveLevel(ulong characterId, int maxLevel);

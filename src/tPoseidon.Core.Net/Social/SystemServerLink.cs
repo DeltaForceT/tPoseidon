@@ -124,16 +124,20 @@ public sealed class SystemServerLink
         return SendAsync(SystemLinkFrames.Report, SystemLinkFrames.EncodeOrder(0, order), ct);
     }
 
-    public async Task SendAsync(ushort opcode, byte[] body, CancellationToken ct)
+    public Task SendAsync(ushort opcode, byte[] body, CancellationToken ct) => TrySendAsync(opcode, body, ct);
+
+    public async Task<bool> TrySendAsync(ushort opcode, byte[] body, CancellationToken ct)
     {
-        if (_system is not { } system) return;
+        if (_system is not { } system) return false;
         try
         {
             await system.SendUnencryptedFrameAsync(opcode, body, ct).ConfigureAwait(false);
+            return true;
         }
         catch (Exception ex) when (ex is ObjectDisposedException or IOException or System.Net.Sockets.SocketException)
         {
             _log($"[system-link] 0x{opcode:X4} not delivered: {ex.Message}");
+            return false;
         }
     }
 

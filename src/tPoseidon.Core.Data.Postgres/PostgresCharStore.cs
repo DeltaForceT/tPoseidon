@@ -209,6 +209,109 @@ public sealed class PostgresCharStore : ICharStore
         return cmd.ExecuteNonQuery() == 1;
     }
 
+    public uint EditCharacter(ulong characterId, CharacterEdit edit)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        return edit.Kind switch
+        {
+            CharacterEditKind.Rename => Rename(conn, characterId, edit),
+            CharacterEditKind.Hair => UpdateMany(
+                conn, characterId, $"UPDATE characters SET {HairColumn(edit.HairSlot)} = @value WHERE character_id = @character_id", ("value", (int)edit.HairColor)),
+            CharacterEditKind.Gender => UpdateMany(
+                conn,
+                characterId,
+                "UPDATE characters SET species = @species, hair = 0, starter_ear = @ear, starter_tail = @tail WHERE character_id = @character_id",
+                ("species", (short)edit.NewSpecies), ("ear", (int)edit.EarItemIndex), ("tail", (int)edit.TailItemIndex)),
+            CharacterEditKind.GrowthWeights => UpdateMany(
+                conn,
+                characterId,
+                "UPDATE characters SET pts_p = @p, pts_m = @m, pts_s = @s, pts_c = @c WHERE character_id = @character_id",
+                ("p", (short)edit.PtsP), ("m", (short)edit.PtsM), ("s", (short)edit.PtsS), ("c", (short)edit.PtsC)),
+            CharacterEditKind.WarehouseSlots => UpdateMany(
+                conn, characterId, "UPDATE characters SET wh_slots = @value WHERE character_id = @character_id", ("value", (short)edit.WarehouseSlots)),
+            _ => CharacterEditCodes.Failed,
+        };
+    }
+
+    private static readonly string[] NameCopies =
+    [
+        "UPDATE ranking SET char_name = @name WHERE char_uid = @character_id",
+        "UPDATE post_date SET char_name = @name WHERE char_uid = @character_id",
+        "UPDATE tbl_gm_char SET char_name = @name WHERE lower(char_name) = lower(@old)",
+    ];
+
+    private static string HairColumn(byte slot) => slot switch
+    {
+        2 => "hair_2",
+        3 => "hair_3",
+        _ => "hair",
+    };
+
+    private static uint UpdateMany(NpgsqlConnection conn, ulong characterId, string sql, params (string Name, object Value)[] parameters)
+    {
+        using var cmd = new NpgsqlCommand(sql, conn);
+        foreach (var (name, value) in parameters) cmd.Parameters.AddWithValue(name, value);
+        cmd.Parameters.AddWithValue("character_id", unchecked((long)characterId));
+        return cmd.ExecuteNonQuery() == 1 ? CharacterEditCodes.Done : CharacterEditCodes.Failed;
+    }
+
+    private static uint Rename(NpgsqlConnection conn, ulong characterId, CharacterEdit edit)
+    {
+        using var transaction = conn.BeginTransaction();
+        using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock(hashtext('characters.name'))", conn, transaction))
+        {
+            lockCmd.ExecuteNonQuery();
+        }
+        using (var taken = new NpgsqlCommand("SELECT 1 FROM characters WHERE lower(name) = lower(@name) LIMIT 1", conn, transaction))
+        {
+            taken.Parameters.AddWithValue("name", edit.NewName);
+            if (taken.ExecuteScalar() is not null) return CharacterEditCodes.NameTaken;
+        }
+        var forbidden = new List<string>();
+        using (var words = new NpgsqlCommand("SELECT word FROM forbidden_name", conn, transaction))
+        using (var reader = words.ExecuteReader())
+        {
+            while (reader.Read()) forbidden.Add(reader.GetString(0));
+        }
+        if (!CharacterNameValidity.IsValid(edit.NewName, forbidden)) return CharacterEditCodes.InvalidName;
+        string oldName;
+        using (var update = new NpgsqlCommand(
+            @"UPDATE characters AS changed SET name = @name
+              FROM (SELECT name FROM characters WHERE character_id = @character_id FOR UPDATE) AS before
+              WHERE changed.character_id = @character_id
+              RETURNING before.name",
+            conn,
+            transaction))
+        {
+            update.Parameters.AddWithValue("name", edit.NewName);
+            update.Parameters.AddWithValue("character_id", unchecked((long)characterId));
+            if (update.ExecuteScalar() is not string previous) return CharacterEditCodes.Failed;
+            oldName = previous;
+        }
+        using (var history = new NpgsqlCommand(
+            "INSERT INTO char_name_history (char_uid, old_name, new_name, reason) VALUES (@character_id, @old, @new, @reason)",
+            conn,
+            transaction))
+        {
+            history.Parameters.AddWithValue("character_id", unchecked((long)characterId));
+            history.Parameters.AddWithValue("old", oldName);
+            history.Parameters.AddWithValue("new", edit.NewName);
+            history.Parameters.AddWithValue("reason", $"by item using({edit.ItemIndex})");
+            history.ExecuteNonQuery();
+        }
+        foreach (var copy in NameCopies)
+        {
+            using var rewrite = new NpgsqlCommand(copy, conn, transaction);
+            rewrite.Parameters.AddWithValue("name", edit.NewName);
+            rewrite.Parameters.AddWithValue("old", oldName);
+            rewrite.Parameters.AddWithValue("character_id", unchecked((long)characterId));
+            rewrite.ExecuteNonQuery();
+        }
+        transaction.Commit();
+        return CharacterEditCodes.Done;
+    }
+
     internal static Character ReadCharacter(NpgsqlDataReader reader) => new()
     {
         CharacterId = unchecked((ulong)reader.GetInt64(0)),

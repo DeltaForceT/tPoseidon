@@ -15,6 +15,8 @@ public sealed class SkillCooldowns
         _running[skillId] = (0, (int)((double)seconds * 1000.0));
     }
 
+    public void Stop(int skillId) => _running.Remove(skillId);
+
     public void Tick(int elapsedMs)
     {
         if (_running.Count == 0) return;

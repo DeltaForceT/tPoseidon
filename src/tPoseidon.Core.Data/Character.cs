@@ -109,4 +109,10 @@ public sealed class Character
 
     public ulong DepthCount { get; init; }
     public uint DigCount { get; init; }
+
+    public Character WithName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return InMemoryCharStore.CloneWith(this, edit: CharacterEdit.Rename(name, 0));
+    }
 }

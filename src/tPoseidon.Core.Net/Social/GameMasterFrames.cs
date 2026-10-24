@@ -624,6 +624,42 @@ public static class GameMasterFrames
         return w.ToArray();
     }
 
+    public static byte[] ChatCommand(ulong characterId, string name, string address, string line, System.Text.Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(address);
+        ArgumentNullException.ThrowIfNull(line);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(24 + (name.Length + address.Length + line.Length) * 2);
+        w.WriteUInt64(characterId);
+        w.WriteNulTerminated(name, text);
+        w.WriteNulTerminated(address, text);
+        w.WriteNulTerminated(line, text);
+        return w.ToArray();
+    }
+
+    public static bool TryReadChatCommand(ReadOnlySpan<byte> payload, System.Text.Encoding text, out ChatCommandFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        frame = default;
+        if (payload.Length < sizeof(ulong) + 3) return false;
+        var rest = payload[sizeof(ulong)..];
+        var nameEnd = rest.IndexOf((byte)0);
+        if (nameEnd < 0) return false;
+        var afterName = rest[(nameEnd + 1)..];
+        var addressEnd = afterName.IndexOf((byte)0);
+        if (addressEnd < 0) return false;
+        var afterAddress = afterName[(addressEnd + 1)..];
+        var lineEnd = afterAddress.IndexOf((byte)0);
+        if (lineEnd < 0) return false;
+        frame = new ChatCommandFrame(
+            new PacketReader(payload).ReadUInt64(),
+            text.GetString(rest[..nameEnd]),
+            text.GetString(afterName[..addressEnd]),
+            text.GetString(afterAddress[..lineEnd]));
+        return true;
+    }
+
     public static bool TryReadChatLine(ReadOnlySpan<byte> payload, System.Text.Encoding text, out ulong characterId, out string line)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -1048,3 +1084,5 @@ public enum SummonAnchor : byte
 }
 
 public readonly record struct SummonAreaRequest(uint ChrType, byte Count, ushort Radius, SummonAnchor Anchor, ushort Map, ushort X, ushort Y);
+
+public readonly record struct ChatCommandFrame(ulong CharacterId, string Name, string Address, string Line);

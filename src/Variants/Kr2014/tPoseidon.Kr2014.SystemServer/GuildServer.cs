@@ -383,6 +383,8 @@ public sealed class GuildServer
 
     public Task ZoneEnteredAsync(ulong characterId, CancellationToken ct) => DeliverAsync(_guilds.ZoneEntered(characterId), ct);
 
+    public void Renamed(ulong characterId, string newName) => _guilds.MemberRenamed(characterId, newName);
+
     private delegate GuildOutbox? GuildRequest(ulong characterId, ReadOnlySpan<byte> payload);
 
     private void On(OpcodeDispatcher dispatcher, S2SessionContext ctx, ushort opcode, GuildRequest request) =>

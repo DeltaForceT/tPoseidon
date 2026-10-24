@@ -31,6 +31,8 @@ public interface IAccountStore
 
         bool SaveCharacterStats(ulong characterId, CharacterStatsSnapshot snapshot);
 
+    uint EditCharacter(ulong characterId, CharacterEdit edit);
+
         bool DeleteCharacter(ulong characterId, uint ownerAccountId);
 
         void UpsertAccount(Account account);

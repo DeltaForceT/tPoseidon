@@ -307,6 +307,12 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         ArgumentNullException.ThrowIfNull(args);
         if (!IsEngagedWith(entityId))
         {
+            if (NpcScript.Classify(functionId).Operation == NpcScriptOperation.Exit)
+            {
+                await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
+                Console.WriteLine($"{_logTag} {_ctx.Remote}   dialog of 0x{entityId:X4} closed after its system window");
+                return;
+            }
             Console.WriteLine($"{_logTag} {_ctx.Remote}   script function {functionId} for 0x{entityId:X4} ignored: not talking to it");
             return;
         }

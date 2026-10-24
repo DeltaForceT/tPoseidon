@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\tPoseidon.Core.Net\tPoseidon.Core.Net.csproj" />
     <ProjectReference Include="..\..\src\tPoseidon.Core.InterServer\tPoseidon.Core.InterServer.csproj" />
     <ProjectReference Include="..\..\src\Variants\Kr2014\tPoseidon.Kr2014.Wire\tPoseidon.Kr2014.Wire.csproj" />
+    <ProjectReference Include="..\..\src\Variants\Kr2014\tPoseidon.Kr2014.SystemServer\tPoseidon.Kr2014.SystemServer.csproj" />
   </ItemGroup>
 
 </Project>

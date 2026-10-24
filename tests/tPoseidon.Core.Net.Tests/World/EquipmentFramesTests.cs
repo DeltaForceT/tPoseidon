@@ -42,4 +42,42 @@ public sealed class EquipmentFramesTests
             EquipmentFrames.LookAdded(0x21F9, 3030, 3030));
         Assert.Equal(new byte[] { 0xF9, 0x21, 0xD6, 0x0B, 0x00, 0x00 }, EquipmentFrames.LookRemoved(0x21F9, 3030));
     }
+
+    [Fact]
+    public void AReleaseListIsACountThenClassUidAndSlot()
+    {
+        var payload = new byte[]
+        {
+            2, 0,
+            2, 0x12, 0xFE, 0xC8, 0x05, 0x01, 0x00, 0x00, 0x00, 4,
+            1, 0x34, 0x12, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 20,
+        };
+
+        Assert.True(EquipmentFrames.TryReadReleaseList(payload, out var entries));
+        Assert.Equal(
+            new[] { new ReleaseEntry(2, 0x0000_0001_05C8_FE12UL, 4), new ReleaseEntry(1, 0x0000_0001_0000_1234UL, 20) },
+            entries);
+        Assert.Equal(payload, EquipmentFrames.ReleaseList(entries));
+    }
+
+    [Fact]
+    public void AnEmptyReleaseListIsAccepted()
+    {
+        Assert.True(EquipmentFrames.TryReadReleaseList(new byte[] { 0, 0 }, out var entries));
+        Assert.Empty(entries);
+    }
+
+    private static readonly byte[][] MalformedReleaseLists =
+    {
+        Array.Empty<byte>(),
+        new byte[] { 1 },
+        new byte[] { 1, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0 },
+        new byte[] { 31, 0 },
+    };
+
+    [Fact]
+    public void AMalformedReleaseListIsRejected()
+    {
+        foreach (var payload in MalformedReleaseLists) Assert.False(EquipmentFrames.TryReadReleaseList(payload, out _));
+    }
 }

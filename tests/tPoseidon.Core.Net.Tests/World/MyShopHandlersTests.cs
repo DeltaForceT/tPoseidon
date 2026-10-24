@@ -104,6 +104,21 @@ public sealed class MyShopHandlersTests
     }
 
     [Fact]
+    public async Task LeaveOutsidePurchaseStorageSendsAndLogsNothing()
+    {
+        var shop = new Harness();
+
+        await shop.Send(Opcode.C2S_PURCHASE_STORAGE_LEAVE);
+        await shop.Send(Opcode.C2S_PURCHASE_STORAGE_MODE);
+        await shop.Send(Opcode.C2S_PURCHASE_STORAGE_LEAVE);
+        await shop.Send(Opcode.C2S_PURCHASE_STORAGE_LEAVE);
+
+        Assert.Empty(shop.Sent);
+        Assert.Empty(shop.Events);
+        Assert.Equal(["[myshop] purchase storage mode", "[myshop] purchase storage mode left"], shop.Log);
+    }
+
+    [Fact]
     public async Task CloseOutsideTheWorldSendsNothing()
     {
         var shop = new Harness { Position = null };

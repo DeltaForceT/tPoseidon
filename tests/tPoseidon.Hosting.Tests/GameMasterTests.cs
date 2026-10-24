@@ -98,7 +98,7 @@ internal sealed class FakePenaltyBook : IGmPenaltyBook
 
 public sealed class GameMasterTests
 {
-    private static readonly GmToolEndpoint Endpoint = new("127.0.0.1", 13336);
+    private static readonly GmToolEndpoint Endpoint = new("127.0.0.1", 13336, "keytable-s2v2010.bin");
     private static readonly GmLogin Login = new("Boss", "secret");
 
     private static GameMasterToolCommand Command(string name) => GameMasterToolCommands.Find(name)!;

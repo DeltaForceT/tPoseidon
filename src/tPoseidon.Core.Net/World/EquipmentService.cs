@@ -139,6 +139,40 @@ public sealed class EquipmentService
         Console.WriteLine($"{_logTag} {_ctx.Remote}   released item {target.Item.ItemIndex} (0x{uid:X}) from slot {target.Slot}");
     }
 
+    public async Task ReleaseListAsync(ReadOnlyMemory<byte> payload, CancellationToken ct)
+    {
+        if (!EquipmentFrames.TryReadReleaseList(payload.Span, out var entries))
+        {
+            Console.Error.WriteLine($"{_logTag} {_ctx.Remote} C2S 0x02D1 is malformed ({payload.Length} bytes); refused");
+            await RefuseReleaseAsync(0, "malformed release list", ct).ConfigureAwait(false);
+            return;
+        }
+        if (_player.Character() is not { } character) return;
+
+        var worn = EquipmentRules.WornBy(_items, _catalog, character.CharacterId);
+        var plan = ReleaseListRules.Plan(entries, worn, character.Level);
+        if (plan.Refusal is not null)
+        {
+            await RefuseReleaseAsync(0, plan.Refusal, ct).ConfigureAwait(false);
+            return;
+        }
+
+        var moved = new List<WornItem>(plan.Items.Count);
+        foreach (var target in plan.Items)
+        {
+            if (!MoveToBag(character.CharacterId, target.Item.ItemUid))
+            {
+                Restore(moved);
+                await RefuseReleaseAsync(0, $"bag move of 0x{target.Item.ItemUid:X} failed", ct).ConfigureAwait(false);
+                return;
+            }
+            moved.Add(target);
+        }
+        foreach (var target in moved) await SendReleasedAsync(target, ct).ConfigureAwait(false);
+        if (moved.Count > 0) await _player.EquipmentChanged().ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} {_ctx.Remote}   released {moved.Count} worn items at once");
+    }
+
     public async Task EquipCommonAsync(ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (!EquipmentFrames.TryReadRequest(payload.Span, out var wireUid, out var slot))

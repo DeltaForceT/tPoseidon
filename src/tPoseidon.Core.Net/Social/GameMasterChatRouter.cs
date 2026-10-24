@@ -40,11 +40,16 @@ public sealed class GameMasterChatRouter
         ArgumentNullException.ThrowIfNull(characterName);
         ArgumentNullException.ThrowIfNull(clientIp);
         ArgumentNullException.ThrowIfNull(line);
-        if (GameMasterChat.Parse(line) is not { } command) return null;
-        var args = command.Arguments;
-        var keyword = GameMasterChat.CommandMark + command.Name.ToLowerInvariant();
+        if (!GameMasterChat.IsCommandLine(line)) return null;
         var who = $"0x{characterId:X} '{characterName}' from {clientIp}";
         var audit = new List<string>();
+        if (GameMasterChat.Parse(line) is not { } command)
+        {
+            audit.Add($"[gm] audit: {who} sent an unknown @ command ({GameMasterChat.WordCount(line)} word(s))");
+            return new GameMasterChatOutcome(null, GameMasterChat.UnknownCommandLine, audit);
+        }
+        var args = command.Arguments;
+        var keyword = GameMasterChat.CommandMark + command.Name.ToLowerInvariant();
         var registered = _authority.GmCharacterId(characterName) == characterId;
 
         if (command.Name == GameMasterChat.Login)
@@ -69,7 +74,6 @@ public sealed class GameMasterChatRouter
             return new GameMasterChatOutcome(dropped, GameMasterChat.NotAllowedLine, audit);
         }
 
-        audit.Add($"[gm] audit: {who} {keyword} {string.Join(' ', args)}".TrimEnd());
         GameMasterOutbox? outbox = command.Name switch
         {
             GameMasterChat.Logout => _service.Logout(characterId),
@@ -108,6 +112,7 @@ public sealed class GameMasterChatRouter
             audit.Add($"[gm] audit: {keyword} from {who} not understood ({args.Count} argument(s))");
             return new GameMasterChatOutcome(null, GameMasterChat.BadArgumentsLine, audit);
         }
+        audit.Add($"[gm] audit: {who} {keyword} {string.Join(' ', args)}".TrimEnd());
         audit.AddRange(outbox.Notes.Select(note => $"[gm] audit: {keyword} {note}"));
         return new GameMasterChatOutcome(outbox, null, audit);
     }

@@ -52,7 +52,10 @@ var reportServer = new tPoseidon.Kr2014.SystemServer.ReportServer(
     System.Text.Encoding.GetEncoding(949),
     (byte)ServerIdentity.System1.ServerIndex,
     Log);
-var gameLinks = new tPoseidon.Kr2014.SystemServer.GameServerLinks(tPoseidon.Core.Net.S2.S2ServerHost.DefaultKeyTablePath(), Log);
+var gameLinks = new tPoseidon.Kr2014.SystemServer.GameServerLinks(tPoseidon.Core.Net.S2.S2ServerHost.DefaultKeyTablePath(), Log)
+{
+    Text = System.Text.Encoding.GetEncoding(949),
+};
 var instantChatRooms = new tPoseidon.Core.Net.Social.InstantChatRooms(
     System.Text.Encoding.GetEncoding(949),
     (ushort)(systemIni?.GetInt("ChatNoticeMakeLimitLevel", tPoseidon.Core.Net.Social.InstantChatRooms.DefaultMakeLimitLevel) ?? tPoseidon.Core.Net.Social.InstantChatRooms.DefaultMakeLimitLevel),
@@ -291,6 +294,27 @@ gameLinks.OnKindChanged = async (characterId, kind, job, ct) =>
 {
     if (socialRoom.Find(characterId) is { } changed) changed.CharacterType = kind;
     await partyServer.KindChangedAsync(characterId, kind, job, ct).ConfigureAwait(false);
+};
+gameLinks.OnRenamed = async (characterId, _, newName, ct) =>
+{
+    socialRoom.Find(characterId)?.Rename(newName);
+    guildServer.Renamed(characterId, newName);
+    await partyServer.RenamedAsync(characterId, newName, ct).ConfigureAwait(false);
+};
+gameLinks.OnMegaphone = async (_, style, message, ct) =>
+{
+    var shout = tPoseidon.Core.Net.World.SpecialItemFrames.MegaphoneShouted(style, message, System.Text.Encoding.GetEncoding(949));
+    foreach (var member in socialRoom.Members)
+    {
+        try
+        {
+            await member.Context.SendFrameAsync(tPoseidon.Core.Net.World.SpecialItemFrames.MegaphoneShout, shout, (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or IOException or System.Net.Sockets.SocketException)
+        {
+            Log($"[megaphone] not delivered to 0x{member.Character.CharacterId:X}: {ex.Message}");
+        }
+    }
 };
 gameLinks.OnCoupleMessage = coupleServer.LinkMessageAsync;
 gameLinks.OnReport = async (report, ct) =>

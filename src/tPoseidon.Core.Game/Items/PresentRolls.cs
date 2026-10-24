@@ -11,6 +11,10 @@ public static class PresentRolls
     public const int InOrderType = 2;
     public const int DistinctTries = 32;
     public const int GiftBoxEffect = 22;
+    public const int RandomBoxEffect = 47;
+    public const int KeyBoxEffect = 49;
+
+    public static bool IsGiftBox(int effect) => effect is GiftBoxEffect or RandomBoxEffect;
     public const int SmallestCount = 1;
 
     public static IReadOnlyList<PresentGrant> Roll(PresentItemEntry entry, Func<int, int> randomBelow)

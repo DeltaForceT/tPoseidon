@@ -127,6 +127,7 @@ public static class GameMasterToolConnection
     public static async Task<IReadOnlyList<ToolReply>> RunAsync(
         string host,
         int port,
+        string keyTablePath,
         string gmCharacter,
         string password,
         ushort opcode,
@@ -134,17 +135,18 @@ public static class GameMasterToolConnection
         bool expectsReply,
         Encoding text,
         CancellationToken ct) =>
-        await ExchangeAsync(host, port, gmCharacter, password, new GameMasterToolRequest(opcode, body), expectsReply, text, ct).ConfigureAwait(false);
+        await ExchangeAsync(host, port, keyTablePath, gmCharacter, password, new GameMasterToolRequest(opcode, body), expectsReply, text, ct).ConfigureAwait(false);
 
-    public static async Task<bool> LoginAsync(string host, int port, string gmCharacter, string password, Encoding text, CancellationToken ct)
+    public static async Task<bool> LoginAsync(string host, int port, string keyTablePath, string gmCharacter, string password, Encoding text, CancellationToken ct)
     {
-        var replies = await ExchangeAsync(host, port, gmCharacter, password, null, false, text, ct).ConfigureAwait(false);
+        var replies = await ExchangeAsync(host, port, keyTablePath, gmCharacter, password, null, false, text, ct).ConfigureAwait(false);
         return replies.Any(reply => reply.Opcode == GameMasterFrames.LoginOk);
     }
 
     private static async Task<IReadOnlyList<ToolReply>> ExchangeAsync(
         string host,
         int port,
+        string keyTablePath,
         string gmCharacter,
         string password,
         GameMasterToolRequest? request,
@@ -156,7 +158,7 @@ public static class GameMasterToolConnection
         var loggedIn = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var answered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var session = S2Client.RunAsync(host, port, S2ServerHost.DefaultKeyTablePath(), "[tposeidon]", async (ctx, innerCt) =>
+        var session = S2Client.RunAsync(host, port, keyTablePath, "[tposeidon]", async (ctx, innerCt) =>
         {
             foreach (var reply in Replies)
             {

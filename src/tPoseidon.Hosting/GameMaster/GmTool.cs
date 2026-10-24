@@ -5,14 +5,15 @@ using tPoseidon.Hosting.Servers;
 
 namespace tPoseidon.Hosting.GameMaster;
 
-public sealed record GmToolEndpoint(string Host, int Port)
+public sealed record GmToolEndpoint(string Host, int Port, string KeyTablePath)
 {
     public const string LocalHost = "127.0.0.1";
 
-    public static GmToolEndpoint For(HostSettings settings)
+    public static GmToolEndpoint For(HostSettings settings, InstallPaths paths)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        return new GmToolEndpoint(LocalHost, settings.Ports.System);
+        ArgumentNullException.ThrowIfNull(paths);
+        return new GmToolEndpoint(LocalHost, settings.Ports.System, paths.KeyTable);
     }
 
     public bool IsLocal =>
@@ -57,7 +58,7 @@ public sealed class GmToolTransport : IGmToolTransport
         try
         {
             return await GameMasterToolConnection
-                .RunAsync(endpoint.Host, endpoint.Port, login.Character, login.Password, request.Opcode, request.Body, expectsReply, GameMasterToolCommands.ClientText(), ct)
+                .RunAsync(endpoint.Host, endpoint.Port, endpoint.KeyTablePath, login.Character, login.Password, request.Opcode, request.Body, expectsReply, GameMasterToolCommands.ClientText(), ct)
                 .ConfigureAwait(false);
         }
         catch (SocketException)
@@ -72,7 +73,7 @@ public sealed class GmToolTransport : IGmToolTransport
         ArgumentNullException.ThrowIfNull(login);
         try
         {
-            return await GameMasterToolConnection.LoginAsync(endpoint.Host, endpoint.Port, login.Character, login.Password, GameMasterToolCommands.ClientText(), ct).ConfigureAwait(false);
+            return await GameMasterToolConnection.LoginAsync(endpoint.Host, endpoint.Port, endpoint.KeyTablePath, login.Character, login.Password, GameMasterToolCommands.ClientText(), ct).ConfigureAwait(false);
         }
         catch (SocketException)
         {

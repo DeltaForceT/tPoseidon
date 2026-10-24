@@ -164,7 +164,7 @@ public sealed class GmWindowTests
     private static GmServices Services(Transport transport, Accounts accounts) => new()
     {
         Transport = transport,
-        Endpoint = new GmToolEndpoint(GmToolEndpoint.LocalHost, 13336),
+        Endpoint = new GmToolEndpoint(GmToolEndpoint.LocalHost, 13336, "keytable-s2v2010.bin"),
         Accounts = accounts,
         Penalties = new Penalties(),
         Catalog = () => GameCatalog.Empty("No game data in the tests."),

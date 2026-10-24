@@ -127,6 +127,14 @@ public sealed class CharStoreHandler : IInterServerHandler
                 return payload.ToArray();
             }
 
+            case CharStoreSubOp.EditCharacter:
+            {
+                var code = _chars.EditCharacter(charUid, CharStoreWire.DecodeEdit(body));
+                var payload = new PacketWriter(4);
+                payload.WriteUInt32(code);
+                return payload.ToArray();
+            }
+
             default:
                 throw new InvalidOperationException($"unknown sub-op 0x{(byte)subOp:X2}");
         }

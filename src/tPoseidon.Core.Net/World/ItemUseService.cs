@@ -30,11 +30,17 @@ public sealed record ItemUsePlayer
     public Func<ItemParamEntry, CancellationToken, Task<bool>>? TeleportMap { get; init; }
     public Func<ItemParamEntry, CancellationToken, Task<bool>>? TreasureMap { get; init; }
     public Func<ushort, Item, CancellationToken, Task<bool>>? ReviveTarget { get; init; }
+    public Func<SpecialItemHost?>? Special { get; init; }
+    public Func<int, BonusPresentEntry?>? BonusPresent { get; init; }
+    public Func<int, KeyboxEntry?>? Keybox { get; init; }
+    public Func<int, int, bool>? ExpPotion { get; init; }
+    public Func<int, bool>? Imprint { get; init; }
 }
 
-public sealed class ItemUseService
+public sealed partial class ItemUseService
 {
-    private readonly S2SessionContext _ctx;
+    private readonly Func<string> _remote;
+    private readonly Func<Opcode, byte[], byte, ushort, CancellationToken, Task> _send;
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
     private readonly ItemUsePlayer _player;
@@ -54,8 +60,24 @@ public sealed class ItemUseService
         string logTag,
         IReadOnlyDictionary<int, PresentItemEntry> presents,
         ItemManager itemManager)
+        : this(RemoteOf(ctx), SenderOf(ctx), items, catalog, player, blocks, rng, logTag, presents, itemManager)
     {
-        _ctx = ctx ?? throw new ArgumentNullException(nameof(ctx));
+    }
+
+    public ItemUseService(
+        Func<string> remote,
+        Func<Opcode, byte[], byte, ushort, CancellationToken, Task> send,
+        IItemStore items,
+        IItemParamLookup catalog,
+        ItemUsePlayer player,
+        CommandBlockIds blocks,
+        Random rng,
+        string logTag,
+        IReadOnlyDictionary<int, PresentItemEntry> presents,
+        ItemManager itemManager)
+    {
+        _remote = remote ?? throw new ArgumentNullException(nameof(remote));
+        _send = send ?? throw new ArgumentNullException(nameof(send));
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _player = player ?? throw new ArgumentNullException(nameof(player));
@@ -64,6 +86,18 @@ public sealed class ItemUseService
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
         _presents = presents ?? throw new ArgumentNullException(nameof(presents));
         _itemManager = itemManager ?? throw new ArgumentNullException(nameof(itemManager));
+    }
+
+    private static Func<string> RemoteOf(S2SessionContext ctx)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        return () => ctx.Remote?.ToString() ?? string.Empty;
+    }
+
+    private static Func<Opcode, byte[], byte, ushort, CancellationToken, Task> SenderOf(S2SessionContext ctx)
+    {
+        ArgumentNullException.ThrowIfNull(ctx);
+        return (opcode, payload, randKey, blockId, ct) => ctx.SendFrameAsync(opcode, payload, randKey, blockId, ct);
     }
 
     public async Task UseAsync(ReadOnlyMemory<byte> payload, CancellationToken ct)
@@ -76,7 +110,20 @@ public sealed class ItemUseService
             await RefuseAsync($"0x{BagItemIds.Stored(wireUid):X} is not in the bag", ct).ConfigureAwait(false);
             return;
         }
-        await UseHeldAsync(held.Item, held.Definition, stats, wireUid, ct).ConfigureAwait(false);
+        await UseHeldAsync(held.Item, held.Definition, stats, wireUid, ReadOnlyMemory<byte>.Empty, ct).ConfigureAwait(false);
+    }
+
+    public async Task UseWithDataAsync(ReadOnlyMemory<byte> payload, CancellationToken ct)
+    {
+        if (!MemoryPortFrames.TryReadUseWithData(payload.Span, out var use)) return;
+        if (_player.IsDead()) return;
+        if (_player.Character() is not { } character || _player.Stats() is not { } stats) return;
+        if (Held(character, use.WireItemUid) is not { } held)
+        {
+            await RefuseAsync($"0x{BagItemIds.Stored(use.WireItemUid):X} is not in the bag", ct).ConfigureAwait(false);
+            return;
+        }
+        await UseHeldAsync(held.Item, held.Definition, stats, use.WireItemUid, use.Data, ct).ConfigureAwait(false);
     }
 
     public async Task UseOnTargetAsync(ReadOnlyMemory<byte> payload, Func<ushort, bool> targetExists, CancellationToken ct)
@@ -105,7 +152,7 @@ public sealed class ItemUseService
             await ReviveTargetAsync(held.Item, held.Definition, stats, wireUid, targetId, revive, ct).ConfigureAwait(false);
             return;
         }
-        await UseHeldAsync(held.Item, held.Definition, stats, wireUid, ct).ConfigureAwait(false);
+        await UseHeldAsync(held.Item, held.Definition, stats, wireUid, ReadOnlyMemory<byte>.Empty, ct).ConfigureAwait(false);
     }
 
     private async Task ReviveTargetAsync(
@@ -123,7 +170,7 @@ public sealed class ItemUseService
         }
         await SendAsync(Opcode.S2C_ITEM_USED, ItemUseFrames.Consumed(wireUid), ct).ConfigureAwait(false);
         var left = Consume(item, definition);
-        Console.WriteLine($"{_logTag} {_ctx.Remote}   rebirth item {item.ItemIndex} revived 0x{targetId:X4}, {left} left");
+        Console.WriteLine($"{_logTag} {_remote()}   rebirth item {item.ItemIndex} revived 0x{targetId:X4}, {left} left");
     }
 
     private (Item Item, ItemParamEntry Definition)? Held(Character character, ulong wireUid)
@@ -133,7 +180,7 @@ public sealed class ItemUseService
         return item is not null && _catalog.GetById(item.ItemIndex) is { } definition ? (item, definition) : null;
     }
 
-    private async Task UseHeldAsync(Item item, ItemParamEntry definition, StatManager stats, ulong wireUid, CancellationToken ct)
+    private async Task UseHeldAsync(Item item, ItemParamEntry definition, StatManager stats, ulong wireUid, ReadOnlyMemory<byte> data, CancellationToken ct)
     {
         if (ItemUseRules.Check(definition, stats.Level) is { } refusal)
         {
@@ -146,7 +193,7 @@ public sealed class ItemUseService
             case ItemUseHelper.NoHelper:
                 await SendAsync(Opcode.S2C_ITEM_USED, ItemUseFrames.Consumed(wireUid), ct).ConfigureAwait(false);
                 Consume(item, definition);
-                Console.WriteLine($"{_logTag} {_ctx.Remote}   item {item.ItemIndex} used (type {definition.Type} has no effect)");
+                Console.WriteLine($"{_logTag} {_remote()}   item {item.ItemIndex} used (type {definition.Type} has no effect)");
                 break;
             case ItemUseHelper.Potion:
                 await DrinkAsync(item, definition, stats, wireUid, ct).ConfigureAwait(false);
@@ -169,13 +216,13 @@ public sealed class ItemUseService
             case ItemUseHelper.Use when definition.SubType == tPoseidon.Core.Game.Soul.SoulRules.PotionSubType && _player.SoulPotion is { } soulPotion:
                 if (!await soulPotion(item, definition, ct).ConfigureAwait(false))
                 {
-                    Console.WriteLine($"{_logTag} {_ctx.Remote}   soul potion {item.ItemIndex} not used");
+                    Console.WriteLine($"{_logTag} {_remote()}   soul potion {item.ItemIndex} not used");
                 }
                 break;
             case ItemUseHelper.Use when definition.Effect == tPoseidon.Core.Game.Fiesta.FiestaRules.TicketEffect && _player.FiestaTicket is { } fiestaTicket:
                 if (await fiestaTicket(definition, ct).ConfigureAwait(false) is not { } ticketUse)
                 {
-                    Console.WriteLine($"{_logTag} {_ctx.Remote}   fiesta ticket {item.ItemIndex} refused");
+                    Console.WriteLine($"{_logTag} {_remote()}   fiesta ticket {item.ItemIndex} refused");
                     break;
                 }
                 await UseWarpTicketAsync(item, definition, wireUid, ticketUse, ct).ConfigureAwait(false);
@@ -190,8 +237,30 @@ public sealed class ItemUseService
                 await SendAsync(Opcode.S2C_ITEM_USED, ItemUseFrames.Consumed(wireUid), ct).ConfigureAwait(false);
                 Consume(item, definition);
                 break;
-            case ItemUseHelper.Use when definition.Effect == PresentRolls.GiftBoxEffect:
+            case ItemUseHelper.Use when PresentRolls.IsGiftBox(definition.Effect):
                 await OpenPresentAsync(item, definition, item.CharacterId, wireUid, ct).ConfigureAwait(false);
+                break;
+            case ItemUseHelper.Use when definition.Effect == ExpPotion.Effect:
+                if (_player.ExpPotion is not { } drinkPotion || !drinkPotion(item.ItemIndex, definition.Life))
+                {
+                    await RefuseAsync($"exp potion {item.ItemIndex}: no {ExpBoostEntry.TableName} row", ct).ConfigureAwait(false);
+                    break;
+                }
+                await UsePlainAsync(item, definition, wireUid, ct).ConfigureAwait(false);
+                break;
+            case ItemUseHelper.Use when definition.Effect == ImprintBook.Effect:
+                if (_player.Imprint is not { } imprint || !imprint(item.ItemIndex))
+                {
+                    await RefuseAsync($"imprint {item.ItemIndex}: no {ImprintEntry.TableName} row", ct).ConfigureAwait(false);
+                    break;
+                }
+                await UsePlainAsync(item, definition, wireUid, ct).ConfigureAwait(false);
+                break;
+            case ItemUseHelper.Use when definition.Effect == tPoseidon.Core.Game.Pets.CharacterPetReinforceRules.ReinforceEffect:
+                await RefuseAsync($"item {item.ItemIndex}: a pet piercing is used through the character pet window", ct).ConfigureAwait(false);
+                break;
+            case ItemUseHelper.Use when definition.Effect == PresentRolls.KeyBoxEffect:
+                await OpenKeyBoxAsync(item, definition, wireUid, ct).ConfigureAwait(false);
                 break;
             case ItemUseHelper.Use when definition.Effect == tPoseidon.Core.Game.Fortune.FortuneRules.StarTearsEffect:
                 if (_player.StarTears is not { } starTears || !await starTears(definition, ct).ConfigureAwait(false))
@@ -201,7 +270,10 @@ public sealed class ItemUseService
                 }
                 await SendAsync(Opcode.S2C_ITEM_USED, ItemUseFrames.Consumed(wireUid), ct).ConfigureAwait(false);
                 Consume(item, definition);
-                Console.WriteLine($"{_logTag} {_ctx.Remote}   item {item.ItemIndex} extends the fortune award by {definition.Life} h");
+                Console.WriteLine($"{_logTag} {_remote()}   item {item.ItemIndex} extends the fortune award by {definition.Life} h");
+                break;
+            case ItemUseHelper.Use when SpecialItemEffects.Handles(definition) && _player.Special?.Invoke() is { } special:
+                await UseSpecialAsync(special, item, definition, stats, wireUid, data, ct).ConfigureAwait(false);
                 break;
             case ItemUseHelper.SkillCard when definition.SubType == tPoseidon.Core.Game.Skills.SkillCardRules.CardSubType && _player.LearnSkillCard is { } learn:
                 if (!await learn(definition, ct).ConfigureAwait(false))
@@ -250,7 +322,7 @@ public sealed class ItemUseService
         await _player.SendToMap(Opcode.S2C_COMMAND_BLOCK_END, Array.Empty<byte>(), block).ConfigureAwait(false);
 
         var left = item.Stack > 1 ? _items.AdjustStack(item.ItemUid, -1) : Consume(item, definition);
-        Console.WriteLine($"{_logTag} {_ctx.Remote}   potion {item.ItemIndex}: HP {hp}/{maxHp}, MP {mp}/{maxMp}, {left} left");
+        Console.WriteLine($"{_logTag} {_remote()}   potion {item.ItemIndex}: HP {hp}/{maxHp}, MP {mp}/{maxMp}, {left} left");
         if (_player.SeedEvent is { } seedEvent)
         {
             if (definition.Hp > 0) await seedEvent(tPoseidon.Core.Game.SoulSeed.SoulSeedRules.HpPotionEvent).ConfigureAwait(false);
@@ -265,7 +337,7 @@ public sealed class ItemUseService
         await _player.SendToMap(Opcode.S2C_COMMAND_BLOCK_END, Array.Empty<byte>(), block).ConfigureAwait(false);
         await SendAsync(Opcode.S2C_ITEM_WARP_NOTICE, ItemUseFrames.Notice(use.Notice, use.Text), ct).ConfigureAwait(false);
         var left = Consume(ticket, definition);
-        Console.WriteLine($"{_logTag} {_ctx.Remote}   warp ticket {ticket.ItemIndex} used, {left} left");
+        Console.WriteLine($"{_logTag} {_remote()}   warp ticket {ticket.ItemIndex} used, {left} left");
         await use.Warp(ct).ConfigureAwait(false);
     }
 
@@ -275,7 +347,7 @@ public sealed class ItemUseService
         await SendAsync(Opcode.S2C_ITEM_USE_EFFECT, ItemUseFrames.Used(wireUid, ItemUseFrames.EffectOnly((ushort)definition.Effect)), block, ct).ConfigureAwait(false);
         await _player.SendToMap(Opcode.S2C_COMMAND_BLOCK_END, Array.Empty<byte>(), block).ConfigureAwait(false);
         Consume(card, definition);
-        Console.WriteLine($"{_logTag} {_ctx.Remote}   skill card {card.ItemIndex} used");
+        Console.WriteLine($"{_logTag} {_remote()}   skill card {card.ItemIndex} used");
     }
 
     private async Task UseMonsterCardAsync(Item card, ItemParamEntry definition, ulong wireUid, CancellationToken ct)
@@ -286,7 +358,7 @@ public sealed class ItemUseService
         await SendAsync(Opcode.S2C_MONSTER_CARD_USED, ItemUseFrames.MonsterCardUsed((uint)card.ItemIndex), ct).ConfigureAwait(false);
         Consume(card, definition);
         _player.MonsterCardUsed?.Invoke(definition);
-        Console.WriteLine($"{_logTag} {_ctx.Remote}   monster card {card.ItemIndex} used (SubType {definition.SubType})");
+        Console.WriteLine($"{_logTag} {_remote()}   monster card {card.ItemIndex} used (SubType {definition.SubType})");
     }
 
     private async Task OpenPresentAsync(Item box, ItemParamEntry definition, ulong characterId, ulong wireUid, CancellationToken ct)
@@ -296,6 +368,22 @@ public sealed class ItemUseService
             await RefuseAsync($"gift box {box.ItemIndex}: no {PresentItemEntry.TableName} row", ct).ConfigureAwait(false);
             return;
         }
+        IReadOnlyList<PresentGrant> rolled;
+        lock (_rng) rolled = PresentRolls.Roll(present, _rng.Next);
+        if (_player.BonusPresent?.Invoke(box.ItemIndex) is { } bonus)
+        {
+            var bonusBox = rolled.Any(grant => grant.ItemId == bonus.SelectItemId) ? bonus.PickBonusPresentId : bonus.UnpickBonusPresentId;
+            if (_presents.TryGetValue(bonusBox, out var bonusPresent))
+            {
+                lock (_rng) rolled = rolled.Concat(PresentRolls.Roll(bonusPresent, _rng.Next)).ToList();
+            }
+        }
+        await DeliverBoxAsync(box, definition, characterId, wireUid, rolled, Enumerable.Empty<Item>(), ct).ConfigureAwait(false);
+    }
+
+    private async Task DeliverBoxAsync(
+        Item box, ItemParamEntry definition, ulong characterId, ulong wireUid, IReadOnlyList<PresentGrant> rolled, IEnumerable<Item> alsoTaken, CancellationToken ct)
+    {
         var bag = _items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory);
         var weight = bag.Sum(held => (_catalog.GetById(held.ItemIndex)?.Weight ?? 0) * held.WeightUnits);
         if (weight >= _player.MaxWeight())
@@ -303,8 +391,6 @@ public sealed class ItemUseService
             await RefusePresentAsync($"gift box {box.ItemIndex}: bag weight {weight} of {_player.MaxWeight()}", ct).ConfigureAwait(false);
             return;
         }
-        IReadOnlyList<PresentGrant> rolled;
-        lock (_rng) rolled = PresentRolls.Roll(present, _rng.Next);
         var grants = PresentRolls.Merge(rolled, itemId => _catalog.GetById(itemId) is { IsStackable: true });
         if (grants.Count == 0 || grants.Any(grant => _catalog.GetById(grant.ItemId) is null))
         {
@@ -322,6 +408,7 @@ public sealed class ItemUseService
         await SendAsync(Opcode.S2C_ITEM_USE_EFFECT, ItemUseFrames.Used(wireUid, ItemUseFrames.EffectOnly((ushort)definition.Effect)), block, ct).ConfigureAwait(false);
         await _player.SendToMap(Opcode.S2C_COMMAND_BLOCK_END, Array.Empty<byte>(), block).ConfigureAwait(false);
         Consume(box, definition);
+        foreach (var extra in alsoTaken) Consume(extra, _catalog.GetById(extra.ItemIndex) ?? definition);
 
         var operations = new List<BagOperation>(grants.Count);
         foreach (var grant in grants)
@@ -343,12 +430,12 @@ public sealed class ItemUseService
             }
         }
         await SendAsync(Opcode.S2C_PRESENT_OPENED, ItemUseFrames.PresentOpened((uint)box.ItemIndex, operations), ct).ConfigureAwait(false);
-        Console.WriteLine($"{_logTag} {_ctx.Remote}   gift box {box.ItemIndex} opened: {string.Join(", ", grants.Select(grant => $"{grant.ItemId} x{grant.Count}"))}");
+        Console.WriteLine($"{_logTag} {_remote()}   gift box {box.ItemIndex} opened: {string.Join(", ", grants.Select(grant => $"{grant.ItemId} x{grant.Count}"))}");
     }
 
     private async Task RefusePresentAsync(string reason, CancellationToken ct)
     {
-        Console.WriteLine($"{_logTag} {_ctx.Remote}   item use refused: {reason}");
+        Console.WriteLine($"{_logTag} {_remote()}   item use refused: {reason}");
         await SendAsync(Opcode.S2C_PRESENT_REFUSED, ItemUseFrames.PresentRefused(), ct).ConfigureAwait(false);
     }
 
@@ -362,7 +449,7 @@ public sealed class ItemUseService
 
     private async Task RefuseAsync(string reason, CancellationToken ct)
     {
-        Console.WriteLine($"{_logTag} {_ctx.Remote}   item use refused: {reason}");
+        Console.WriteLine($"{_logTag} {_remote()}   item use refused: {reason}");
         await SendAsync(Opcode.S2C_ITEM_USE_REFUSED, Array.Empty<byte>(), ct).ConfigureAwait(false);
     }
 
@@ -372,8 +459,8 @@ public sealed class ItemUseService
     }
 
     private Task SendAsync(Opcode opcode, byte[] payload, CancellationToken ct) =>
-        _ctx.SendFrameAsync(opcode, payload, randKey: NextRandKey(), ct);
+        _send(opcode, payload, NextRandKey(), 0, ct);
 
     private Task SendAsync(Opcode opcode, byte[] payload, ushort blockId, CancellationToken ct) =>
-        _ctx.SendFrameAsync(opcode, payload, NextRandKey(), blockId, ct);
+        _send(opcode, payload, NextRandKey(), blockId, ct);
 }

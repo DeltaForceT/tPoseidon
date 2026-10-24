@@ -29,6 +29,9 @@ public sealed class InMemorySkillStore : ISkillStore
         _skills[key] = skill;
     }
 
+    public bool Delete(ulong characterId, int skillId) =>
+        _skills.TryRemove(new SkillKey(characterId, skillId), out _);
+
     public int DeleteAllForCharacter(ulong characterId)
     {
         var toRemove = _skills.Keys.Where(k => k.CharacterId == characterId).ToList();

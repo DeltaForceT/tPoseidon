@@ -15,6 +15,7 @@ public enum CharStoreSubOp : byte
     SaveCharacterStats = 0x07,
     GetSnapshot = 0x08,
     SetCharacterHome = 0x09,
+    EditCharacter = 0x0A,
 }
 
 public static class CharStoreWire
@@ -73,6 +74,47 @@ public static class CharStoreWire
     {
         var reader = new PacketReader(body);
         return ReadStatsSnapshot(ref reader);
+    }
+
+    public static byte[] EncodeEdit(CharacterEdit edit)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        var writer = new PacketWriter(48);
+        writer.WriteByte((byte)edit.Kind);
+        WriteString(writer, edit.NewName);
+        writer.WriteInt32(edit.ItemIndex);
+        writer.WriteByte(edit.HairSlot);
+        writer.WriteUInt16(edit.HairColor);
+        writer.WriteByte((byte)edit.NewSpecies);
+        writer.WriteUInt16(edit.EarItemIndex);
+        writer.WriteUInt16(edit.TailItemIndex);
+        writer.WriteByte(edit.PtsP);
+        writer.WriteByte(edit.PtsM);
+        writer.WriteByte(edit.PtsS);
+        writer.WriteByte(edit.PtsC);
+        writer.WriteUInt16(edit.WarehouseSlots);
+        return writer.ToArray();
+    }
+
+    public static CharacterEdit DecodeEdit(ReadOnlySpan<byte> body)
+    {
+        var reader = new PacketReader(body);
+        return new CharacterEdit
+        {
+            Kind = (CharacterEditKind)reader.ReadByte(),
+            NewName = ReadString(ref reader),
+            ItemIndex = reader.ReadInt32(),
+            HairSlot = reader.ReadByte(),
+            HairColor = reader.ReadUInt16(),
+            NewSpecies = (Species)reader.ReadByte(),
+            EarItemIndex = reader.ReadUInt16(),
+            TailItemIndex = reader.ReadUInt16(),
+            PtsP = reader.ReadByte(),
+            PtsM = reader.ReadByte(),
+            PtsS = reader.ReadByte(),
+            PtsC = reader.ReadByte(),
+            WarehouseSlots = reader.ReadUInt16(),
+        };
     }
 
     private static void WriteCharacter(PacketWriter writer, Character c)

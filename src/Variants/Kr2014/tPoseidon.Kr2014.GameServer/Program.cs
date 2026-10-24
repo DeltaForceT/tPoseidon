@@ -164,6 +164,7 @@ IGuideHistoryStore guideHistoryStore = new PostgresGuideHistoryStore(pg.DataSour
 IItemStore itemStore = new PostgresItemStore(pg.DataSource);
 
 ISkillStore skillStore = new PostgresSkillStore(pg.DataSource);
+IImprintStore imprintStore = new PostgresImprintStore(pg.DataSource);
 
 IMonsterHuntStore monsterHuntStore = new PostgresMonsterHuntStore(pg.DataSource);
 
@@ -442,6 +443,11 @@ var coupleTables = CoupleTables.Empty;
 var pkInfo = PkInfoTables.Empty;
 var guildGameTypes = GuildGameTypeTables.Empty;
 var fiestaTables = FiestaTables.Empty;
+var specialPortTables = SpecialPortTables.Empty;
+var boxTables = BoxTables.Empty;
+IReadOnlyDictionary<int, ImprintEntry> imprintRows = new Dictionary<int, ImprintEntry>();
+IReadOnlyDictionary<int, ExpBoostEntry> expBoosts = new Dictionary<int, ExpBoostEntry>();
+var skillCardBySkill = new Dictionary<int, SkillCardEntry>();
 var treasureMapTables = TreasureMapTables.Empty;
 var missionTables = MissionTables.Empty;
 var harconDefTables = HarconDefTables.Empty;
@@ -523,6 +529,14 @@ try
     pkInfo = reader.LoadPkInfo();
     guildGameTypes = reader.LoadGuildGameTypeTables();
     fiestaTables = reader.LoadFiestaTables();
+    specialPortTables = reader.LoadSpecialPortTables();
+    boxTables = reader.LoadBoxTables();
+    expBoosts = reader.LoadExpBoosts();
+    imprintRows = reader.LoadImprints();
+    Console.WriteLine($"{LogTag} imprints from libconfig: {imprintRows.Count} rows ({ImprintEntry.TableName})");
+    Console.WriteLine($"{LogTag} exp boosters from libconfig: {expBoosts.Count} rows ({ExpBoostEntry.TableName})");
+    Console.WriteLine($"{LogTag} boxes from libconfig: {boxTables.Bonuses.Count} bonus presents ({BonusPresentEntry.TableName}), {boxTables.Keyboxes.Count} key boxes ({KeyboxEntry.TableName})");
+    Console.WriteLine($"{LogTag} item ports from libconfig: {specialPortTables.Advanced.Count} advanced zones ({SpecialPortTables.AdvancedTable}), {specialPortTables.Random.Count} broom rows ({SpecialPortTables.RandomTable})");
     treasureMapTables = reader.LoadTreasureMapTables();
     missionTables = reader.LoadMissionTables();
     harconDefTables = reader.LoadHarconDefTables();
@@ -562,6 +576,7 @@ try
     skillScrolls = reader.LoadSkillScrolls().GroupBy(scroll => scroll.ItemId).ToDictionary(scrolls => scrolls.Key, scrolls => scrolls.First());
     Console.WriteLine($"{LogTag} skills from libconfig: {skillBook.Count} rows (SkillParam2 with their ESAII_ and ESAction_ tables)");
     foreach (var card in reader.LoadSkillCards()) skillCards[card.Id] = card;
+    foreach (var card in skillCards.Values) skillCardBySkill.TryAdd(card.AffectionSkill, card);
     foreach (var teleport in reader.LoadTeleportInfo()) teleports[teleport.Id] = teleport;
     foreach (var npcMove in reader.LoadNpcMoves()) npcMoves.TryAdd(npcMove.Id, npcMove);
     skillChecks = reader.LoadSkillChecks();
@@ -1024,6 +1039,7 @@ var itemThrows = new ItemThrowController(itemStore, itemCatalog, groundItems, id
 var systemLink = new tPoseidon.Core.Net.Social.SystemServerLink(
     tPoseidon.Core.Net.Social.SystemServerLink.InternalAddresses(ServerEndpointConfig.MasterHost),
     msg => Console.WriteLine($"{LogTag} {msg}"));
+var gameMasterRelay = new tPoseidon.Core.Net.Social.GameMasterChatRelay(systemLink, clientTextEncoding);
 var partyShares = new tPoseidon.Core.Net.Social.PartyShareBook(systemLink);
 var masterOccupation = new tPoseidon.Core.InterServer.MasterOccupation(() => masterClient, selfIdentity.ServerIndex, msg => Console.WriteLine($"{LogTag} {msg}"));
 var guildNames = new tPoseidon.Core.Net.Social.GuildNameBook(systemLink, clientTextEncoding);
@@ -1146,6 +1162,19 @@ var memoryPorts = new MemoryPortController(
     () => memoryPortRows,
     mapId => mapKindById.TryGetValue(mapId, out var portMap) ? portMap.Option : 0,
     porter => PlayerPositionAt(porter, DateTimeOffset.UtcNow),
+    clientTextEncoding,
+    LogTag);
+
+var specialItems = new SpecialItemController(
+    accountStore,
+    skillStore,
+    globalItemManager,
+    itemCatalog,
+    systemLink,
+    mapId => mapKindById.TryGetValue(mapId, out var specialMap) ? specialMap.Option : 0,
+    () => specialPortTables,
+    skillId => skillCardBySkill.TryGetValue(skillId, out var skillCard) ? skillCard : null,
+    skillId => skillBook.Find(skillId)?.Row.MasterTmPoint ?? 0,
     clientTextEncoding,
     LogTag);
 
@@ -1356,52 +1385,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             },
             moveRng,
             LogTag);
-        var itemUse = new ItemUseService(
-            ctx,
-            itemStore,
-            itemCatalog,
-            new ItemUsePlayer
-            {
-                Character = () => currentChar,
-                Stats = () => statManager,
-                EntityId = () => liveSessions.TryGetValue(ctx, out var useSt) ? useSt.PlayerEntityId : (ushort)0,
-                MaxHp = () => liveSessions.TryGetValue(ctx, out var useHpSt) ? useHpSt.PlayerMaxHp : 0,
-                MaxMp = () => liveSessions.TryGetValue(ctx, out var useMpSt) ? useMpSt.PlayerMaxMp : 0,
-                IsDead = () => liveSessions.TryGetValue(ctx, out var useDeadSt) && useDeadSt.IsDead,
-                SendToMap = (opcode, payload, blockId) => liveSessions.TryGetValue(ctx, out var useMapSt)
-                    ? SendToMapInBlockAsync(useMapSt.MapId, opcode, payload, blockId)
-                    : Task.CompletedTask,
-                MaxWeight = () => liveSessions.TryGetValue(ctx, out var useWeightSt) ? useWeightSt.PlayerMaxWt : 0,
-                StarTears = (tears, tearsCt) => liveSessions.TryGetValue(ctx, out var tearsSt) ? fortune.StarTearsAsync(tearsSt, tears, tearsCt) : Task.FromResult(false),
-                LearnSkillCard = (cardDefinition, cardCt) => LearnSkillCardAsync(cardDefinition, cardCt),
-                TeleportMap = (mapDefinition, _) => liveSessions.TryGetValue(ctx, out var mapSt)
-                    ? drillController.CreateTeleportSpotAsync(mapSt, mapDefinition)
-                    : Task.FromResult(false),
-                TreasureMap = (treasureDefinition, _) => liveSessions.TryGetValue(ctx, out var treasureSt)
-                    ? drillController.CreateTreasureSpotAsync(treasureSt, treasureDefinition)
-                    : Task.FromResult(false),
-                ReviveTarget = (targetId, rebirthItem, reviveCt) => liveSessions.TryGetValue(ctx, out var reviverSt)
-                    ? ReviveWithItemAsync(ctx, reviverSt, targetId, rebirthItem, reviveCt)
-                    : Task.FromResult(false),
-                FiestaTicket = (ticketDefinition, _) => liveSessions.TryGetValue(ctx, out var ticketSt)
-                    ? fiesta.TicketAsync(ticketSt, ticketDefinition)
-                    : Task.FromResult<WarpTicketUse?>(null),
-                Disguise = (kitId, _) => liveSessions.TryGetValue(ctx, out var kitSt) ? disguises.UseKitAsync(kitSt, kitId) : Task.FromResult(false),
-                PlantSeed = (seedItem, seedUid, seedCt) => liveSessions.TryGetValue(ctx, out var seedSt) ? soulSeeds.PlantAsync(seedSt, seedItem, seedUid, seedCt) : Task.FromResult(false),
-                SeedEvent = seedEventType => liveSessions.TryGetValue(ctx, out var potionSt) ? soulSeeds.EventAsync(potionSt, seedEventType, 1) : Task.CompletedTask,
-                SoulPotion = (soulPotionItem, soulPotionDefinition, _) => liveSessions.TryGetValue(ctx, out var soulPotionSt)
-                    ? soulSystem.UsePotionAsync(soulPotionSt, soulPotionItem, soulPotionDefinition)
-                    : Task.FromResult(false),
-                MonsterCardUsed = usedCard =>
-                {
-                    if (liveSessions.TryGetValue(ctx, out var cardUseSt)) CardIdentifyController.CardUsed(cardUseSt, usedCard);
-                },
-            },
-            commandBlockIds,
-            moveRng,
-            LogTag,
-            presentItems,
-            globalItemManager);
         var compound = new CompoundService(
             ctx,
             itemStore,
@@ -1892,6 +1875,78 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             },
             moveRng,
             LogTag);
+        SpecialItemHost? specialHost = null;
+        var itemUse = new ItemUseService(
+            ctx,
+            itemStore,
+            itemCatalog,
+            new ItemUsePlayer
+            {
+                Character = () => currentChar,
+                Stats = () => statManager,
+                EntityId = () => liveSessions.TryGetValue(ctx, out var useSt) ? useSt.PlayerEntityId : (ushort)0,
+                MaxHp = () => liveSessions.TryGetValue(ctx, out var useHpSt) ? useHpSt.PlayerMaxHp : 0,
+                MaxMp = () => liveSessions.TryGetValue(ctx, out var useMpSt) ? useMpSt.PlayerMaxMp : 0,
+                IsDead = () => liveSessions.TryGetValue(ctx, out var useDeadSt) && useDeadSt.IsDead,
+                SendToMap = (opcode, payload, blockId) => liveSessions.TryGetValue(ctx, out var useMapSt)
+                    ? SendToMapInBlockAsync(useMapSt.MapId, opcode, payload, blockId)
+                    : Task.CompletedTask,
+                MaxWeight = () => liveSessions.TryGetValue(ctx, out var useWeightSt) ? useWeightSt.PlayerMaxWt : 0,
+                StarTears = (tears, tearsCt) => liveSessions.TryGetValue(ctx, out var tearsSt) ? fortune.StarTearsAsync(tearsSt, tears, tearsCt) : Task.FromResult(false),
+                LearnSkillCard = (cardDefinition, cardCt) => LearnSkillCardAsync(cardDefinition, cardCt),
+                TeleportMap = (mapDefinition, _) => liveSessions.TryGetValue(ctx, out var mapSt)
+                    ? drillController.CreateTeleportSpotAsync(mapSt, mapDefinition)
+                    : Task.FromResult(false),
+                TreasureMap = (treasureDefinition, _) => liveSessions.TryGetValue(ctx, out var treasureSt)
+                    ? drillController.CreateTreasureSpotAsync(treasureSt, treasureDefinition)
+                    : Task.FromResult(false),
+                ReviveTarget = (targetId, rebirthItem, reviveCt) => liveSessions.TryGetValue(ctx, out var reviverSt)
+                    ? ReviveWithItemAsync(ctx, reviverSt, targetId, rebirthItem, reviveCt)
+                    : Task.FromResult(false),
+                FiestaTicket = (ticketDefinition, _) => liveSessions.TryGetValue(ctx, out var ticketSt)
+                    ? fiesta.TicketAsync(ticketSt, ticketDefinition)
+                    : Task.FromResult<WarpTicketUse?>(null),
+                Disguise = (kitId, _) => liveSessions.TryGetValue(ctx, out var kitSt) ? disguises.UseKitAsync(kitSt, kitId) : Task.FromResult(false),
+                PlantSeed = (seedItem, seedUid, seedCt) => liveSessions.TryGetValue(ctx, out var seedSt) ? soulSeeds.PlantAsync(seedSt, seedItem, seedUid, seedCt) : Task.FromResult(false),
+                SeedEvent = seedEventType => liveSessions.TryGetValue(ctx, out var potionSt) ? soulSeeds.EventAsync(potionSt, seedEventType, 1) : Task.CompletedTask,
+                SoulPotion = (soulPotionItem, soulPotionDefinition, _) => liveSessions.TryGetValue(ctx, out var soulPotionSt)
+                    ? soulSystem.UsePotionAsync(soulPotionSt, soulPotionItem, soulPotionDefinition)
+                    : Task.FromResult(false),
+                BonusPresent = boxId => boxTables.Bonuses.TryGetValue(boxId, out var bonusRow) ? bonusRow : null,
+                Keybox = boxId => boxTables.Keyboxes.TryGetValue(boxId, out var keyRow) ? keyRow : null,
+                ExpPotion = (potionId, life) =>
+                {
+                    if (!expBoosts.TryGetValue(potionId, out var boost) || !liveSessions.TryGetValue(ctx, out var potionSt)) return false;
+                    potionSt.ExpPotion = new tPoseidon.Core.Game.Items.ExpPotion(boost.ExpAdvantage, boost.TmAdvantage, DateTimeOffset.UtcNow.AddMinutes(life));
+                    return true;
+                },
+                Imprint = imprintItemId =>
+                {
+                    if (!imprintRows.TryGetValue(imprintItemId, out var imprintRow) || currentChar is null || !liveSessions.TryGetValue(ctx, out var imprintSt)) return false;
+                    var active = imprintSt.Imprints.Add(imprintRow, DateTimeOffset.UtcNow);
+                    imprintStore.Save(new ImprintRecord(currentChar.CharacterId, active.Type, active.ItemId, active.Until));
+                    ApplyEquipmentChange();
+                    return true;
+                },
+                Special = () => specialHost ??= liveSessions.TryGetValue(ctx, out var specialSt)
+                    ? specialItems.HostFor(new SpecialItemSession(
+                        specialSt,
+                        ReloadCharacter,
+                        ReleaseAllEquipmentAsync,
+                        StoreStatPoints,
+                        SkillForgottenAsync,
+                        trigger => FlushStatsToDb(trigger)))
+                    : null,
+                MonsterCardUsed = usedCard =>
+                {
+                    if (liveSessions.TryGetValue(ctx, out var cardUseSt)) CardIdentifyController.CardUsed(cardUseSt, usedCard);
+                },
+            },
+            commandBlockIds,
+            moveRng,
+            LogTag,
+            presentItems,
+            globalItemManager);
         var skillShop = new SkillShopService(
             ctx,
             skillShopCatalogs,
@@ -2372,7 +2427,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         ctx.Dispatcher.Register(Opcode.C2S_ITEM_USE_WITH_DATA, async (_, payload, useCt) =>
         {
             if (liveSessions.TryGetValue(ctx, out var porterSt) && await memoryPorts.TryUseAsync(porterSt, payload, useCt).ConfigureAwait(false)) return;
-            await itemUse.UseAsync(payload, useCt).ConfigureAwait(false);
+            await itemUse.UseWithDataAsync(payload, useCt).ConfigureAwait(false);
         });
         ctx.Dispatcher.Register(Opcode.C2S_MEMORY_PORT_OPEN, (_, payload, portCt) =>
             liveSessions.TryGetValue(ctx, out var openPortSt) ? memoryPorts.OpenAsync(openPortSt, payload, portCt) : Task.CompletedTask);
@@ -2525,9 +2580,14 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         int[] WithFortune(int[] setBonus)
         {
-            if (!liveSessions.TryGetValue(ctx, out var fortuneSt) || fortuneSt.Fortune is not { Active: true } held) return setBonus;
-            var stats = held.ActiveStats;
-            for (var slot = 0; slot < setBonus.Length && slot < stats.Count; slot++) setBonus[slot] += stats[slot];
+            if (!liveSessions.TryGetValue(ctx, out var fortuneSt)) return setBonus;
+            if (fortuneSt.Fortune is { Active: true } held)
+            {
+                var stats = held.ActiveStats;
+                for (var slot = 0; slot < setBonus.Length && slot < stats.Count; slot++) setBonus[slot] += stats[slot];
+            }
+            var imprinted = fortuneSt.Imprints.StatBonus(DateTimeOffset.UtcNow);
+            for (var slot = 0; slot < setBonus.Length && slot < imprinted.Length; slot++) setBonus[slot] += imprinted[slot];
             return setBonus;
         }
 
@@ -2619,6 +2679,44 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 tPoseidon.Core.Net.Social.SystemLinkFrames.CharacterTypeChangedFor(changer.CharacterId, (byte)type, job), changeCt).ConfigureAwait(false);
             Console.WriteLine($"{LogTag} {ctx.Remote} [job-change] '{changer.Name}' is now type {type}, job {job} (index {tier}); {released} items moved to the bag");
             return true;
+        }
+
+        Character? ReloadCharacter()
+        {
+            if (currentChar is null) return null;
+            currentChar = accountStore.GetCharacterById(currentChar.CharacterId) ?? currentChar;
+            if (liveSessions.TryGetValue(ctx, out var reloadSt)) reloadSt.Character = currentChar;
+            return currentChar;
+        }
+
+        async Task ReleaseAllEquipmentAsync(CancellationToken releaseCt)
+        {
+            var uniquesBeforeRelease = WornAbsoluteUniques();
+            await equipment.ReleaseAllAsync(releaseCt).ConfigureAwait(false);
+            await WithdrawReleasedUniquesAsync(uniquesBeforeRelease, releaseCt).ConfigureAwait(false);
+            await SyncPetAsync(withEffect: false).ConfigureAwait(false);
+            ApplyEquipmentChange();
+        }
+
+        bool StoreStatPoints(IReadOnlyList<short> points, int bonus, string trigger)
+        {
+            if (currentChar is null || statManager is null || !liveSessions.TryGetValue(ctx, out var pointsSt)) return false;
+            var stored = points.ToArray();
+            ApplyCombatStats(pointsSt, StatsWithEquipment(currentChar, stored));
+            statManager.SetVitals(
+                Math.Min(statManager.CurrentHp, pointsSt.PlayerMaxHp),
+                Math.Min(statManager.CurrentMp, pointsSt.PlayerMaxMp));
+            FlushStatsToDb(trigger, stored, (ushort)bonus);
+            ReloadCharacter();
+            return true;
+        }
+
+        async Task SkillForgottenAsync(int skillId, CancellationToken forgetCt)
+        {
+            if (skillBook.Find(skillId) is { IsPassive: true } forgotten && PassiveStats.IsStatPassive(forgotten.ActionId))
+            {
+                await SendPassiveStatsAsync(forgetCt).ConfigureAwait(false);
+            }
         }
 
         async Task<int> OpenLookChangeAsync()
@@ -2789,6 +2887,13 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }
             state.Skills = ownedSkills;
             state.Cast = null;
+            foreach (var record in imprintStore.Load(character.CharacterId))
+            {
+                if (imprintRows.TryGetValue(record.ItemId, out var restoredRow))
+                {
+                    state.Imprints.Restore(new tPoseidon.Core.Game.Items.ActiveImprint(record.ItemId, record.Type, restoredRow.Value, record.ExpiresAt));
+                }
+            }
         }
 
         IReadOnlyList<(Opcode Opcode, byte[] Payload, SwingAudience Audience)> GainExp(long gain, bool fromSwing, bool gmRate)
@@ -2798,6 +2903,8 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 return Array.Empty<(Opcode Opcode, byte[] Payload, SwingAudience Audience)>();
             }
             if (gmRate) gain = gameMasters.Rates.ScaleExp(gain);
+            gain = progressSt.ExpPotion?.ScaleExp(gain, DateTimeOffset.UtcNow) ?? gain;
+            gain = tPoseidon.Core.Game.Items.ImprintBook.Scale(gain, progressSt.Imprints.ExpPercent(DateTimeOffset.UtcNow));
 
             var outcome = statManager.AddExp(gain, levelExpChart);
             if (outcome.Kind == ExpGainKind.Withheld)
@@ -2898,6 +3005,11 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         {
             if (statManager is null || currentChar is null) return Array.Empty<(Opcode Opcode, byte[] Payload)>();
             if (gmRate) gain = gameMasters.Rates.ScaleTm(gain);
+            if (liveSessions.TryGetValue(ctx, out var tmPotionSt))
+            {
+                gain = tmPotionSt.ExpPotion?.ScaleTm(gain, DateTimeOffset.UtcNow) ?? gain;
+                gain = tPoseidon.Core.Game.Items.ImprintBook.Scale(gain, tmPotionSt.Imprints.TmPercent(DateTimeOffset.UtcNow));
+            }
 
             var outcome = statManager.AddTmExp(gain, tmLevelChart);
             var frames = new List<(Opcode Opcode, byte[] Payload)>(outcome.LevelUps.Count + 1);
@@ -3363,12 +3475,14 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             return refine.ClosePhantomAsync(phantomCloseCt);
         });
 
-        ctx.Dispatcher.Register(Opcode.REFINE_CLOSE, (_, _, _) =>
-        {
-            refine.Leave();
-            growth.Leave();
-            return Task.CompletedTask;
-        });
+        tPoseidon.Core.Net.World.RefineCloseHandler.Register(
+            ctx.Dispatcher,
+            SendShopFrameAsync,
+            () =>
+            {
+                refine.Leave();
+                growth.Leave();
+            });
 
         ctx.Dispatcher.Register(Opcode.C2S_VIP_SHOP_BUY, (_, payload, vipCt) => vipShop.BuyAsync(payload, vipCt));
 
@@ -3478,6 +3592,14 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             var uniquesBeforeRelease = WornAbsoluteUniques();
             await equipment.ReleaseAsync(payload, releaseCt).ConfigureAwait(false);
             await WithdrawReleasedUniquesAsync(uniquesBeforeRelease, releaseCt).ConfigureAwait(false);
+            await SyncPetAsync(withEffect: true).ConfigureAwait(false);
+        });
+
+        ctx.Dispatcher.Register(Opcode.CMD_RELEASE_ITEM_ALL, async (_, payload, releaseAllCt) =>
+        {
+            var uniquesBeforeReleaseAll = WornAbsoluteUniques();
+            await equipment.ReleaseListAsync(payload, releaseAllCt).ConfigureAwait(false);
+            await WithdrawReleasedUniquesAsync(uniquesBeforeReleaseAll, releaseAllCt).ConfigureAwait(false);
             await SyncPetAsync(withEffect: true).ConfigureAwait(false);
         });
 
@@ -4064,6 +4186,9 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         ctx.Dispatcher.Register(Opcode.CARD_IDENTIFY_END, (_, _, _) =>
             liveSessions.TryGetValue(ctx, out var identifyEndSt) ? cardIdentify.EndAsync(identifyEndSt) : Task.CompletedTask);
+
+        ctx.Dispatcher.Register(Opcode.C2S_CANCEL_ITEM_USE, (_, _, _) =>
+            liveSessions.TryGetValue(ctx, out var cancelUseSt) ? cardIdentify.EndAsync(cancelUseSt) : Task.CompletedTask);
 
         ctx.Dispatcher.Register(Opcode.C2S_PLAYER_SHOP_OPEN, (_, _, _) =>
             liveSessions.TryGetValue(ctx, out var shopOpenSt) ? playerShops.OpenAsync(shopOpenSt) : Task.CompletedTask);
@@ -5278,18 +5403,31 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }
         });
 
+        async Task HandleAtLineAsync(InGameSessionState speaker, string text, ReadOnlyMemory<byte> payload)
+        {
+            if (currentChar is null) return;
+            if (!GameMasterController.IsCommand(text) && await TryHandleScriptChatAsync(speaker, text).ConfigureAwait(false)) return;
+            var clientAddress = ctx.Remote is { } remote ? (remote.Address.IsIPv4MappedToIPv6 ? remote.Address.MapToIPv4() : remote.Address).ToString() : string.Empty;
+            var relay = await gameMasterRelay.RelayAsync(currentChar.CharacterId, currentChar.Name, clientAddress, payload, sessionCt).ConfigureAwait(false);
+            var shape = $"{tPoseidon.Core.Net.Social.GameMasterChat.WordCount(text)} word(s), {text.Length} char(s)";
+            if (relay.Result == tPoseidon.Core.Net.Social.GameMasterRelayResult.Relayed)
+            {
+                Console.WriteLine($"{LogTag} {ctx.Remote} [chat] '{currentChar.Name}' GM line sent to the SystemServer ({shape})");
+                return;
+            }
+            Console.WriteLine($"{LogTag} {ctx.Remote} [chat] '{currentChar.Name}' GM line not delivered: the SystemServer link is down ({shape})");
+            await TellScriptLineAsync(speaker, tPoseidon.Core.Net.Social.GameMasterChat.UnavailableLine, sessionCt).ConfigureAwait(false);
+        }
+
         async Task BroadcastChatAsync(ushort replyOpcode, ReadOnlyMemory<byte> payload)
         {
             if (currentChar is null || !liveSessions.TryGetValue(ctx, out var speaker)) return;
             var text = tPoseidon.Core.Net.Social.ChatFrames.ReadText(payload.Span, clientTextEncoding);
-            if (GameMasterController.IsCommand(text))
+            if (tPoseidon.Core.Net.Social.GameMasterChat.IsCommandLine(text))
             {
-                await systemLink.SendAsync(tPoseidon.Core.Net.Social.GameMasterFrames.LinkChatCommand,
-                    tPoseidon.Core.Net.Social.GameMasterFrames.ChatLine(currentChar.CharacterId, text, clientTextEncoding), default).ConfigureAwait(false);
-                Console.WriteLine($"{LogTag} {ctx.Remote} [chat] '{currentChar.Name}' GM command passed to the SystemServer");
+                await HandleAtLineAsync(speaker, text, payload).ConfigureAwait(false);
                 return;
             }
-            if (await TryHandleScriptChatAsync(speaker, text).ConfigureAwait(false)) return;
             await SendToMapAsync(speaker.MapId, (Opcode)replyOpcode,
                 tPoseidon.Core.Net.Social.ChatFrames.Line(speaker.PlayerEntityId, currentChar.Name, text, clientTextEncoding)).ConfigureAwait(false);
             Console.WriteLine($"{LogTag} {ctx.Remote} [chat] 0x{replyOpcode:X4} '{currentChar.Name}': {text}");
@@ -5303,7 +5441,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         {
             if (!liveSessions.TryGetValue(ctx, out var speaker)) return;
             var text = tPoseidon.Core.Net.Social.ChatFrames.ReadText(payload.Span, clientTextEncoding);
-            if (GameMasterController.IsCommand(text)) return;
+            if (tPoseidon.Core.Net.Social.GameMasterChat.IsCommandLine(text)) return;
             await SendToMapAsync(speaker.MapId, (Opcode)tPoseidon.Core.Net.Social.ChatFrames.HeadMessageShown,
                 tPoseidon.Core.Net.Social.ChatFrames.Head(speaker.PlayerEntityId, text, clientTextEncoding)).ConfigureAwait(false);
         });
@@ -14760,4 +14898,6 @@ internal sealed class InGameSessionState
     public Dictionary<byte, short> ResistBonus { get; } = new();
     public (int SkillId, int Level, ulong ItemUid)? ScrollCast { get; set; }
     public DateTimeOffset EffectsTickedAt { get; set; }
+    public tPoseidon.Core.Game.Items.ExpPotion? ExpPotion { get; set; }
+    public tPoseidon.Core.Game.Items.ImprintBook Imprints { get; } = new();
 }

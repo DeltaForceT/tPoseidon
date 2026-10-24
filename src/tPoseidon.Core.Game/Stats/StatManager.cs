@@ -326,6 +326,15 @@ public sealed class StatManager
         }
     }
 
+    public ushort AddTmPoints(int points)
+    {
+        lock (_lock)
+        {
+            _tmPoint = (ushort)Math.Clamp(_tmPoint + points, 0, ushort.MaxValue);
+            return _tmPoint;
+        }
+    }
+
     public void ApplyQuestRewards(long gelder, long exp, long tmxp)
     {
         if (gelder > 0) GrantMoney(gelder, StatChangeSource.Quest);

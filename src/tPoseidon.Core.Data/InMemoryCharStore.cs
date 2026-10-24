@@ -66,31 +66,48 @@ public sealed class InMemoryCharStore : ICharStore
         return _byId.TryUpdate(characterId, updated, existing);
     }
 
+    public IReadOnlyCollection<string> ForbiddenNames { get; set; } = Array.Empty<string>();
+
+    public uint EditCharacter(ulong characterId, CharacterEdit edit) =>
+        InMemoryCharacterEdits.Apply(_byId, characterId, edit, ForbiddenNames);
+
+    private static ushort HairSlotValue(CharacterEdit? edit, int slot, ushort current)
+    {
+        if (edit is null) return current;
+        return edit.Kind switch
+        {
+            CharacterEditKind.Hair when edit.HairSlot == slot => edit.HairColor,
+            CharacterEditKind.Gender when slot == 1 => 0,
+            _ => current,
+        };
+    }
+
     internal static Character CloneWith(
         Character src,
         ushort? mapId = null,
         ushort? positionX = null,
         ushort? positionY = null,
         CharacterStatsSnapshot? stats = null,
-        ushort? home = null) => new()
+        ushort? home = null,
+        CharacterEdit? edit = null) => new()
     {
         CharacterId = src.CharacterId,
         OwnerAccountId = src.OwnerAccountId,
         Slot = src.Slot,
-        Name = src.Name,
+        Name = edit?.Kind == CharacterEditKind.Rename ? edit.NewName : src.Name,
         AccountLabel = src.AccountLabel,
-        Species = src.Species,
+        Species = edit?.Kind == CharacterEditKind.Gender ? edit.NewSpecies : src.Species,
         FType = src.FType,
-        PtsP = src.PtsP,
-        PtsM = src.PtsM,
-        PtsS = src.PtsS,
-        PtsC = src.PtsC,
+        PtsP = edit?.Kind == CharacterEditKind.GrowthWeights ? edit.PtsP : src.PtsP,
+        PtsM = edit?.Kind == CharacterEditKind.GrowthWeights ? edit.PtsM : src.PtsM,
+        PtsS = edit?.Kind == CharacterEditKind.GrowthWeights ? edit.PtsS : src.PtsS,
+        PtsC = edit?.Kind == CharacterEditKind.GrowthWeights ? edit.PtsC : src.PtsC,
         JobTier = src.JobTier,
-        Hair = src.Hair,
+        Hair = HairSlotValue(edit, 1, src.Hair),
         Money = stats?.Money ?? src.Money,
         Level = stats?.Level ?? src.Level,
-        StarterEarItemIndex = src.StarterEarItemIndex,
-        StarterTailItemIndex = src.StarterTailItemIndex,
+        StarterEarItemIndex = edit?.Kind == CharacterEditKind.Gender ? edit.EarItemIndex : src.StarterEarItemIndex,
+        StarterTailItemIndex = edit?.Kind == CharacterEditKind.Gender ? edit.TailItemIndex : src.StarterTailItemIndex,
         PositionX = positionX ?? src.PositionX,
         PositionY = positionY ?? src.PositionY,
         MapId = mapId ?? src.MapId,
@@ -101,7 +118,7 @@ public sealed class InMemoryCharStore : ICharStore
         TmExpMagic = src.TmExpMagic,
         TmExpSense = src.TmExpSense,
         TmExpCharm = src.TmExpCharm,
-        WarehouseSlots = src.WarehouseSlots,
+        WarehouseSlots = edit?.Kind == CharacterEditKind.WarehouseSlots ? edit.WarehouseSlots : src.WarehouseSlots,
         LoginTime = src.LoginTime,
         LogoutTime = src.LogoutTime,
         TotalConnectedSeconds = src.TotalConnectedSeconds,
@@ -134,8 +151,8 @@ public sealed class InMemoryCharStore : ICharStore
         ChangeJobQuestState = src.ChangeJobQuestState,
         DepthCount = src.DepthCount,
         DigCount = src.DigCount,
-        Hair2 = src.Hair2,
-        Hair3 = src.Hair3,
+        Hair2 = HairSlotValue(edit, 2, src.Hair2),
+        Hair3 = HairSlotValue(edit, 3, src.Hair3),
         JobState = src.JobState,
         CharState = src.CharState,
         Home = home ?? src.Home,

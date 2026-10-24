@@ -132,7 +132,7 @@ internal static class GmCommand
             throw new CliException("The account password is required.");
         }
 
-        return Print(GmTool.RunAsync(GmToolTransport.Shared, new GmToolEndpoint(host, port), new GmLogin(gm, password), call, CancellationToken.None)
+        return Print(GmTool.RunAsync(GmToolTransport.Shared, new GmToolEndpoint(host, port, paths.KeyTable), new GmLogin(gm, password), call, CancellationToken.None)
             .GetAwaiter().GetResult());
     }
 

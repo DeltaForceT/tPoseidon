@@ -30,13 +30,17 @@ public static class MyShopHandlers
             await depart().ConfigureAwait(false);
             await send(Opcode.S2C_MYSHOP_OPENED, Array.Empty<byte>(), ct).ConfigureAwait(false);
         });
+        var inPurchaseStorage = false;
         dispatcher.Register(Opcode.C2S_PURCHASE_STORAGE_MODE, (_, _, _) =>
         {
+            inPurchaseStorage = true;
             log("[myshop] purchase storage mode");
             return Task.CompletedTask;
         });
         dispatcher.Register(Opcode.C2S_PURCHASE_STORAGE_LEAVE, (_, _, _) =>
         {
+            if (!inPurchaseStorage) return Task.CompletedTask;
+            inPurchaseStorage = false;
             log("[myshop] purchase storage mode left");
             return Task.CompletedTask;
         });

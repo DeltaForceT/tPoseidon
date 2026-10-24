@@ -90,6 +90,17 @@ public sealed class PostgresSkillStore : ISkillStore
         return cmd.ExecuteNonQuery();
     }
 
+    public bool Delete(ulong characterId, int skillId)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand(
+            "DELETE FROM skills WHERE char_uid = @char_uid AND skill_id = @skill_id",
+            conn);
+        cmd.Parameters.AddWithValue("char_uid", unchecked((long)characterId));
+        cmd.Parameters.AddWithValue("skill_id", skillId);
+        return cmd.ExecuteNonQuery() == 1;
+    }
+
     public int DeleteAboveLevel(ulong characterId, int maxLevel)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();

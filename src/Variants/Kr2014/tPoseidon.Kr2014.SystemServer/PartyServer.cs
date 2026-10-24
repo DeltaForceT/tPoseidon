@@ -109,6 +109,9 @@ public sealed class PartyServer
     public Task KindChangedAsync(ulong characterId, byte kind, byte job, CancellationToken ct) =>
         DeliverAsync(_parties.KindChanged(characterId, kind, job), ct);
 
+    public Task RenamedAsync(ulong characterId, string newName, CancellationToken ct) =>
+        DeliverAsync(_parties.MemberRenamed(characterId, newName), ct);
+
     public Task DeadChangedAsync(ulong characterId, bool dead, CancellationToken ct) =>
         DeliverAsync(_parties.SetDead(characterId, dead), ct);
 

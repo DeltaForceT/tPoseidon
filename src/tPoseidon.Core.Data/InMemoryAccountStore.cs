@@ -232,6 +232,11 @@ public sealed class InMemoryAccountStore : IAccountStore
         return false;
     }
 
+    public IReadOnlyCollection<string> ForbiddenNames { get; set; } = Array.Empty<string>();
+
+    public uint EditCharacter(ulong characterId, CharacterEdit edit) =>
+        InMemoryCharacterEdits.Apply(_charactersById, characterId, edit, ForbiddenNames);
+
     public bool SaveCharacterStats(ulong characterId, CharacterStatsSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
