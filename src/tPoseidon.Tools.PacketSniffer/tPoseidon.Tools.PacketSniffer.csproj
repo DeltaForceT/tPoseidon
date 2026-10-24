@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpPcap" Version="6.3.0" />
+    <PackageReference Include="PacketDotNet" Version="1.4.7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Crypto\tPoseidon.Core.Crypto.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Net\tPoseidon.Core.Net.csproj" />
+  </ItemGroup>
+
+</Project>

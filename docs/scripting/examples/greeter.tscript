@@ -1,0 +1,31 @@
+// A new NPC that greets players by name and offers a small menu.
+// Replace the sprite id with the type id of an NPC model your client has,
+// and the map and position with a spot on the map where you want it.
+
+npc "Welcome Guide" sprite 1301 map 1 at 120, 340 face south {
+    char.visits += 1;
+
+    mes "Hello, " + name() + "!";
+    mes "This is visit number " + char.visits + ".";
+
+    menu {
+        "What can I do here?" {
+            mes "You can ask me for a small gift once per visit,";
+            mes "or open your bank without walking to the city.";
+            next;
+            mes "Come back any time.";
+            close;
+        }
+        "Open my bank" {
+            npcfunc(17);
+        }
+        "Give me some money" if (money() < 1000) {
+            givemoney(500);
+            mes "Here are 500 gelder. Spend them wisely.";
+            close;
+        }
+        "Never mind" {
+            end;
+        }
+    }
+}

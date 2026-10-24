@@ -1,0 +1,33 @@
+tPoseidon
+Copyright (c) 2026 the tPoseidon authors.
+Licensed under the tPoseidon Beta License; see LICENSE.
+
+The game and its assets
+-----------------------
+tPoseidon is an independent, fan-made server emulator. It is not affiliated
+with, endorsed by or connected to the owners of the game it works with.
+
+The game, its client, executables, libraries, art, music, sound, maps, data
+tables, names and trademarks belong to their respective owners. None of them
+are included in this repository or in the tPoseidon release packages, and
+none of them are covered by the tPoseidon license. Players and server hosts
+must supply their own copy of the game client. At run time, tPoseidon reads
+the game data it needs from the folder of the client the user points it to.
+
+Third-party components in release packages
+------------------------------------------
+Release packages bundle the following components under their own licenses.
+The license texts are in the licenses/ folder of each package. PostgreSQL is
+not bundled; server hosts install it themselves.
+
+- .NET runtime and libraries: MIT License, (c) .NET Foundation and
+  contributors.
+- Npgsql: PostgreSQL License, (c) the Npgsql Development Team.
+- Konscious.Security.Cryptography.Argon2: MIT License, (c) Keef Aragon.
+- System.Text.Encoding.CodePages: MIT License, (c) .NET Foundation and
+  contributors.
+- SharpPcap (control panel only): MIT License, (c) the SharpPcap
+  contributors.
+- PacketDotNet (control panel only): Mozilla Public License 2.0, (c) the
+  PacketDotNet contributors. Its source code is available from its project
+  page.

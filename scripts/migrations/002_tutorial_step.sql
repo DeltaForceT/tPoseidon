@@ -1,0 +1,3 @@
+ALTER TABLE characters
+    ADD COLUMN IF NOT EXISTS tutorial_step SMALLINT NOT NULL DEFAULT 0
+        CHECK (tutorial_step BETWEEN 0 AND 255);

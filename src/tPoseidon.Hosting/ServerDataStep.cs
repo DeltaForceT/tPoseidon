@@ -1,0 +1,67 @@
+using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.LibConfig.ServerData;
+using tPoseidon.Hosting.Processes;
+
+namespace tPoseidon.Hosting;
+
+public sealed record StepProgress(int Step, int Steps, string Message);
+
+public static class ServerDataStep
+{
+    public const string SnapshotBuilderAssembly = "tPoseidon.Tools.BuildWorldSnapshot";
+    public const int Steps = 3;
+    private const string SnapshotVariant = "kr2014";
+    private const string ZoneRoutingFile = "master-zone-routing.json";
+    private const string KeyTableFile = "keytable-s2v2010.bin";
+    private const string ZoneRouting = "{\n  \"default\": 2,\n  \"zones\": {\n    \"148\": 2,\n    \"153\": 3\n  }\n}\n";
+
+    public static void Run(InstallPaths paths, HostSettings settings, IProgress<StepProgress>? progress = null)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(settings);
+        var libconfig = ClientFolder.LibConfigFor(settings.ClientFolder, settings.Launch.ServiceName);
+        var mapFolder = ClientFolder.MapFolder(settings.ClientFolder);
+        var builder = paths.AppExecutable(SnapshotBuilderAssembly);
+        if (!File.Exists(builder))
+        {
+            throw new HostingException($"{builder} is missing. Unpack the full release package again.");
+        }
+
+        progress?.Report(new StepProgress(1, Steps, $"Reading the packet key table from {settings.ClientExecutable}..."));
+        var extraction = KeyTableExtractor.Extract(File.ReadAllBytes(Path.Combine(settings.ClientFolder, settings.ClientExecutable)));
+        Directory.CreateDirectory(paths.ServerData);
+        var keyTablePath = Path.Combine(paths.ServerData, KeyTableFile);
+        if (extraction.Table is not null)
+        {
+            File.WriteAllBytes(keyTablePath, extraction.Table);
+        }
+        else
+        {
+            throw new HostingException($"Could not read the packet key table from {settings.ClientExecutable}: {extraction.Outcome} Make sure the folder holds an unmodified KR 2014 client.");
+        }
+
+        progress?.Report(new StepProgress(2, Steps, "Reading maps, NPC points, portals and monster tables from the client..."));
+        var summary = ServerDataGenerator.Generate(libconfig, mapFolder, paths.ServerData);
+        progress?.Report(new StepProgress(2, Steps, $"{summary.Maps} maps, {summary.NpcPoints} NPC points, {summary.Portals} portals on {summary.PortalMaps} maps, {summary.PoolRows} monster rows on {summary.PoolMaps} maps."));
+
+        var routing = Path.Combine(paths.ServerData, ZoneRoutingFile);
+        if (!File.Exists(routing))
+        {
+            File.WriteAllText(routing, ZoneRouting);
+        }
+
+        progress?.Report(new StepProgress(3, Steps, "Building the world snapshot (map geometry and attack timings)..."));
+        var result = ToolRunner.Capture(builder, new[]
+        {
+            "--variant", SnapshotVariant,
+            "--data-dir", paths.ServerData,
+            "--libconfig", libconfig,
+            "--md3-dir", mapFolder,
+            "--output", Path.Combine(paths.ServerData, "cache", SnapshotVariant + "-world.snapshot"),
+        });
+        if (result.ExitCode != 0)
+        {
+            throw new HostingException($"Building the world snapshot failed (exit {result.ExitCode}):{Environment.NewLine}{result.Output}");
+        }
+    }
+}

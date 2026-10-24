@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Data\tPoseidon.Core.Data.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.LibConfig\tPoseidon.Core.LibConfig.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Game\tPoseidon.Core.Game.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Net\tPoseidon.Core.Net.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.WorldSnapshot\tPoseidon.Core.WorldSnapshot.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

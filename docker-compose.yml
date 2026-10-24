@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: modern_trickster
+      POSTGRES_USER: mt
+      POSTGRES_PASSWORD: mt_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - mt-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mt -d modern_trickster"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mt-postgres-data:

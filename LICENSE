@@ -1,0 +1,136 @@
+tPoseidon Beta License
+Version 1.0
+
+Copyright (c) 2026 the tPoseidon authors. All rights reserved except as
+granted below.
+
+This license applies to the tPoseidon source code, release packages,
+documentation and any other material published by the tPoseidon project
+(together, "the Software") during the beta phase. It is not an open-source
+license. The project intends to release the Software under an open-source
+license after the beta; until it does, these terms apply.
+
+1. Definitions
+
+   "You" means the person or organisation using the Software.
+
+   "Official Release" means a release package published by the tPoseidon
+   project on its official release page, unmodified.
+
+   "Community Use" means running the Software for yourself, your friends or
+   a community of players without charging for access to it.
+
+   "Derived Work" means any work that copies, modifies, translates, ports or
+   is based on the Software or any part of it, including forks and other
+   emulators built from it.
+
+2. What you may do
+
+   Free of charge, you may:
+
+   a. download Official Releases and install them on any number of your own
+      machines;
+
+   b. run Official Releases and host game servers with them for Community
+      Use, including servers open to the public over the internet;
+
+   c. change the Software's configuration through the settings, files and
+      tools the Software provides for that purpose;
+
+   d. read the source code, build it and change it on your own machines,
+      only to test it, to study it, or to prepare bug reports and
+      suggestions to the tPoseidon project under section 4;
+
+   e. report bugs, request features and take part in the project's issue
+      tracker, forum and other spaces.
+
+3. What you may not do
+
+   Unless the tPoseidon project gives you written permission, you may not:
+
+   a. publish, distribute, upload or otherwise make available the Software,
+      in source or binary form, anywhere other than through the official
+      project pages (link to the official release page instead);
+
+   b. create, publish, distribute or host a Derived Work, including a fork,
+      a modified release package or another emulator based on the
+      Software;
+
+   c. host a game server with a modified build of the Software, except
+      privately on your own machines for the purposes in section 2(d);
+
+   d. sell the Software, sell access to a server running it, or sell items,
+      characters or advantages in a game hosted with it;
+
+   e. remove or change any copyright, license or notice in the Software;
+
+   f. use the Software or the project's spaces to distribute the game
+      client or any file belonging to the game.
+
+   If the Software is hosted on a service whose terms let users fork or copy
+   repositories (for example by pressing a "Fork" button), you may use that
+   feature only to the extent the service's terms require, and only to view
+   the Software and to send bug reports and suggestions back to the tPoseidon
+   project. Using,
+   building for distribution, hosting or distributing such a copy is not
+   permitted.
+
+4. Contributions
+
+   You may send bug reports and suggestions to the tPoseidon project.
+   Code contributions (patches and pull requests) are not accepted until
+   the project's 1.0 release. By sending anything to the project you:
+
+   a. confirm that you wrote it or otherwise have the right to submit it,
+      and that it does not contain files belonging to the game or code you
+      are not allowed to share;
+
+   b. grant the tPoseidon project a perpetual, worldwide, non-exclusive,
+      royalty-free, irrevocable license to use, copy, modify, distribute and
+      sublicense your contribution as part of the Software, under this
+      license, under any later version of it, and under any open-source
+      license the project later adopts.
+
+5. The game and its assets
+
+   tPoseidon is an independent server emulator. The game it works with, its
+   client, art, music, maps, data, names and trademarks belong to their
+   respective owners. None of them are included in the Software or licensed
+   by this license. You must obtain the game client yourself and use it in
+   line with the rights you have to it. See the NOTICE file.
+
+6. Termination
+
+   If you break these terms, your rights under this license end
+   automatically. If you stop the breach within 30 days of being told about
+   it, your rights are restored, unless you have been told about a breach of
+   these terms before.
+
+7. No warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+   THE SOFTWARE IS BETA SOFTWARE AND MAY CONTAIN BUGS THAT CAUSE LOSS OF
+   DATA.
+
+8. Limitation of liability
+
+   IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+   CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT
+   OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+   THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+9. Third-party components
+
+   Release packages include third-party components, such as the .NET
+   runtime and PostgreSQL, under their own licenses. Those licenses are
+   listed in the NOTICE file and the licenses/ folder of each release
+   package, and they apply to those components instead of this license.
+
+10. Future versions
+
+   The tPoseidon project may publish new versions of this license or move
+   the Software to an open-source license. A release published under this
+   version of the license stays under it unless the project re-releases it
+   under other terms.

@@ -1,0 +1,18 @@
+* text=auto eol=lf
+
+*.pcap       binary
+*.pcapng     binary
+*.nri        binary
+*.bac        binary
+*.dat        binary
+*.md3        binary
+*.bin        binary
+*.zbin       binary
+*.exe        binary
+*.dll        binary
+
+*.ps1        text eol=crlf
+*.cmd        text eol=crlf
+*.bat        text eol=crlf
+
+*.sh         text eol=lf

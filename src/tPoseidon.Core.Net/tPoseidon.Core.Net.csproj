@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Crypto\tPoseidon.Core.Crypto.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Data\tPoseidon.Core.Data.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.LibConfig\tPoseidon.Core.LibConfig.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Game\tPoseidon.Core.Game.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="tPoseidon.Core.Net.Tests" />
+  </ItemGroup>
+
+</Project>

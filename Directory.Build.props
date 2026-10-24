@@ -1,0 +1,25 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors />
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Version>0.55.0-beta</Version>
+    <Company>the tPoseidon authors</Company>
+    <Copyright>Copyright (c) 2026 the tPoseidon authors</Copyright>
+    <Product>tPoseidon</Product>
+    <NeutralLanguage>en-US</NeutralLanguage>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(BuildTag)' != ''">
+    <AssemblyMetadata Include="BuildTag" Value="$(BuildTag)" />
+  </ItemGroup>
+
+</Project>

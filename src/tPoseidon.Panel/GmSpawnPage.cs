@@ -1,0 +1,146 @@
+using System.Globalization;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using tPoseidon.Core.Net.Social;
+
+namespace tPoseidon.Panel;
+
+public static class GmSpawnPage
+{
+    public const int LargeSpawn = 20;
+    public const int MostNpcLines = byte.MaxValue;
+
+    public static Control Build(GmKit kit)
+    {
+        ArgumentNullException.ThrowIfNull(kit);
+        var model = kit.Model;
+        var page = new StackPanel { Spacing = 10 };
+        page.Children.Add(WhereSection(kit));
+
+        var monster = GmPickers.Monster(model);
+        var count = GmKit.Box("Count", 70, "1");
+        page.Children.Add(GmKit.Section(
+            "Monsters",
+            string.Create(CultureInfo.InvariantCulture, $"Monster types {GameMasterFrames.FirstSummonableMonster} to {GameMasterFrames.LastSummonableMonster}. They all appear on the spot where your GM stands; the server has no spread or radius for them."),
+            monster,
+            GmKit.Line(
+                GmKit.Field("How many (1 to 255)", count),
+                GmKit.Presets(count, ("1", "1"), ("5", "5"), ("10", "10"), ("20", "20")),
+                kit.Tool("Spawn monsters", "summon-monster", checks =>
+                {
+                    var type = checks.Number(monster.Id, "The monster type", GameMasterFrames.FirstSummonableMonster, GameMasterFrames.LastSummonableMonster);
+                    return [type, checks.Number(count, "The count", 1, byte.MaxValue)];
+                }, arguments => int.Parse(arguments[1], CultureInfo.InvariantCulture) > LargeSpawn
+                    ? new GmConfirm($"Spawn {arguments[1]} monsters?", "That is a lot of monsters on one spot. Players nearby will be attacked by all of them.", "Spawn")
+                    : null, primary: true))));
+
+        var npc = GmPickers.Npc(model);
+        var lines = GmKit.Lines("Lines the NPC keeps, one per line (optional)");
+        page.Children.Add(GmKit.Section(
+            "NPCs",
+            "Places an NPC where your GM stands. It stays until the game server restarts.",
+            npc,
+            lines,
+            GmKit.Line(kit.Tool("Place NPC", "summon-npc", checks =>
+            {
+                var type = checks.Number(npc.Id, "The NPC type", 0, uint.MaxValue);
+                var kept = (lines.Text ?? "").Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0).ToList();
+                checks.Require(kept.Count <= MostNpcLines, lines, string.Create(CultureInfo.InvariantCulture, $"An NPC keeps at most {MostNpcLines} lines."));
+                return [type, .. kept];
+            }, primary: true))));
+
+        var give = GmPickers.Item(model);
+        var receiver = GmKit.Box("Character name", 200);
+        var giveCount = GmKit.Box("Count", 80, "1");
+        model.CharacterChosen += chosen => receiver.Text = chosen;
+        page.Children.Add(GmKit.Section(
+            "Items",
+            "Gives items to an online character, or lets an NPC on your GM's map hand one out to each player who talks to it.",
+            give,
+            GmKit.Line(
+                GmKit.Field("To", receiver),
+                GmKit.Field("Count", giveCount),
+                kit.Tool("Give", "present", checks =>
+                {
+                    var who = checks.Text(receiver, "The character name");
+                    var id = checks.Number(give.Id, "The item id", 0, uint.MaxValue);
+                    return [who, id, checks.Number(giveCount, "Count", 1, ushort.MaxValue)];
+                }, primary: true)),
+            IssueLine(kit, give)));
+
+        var objectId = GmKit.Box("Object id", 110);
+        page.Children.Add(GmKit.Section(
+            "Clear",
+            "The server can remove every monster on your GM's map (spawned or not), or one monster by its object id. It does not keep track of who spawned what.",
+            GmKit.Line(
+                kit.Tool("Remove every monster on my GM's map", "remove-monsters", _ => [],
+                    _ => new GmConfirm("Remove every monster on your GM's map?", "This also removes the map's own monsters until they come back.", "Remove")),
+                GmKit.Field("Object id", objectId),
+                kit.Tool("Remove this monster", "remove-object", checks => [checks.Number(objectId, "The object id", 1, ushort.MaxValue)]))));
+        return page;
+    }
+
+    private static WrapPanel IssueLine(GmKit kit, GmPicker item)
+    {
+        var npcObject = GmKit.Box("NPC object id", 120);
+        var times = GmKit.Box("Times", 80, "10");
+        return GmKit.Line(
+            GmKit.Field("NPC object id", npcObject),
+            GmKit.Field("How many players", times),
+            kit.Tool("Let the NPC hand it out", "issue-item", checks =>
+            {
+                var npc = checks.Number(npcObject, "The NPC object id", 1, ushort.MaxValue);
+                var id = checks.Number(item.Id, "The item id", 0, uint.MaxValue);
+                return [npc, id, checks.Number(times, "How many players", 1, ushort.MaxValue)];
+            }));
+    }
+
+    private static Border WhereSection(GmKit kit)
+    {
+        var model = kit.Model;
+        var player = GmKit.Box("Character name", 200);
+        model.CharacterChosen += chosen => player.Text = chosen;
+        var map = GmPickers.Map(model);
+        var atPlayer = GmKit.Line(
+            GmKit.Field("Player", player),
+            kit.Tool("Move my GM next to them", "teleport", checks => [checks.Text(player, "The character name")], primary: true));
+        var onMap = new StackPanel { Spacing = 4 };
+        onMap.Children.Add(map);
+        onMap.Children.Add(GmKit.Line(kit.Tool("Move my GM to this map", "teleport-zone", checks => [checks.Number(map.Id, "The map id", 1, 999)], primary: true)));
+        var places = new Control[] { new TextBlock { Text = "Spawns appear where your GM stands right now.", Foreground = Tokens.TextSecondary, Margin = new Thickness(0, 0, 0, 6) }, atPlayer, onMap };
+        var labels = new[] { "Where my GM stands", "Next to a player", "On a map" };
+        var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 0, 0, 6) };
+        var host = new ContentControl { Content = places[0] };
+        for (var i = 0; i < labels.Length; i++)
+        {
+            var index = i;
+            var chip = new ToggleButton { Content = labels[i], Height = 26, MinHeight = 0, Padding = new Thickness(10, 0), IsChecked = i == 0, VerticalContentAlignment = VerticalAlignment.Center, Foreground = Tokens.TextPrimary, FontSize = Tokens.FontSizeCaption };
+            chip.Classes.Add("chip");
+            chip.Click += (_, _) =>
+            {
+                foreach (var other in chips.Children.OfType<ToggleButton>())
+                {
+                    other.IsChecked = other == chip;
+                }
+
+                host.Content = places[index];
+            };
+            chips.Children.Add(chip);
+        }
+
+        string Gm(GmChecks checks)
+        {
+            checks.Require(model.GameMaster is not null, null, "Connect first: your GM character is not known yet.");
+            return model.GameMaster ?? "";
+        }
+
+        return GmKit.Section(
+            "Where",
+            "The server always spawns on the spot where your GM character stands in game. To spawn next to a player or on another map, move your GM there first; the server has no order to spawn at other coordinates.",
+            chips,
+            host,
+            GmKit.Line(kit.Tool("Where is my GM now?", "char-info", checks => [Gm(checks)])));
+    }
+}

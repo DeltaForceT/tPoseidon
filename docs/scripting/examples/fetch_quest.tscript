@@ -1,0 +1,59 @@
+// A simple fetch quest kept entirely in script variables.
+// queststate("herbs") is stored on the character: 0 = not started, 1 = taken, 2 = finished.
+// The item ids are placeholders; use ids that exist in your item table.
+
+function herb_item() {
+    return 1002;
+}
+
+function herbs_needed() {
+    return 5;
+}
+
+npc "Herbalist Rina" sprite 1302 map 1 at 150, 360 face west {
+    let state = queststate("herbs");
+
+    if (state == 2) {
+        mes "Thank you again for the herbs, " + name() + ".";
+        close;
+    }
+
+    if (state == 0) {
+        mes "I am running low on herbs.";
+        mes "Could you bring me " + herbs_needed() + " of them?";
+        menu {
+            "I will help." {
+                setqueststate("herbs", 1);
+                mes "Wonderful. Come back when you have them.";
+                close;
+            }
+            "Not now." {
+                end;
+            }
+        }
+    }
+
+    let have = countitem(herb_item());
+    mes "You have " + have + " of the " + herbs_needed() + " herbs I need.";
+    if (have < herbs_needed()) {
+        close;
+    }
+
+    next;
+    menu {
+        "Hand them over." {
+            if (!takeitem(herb_item(), herbs_needed())) {
+                mes "Something went wrong with the herbs. Please try again.";
+                close;
+            }
+            setqueststate("herbs", 2);
+            givemoney(2000);
+            giveexp(500);
+            mes "Perfect! Here is your reward.";
+            close;
+        }
+        "Not yet." {
+            end;
+        }
+    }
+}

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>tPoseidon.Tools.ReleasePack</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="release.lock.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Crypto\tPoseidon.Core.Crypto.csproj" />
+    <ProjectReference Include="..\tPoseidon.Gacha.Art\tPoseidon.Gacha.Art.csproj" />
+  </ItemGroup>
+
+</Project>

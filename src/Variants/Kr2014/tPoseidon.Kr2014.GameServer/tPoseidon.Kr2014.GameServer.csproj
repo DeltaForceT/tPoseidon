@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.Crypto\tPoseidon.Core.Crypto.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.Net\tPoseidon.Core.Net.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.Data\tPoseidon.Core.Data.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.Data.Postgres\tPoseidon.Core.Data.Postgres.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.LibConfig\tPoseidon.Core.LibConfig.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.Game\tPoseidon.Core.Game.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.WorldSnapshot\tPoseidon.Core.WorldSnapshot.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.InterServer\tPoseidon.Core.InterServer.csproj" />
+    <ProjectReference Include="..\tPoseidon.Kr2014.Common\tPoseidon.Kr2014.Common.csproj" />
+    <ProjectReference Include="..\tPoseidon.Kr2014.Wire\tPoseidon.Kr2014.Wire.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

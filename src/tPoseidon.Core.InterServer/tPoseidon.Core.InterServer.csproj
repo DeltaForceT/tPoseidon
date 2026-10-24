@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Net\tPoseidon.Core.Net.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Data\tPoseidon.Core.Data.csproj" />
+  </ItemGroup>
+
+</Project>

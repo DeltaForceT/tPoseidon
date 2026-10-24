@@ -1,0 +1,54 @@
+// An event NPC that only game masters can use, plus a chat command and a timer.
+// Players who talk to the NPC are turned away. A game master can start and stop an
+// event, which announces itself on a schedule while it runs.
+// Chat commands start with @ and are typed in normal chat, for example: @event start
+
+function start_event() {
+    server.event_running = 1;
+    announce("An event has started. Look for the event NPC!");
+}
+
+function stop_event() {
+    server.event_running = 0;
+    announce("The event is over. Thank you for playing.");
+}
+
+npc "Event Master" sprite 1303 map 1 at 180, 340 face south {
+    if (!isgm()) {
+        mes "Only game masters can speak with me.";
+        close;
+    }
+
+    mes "Event status: " + server.event_running;
+    menu {
+        "Start the event" if (server.event_running == 0) {
+            start_event();
+            close;
+        }
+        "Stop the event" if (server.event_running == 1) {
+            stop_event();
+            close;
+        }
+        "Done" {
+            end;
+        }
+    }
+}
+
+command "event" gm {
+    if (arg(1) == "start") {
+        start_event();
+        tell("Event started.");
+    } else if (arg(1) == "stop") {
+        stop_event();
+        tell("Event stopped.");
+    } else {
+        tell("Use @event start or @event stop.");
+    }
+}
+
+every 10 minutes {
+    if (server.event_running == 1) {
+        announce("The event is still running. " + online() + " players are online.");
+    }
+}

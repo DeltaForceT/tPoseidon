@@ -1,0 +1,24 @@
+// Gives every character one reward per calendar day, on the first login of that day.
+// today() returns the date as a number such as 20261022, so comparing it with
+// a stored value tells us whether the reward was already given.
+
+function reward_item() {
+    return 1001;
+}
+
+on login {
+    if (char.last_login_reward == today()) {
+        end;
+    }
+
+    char.last_login_reward = today();
+    char.days_claimed += 1;
+
+    givemoney(1000 + 100 * min(char.days_claimed, 10));
+
+    if (giveitem(reward_item(), 1)) {
+        tell("Daily reward: gelder and one item. Days claimed so far: " + char.days_claimed + ".");
+    } else {
+        tell("Daily reward: gelder. Your bag is full, so the item was skipped.");
+    }
+}

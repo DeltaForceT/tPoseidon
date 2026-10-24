@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>tPoseidon.Hosting</RootNamespace>
+    <AssemblyName>tPoseidon.Hosting</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Crypto\tPoseidon.Core.Crypto.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Data.Postgres\tPoseidon.Core.Data.Postgres.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.LibConfig\tPoseidon.Core.LibConfig.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.Net\tPoseidon.Core.Net.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="tPoseidon.Hosting.Tests" />
+  </ItemGroup>
+
+</Project>

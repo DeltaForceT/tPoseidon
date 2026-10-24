@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Package and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Work out the version
+        run: |
+          version="${TAG#v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "The tag $TAG is not a version like v0.55.0-beta" >&2
+            exit 1
+          fi
+          core="${version%%-*}"
+          short="${core%.0}"
+          if [ "$version" = "$core" ]; then
+            title="v$short"
+          else
+            suffix="${version#*-}"
+            title="v$short ${suffix^}"
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "TITLE=$title" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: dotnet test tPoseidon.sln --configuration Release
+
+      - name: Package for every system
+        run: >
+          dotnet run --configuration Release --project src/tPoseidon.Tools.ReleasePack --
+          --version "$VERSION" --rid all --output artifacts/release
+
+      - name: Write the checksums
+        working-directory: artifacts/release
+        run: sha256sum *.zip *.tar.gz > "tposeidon-$VERSION-SHA256SUMS.txt"
+
+      - name: Extract the release notes
+        run: |
+          awk -v version="$VERSION" '
+            $0 ~ "^## " version "$" { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "CHANGELOG.md has no section for $VERSION" >&2
+            exit 1
+          fi
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          case "$VERSION" in
+            *-*) flags="--prerelease" ;;
+          esac
+          gh release create "$TAG" artifacts/release/* \
+            --title "$TITLE" \
+            --notes-file release-notes.md \
+            --verify-tag \
+            $flags

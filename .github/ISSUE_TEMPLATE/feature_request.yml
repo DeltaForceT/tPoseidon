@@ -1,0 +1,49 @@
+name: Feature request
+description: Suggest a missing system, a setup improvement or a tool.
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We're rebuilding the original game first. Missing original features come before new ideas; ideas that change the game go on the list for later.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of request
+      options:
+        - A feature of the original game that is missing or incomplete
+        - Setup, panel or command-line manager
+        - Server hosting or administration
+        - Tools for developers or content creators
+        - Something new that the original game did not have
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What you would like
+      description: What it is and who it helps.
+    validations:
+      required: true
+
+  - type: textarea
+    id: original
+    attributes:
+      label: How it worked in the original game
+      description: If it was in the original, how did it work? Screenshots, videos or wiki pages help a lot.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds or alternatives
+      description: What you do now instead, or other ways to get there.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you send
+      options:
+        - label: I searched the issues and nobody asked for this yet.
+          required: true

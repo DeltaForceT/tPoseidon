@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and setup help
+    url: https://github.com/DeltaForceT/modern-trickster/discussions
+    about: Questions and setup help go here. The issue tracker is for bugs.
+  - name: Report a security problem
+    url: https://github.com/DeltaForceT/modern-trickster/security/advisories/new
+    about: Please report these privately, not as an issue.
+  - name: Beta rules and known issues
+    url: https://github.com/DeltaForceT/modern-trickster/blob/main/docs/beta/BETA.md
+    about: What to expect from the beta, how updates work and where to get help.
+  - name: Forum
+    url: https://github.com/DeltaForceT/modern-trickster/blob/main/docs/beta/forum-bug-report-template.md
+    about: Prefer the forum? Use this template for your post.

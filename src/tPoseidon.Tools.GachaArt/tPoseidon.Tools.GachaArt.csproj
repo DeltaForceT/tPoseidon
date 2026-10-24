@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>tPoseidon.Tools.GachaArt</RootNamespace>
+    <AssemblyName>GachaArt</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\tPoseidon.Gacha.Art\tPoseidon.Gacha.Art.csproj" />
+  </ItemGroup>
+
+</Project>

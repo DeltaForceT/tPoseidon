@@ -1,0 +1,163 @@
+name: Bug report
+description: Something in the game or the server does not work as it should.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing. One bug per report, please.
+        Take personal stuff out of logs and screenshots before you send (real names, passwords, IP addresses, paths with your user name).
+        Security bugs don't go here; report them privately, see [SECURITY.md](https://github.com/DeltaForceT/modern-trickster/blob/main/SECURITY.md).
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you report
+      options:
+        - label: I searched the issues and the known issues list and didn't find this.
+          required: true
+        - label: I'm on the latest release (or I explain below why not).
+          required: true
+        - label: I took personal info out of the logs and screenshots.
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: tPoseidon version
+      description: "From `tposeidon status`, the panel title bar, or the release file name."
+      placeholder: 0.55.0-beta
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Server operating system
+      options:
+        - Windows 10 / 11 (x64)
+        - Linux x64
+        - Linux arm64
+        - macOS Intel (x64)
+        - macOS Apple silicon (arm64)
+        - Other (say below)
+    validations:
+      required: true
+
+  - type: input
+    id: os-detail
+    attributes:
+      label: Operating system details
+      description: Version or distro, and whether the client runs on the same machine.
+      placeholder: Ubuntu 24.04, client on a separate Windows 11 PC
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: Game client
+      options:
+        - KR 2014 client, as is
+        - KR 2014 client with the tPoseidon English translation
+        - KR 2014 client, changed some other way (say below)
+        - Client running under Wine or CrossOver
+    validations:
+      required: true
+
+  - type: input
+    id: database
+    attributes:
+      label: PostgreSQL
+      description: Version, and how you installed it.
+      placeholder: 16.4, Windows installer
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Setup, panel or command-line manager
+        - Login, server or channel list
+        - Character creation, selection or deletion
+        - Maps, warps or movement
+        - NPCs, dialogs or shops
+        - Combat, skills or monsters
+        - Items, inventory or equipment
+        - Quests
+        - Party, guild, friends, chat or trade
+        - Pets
+        - Crash or disconnect
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened
+      description: Short version.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Every step, from somewhere easy to get back to (e.g. log in, warp to town, talk to the shop NPC).
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened
+      description: And how the original game did it, if you remember.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Include any message on screen.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: How often does it happen?
+      options:
+        - Every time
+        - Sometimes
+        - Once so far
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server logs
+      description: |
+        Paste the lines from around the time it happened. A few hundred lines is fine. docs/beta/how-to-report-a-bug.md shows where the logs are.
+        If they're long, attach the files in the box below instead.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots and files
+      description: Drop screenshots, videos, log files or crash dumps here.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Settings you changed, rates, how many people were on, workarounds.

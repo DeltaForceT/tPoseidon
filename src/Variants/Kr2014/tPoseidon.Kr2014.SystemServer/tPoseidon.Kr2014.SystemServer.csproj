@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.Net\tPoseidon.Core.Net.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.InterServer\tPoseidon.Core.InterServer.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.Data\tPoseidon.Core.Data.csproj" />
+    <ProjectReference Include="..\..\..\tPoseidon.Core.Data.Postgres\tPoseidon.Core.Data.Postgres.csproj" />
+    <ProjectReference Include="..\tPoseidon.Kr2014.Wire\tPoseidon.Kr2014.Wire.csproj" />
+  </ItemGroup>
+
+</Project>

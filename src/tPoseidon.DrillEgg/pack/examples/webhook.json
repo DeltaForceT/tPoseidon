@@ -1,0 +1,87 @@
+{
+  "port": 8080,
+  "listen": "any",
+  "openBrowser": false,
+  "files": {
+    "swf": "myshop.swf",
+    "art": "art",
+    "pictures": "pictures",
+    "data": "drill-egg.db"
+  },
+  "players": {
+    "connector": "http",
+    "signIn": "token",
+    "url": "https://YOUR-GAME-SERVER.example/drill-egg/sign-in",
+    "secret": "CHANGE-ME-TO-A-LONG-RANDOM-TEXT"
+  },
+  "coupons": {
+    "connector": "http",
+    "countUrl": "https://YOUR-GAME-SERVER.example/drill-egg/coupons",
+    "spendUrl": "https://YOUR-GAME-SERVER.example/drill-egg/spend",
+    "secret": "CHANGE-ME-TO-A-LONG-RANDOM-TEXT"
+  },
+  "delivery": {
+    "connector": "http",
+    "url": "https://YOUR-GAME-SERVER.example/drill-egg/deliver",
+    "secret": "CHANGE-ME-TO-A-LONG-RANDOM-TEXT",
+    "retrySeconds": 60
+  },
+  "prizes": [
+    {
+      "id": 1,
+      "name": "Small Healing Potion",
+      "weight": 30
+    },
+    {
+      "id": 2,
+      "name": "Large Healing Potion",
+      "weight": 20
+    },
+    {
+      "id": 3,
+      "name": "Mana Elixir",
+      "weight": 15
+    },
+    {
+      "id": 4,
+      "name": "Lucky Clover",
+      "weight": 10
+    },
+    {
+      "id": 5,
+      "name": "Drill Charm",
+      "weight": 8
+    },
+    {
+      "id": 6,
+      "name": "Shiny Gem",
+      "weight": 6
+    },
+    {
+      "id": 7,
+      "name": "Treasure Map",
+      "weight": 5
+    },
+    {
+      "id": 8,
+      "name": "Golden Pickaxe",
+      "weight": 3,
+      "rare": true
+    },
+    {
+      "id": 9,
+      "name": "Crystal Egg",
+      "weight": 2,
+      "rare": true
+    },
+    {
+      "id": 10,
+      "name": "Legendary Drill Egg",
+      "weight": 1,
+      "rare": true
+    }
+  ],
+  "deepDrill": {
+    "rareBoost": 3
+  }
+}
