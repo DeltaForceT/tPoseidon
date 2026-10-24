@@ -103,7 +103,7 @@ public static class MonsterBattleFrames
         w.WriteUInt16(swung.Y);
         w.WriteUInt16(swung.TargetX);
         w.WriteUInt16(swung.TargetY);
-        w.WriteInt16((short)Math.Clamp(swung.Damage, 0, short.MaxValue));
+        w.WriteInt16Field(swung.Damage);
         w.WriteByte(swung.Result);
         return w.ToArray();
     }
@@ -112,7 +112,7 @@ public static class MonsterBattleFrames
     {
         var w = new PacketWriter(MeleeSwingFrames.HitResultSize);
         w.WriteUInt16(swung.TargetEntityId);
-        w.WriteInt32(swung.Damage);
+        w.WriteInt32Field(swung.Damage);
         w.WriteInt32(MeleeSwingFrames.DeathTypeNormal);
         w.WriteInt32(swung.Result);
         w.WriteInt32(0);

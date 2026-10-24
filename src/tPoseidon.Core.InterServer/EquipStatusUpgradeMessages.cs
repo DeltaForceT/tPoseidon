@@ -29,7 +29,7 @@ public static class EquipStatusUpgradeMessages
     {
         ArgumentNullException.ThrowIfNull(result);
         var w = new PacketWriter(8 + result.Items.Count * 24);
-        w.WriteUInt32(result.RemainMoney);
+        w.WriteInt64(result.RemainMoney);
         WriteItems(w, result.Items);
         return w.ToArray();
     }
@@ -37,7 +37,7 @@ public static class EquipStatusUpgradeMessages
     public static EquipStatusUpgradeResult DecodeResult(ReadOnlySpan<byte> body)
     {
         var r = new PacketReader(body);
-        var remain = r.ReadUInt32();
+        var remain = r.ReadInt64();
         return new EquipStatusUpgradeResult(EquipStatusUpgradeRules.Ok, remain, ReadItems(ref r));
     }
 

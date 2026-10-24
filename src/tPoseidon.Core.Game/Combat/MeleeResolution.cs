@@ -1,6 +1,8 @@
+using tPoseidon.Core.Common;
+
 namespace tPoseidon.Core.Game.Combat;
 
-public readonly record struct MeleeOutcome(int Damage, byte Result, byte ArmedNext);
+public readonly record struct MeleeOutcome(long Damage, byte Result, byte ArmedNext);
 
 public static class MeleeResolution
 {
@@ -25,14 +27,14 @@ public static class MeleeResolution
     private const double StrongCriticalFactor = 1.3;
 
     public static MeleeOutcome PlayerAgainstMonster(
-        int attackerAp,
-        int attackerAc,
-        int attackerLk,
+        long attackerAp,
+        long attackerAc,
+        long attackerLk,
         byte armed,
-        int targetDp,
-        int targetHv,
-        int targetLk,
-        int targetHp,
+        long targetDp,
+        long targetHv,
+        long targetLk,
+        long targetHp,
         Random rng,
         int criticalBonus = 0,
         bool targetCannotEvade = false)
@@ -80,16 +82,16 @@ public static class MeleeResolution
     }
 
     public static MeleeOutcome MonsterAgainstPlayer(
-        int attackerAp,
-        int attackerAc,
-        int attackerLk,
+        long attackerAp,
+        long attackerAc,
+        long attackerLk,
         int attackerLevel,
         bool levelScaledAccuracy,
-        int targetDp,
-        int targetHv,
-        int targetLk,
+        long targetDp,
+        long targetHv,
+        long targetLk,
         int targetLevel,
-        int targetHp,
+        long targetHp,
         bool targetProtected,
         Random rng)
     {
@@ -101,7 +103,7 @@ public static class MeleeResolution
         if (levelScaledAccuracy)
         {
             var levelRatio = (double)targetLevel / Math.Max(1, attackerLevel);
-            var chance = (int)(attackerAc
+            var chance = WireLimits.Saturate(attackerAc
                 - (targetHv / HvScale * LevelScaledWeight + levelRatio * LevelScaledWeight));
             hit = rng.Next(PerCent) < Math.Max(LowestLevelScaledChance, chance);
         }
@@ -135,12 +137,12 @@ public static class MeleeResolution
         return Finish(StrongCritical(attackerAp, targetDp), ResultStrongCritical, targetHp);
     }
 
-    public static int Normal(int ap, int dp) => Math.Max(0, (int)(ap - DefenceShare * dp));
+    public static long Normal(long ap, long dp) => Math.Max(0L, WireLimits.Saturate(ap - DefenceShare * dp));
 
-    public static int Critical(int ap, int dp) => Math.Max(1, (int)(CriticalAttackShare * ap - DefenceShare * dp));
+    public static long Critical(long ap, long dp) => Math.Max(1L, WireLimits.Saturate(CriticalAttackShare * ap - DefenceShare * dp));
 
-    public static int StrongCritical(int ap, int dp) => (int)(Critical(ap, dp) * StrongCriticalFactor);
+    public static long StrongCritical(long ap, long dp) => WireLimits.Saturate(Critical(ap, dp) * StrongCriticalFactor);
 
-    private static MeleeOutcome Finish(int damage, byte kind, int targetHp)
+    private static MeleeOutcome Finish(long damage, byte kind, long targetHp)
         => new(damage, damage >= targetHp ? (byte)(kind | ResultFinishingFlag) : kind, NotArmed);
 }

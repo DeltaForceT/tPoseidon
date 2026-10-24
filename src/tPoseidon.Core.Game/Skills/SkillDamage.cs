@@ -1,10 +1,12 @@
+using tPoseidon.Core.Common;
+
 namespace tPoseidon.Core.Game.Skills;
 
-public readonly record struct SkillAttacker(int Ap, int Ac, int Ma, int Lk, int Level, int Da = 0, int Hp = 0, int MaxHp = 0, int Hv = 0, int Dx = 0, int Dp = 0, int WeaponDa = 0, float DarkBonus = 0f, int Weight = 0, int ElementBonus = 0);
+public readonly record struct SkillAttacker(long Ap, long Ac, long Ma, long Lk, int Level, long Da = 0, long Hp = 0, long MaxHp = 0, long Hv = 0, long Dx = 0, long Dp = 0, long WeaponDa = 0, float DarkBonus = 0f, long Weight = 0, long ElementBonus = 0);
 
-public readonly record struct SkillTarget(int Dp, int Hv, int Md, int Lk, int Hp, int Level, int Resist, int MaxHp = 0, int BaseDp = 0);
+public readonly record struct SkillTarget(long Dp, long Hv, long Md, long Lk, long Hp, int Level, int Resist, long MaxHp = 0, long BaseDp = 0);
 
-public readonly record struct SkillHit(int Damage, int Type, int Kind, int Element, int Healed, int Flags = 0);
+public readonly record struct SkillHit(long Damage, int Type, int Kind, int Element, long Healed, int Flags = 0);
 
 public static class SkillDamage
 {
@@ -36,10 +38,10 @@ public static class SkillDamage
     private const int FullResist = 100;
 
     public static SkillHit Physical(
-        SkillAttacker attacker, int power, SkillTarget target, float applyRatio, int element, Random rng)
+        SkillAttacker attacker, long power, SkillTarget target, float applyRatio, int element, Random rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        var chance = (int)((attacker.Ac - target.Hv * PlayerHvWeight + PhysicalHitBase) * HitScale * applyRatio);
+        var chance = WireLimits.Saturate((attacker.Ac - target.Hv * PlayerHvWeight + PhysicalHitBase) * HitScale * applyRatio);
         if (rng.Next(Percent) >= Math.Clamp(chance, LowestHitChance, HighestHitChance))
         {
             return new SkillHit(0, PhysicalType, KindMiss, 0, 0);
@@ -47,18 +49,18 @@ public static class SkillDamage
 
         if (IsCritical(attacker, target, rng))
         {
-            var critical = Math.Max(1, (int)((float)(power * CriticalPowerShare) - (float)(target.Dp * DefenceShare)));
+            var critical = Math.Max(1L, WireLimits.Saturate((float)(power * CriticalPowerShare) - (float)(target.Dp * DefenceShare)));
             return AfterResist(critical, PhysicalType, KindCritical, target, element);
         }
-        var normal = Math.Max(0, (int)((float)(double)power - (float)(target.Dp * DefenceShare)));
+        var normal = Math.Max(0L, WireLimits.Saturate((float)(double)power - (float)(target.Dp * DefenceShare)));
         return AfterResist(normal, PhysicalType, KindHit, target, element);
     }
 
     public static SkillHit Magic(
-        SkillAttacker attacker, int power, SkillTarget target, float applyRatio, int magicAttackLoss, int element, Random rng)
+        SkillAttacker attacker, long power, SkillTarget target, float applyRatio, long magicAttackLoss, int element, Random rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        var chance = (int)((attacker.Lk - target.Lk + MagicHitBase) * HitScale * applyRatio);
+        var chance = WireLimits.Saturate((attacker.Lk - target.Lk + MagicHitBase) * HitScale * applyRatio);
         if (rng.Next(Percent) >= Math.Clamp(chance, LowestHitChance, HighestHitChance))
         {
             return new SkillHit(0, MagicType, KindMiss, 0, 0);
@@ -67,7 +69,7 @@ public static class SkillDamage
         var magicAttack = attacker.Ma - magicAttackLoss;
         if (IsCritical(attacker, target, rng))
         {
-            var critical = MagicDamage((int)(power * MagicCriticalPowerShare), magicAttack, target.Md);
+            var critical = MagicDamage(WireLimits.Saturate(power * MagicCriticalPowerShare), magicAttack, target.Md);
             return AfterResist(WithDarkBonus(critical, attacker, element), MagicType, KindCritical, target, element);
         }
         return AfterResist(WithDarkBonus(MagicDamage(power, magicAttack, target.Md), attacker, element), MagicType, KindHit, target, element);
@@ -76,19 +78,22 @@ public static class SkillDamage
     public static bool IsCritical(SkillAttacker attacker, SkillTarget target, Random rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        var chance = (int)((attacker.Ac + attacker.Lk * (double)HitScale - (target.Hv + target.Lk)) / CriticalDivisor);
+        var chance = WireLimits.Saturate((attacker.Ac + attacker.Lk * (double)HitScale - (target.Hv + target.Lk)) / CriticalDivisor);
         return rng.Next(Percent) < Math.Clamp(chance, LowestCriticalChance, HighestCriticalChance);
     }
 
-    public static int WithDarkBonus(int damage, SkillAttacker attacker, int element) =>
+    public static long WithDarkBonus(long damage, SkillAttacker attacker, int element) =>
         element == SkillActions.DarkElement && attacker.DarkBonus > 0f
-            ? damage + (int)Math.Truncate(damage * (double)attacker.DarkBonus)
+            ? SaturatingAdd(damage, WireLimits.Saturate(Math.Truncate(damage * (double)attacker.DarkBonus)))
             : damage;
 
-    public static int MagicDamage(int power, int magicAttack, int magicDefence) =>
-        Math.Max(0, (int)((float)(power * (magicAttack / MagicAttackScale)) - (float)(magicDefence * MagicDefenceShare)));
+    public static long MagicDamage(long power, long magicAttack, long magicDefence) =>
+        Math.Max(0L, WireLimits.Saturate((float)(power * (magicAttack / MagicAttackScale)) - (float)(magicDefence * MagicDefenceShare)));
 
-    private static SkillHit AfterResist(int damage, int type, int kind, SkillTarget target, int element)
+    private static long SaturatingAdd(long left, long right) =>
+        right > 0 && left > long.MaxValue - right ? long.MaxValue : left + right;
+
+    private static SkillHit AfterResist(long damage, int type, int kind, SkillTarget target, int element)
     {
         var resist = target.Resist;
         var remaining = damage;
@@ -97,8 +102,8 @@ public static class SkillDamage
             resist -= FullResist;
             remaining = 0;
         }
-        remaining -= (int)(damage * resist * ResistScale);
-        var healed = 0;
+        remaining -= WireLimits.Saturate(damage * resist * ResistScale);
+        long healed = 0;
         if (remaining < 0)
         {
             healed = -remaining;

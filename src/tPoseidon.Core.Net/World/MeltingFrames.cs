@@ -15,7 +15,7 @@ public static class MeltingFrames
         return true;
     }
 
-    public static byte[] Result(uint money, IReadOnlyList<BagOperation> operations) => SlotExtendFrames.MoneyAndOperations(money, operations);
+    public static byte[] Result(long money, IReadOnlyList<BagOperation> operations) => SlotExtendFrames.MoneyAndOperations(money, operations);
 
     public static byte[] Refused(byte code) => [code];
 }

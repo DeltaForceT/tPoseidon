@@ -244,7 +244,7 @@ public static class SkillFrames
     {
         var w = new PacketWriter(HitResultSize);
         w.WriteUInt16(targetEntityId);
-        w.WriteInt32(hit.Damage);
+        w.WriteInt32Field(hit.Damage);
         w.WriteInt32(hit.Type);
         w.WriteInt32(hit.Kind);
         w.WriteInt32(hit.Element);
@@ -320,7 +320,7 @@ public static class SkillFrames
         w.WriteUInt16(strike.TargetY);
         foreach (var (damage, kind, third) in outcome.Slots)
         {
-            w.WriteInt32(damage);
+            w.WriteInt32Field(damage);
             w.WriteInt32(kind);
             w.WriteUInt16(third);
         }
@@ -405,7 +405,7 @@ public static class SkillFrames
     {
         foreach (var hit in hits)
         {
-            w.WriteInt32(hit.Damage);
+            w.WriteInt32Field(hit.Damage);
             w.WriteInt32(hit.Kind);
             w.WriteUInt16(ChainSlotEnd);
         }
@@ -451,11 +451,11 @@ public static class SkillFrames
         return frames;
     }
 
-    private static byte[] SummaryResult(ushort targetEntityId, int sum, int landed, int type = SkillDamage.PhysicalType, int element = 0)
+    private static byte[] SummaryResult(ushort targetEntityId, long sum, int landed, int type = SkillDamage.PhysicalType, int element = 0)
     {
         var result = new PacketWriter(HitResultSize);
         result.WriteUInt16(targetEntityId);
-        result.WriteInt32(sum);
+        result.WriteInt32Field(sum);
         result.WriteInt32(type);
         result.WriteInt32(SkillDamage.KindHit);
         result.WriteInt32(element);
@@ -504,19 +504,19 @@ public static class SkillFrames
 
     public static byte[] FlagTail(bool flag) => new[] { flag ? (byte)1 : (byte)0 };
 
-    public static byte[] FlagAmountTail(bool flag, int amount)
+    public static byte[] FlagAmountTail(bool flag, long amount)
     {
         var w = new PacketWriter(5);
         w.WriteByte(flag ? (byte)1 : (byte)0);
-        w.WriteInt32(amount);
+        w.WriteInt32Field(amount);
         return w.ToArray();
     }
 
-    public static byte[] FlagAmountPointTail(bool flag, int amount, (ushort X, ushort Y) point)
+    public static byte[] FlagAmountPointTail(bool flag, long amount, (ushort X, ushort Y) point)
     {
         var w = new PacketWriter(9);
         w.WriteByte(flag ? (byte)1 : (byte)0);
-        w.WriteInt32(amount);
+        w.WriteInt32Field(amount);
         w.WriteUInt16(point.X);
         w.WriteUInt16(point.Y);
         return w.ToArray();
@@ -680,11 +680,11 @@ public static class SkillFrames
         return w.ToArray();
     }
 
-    public static byte[] MonsterHpUpdate(ushort monsterEntityId, int hp)
+    public static byte[] MonsterHpUpdate(ushort monsterEntityId, long hp)
     {
         var w = new PacketWriter(MonsterHpSize);
         w.WriteUInt16(monsterEntityId);
-        w.WriteInt32(Math.Max(0, hp));
+        w.WriteUInt32Field(Math.Max(0L, hp));
         w.WriteUInt16(0);
         w.WriteByte(0);
         return w.ToArray();
@@ -694,7 +694,7 @@ public static class SkillFrames
     {
         var w = new PacketWriter(MonsterHpSize);
         w.WriteUInt16(strike.TargetEntityId);
-        w.WriteInt32(Math.Max(0, strike.MobHpAfter));
+        w.WriteUInt32Field(Math.Max(0L, strike.MobHpAfter));
         w.WriteUInt16(0);
         w.WriteByte(0);
         return w.ToArray();

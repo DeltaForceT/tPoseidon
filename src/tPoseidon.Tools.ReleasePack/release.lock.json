@@ -50,52 +50,5 @@
       "url": "https://raw.githubusercontent.com/rsms/inter/v4.0/LICENSE.txt",
       "sha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a"
     }
-  ],
-  "drillEggLicenses": [
-    {
-      "path": "npgsql/LICENSE",
-      "url": "https://raw.githubusercontent.com/npgsql/npgsql/v8.0.5/LICENSE",
-      "sha256": "f509fe5f15513a03cdafc0af3dbf691daaa0178961f3279410a9a5de534f9efc"
-    },
-    {
-      "path": "konscious-argon2/LICENSE",
-      "url": "https://raw.githubusercontent.com/kmaragon/Konscious.Security.Cryptography/4ed95a5377e411506ca6868409b5c7d7ecaa859b/LICENSE",
-      "sha256": "e476e0e780e301a7e65c7b6f54b0c67e9614429ba3ac1c5b498915bf8e6a1bec"
-    },
-    {
-      "path": "sqlclient/LICENSE",
-      "url": "https://raw.githubusercontent.com/dotnet/SqlClient/v5.2.2/LICENSE",
-      "sha256": "9fa73cb72fb654d029c9214f0e3eec32c301a0c23be71b50fe3910e61553fa34"
-    },
-    {
-      "path": "mysqlconnector/LICENSE",
-      "url": "https://raw.githubusercontent.com/mysql-net/MySqlConnector/2.4.0/LICENSE",
-      "sha256": "78a13e548e66c0d3413b1404c1ab02245de0cf4d5834167406ba1cf61050867e"
-    },
-    {
-      "path": "sqlitepclraw/LICENSE.TXT",
-      "url": "https://raw.githubusercontent.com/ericsink/SQLitePCL.raw/v2.1.6/LICENSE.TXT",
-      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
-    },
-    {
-      "path": "microsoft-data-sqlite/LICENSE.txt",
-      "url": "https://raw.githubusercontent.com/dotnet/efcore/v8.0.10/LICENSE.txt",
-      "sha256": "ae48df11a335dc1a615f4f938b69cba73bcf4485c4f97af49b38efb0f216353b"
-    },
-    {
-      "path": "azure-sdk/LICENSE.txt",
-      "url": "https://raw.githubusercontent.com/Azure/azure-sdk-for-net/Azure.Identity_1.11.4/LICENSE.txt",
-      "sha256": "9b45236978bb5cd5de992021769e1eeaa79f0116d3b02cf8ba065a1ed603d5fa"
-    },
-    {
-      "path": "msal/LICENSE",
-      "url": "https://raw.githubusercontent.com/AzureAD/microsoft-authentication-library-for-dotnet/4.61.3/LICENSE",
-      "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
-    },
-    {
-      "path": "identitymodel/LICENSE.txt",
-      "url": "https://raw.githubusercontent.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet/6.35.0/LICENSE.txt",
-      "sha256": "cba03f5387b05405e56b688376421acae396136af4b5116738dc6e5160f87ddd"
-    }
   ]
 }

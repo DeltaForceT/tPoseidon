@@ -68,7 +68,7 @@ public sealed class HarconFramesTests
         var frame = HarconFrames.Gauges([(0x1234, 5000), (0x0042, 0)]);
 
         Assert.Equal(new byte[] { 2, 0x34, 0x12, 0x88, 0x13, 0, 0, 0x42, 0, 0, 0, 0, 0 }, frame);
-        var many = Enumerable.Range(1, 8).Select(id => ((ushort)id, 100)).ToArray();
+        var many = Enumerable.Range(1, 8).Select(id => ((ushort)id, 100L)).ToArray();
         Assert.Equal(HarconFrames.MaxGauges, HarconFrames.Gauges(many)[0]);
     }
 

@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Skills;
@@ -82,25 +83,25 @@ public static class ObjectEffects
 
     public static int ElectricFieldLoss(int casterMp) => -(casterMp / ElectricMpStep);
 
-    public static int WeightPower(int weight, float factor) => (int)(weight * (double)factor);
+    public static long WeightPower(long weight, float factor) => WireLimits.Saturate(weight * (double)factor);
 
-    public static int PoisonTickDamage(int damage, float ratio) => damage > 0 ? (int)(damage * (double)ratio) : damage;
+    public static long PoisonTickDamage(long damage, float ratio) => damage > 0 ? WireLimits.Saturate(damage * (double)ratio) : damage;
 
-    public static int ThrownWeaponPower(ItemParamEntry item, float multiplier)
+    public static long ThrownWeaponPower(ItemParamEntry item, float multiplier)
     {
         ArgumentNullException.ThrowIfNull(item);
-        var power = item.Type == ThrowSkills.ThrowItemType ? (int)(item.Ap * multiplier) : item.Weight / 2;
+        var power = item.Type == ThrowSkills.ThrowItemType ? WireLimits.Saturate(item.Ap * multiplier) : item.Weight / 2;
         return Math.Max(1, power);
     }
 
-    public static int PoisonAssaultPower(int weaponPower, int da, float ratio) => (int)(weaponPower + da * ThrowDigStep * ratio);
+    public static long PoisonAssaultPower(long weaponPower, long da, float ratio) => WireLimits.Saturate(weaponPower + da * ThrowDigStep * ratio);
 
-    public static int PoisonAssaultTick(int weaponPower, int da, float ratio, float poisonRatio) =>
-        (int)(poisonRatio * ((weaponPower + da * ThrowDigStep) * ratio));
+    public static long PoisonAssaultTick(long weaponPower, long da, float ratio, float poisonRatio) =>
+        WireLimits.Saturate(poisonRatio * ((weaponPower + da * ThrowDigStep) * ratio));
 
-    public static int FullHousePower(int ap, int hv, int lk, float ratio) => (int)((ap + CardStep * hv + CardStep * lk) * (double)ratio);
+    public static long FullHousePower(long ap, long hv, long lk, float ratio) => WireLimits.Saturate((ap + CardStep * hv + CardStep * lk) * (double)ratio);
 
-    public static int FullHouseReduced(int power, int dp) => (int)((power - dp) * ReducedShare);
+    public static long FullHouseReduced(long power, long dp) => WireLimits.Saturate((power - dp) * ReducedShare);
 
     public static Effects.SkillEffectMode SharpClawMode(int hitKind, Effects.SkillEffectMode rolled) => (hitKind & SkillDamage.KindMask) switch
     {
@@ -109,7 +110,7 @@ public static class ObjectEffects
         _ => rolled,
     };
 
-    public static bool StopsPoison(int hitKind, int damage) =>
+    public static bool StopsPoison(int hitKind, long damage) =>
         damage == 0 || (hitKind & SkillDamage.KindMask) is SkillDamage.KindMiss or Effects.IncomingHits.KindGuarded or Effects.IncomingHits.KindBlockedByGuard or Effects.IncomingHits.KindAbsorbed;
 
     public static bool StunsAfterFullHouse(int hitKind) =>

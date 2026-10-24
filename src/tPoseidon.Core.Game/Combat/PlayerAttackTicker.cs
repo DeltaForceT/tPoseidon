@@ -55,17 +55,17 @@ public sealed class PlayerAttackTicker
 
             var def = _catalog.GetById(mob.MonsterParamId);
 
-            int requestedDamage;
+            long requestedDamage;
             byte hitFlags;
             uint hitKind;
             if (_damage is not null && def is not null)
             {
                 var attacker = new AttackerStats(Ap: p.Ap, Ma: p.Ma, Ac: p.Ac, GunAp: 0);
                 var defender = new DefenderStats(
-                    Dp: (ushort)def.DpLv,
-                    Md: (ushort)def.MdLv,
+                    Dp: def.DpLv,
+                    Md: def.MdLv,
                     Hv: 0,
-                    CurrentHp: (ushort)Math.Min(mob.CurrentHp, ushort.MaxValue),
+                    CurrentHp: mob.CurrentHp,
                     PhysResistPct: 0, MagicResistPct: 0, GunResistPct: 0,
                     FireResistPct: 0, WaterResistPct: 0, AirResistPct: 0,
                     SoilResistPct: 0, ElectricityResistPct: 0,
@@ -78,7 +78,7 @@ public sealed class PlayerAttackTicker
             }
             else
             {
-                requestedDamage = Math.Max(1, (int)p.Ap);
+                requestedDamage = Math.Max(1L, p.Ap);
                 hitFlags = DamageHitFlags.Normal;
                 hitKind = DamageHitKind.PlayerToMob;
             }
@@ -138,12 +138,12 @@ public readonly record struct PlayerStrike(
     ushort AttackerY,
     ushort TargetX,
     ushort TargetY,
-    int Damage,
-    int MobHpAfter,
+    long Damage,
+    long MobHpAfter,
     byte HitFlags,
     uint HitKind,
     bool Killed,
     DateTimeOffset NextSwingAtUtc,
     int MonsterParamId,
-    int MobMaxHp,
-    int MobHpBefore = 0);
+    long MobMaxHp,
+    long MobHpBefore = 0);

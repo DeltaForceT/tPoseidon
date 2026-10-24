@@ -238,7 +238,7 @@ internal sealed class SoulController
                     $"store refused the potions with code {result.Error}").ConfigureAwait(false);
                 return;
             }
-            stats.GrantMoney((int)((long)result.RemainMoney - stats.Money), tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
+            stats.GrantMoney(result.RemainMoney - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
             GuardianSoulRow saved;
             lock (hold.Gate)
             {
@@ -359,7 +359,7 @@ internal sealed class SoulController
                 await SendAsync(player, Opcode.S2C_SOUL_CRAFT_REFUSED, SoulFrames.Code(SoulRules.Unknown)).ConfigureAwait(false);
                 return;
             }
-            stats.GrantMoney((int)((long)applied.RemainMoney - stats.Money), tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
+            stats.GrantMoney(applied.RemainMoney - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
             var soul = Spend(hold, (uint)recipe.Fee);
             await _master.SaveSoulAsync(character.CharacterId, soul, default).ConfigureAwait(false);
             foreach (var removed in applied.Items.Where(row => row.Action == EquipUpgradeAction.Delete)) player.TimedItems.Forget(removed.ItemUid);
@@ -405,7 +405,7 @@ internal sealed class SoulController
                 await SendAsync(player, Opcode.S2C_SOUL_REINFORCE_REFUSED, SoulFrames.Code(SoulRules.Unknown)).ConfigureAwait(false);
                 return;
             }
-            stats.GrantMoney((int)((long)applied.RemainMoney - stats.Money), tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
+            stats.GrantMoney(applied.RemainMoney - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
             var next = (short)(level + 1);
             var levelProperty = new ItemProperty(SoulRules.LevelType, SoulRules.LevelId, next, 0);
             _properties.Replace(target!.ItemUid, SoulRules.WithProperty(stored, levelProperty.Type, levelProperty.Id, next));

@@ -45,7 +45,7 @@ public sealed class Character
 
         public DateTimeOffset GenTime { get; init; } = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
-        public uint Money { get; init; }
+        public long Money { get; init; }
 
         public ushort Level { get; init; } = 1;
 
@@ -59,9 +59,9 @@ public sealed class Character
 
         public ushort MapId { get; init; }
 
-    public uint CurrentHp { get; set; }
+    public long CurrentHp { get; set; }
 
-    public uint CurrentMp { get; init; }
+    public long CurrentMp { get; init; }
 
     
 
@@ -109,7 +109,7 @@ public sealed class Character
     public ushort TmLevelCharm { get; init; }
     public ushort TmPoint { get; init; }
     public ushort TmLevel { get; init; }
-    public uint TmExp { get; init; }
+    public long TmExp { get; init; }
 
     
 

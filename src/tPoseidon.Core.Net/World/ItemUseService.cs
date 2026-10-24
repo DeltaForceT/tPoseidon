@@ -14,8 +14,8 @@ public sealed record ItemUsePlayer
     public required Func<Character?> Character { get; init; }
     public required Func<StatManager?> Stats { get; init; }
     public required Func<ushort> EntityId { get; init; }
-    public required Func<uint> MaxHp { get; init; }
-    public required Func<uint> MaxMp { get; init; }
+    public required Func<long> MaxHp { get; init; }
+    public required Func<long> MaxMp { get; init; }
     public required Func<bool> IsDead { get; init; }
     public required Func<Opcode, byte[], ushort, Task> SendToMap { get; init; }
     public required Func<int> MaxWeight { get; init; }
@@ -241,11 +241,11 @@ public sealed class ItemUseService
         var (hp, mp) = stats.RestoreVitals(definition.Hp, maxHp, definition.Mp, maxMp);
         if (definition.Hp != 0)
         {
-            await SendAsync(Opcode.S2C_HEALTH_STATUS, new HealthStatusPacket { CurrentHp = hp }.EncodePayload(), block, ct).ConfigureAwait(false);
+            await SendAsync(Opcode.S2C_HEALTH_STATUS, HealthStatusPacket.Of(hp).EncodePayload(), block, ct).ConfigureAwait(false);
         }
         if (definition.Mp != 0)
         {
-            await SendAsync(Opcode.S2C_MANA_STATUS, new ManaStatusPacket { CurrentMp = mp }.EncodePayload(), block, ct).ConfigureAwait(false);
+            await SendAsync(Opcode.S2C_MANA_STATUS, ManaStatusPacket.Of(mp).EncodePayload(), block, ct).ConfigureAwait(false);
         }
         await _player.SendToMap(Opcode.S2C_COMMAND_BLOCK_END, Array.Empty<byte>(), block).ConfigureAwait(false);
 

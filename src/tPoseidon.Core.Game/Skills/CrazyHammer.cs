@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Combat;
 using tPoseidon.Core.LibConfig;
 
@@ -74,7 +75,7 @@ public static class CrazyHammer
         LimitColumn = SkillAreaShapes.KillNumColumn, Target = AreaTarget.AlwaysFirst,
     };
 
-    public static int NormalAttackAp(int ap, int baseAp, SkillTableRow crazy, SkillTableRow? triple)
+    public static long NormalAttackAp(long ap, int baseAp, SkillTableRow crazy, SkillTableRow? triple)
     {
         ArgumentNullException.ThrowIfNull(crazy);
         var bonus = baseAp * (crazy.Value(RatioColumn) ?? 0f) + baseAp * (triple?.Value(RatioColumn) ?? 0f);
@@ -84,5 +85,5 @@ public static class CrazyHammer
     public static int CriticalBonus(SkillTableRow? quadruple) =>
         (int)Math.Round((quadruple?.Value(CriticalRatioColumn) ?? 0f) * PercentPerRatio);
 
-    public static int ShockwaveDamage(int ap, int targetDp) => MeleeResolution.Normal(ap, targetDp);
+    public static long ShockwaveDamage(long ap, long targetDp) => MeleeResolution.Normal(ap, targetDp);
 }

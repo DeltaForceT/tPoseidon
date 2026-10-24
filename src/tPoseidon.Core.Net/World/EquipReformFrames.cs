@@ -33,11 +33,11 @@ public static class EquipReformFrames
         return true;
     }
 
-    public static byte[] Refused(uint code, uint money)
+    public static byte[] Refused(uint code, long money)
     {
         var w = new PacketWriter(8);
         w.WriteUInt32(code);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         return w.ToArray();
     }
 
@@ -47,7 +47,7 @@ public static class EquipReformFrames
         ulong targetWireUid,
         uint targetItemId,
         IReadOnlyList<ItemProperty> properties,
-        uint money,
+        long money,
         ReformRefineBonus refine)
     {
         ArgumentNullException.ThrowIfNull(properties);
@@ -59,7 +59,7 @@ public static class EquipReformFrames
         w.WriteUInt32(targetItemId);
         w.WriteUInt32((uint)properties.Count);
         foreach (var property in properties) WriteProperty(w, property);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         w.WriteUInt16((ushort)refine.PropertyId);
         w.WriteUInt16((ushort)refine.Value);
         return w.ToArray();

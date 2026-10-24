@@ -377,7 +377,7 @@ public static class SkillEffectKinds
     public const double RegiDownFloor = 0.3;
     public const double RegiDownCap = 0.5;
 
-    public static int ResistDrop(int casterMa, float regiDown, int baseResist)
+    public static int ResistDrop(long casterMa, float regiDown, int baseResist)
     {
         var share = (casterMa / RegiDownMagicScale + RegiDownFloor) * regiDown;
         if (share > RegiDownCap) share = (float)RegiDownCap;

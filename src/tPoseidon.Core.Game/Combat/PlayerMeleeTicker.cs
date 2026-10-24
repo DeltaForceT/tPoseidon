@@ -9,9 +9,9 @@ public readonly record struct PlayerMeleeAttacker(
     ushort TargetEntityId,
     ushort X,
     ushort Y,
-    int Ap,
-    int Ac,
-    int Lk,
+    long Ap,
+    long Ac,
+    long Lk,
     DateTimeOffset NextSwingAt,
     int CriticalBonus = 0);
 
@@ -63,7 +63,7 @@ public sealed class PlayerMeleeTicker
             _armedByAttacker[attacker.EntityId] = outcome.ArmedNext;
             if (outcome.Damage > 0 && halvesHits?.Invoke(monster.EntityId) == true)
             {
-                var halved = (int)(outcome.Damage * HardenedShare);
+                var halved = (long)(outcome.Damage * HardenedShare);
                 outcome = outcome with
                 {
                     Damage = halved,

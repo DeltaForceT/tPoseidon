@@ -48,7 +48,7 @@ public sealed record NpcScriptPlayer
     public required Func<StatManager?> Stats { get; init; }
     public required Func<int> MaxWeight { get; init; }
     public required Func<IReadOnlyDictionary<int, int>> Skills { get; init; }
-    public required Func<int, int, CancellationToken, Task> GrantProgress { get; init; }
+    public required Func<long, long, CancellationToken, Task> GrantProgress { get; init; }
     public required Func<ServerRates> Rates { get; init; }
     public required Func<CancellationToken, Task<int>> OpenBank { get; init; }
     public required Func<CancellationToken, Task<int>> OpenWarehouse { get; init; }
@@ -775,7 +775,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         await _player.GrantProgress(exp, tmExp, ct).ConfigureAwait(false);
         await SendAsync(Opcode.S2C_QUEST_RESULT, QuestResultFrames.QuestResult(
             operations, rewards.Select(reward => ((uint)reward.ItemIndex, (ushort)reward.Count)).ToList(),
-            (uint)exp, (uint)tmExp, 0, 0, 0, 0, 0), ct).ConfigureAwait(false);
+            exp, tmExp, 0, 0, 0, 0, 0), ct).ConfigureAwait(false);
         var stateStored = _player.SetJobQuestState is { } setState
             && await setState((byte)shop.ChangeJob, ct).ConfigureAwait(false);
         RecordCompletion(characterId, QuestTypes.JobChange, questId, entry.CompletionCount, monster: 0, kills: 0, clearTimeMs: 0);
@@ -1185,16 +1185,16 @@ public sealed partial class NpcScriptExecutor : IJobQuests
             await _player.GrantProgress(exp, tmExp, ct).ConfigureAwait(false);
             await GrantMoneyAsync(gelder, ct).ConfigureAwait(false);
             await SendAsync(Opcode.S2C_QUEST_RESULT_MANIFEST, QuestResultFrames.Result(
-                operations, rewardList, (uint)exp, (uint)tmExp, (uint)questId,
-                (ushort)Math.Clamp(row?.Count ?? 0, 0, ushort.MaxValue), (uint)gelder), ct).ConfigureAwait(false);
+                operations, rewardList, exp, tmExp, (uint)questId,
+                (ushort)Math.Clamp(row?.Count ?? 0, 0, ushort.MaxValue), gelder), ct).ConfigureAwait(false);
         }
         else
         {
             await GrantMoneyAsync(gelder, ct).ConfigureAwait(false);
             await _player.GrantProgress(exp, tmExp, ct).ConfigureAwait(false);
             await SendAsync(Opcode.S2C_QUEST_RESULT, QuestResultFrames.QuestResult(
-                operations, rewardList, (uint)exp, (uint)tmExp, (ushort)questId, entry.CompletionCount,
-                (uint)gelder, 0, 0), ct).ConfigureAwait(false);
+                operations, rewardList, exp, tmExp, (ushort)questId, entry.CompletionCount,
+                gelder, 0, 0), ct).ConfigureAwait(false);
         }
         RecordCompletion(characterId, type, questId, entry.CompletionCount, monster: 0, kills: 0, clearTimeMs: 0);
         var historyType = type == QuestTypes.Scenario ? QuestFrames.HistoryOfScenario : QuestFrames.HistoryOfNormal;
@@ -1328,7 +1328,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         var exp = Math.Max(0, rates.ScaleExp(PartyQuests.Catalog.RewardFor(quest.Exp, item.MemberCount, item.OwnKills, item.TargetCount, completions)));
         var tmExp = Math.Max(0, rates.ScaleTmxp(PartyQuests.Catalog.RewardFor(quest.Tmxp, item.MemberCount, item.OwnKills, item.TargetCount, completions)));
         await _ctx.SendFrameAsync(Social.PartyQuestFrames.Rewarded,
-            QuestResultFrames.PartyQuestResult(operations, (uint)exp, (uint)tmExp, (uint)questId), NextRandKey(), ct).ConfigureAwait(false);
+            QuestResultFrames.PartyQuestResult(operations, exp, tmExp, (uint)questId), NextRandKey(), ct).ConfigureAwait(false);
         await _player.GrantProgress(exp, tmExp, ct).ConfigureAwait(false);
         await PartyQuests.FinishAsync(characterId, (uint)questId, ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   party quest {questId} rewarded: exp {exp}, TM {tmExp}, completion {completions}, {operations.Count} bag changes");
@@ -1445,7 +1445,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         await SendAsync(Opcode.S2C_MONSTER_QUEST_RESULT, QuestResultFrames.MonsterQuestResult(
             operations,
             rewards.Select(reward => ((uint)reward.ItemIndex, (ushort)reward.Count)).ToList(),
-            (uint)exp, (uint)tmExp, (ushort)questId, (uint)gelder), ct).ConfigureAwait(false);
+            exp, tmExp, (ushort)questId, gelder), ct).ConfigureAwait(false);
 
         RecordCompletion(characterId, QuestTypes.Monster, questId, entry.Count, entry.Monster, entry.Kills, entry.ClearTimeMs);
         if (HistoryLoaded(QuestFrames.HistoryOfMonster))
@@ -1847,7 +1847,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         return NpcScript.Silent;
     }
 
-    private async Task GrantMoneyAsync(int gelder, CancellationToken ct)
+    private async Task GrantMoneyAsync(long gelder, CancellationToken ct)
     {
         if (gelder <= 0 || _player.Stats() is not { } stats) return;
         stats.GrantMoney(gelder, StatChangeSource.Quest);

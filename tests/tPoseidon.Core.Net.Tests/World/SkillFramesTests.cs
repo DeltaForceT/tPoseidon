@@ -220,7 +220,7 @@ public sealed class SkillFramesTests
     [Fact]
     public void TornadoBombCarriesThreeSlotsAndAFlaggedTotal()
     {
-        var outcome = new TornadoOutcome(new (int, int, ushort)[] { (30, 0, 0xFFFF), (0, 1, 0xFFFF), (40, 3, 0xFFFF) }, 70, 2, 0, false);
+        var outcome = new TornadoOutcome(new (long, int, ushort)[] { (30, 0, 0xFFFF), (0, 1, 0xFFFF), (40, 3, 0xFFFF) }, 70, 2, 0, false);
         var additions = new SwingAdditions(
             null,
             Array.Empty<(Opcode Opcode, byte[] Payload)>(),

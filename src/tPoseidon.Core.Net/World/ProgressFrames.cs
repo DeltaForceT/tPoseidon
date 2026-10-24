@@ -19,39 +19,39 @@ public static class ProgressFrames
 
     private const double SpeedUnit = 4.0;
 
-    public static byte[] ExpGained(uint gain)
+    public static byte[] ExpGained(long gain)
     {
         var w = new PacketWriter(ExpGainedSize);
-        w.WriteUInt32(gain);
+        w.WriteUInt32Field(gain);
         return w.ToArray();
     }
 
-    public static byte[] LevelUp(CharacterStatBlock stats, uint hp, uint mp, uint exp)
+    public static byte[] LevelUp(CharacterStatBlock stats, long hp, long mp, ulong exp)
     {
         ArgumentNullException.ThrowIfNull(stats);
         var w = new PacketWriter(LevelUpSize);
         stats.WriteTo(w);
-        w.WriteUInt32(hp);
-        w.WriteUInt32(mp);
-        w.WriteUInt32(exp);
+        w.WriteUInt32Field(hp);
+        w.WriteUInt32Field(mp);
+        w.WriteUInt32Field(exp);
         w.WriteByte(GeneralGuideList);
         return w.ToArray();
     }
 
-    public static byte[] TmTotal(byte source, uint tmExp)
+    public static byte[] TmTotal(byte source, long tmExp)
     {
         var w = new PacketWriter(TmTotalSize);
         w.WriteByte(source);
-        w.WriteUInt32(tmExp);
+        w.WriteUInt32Field(tmExp);
         return w.ToArray();
     }
 
-    public static byte[] TmLevelUp(byte characterType, ushort tmLevel, uint tmExp, ushort tmPoint)
+    public static byte[] TmLevelUp(byte characterType, ushort tmLevel, long tmExp, ushort tmPoint)
     {
         var w = new PacketWriter(TmLevelUpSize);
         w.WriteByte(characterType);
         w.WriteUInt16(tmLevel);
-        w.WriteUInt32(tmExp);
+        w.WriteUInt32Field(tmExp);
         w.WriteUInt16(tmPoint);
         return w.ToArray();
     }

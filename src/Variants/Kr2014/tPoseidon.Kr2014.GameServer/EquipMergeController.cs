@@ -143,7 +143,7 @@ internal sealed class EquipMergeController
             return;
         }
         _properties.Replace(merged.ItemUid, properties);
-        stats.GrantMoney((int)((long)result.RemainMoney - stats.Money), tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
+        stats.GrantMoney(result.RemainMoney - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
         player.TimedItems.Forget(main.ItemUid);
         player.TimedItems.Forget(sub.ItemUid);
         await SendAsync(player, (Opcode)EquipMergeFrames.Merged, EquipMergeFrames.Result(success, result.RemainMoney,

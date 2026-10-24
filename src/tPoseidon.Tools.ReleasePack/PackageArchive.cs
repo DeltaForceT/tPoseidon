@@ -9,7 +9,6 @@ internal sealed class PackageArchive : IDisposable
     public const UnixFileMode RegularMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
     public const UnixFileMode ExecutableMode = RegularMode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
     public const string CommentAttribute = "comment";
-    private const UnixFileMode DirectoryType = (UnixFileMode)0x4000;
 
     private readonly ZipArchive? _zip;
     private readonly TarWriter? _tar;
@@ -46,21 +45,6 @@ internal sealed class PackageArchive : IDisposable
     {
         using var source = new MemoryStream(new System.Text.UTF8Encoding(false).GetBytes(text));
         AddStream(source, entryName, mode, _timestamp);
-    }
-
-    public void AddDirectory(string entryName, UnixFileMode mode)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(entryName);
-        var name = entryName.EndsWith('/') ? entryName : entryName + "/";
-        if (_zip is not null)
-        {
-            var entry = _zip.CreateEntry(name, CompressionLevel.NoCompression);
-            entry.LastWriteTime = _timestamp;
-            entry.ExternalAttributes = (int)(mode | DirectoryType) << 16;
-            return;
-        }
-
-        _tar!.WriteEntry(new PaxTarEntry(TarEntryType.Directory, name) { Mode = mode, ModificationTime = _timestamp });
     }
 
     public void Dispose()

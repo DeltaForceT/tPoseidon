@@ -166,11 +166,11 @@ public sealed class PostgresTradeStore : ITradeStore
         return (ulong)uid;
     }
 
-    private static uint? LockMoney(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId)
+    private static long? LockMoney(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId)
     {
         using var cmd = new NpgsqlCommand("SELECT money FROM characters WHERE character_id = @ch FOR UPDATE", conn, tx);
         cmd.Parameters.AddWithValue("ch", unchecked((long)characterId));
-        return cmd.ExecuteScalar() is { } money and not DBNull ? (uint)Math.Max(0L, Convert.ToInt64(money, System.Globalization.CultureInfo.InvariantCulture)) : null;
+        return cmd.ExecuteScalar() is { } money and not DBNull ? Math.Max(0L, Convert.ToInt64(money, System.Globalization.CultureInfo.InvariantCulture)) : null;
     }
 
     private static void SetMoney(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId, uint money) =>

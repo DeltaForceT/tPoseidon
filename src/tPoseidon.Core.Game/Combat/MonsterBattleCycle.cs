@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.LibConfig;
@@ -34,7 +35,7 @@ public sealed record MonsterBattleSwung(
     ushort TargetEntityId,
     ushort TargetX,
     ushort TargetY,
-    int Damage,
+    long Damage,
     byte Result,
     bool Fatal,
     ushort GuardLeft = 0) : MonsterBattleEvent(EntityId);
@@ -52,9 +53,9 @@ public readonly record struct MonsterBattleTarget(
     int Hv,
     int Lk,
     int Level,
-    int Hp,
+    long Hp,
     bool Protected = false,
-    int MaxHp = 0,
+    long MaxHp = 0,
     int Job = 0);
 
 public sealed class MonsterBattleCycle
@@ -175,7 +176,7 @@ public sealed class MonsterBattleCycle
         {
             if (_fights.Count == 0) return events;
 
-            var hpLeftByTarget = new Dictionary<ushort, int>();
+            var hpLeftByTarget = new Dictionary<ushort, long>();
             var monstersById = new Dictionary<ushort, MonsterEntity>(monsters.Count);
             foreach (var monster in monsters) monstersById[monster.EntityId] = monster;
 
@@ -201,9 +202,9 @@ public sealed class MonsterBattleCycle
                 if (fight.Tactics is { } tactics && tactics.Advance((int)Math.Max(0, sinceLastTick.TotalMilliseconds)))
                 {
                     TacticTarget? tacticTarget = targets.TryGetValue(fight.TargetEntityId, out var tactical)
-                        ? new TacticTarget(tactical.Level, tactical.Job, tactical.Hp, tactical.MaxHp)
+                        ? new TacticTarget(tactical.Level, tactical.Job, WireLimits.Int32Field(tactical.Hp), WireLimits.Int32Field(tactical.MaxHp))
                         : null;
-                    tactics.Rearm(_rng.Next(MonsterTactics.RatioCap), tacticTarget, monster.CurrentHp);
+                    tactics.Rearm(_rng.Next(MonsterTactics.RatioCap), tacticTarget, WireLimits.Int32Field(monster.CurrentHp));
                 }
 
                 var definition = _catalog.GetById(monster.MonsterParamId);
@@ -273,7 +274,7 @@ public sealed class MonsterBattleCycle
         MonsterParamEntry definition,
         CharacterCombatInfo reach,
         MonsterBattleTarget target,
-        Dictionary<ushort, int> hpLeftByTarget,
+        Dictionary<ushort, long> hpLeftByTarget,
         DateTimeOffset now,
         List<MonsterBattleEvent> events)
     {

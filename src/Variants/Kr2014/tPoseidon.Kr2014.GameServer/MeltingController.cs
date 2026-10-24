@@ -141,7 +141,7 @@ internal sealed class MeltingController
                 : result.Error == EquipStatusUpgradeRules.BagFull ? MeltingRules.NoBagSpace : MeltingRules.Unknown, $"store refused with code {result.Error}").ConfigureAwait(false);
             return;
         }
-        stats.GrantMoney((int)((long)result.RemainMoney - stats.Money), tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
+        stats.GrantMoney(result.RemainMoney - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
         foreach (var removed in result.Items.Where(row => row.Action == EquipUpgradeAction.Delete)) player.TimedItems.Forget(removed.ItemUid);
         await SendAsync(player, Opcode.S2C_MELTING_RESULT, MeltingFrames.Result(result.RemainMoney, result.Items.Select(EquipUpgradeOperations.ToBag).ToList())).ConfigureAwait(false);
         Log(player, $"melts {melted.Count} items (score {total}, band {band.Id}) into item {box.Id} for {fee} gelder");

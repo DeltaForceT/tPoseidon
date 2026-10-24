@@ -53,7 +53,7 @@ public static class ItemComposingFrames
         return w.ToArray();
     }
 
-    public static byte[] Result(byte kind, BagOperation material, BagOperation? support, ulong baseWireUid, ItemProperty appearance, ItemProperty options, uint money)
+    public static byte[] Result(byte kind, BagOperation material, BagOperation? support, ulong baseWireUid, ItemProperty appearance, ItemProperty options, long money)
     {
         var w = new PacketWriter(80);
         w.WriteUInt16(kind);
@@ -63,7 +63,7 @@ public static class ItemComposingFrames
         w.WriteUInt64(baseWireUid);
         WriteProperty(w, appearance);
         WriteProperty(w, options);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         return w.ToArray();
     }
 

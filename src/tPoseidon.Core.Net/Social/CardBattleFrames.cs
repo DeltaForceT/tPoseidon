@@ -261,7 +261,7 @@ public static class CardBattleFrames
         w.WriteByte(winner ? (byte)1 : (byte)0);
         w.WriteByte(reward.Special ? (byte)1 : (byte)0);
         w.WriteUInt32((uint)reward.Exp);
-        w.WriteUInt32(reward.ExpTotal);
+        w.WriteUInt32Field(reward.ExpTotal);
         w.WriteUInt32(reward.WonCardItemId);
         w.WriteUInt32((uint)reward.Money);
         w.WriteUInt32(reward.PresentItemId);
@@ -298,7 +298,7 @@ public static class CardBattleFrames
         w.WriteUInt32((uint)reward.Level);
         w.WriteByte(reward.Special ? (byte)1 : (byte)0);
         w.WriteUInt32((uint)reward.Exp);
-        w.WriteUInt32(reward.ExpTotal);
+        w.WriteUInt32Field(reward.ExpTotal);
         w.WriteUInt32(reward.WonCardItemId);
         w.WriteUInt32(reward.LostCardItemId);
         w.WriteUInt32((uint)reward.Money);

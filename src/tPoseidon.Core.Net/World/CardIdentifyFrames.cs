@@ -6,12 +6,12 @@ public static class CardIdentifyFrames
     public const uint NoScore = 0;
     public const int PositionSize = sizeof(uint);
 
-    public static byte[] Ended(uint score, uint exp, uint tmExp)
+    public static byte[] Ended(uint score, long exp, long tmExp)
     {
         var w = new PacketWriter(3 * sizeof(uint));
         w.WriteUInt32(score);
-        w.WriteUInt32(exp);
-        w.WriteUInt32(tmExp);
+        w.WriteUInt32Field(exp);
+        w.WriteUInt32Field(tmExp);
         return w.ToArray();
     }
 

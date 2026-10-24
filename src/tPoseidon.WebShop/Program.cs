@@ -1,4 +1,3 @@
-using Microsoft.Extensions.FileProviders;
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data.Postgres;
 using tPoseidon.Core.LibConfig;
@@ -11,7 +10,6 @@ ConsoleFileLog.EnableIfConfigured();
 
 var options = ShopOptions.FromEnvironment();
 Console.WriteLine($"{LogTag} urls {options.Urls}, libconfig {LogPaths.Scrub(options.LibConfigPath)} (exists={File.Exists(options.LibConfigPath)})");
-Console.WriteLine($"{LogTag} pages {LogPaths.Scrub(options.PagesDirectory)} (exists={Directory.Exists(options.PagesDirectory)}), art {(options.ArtDirectory is null ? "not set" : LogPaths.Scrub(options.ArtDirectory))}");
 
 var bootstrap = await PostgresStoreBootstrap.InitializeAsync().ConfigureAwait(false);
 var names = File.Exists(options.LibConfigPath) ? ItemNames.Load(options.LibConfigPath) : new ItemNames([]);
@@ -19,10 +17,8 @@ Console.WriteLine($"{LogTag} {names.Count} item names loaded");
 
 var shop = new ShopApp(
     new PostgresShopAccountStore(bootstrap.DataSource),
-    new PostgresGachaStore(bootstrap.DataSource),
     new ShopSessions(),
     names,
-    options.PagesDirectory,
     TimeProvider.System,
     new PostgresCashShopStore(bootstrap.DataSource),
     options.Cash);
@@ -60,24 +56,11 @@ app.Use(async (context, next) =>
     }
 });
 
-app.MapMethods("/gacha.aspx", [HttpMethods.Get, HttpMethods.Post], (Delegate)shop.GachaPageAsync);
-app.MapPost("/gacha/state", shop.GachaState);
-app.MapPost("/gacha/draw", shop.GachaDraw);
-app.MapGet("/close", ShopApp.Close);
 app.MapMethods("/BuyItem.aspx", [HttpMethods.Get, HttpMethods.Post], (Delegate)shop.BuyItemPageAsync);
 app.MapMethods("/GiftItem.aspx", [HttpMethods.Get, HttpMethods.Post], (Delegate)shop.GiftItemPageAsync);
 app.MapMethods("/mypoint.aspx", [HttpMethods.Get, HttpMethods.Post], (Delegate)shop.MyPointAsync);
 app.MapMethods("/chargepoint.aspx", [HttpMethods.Get, HttpMethods.Post], (Delegate)shop.ChargePointPageAsync);
 Console.WriteLine($"{LogTag} cash: {options.Cash.Mode.ToString().ToLowerInvariant()}{(options.Cash.Mode == tPoseidon.Core.Data.CashMode.Balance ? $", accounts start with {options.Cash.StartingBalance}" : "")}");
-
-if (Directory.Exists(options.PagesDirectory))
-{
-    app.UseStaticFiles(new StaticFileOptions { FileProvider = new PhysicalFileProvider(Path.GetFullPath(options.PagesDirectory)) });
-}
-if (options.ArtDirectory is { } art && Directory.Exists(art))
-{
-    app.UseStaticFiles(new StaticFileOptions { FileProvider = new PhysicalFileProvider(Path.GetFullPath(art)), RequestPath = "/gacha/art" });
-}
 
 Console.WriteLine($"{LogTag} listening");
 await app.RunAsync().ConfigureAwait(false);

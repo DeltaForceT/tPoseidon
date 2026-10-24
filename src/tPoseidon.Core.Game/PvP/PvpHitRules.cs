@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Combat;
 
 namespace tPoseidon.Core.Game.PvP;
@@ -21,13 +22,13 @@ public static class PvpHitRules
     public static float DamageFactor(byte attackerPvpMode) =>
         attackerPvpMode < ModeDamageFactors.Count ? ModeDamageFactors[attackerPvpMode] : OutsideTableFactor;
 
-    public static int Damage(int attackerAp, int targetDp, float factor) =>
-        Math.Max(0, (int)((int)(attackerAp - targetDp * DefenceShare) * factor));
+    public static long Damage(long attackerAp, long targetDp, float factor) =>
+        Math.Max(0L, WireLimits.Saturate(WireLimits.Saturate(attackerAp - targetDp * DefenceShare) * factor));
 
-    public static bool Dodges(int targetHv, int roll) => roll < Math.Min(targetHv, DodgeCap);
+    public static bool Dodges(long targetHv, int roll) => roll < Math.Min(targetHv, DodgeCap);
 
     public static MeleeOutcome Strike(
-        int attackerAp, int attackerAc, byte attackerPvpMode, int targetDp, int targetHv, int targetHp, bool targetProtected, Random rng)
+        long attackerAp, long attackerAc, byte attackerPvpMode, long targetDp, long targetHv, long targetHp, bool targetProtected, Random rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
         var hit = Hits(attackerAc, rng.Next(PlayerRollRange));
@@ -46,7 +47,7 @@ public static class PvpHitRules
 
     public static bool CanAttackPlayer(byte attackerPvpMode) => attackerPvpMode is >= LowestAttackMode and <= HighestAttackMode;
 
-    public static bool Hits(int attackerAc, int roll) => roll < Math.Min(attackerAc, PlayerHitCap);
+    public static bool Hits(long attackerAc, int roll) => roll < Math.Min(attackerAc, PlayerHitCap);
 
     public static bool CreditsKill(byte victimPvpMode, byte victimRecordMode, bool killerIsPlayer) =>
         victimPvpMode == PkRules.PkZoneMode && killerIsPlayer && victimRecordMode != PkRules.RecordOff;

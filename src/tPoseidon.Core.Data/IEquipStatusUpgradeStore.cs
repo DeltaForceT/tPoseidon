@@ -20,7 +20,7 @@ public sealed record EquipUpgradeItem(
 
 public sealed record EquipStatusUpgrade(ulong CharacterId, uint Fee, int BagCapacity, IReadOnlyList<EquipUpgradeItem> Items);
 
-public sealed record EquipStatusUpgradeResult(int Error, uint RemainMoney, IReadOnlyList<EquipUpgradeItem> Items)
+public sealed record EquipStatusUpgradeResult(int Error, long RemainMoney, IReadOnlyList<EquipUpgradeItem> Items)
 {
     public bool Succeeded => Error == EquipStatusUpgradeRules.Ok;
 

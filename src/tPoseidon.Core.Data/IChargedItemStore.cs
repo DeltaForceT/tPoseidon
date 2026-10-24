@@ -44,7 +44,6 @@ public static class ChargedItemRules
     public const int MoveFailed = 103;
     public const byte PurchaseSellType = 0;
     public const byte OtherSellType = 1;
-    public const int GachaSellCodeBase = 300_000_000;
 }
 
 public interface IChargedItemStore

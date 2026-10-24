@@ -55,10 +55,10 @@ public static class PlayerShopSearchFrames
         return w.ToArray();
     }
 
-    public static byte[] Bought(uint money, BagOperation operation, ulong wireUid, ushort remaining)
+    public static byte[] Bought(long money, BagOperation operation, ulong wireUid, ushort remaining)
     {
         var w = new PacketWriter(40);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         w.WriteBytes(QuestResultFrames.ItemOperation(operation));
         w.WriteUInt64(wireUid);
         w.WriteUInt16(remaining);

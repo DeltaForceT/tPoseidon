@@ -9,6 +9,9 @@ public sealed class ManaStatusPacket
 
     public uint CurrentMp { get; init; }
 
+    public static ManaStatusPacket Of(long currentMp) =>
+        new() { CurrentMp = WireLimits.Int32FieldUnsigned(currentMp) };
+
     public byte[] EncodePayload()
     {
         var w = new PacketWriter(PayloadSize);

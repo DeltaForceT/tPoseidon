@@ -900,7 +900,7 @@ public static class GameMasterFrames
         return true;
     }
 
-    public sealed record CharacterInfo(string Name, ulong CharacterId, ushort Zone, uint Level, uint Money, bool Missing, bool Remote);
+    public sealed record CharacterInfo(string Name, ulong CharacterId, ushort Zone, uint Level, long Money, bool Missing, bool Remote);
 
     public static byte[] CharInfoReport(CharacterInfo info, System.Text.Encoding text)
     {
@@ -913,7 +913,7 @@ public static class GameMasterFrames
         w.WriteUInt64(info.CharacterId);
         w.WriteUInt16(info.Zone);
         w.WriteUInt32(info.Level);
-        w.WriteUInt32(info.Money);
+        w.WriteUInt32Field(info.Money);
         w.WriteByte(info.Remote ? (byte)1 : (byte)0);
         w.WriteByte(info.Missing ? (byte)1 : (byte)0);
         w.ToArray().CopyTo(buffer, CharInfoNameLength);
@@ -950,7 +950,7 @@ public static class GameMasterFrames
         w.WriteUInt64(info.CharacterId);
         w.WriteUInt16(info.Zone);
         w.WriteUInt32(info.Level);
-        w.WriteUInt32(info.Money);
+        w.WriteUInt32Field(info.Money);
         w.WriteByte(info.Remote ? (byte)1 : (byte)0);
         return w.ToArray();
     }

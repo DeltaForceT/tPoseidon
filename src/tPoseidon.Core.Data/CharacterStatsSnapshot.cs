@@ -2,12 +2,12 @@ namespace tPoseidon.Core.Data;
 
 public sealed record CharacterStatsSnapshot
 {
-    public required uint CurrentHp { get; init; }
-    public required uint CurrentMp { get; init; }
+    public required long CurrentHp { get; init; }
+    public required long CurrentMp { get; init; }
     public required ushort Level { get; init; }
     public required ulong Exp { get; init; }
-    public required uint Money { get; init; }
-    public required uint TmExp { get; init; }
+    public required long Money { get; init; }
+    public required long TmExp { get; init; }
     public required ushort TmLevel { get; init; }
     public required ushort TmPoint { get; init; }
 

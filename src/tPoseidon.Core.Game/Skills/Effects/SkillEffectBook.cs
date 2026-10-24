@@ -8,7 +8,7 @@ public enum SkillEffectRemoval
 
 public sealed record SkillEffectRegistration(IReadOnlyList<(SkillEffect Effect, SkillEffectRemoval Reason)> Removed);
 
-public readonly record struct SkillEffectCaster(int Ap, int Hv, int Ma = 0, int Da = 0, int Ac = 0, int Lk = 0);
+public readonly record struct SkillEffectCaster(long Ap, long Hv, long Ma = 0, long Da = 0, long Ac = 0, long Lk = 0);
 
 public sealed class SkillEffectBook
 {

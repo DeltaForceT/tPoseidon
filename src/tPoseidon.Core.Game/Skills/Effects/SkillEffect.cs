@@ -33,10 +33,10 @@ public sealed class SkillEffect
     public required SkillEffectMode Mode { get; init; }
     public long Sequence { get; set; }
     public int TickMs { get; init; }
-    public int Charges { get; set; }
+    public long Charges { get; set; }
     public float Slow { get; init; }
     public double Threshold { get; init; }
-    public int Magnitude { get; init; }
+    public long Magnitude { get; init; }
     public bool Active { get; set; }
     public double LifeRatio { get; set; }
     public int PeriodCount { get; set; }

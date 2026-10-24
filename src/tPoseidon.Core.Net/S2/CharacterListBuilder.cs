@@ -132,7 +132,7 @@ public static class CharacterListBuilder
 
         WriteUInt16Le(entry, HairOffset, character.Hair);
 
-        WriteUInt32Le(entry, MoneyOffset, character.Money);
+        WriteUInt32Le(entry, MoneyOffset, WireLimits.Int32FieldUnsigned(character.Money));
 
         WriteUInt16Le(entry, LevelOffset, character.Level);
 

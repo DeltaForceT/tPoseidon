@@ -1,6 +1,6 @@
 # tPoseidon beta: system status
 
-Last updated: 2026-10-23
+Last updated: 2026-10-24
 
 This is where we say what works and what doesn't. The target is the KR 2014 "Original" variant: the aim is to behave like the original server, not to invent new rules.
 
@@ -144,7 +144,7 @@ A short "try" hint is given where one is obvious.
 - Monster quest ranking (weekly ranking and the rank window)
 
 ### Minigames and events
-- Drilling: manual and auto, drill life, gacha prizes - dig in a drill map
+- Drilling: manual and auto, drill life, prizes - dig in a drill map
 - Surprise spots: dig spots, treasure maps, crevice maps
 - Memory puzzle map - watch and repeat the statue sequence
 - Slide puzzle map (**reconstructed**)
@@ -202,6 +202,22 @@ A short "try" hint is given where one is obvious.
 - GM spawns at chosen coordinates, on another map without moving the GM there, spread over an area, or removing only what a GM spawned: the server only spawns on the spot where the GM character stands and removes all monsters of a map or one by id (the original order's map field is not understood yet)
 - The GM chat keywords move notice, chat colour and monster search: the original servers have no command for them (they were actions of the original GM client, which is not available), so they stay normal chat
 - Control panel on Linux and macOS: the panel is packaged for Windows, Linux and macOS, but it has only been tried on Windows so far
+
+## 4. Value limits
+
+The server does not cap game values. Damage, monster HP, player HP and MP (current and maximum), Galder carried and in the bank, EXP, TM EXP and the pools of shields and effects are calculated and stored as 64-bit numbers, and the database columns for them are 64-bit. A hit of 9,000,000,000 takes 9,000,000,000 HP off the target, and a wallet can hold more than 2,147,483,647 Galder.
+
+What limits a number is the client, which cannot be changed in the Original variant. Whatever the server holds, the value sent to the client is cut at the largest number the client reads and never wraps around:
+
+- Every number the client reads as a 32-bit value (damage in the hit result, monster HP, player HP and MP, EXP, TM EXP, Galder in the wallet and in the bank window, quest rewards) is read as a signed number, so the largest value it can show is 2,147,483,647. Above that, the server sends 2,147,483,647 and keeps the real value.
+- The attack packet (0x001F) carries a 16-bit damage field. The client never reads it, so it is cut at 32,767 without any visible effect.
+- The client works out maximum HP and MP itself from the stat points and clamps the current HP and MP it is sent to that maximum. A monster's HP is clamped to the `MaxHpLv` of its entry in the client's own MonsterParam table, so an HP bar above that value needs the client's table changed too.
+- Stat points are 16-bit in the client (65,535 per stat), item stacks are 16-bit (65,535), and the client's level and EXP tables stop at level 400 (TM level 500). The server keeps these limits.
+- The client refuses actions above 2,100,000,000 Galder in its own windows (Gelder coupon, selling to an NPC shop, mail attachment, number input). Trades and player shops settle at most 2,147,483,647 Galder because the amount is sent to the client.
+
+Optional limits are in `data/server_rates.json`, section `Caps`: `MaxDamagePerHit`, `MaxHpPool`, `MaxMpPool`, `MaxGalder` (carried) and `MaxBankGalder`. `0` means no limit and is the default. Files written by older builds contain explicit limits (65535 for damage, 4294967295 for the pools), so set those to `0` to remove them; the control panel's Caps group does the same.
+
+The update adds database migration 075, which widens `characters.hp`, `characters.mp` and `characters.tm_exp` to 64-bit and replaces the upper bound on `characters.money` with a plain "not negative" check. No stored value changes. Back up first, as with every update.
 
 ---
 

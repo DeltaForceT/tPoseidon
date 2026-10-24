@@ -20,7 +20,7 @@ internal sealed class HarconController : IDisposable
         public List<ushort> Monsters { get; } = new();
         public List<ushort> Defended { get; } = new();
         public List<ushort> Targets { get; } = new();
-        public Dictionary<ushort, int> Gauges { get; } = new();
+        public Dictionary<ushort, long> Gauges { get; } = new();
         public Dictionary<ushort, (ushort Turret, DateTimeOffset Until, ulong Builder)> Turrets { get; } = new();
         public HashSet<ulong> Arrived { get; } = new();
         public HashSet<ulong> DeadNow { get; } = new();
@@ -690,7 +690,7 @@ internal sealed class HarconController : IDisposable
             state.Gauges.Clear();
             foreach (var monster in GaugeEntries(state)) state.Gauges[monster.EntityId] = monster.CurrentHp;
         }
-        var changed = new List<(ushort EntityId, int Value)>();
+        var changed = new List<(ushort EntityId, long Value)>();
         foreach (var (id, last) in state.Gauges.ToArray())
         {
             var hp = _monsters.Get(id) is { IsDead: false } monster ? monster.CurrentHp : 0;

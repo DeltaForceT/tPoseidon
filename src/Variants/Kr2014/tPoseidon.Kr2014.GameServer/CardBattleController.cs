@@ -94,7 +94,7 @@ internal sealed class CardBattleController : IDisposable
             player.Stats?.Level ?? character.Level,
             status.Special,
             reward.Exp,
-            (uint)Math.Min(player.Stats?.Exp ?? 0, uint.MaxValue),
+            WireLimits.Int32FieldUnsigned(player.Stats?.Exp ?? 0UL),
             status.OverDistance ? 0 : status.WonCardItemId,
             status.LostCardItemId,
             reward.Money,

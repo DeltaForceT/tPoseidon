@@ -162,7 +162,7 @@ public sealed class GrowthService
         w.WriteUInt64(BagItemIds.OnWire(target.ItemUid));
         WriteProp9(w, element);
         w.WriteZero(Prop9Size);
-        w.WriteUInt32(stats.Money);
+        w.WriteUInt32Field(stats.Money);
         foreach (var operation in aidOperations) w.WriteBytes(QuestResultFrames.ItemOperation(operation));
         await SendAsync(Opcode.S2C_GROWTH_RESULT, w.ToArray(), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   maturing compound item {target.ItemIndex} slot {slot}: property {materialRow.EnableProperty} = {ability} (chance {chance}%, fee {fee})");

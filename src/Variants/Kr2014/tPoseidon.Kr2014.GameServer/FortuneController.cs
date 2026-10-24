@@ -258,13 +258,13 @@ internal sealed class FortuneController
         Log(player, "leaves the fortune house");
     }
 
-    private async Task EnterAsync(InGameSessionState player, FortuneHold hold, uint money)
+    private async Task EnterAsync(InGameSessionState player, FortuneHold hold, long money)
     {
         if (!await DealAsync(player, hold, money).ConfigureAwait(false)) return;
         Log(player, $"enters the fortune house (use {hold.Info.ViewCount})");
     }
 
-    private async Task<bool> DealAsync(InGameSessionState player, FortuneHold hold, uint money)
+    private async Task<bool> DealAsync(InGameSessionState player, FortuneHold hold, long money)
     {
         var tables = _tables();
         var nextFee = FortuneHouse.Fee(tables.FeeByUse, hold.Info.ViewCount + 1);

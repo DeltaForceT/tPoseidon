@@ -48,7 +48,7 @@ public static class PlayerDeathFrames
     public static byte[] ExpValue(ulong exp)
     {
         var w = new PacketWriter(ExpValueSize);
-        w.WriteUInt32((uint)Math.Min(exp, uint.MaxValue));
+        w.WriteUInt32Field(exp);
         return w.ToArray();
     }
 

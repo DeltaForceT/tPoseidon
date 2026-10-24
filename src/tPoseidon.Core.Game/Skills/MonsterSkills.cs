@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 namespace tPoseidon.Core.Game.Skills;
 
 public static class MonsterSkills
@@ -104,8 +105,8 @@ public static class MonsterSkills
         actionId is DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
             or Destruction or Vampiric or Poison or Charging or Warp;
 
-    public static int ChargingPower(int pushed, int casterHp, float ratio) =>
-        (int)(unchecked((pushed + ChargingDistanceBase) * casterHp) * (double)ratio / ChargingDivisor);
+    public static long ChargingPower(long pushed, long casterHp, float ratio) =>
+        WireLimits.Saturate(unchecked((pushed + ChargingDistanceBase) * casterHp) * (double)ratio / ChargingDivisor);
 
     public static bool BlocksSkill(int condition, int skillId) => (condition & SkillBlockingCondition) != 0 && skillId != StunCancelSkill;
 
@@ -113,13 +114,13 @@ public static class MonsterSkills
 
     public static int DotElementOf(int actionId) => actionId == CruelFlame ? SkillActions.DarkElement : SkillActions.WindElement;
 
-    public static int DotDamage(int firstHit, float ratio) => (int)(firstHit * (double)ratio);
+    public static long DotDamage(long firstHit, float ratio) => WireLimits.Saturate(firstHit * (double)ratio);
 
-    public static float WaterNetDexterity(int casterMagic, float ratio) => (float)(casterMagic * (double)ratio / 100.0);
+    public static float WaterNetDexterity(long casterMagic, float ratio) => (float)(casterMagic * (double)ratio / 100.0);
 
-    public static int DestructionPower(int maxHp, float ratio) => (int)(maxHp * (double)ratio);
+    public static long DestructionPower(long maxHp, float ratio) => WireLimits.Saturate(maxHp * (double)ratio);
 
-    public static int PoisonDamage(int amount, int hp) => hp > PoisonFloorHp ? Math.Min(amount, hp - PoisonFloorHp) : 0;
+    public static long PoisonDamage(long amount, long hp) => hp > PoisonFloorHp ? Math.Min(amount, hp - PoisonFloorHp) : 0;
 
     public static bool PoisonStrikeDue(int elapsedMs, int strikes, int periodMs) => elapsedMs >= PoisonFirstMs + strikes * periodMs;
 
@@ -129,19 +130,19 @@ public static class MonsterSkills
 
     public static (int Element, int Loss)? SingleMagicOf(int actionId) => SingleMagic.TryGetValue(actionId, out var magic) ? magic : null;
 
-    public static (int Hp, bool Healed) Healing(int hp, int maxHp, float ratio)
+    public static (long Hp, bool Healed) Healing(long hp, long maxHp, float ratio)
     {
-        var raised = (int)(hp + maxHp * (double)ratio);
+        var raised = WireLimits.Saturate(hp + maxHp * (double)ratio);
         var healed = raised > hp && hp < maxHp;
         return (Math.Min(raised, maxHp), healed);
     }
 
-    public static int SirenPower(int hp, int dp, float ratio) => (int)((hp * (double)LifeShare + dp * DefenceShare) * ratio);
+    public static long SirenPower(long hp, long dp, float ratio) => WireLimits.Saturate((hp * (double)LifeShare + dp * DefenceShare) * ratio);
 
-    public static int RingFalloff(int damage, float distance, float radius)
+    public static long RingFalloff(long damage, float distance, float radius)
     {
         if (radius <= 0f) return damage;
         var fall = 1.0f - distance / radius;
-        return (int)(damage * (double)fall);
+        return WireLimits.Saturate(damage * (double)fall);
     }
 }

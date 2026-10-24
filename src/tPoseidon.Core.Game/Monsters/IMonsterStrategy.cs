@@ -9,6 +9,6 @@ public interface IMonsterStrategy
 
     void OnSpawn(MonsterEntity mob);
     void OnTick(MonsterEntity mob, DateTimeOffset now);
-    void OnDamaged(MonsterEntity mob, ushort attackerEntityId, int damage);
+    void OnDamaged(MonsterEntity mob, ushort attackerEntityId, long damage);
     void OnDeath(MonsterEntity mob, ushort killerEntityId);
 }

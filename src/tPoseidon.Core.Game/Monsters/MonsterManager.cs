@@ -11,6 +11,7 @@ public sealed class MonsterManager : IMonsterEntityProvider
     private readonly IMonItemDropInfoLookup? _dropCatalog;
     private readonly MonsterOverridesProvider? _monsterOverrides;
     private readonly IdAllocator _idAllocator;
+    private readonly Func<long>? _damageLimit;
     private readonly ConcurrentDictionary<ushort, MonsterEntity> _byEntityId = new();
     private readonly ConcurrentDictionary<ushort, IMonsterStrategy> _strategyByEntityId = new();
     private readonly ConcurrentDictionary<ushort, GroundItem> _groundItems = new();
@@ -22,7 +23,8 @@ public sealed class MonsterManager : IMonsterEntityProvider
         IdAllocator idAllocator,
         IMonItemDropInfoLookup? dropCatalog = null,
         MonsterOverridesProvider? monsterOverrides = null,
-        int? rngSeed = null)
+        int? rngSeed = null,
+        Func<long>? damageLimit = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(idAllocator);
@@ -30,11 +32,12 @@ public sealed class MonsterManager : IMonsterEntityProvider
         _dropCatalog = dropCatalog;
         _monsterOverrides = monsterOverrides;
         _idAllocator = idAllocator;
+        _damageLimit = damageLimit;
         _rng = rngSeed is int s ? new Random(s) : new Random();
     }
 
     public event Action<MonsterEntity>? MonsterSpawned;
-    public event Action<MonsterEntity, ushort, int>? MonsterDamaged;
+    public event Action<MonsterEntity, ushort, long>? MonsterDamaged;
     public event Action<MonsterEntity, ushort>? MonsterKilled;
 
     public int Count => _byEntityId.Count;
@@ -83,6 +86,7 @@ public sealed class MonsterManager : IMonsterEntityProvider
             IsBoss = isBoss,
             Atype = atype,
             AiViewRange = def.AiViewRange,
+            DamageLimit = _damageLimit,
         };
         entity.InitHp(maxHp);
         entity.InitPosition(x, y);
@@ -100,14 +104,14 @@ public sealed class MonsterManager : IMonsterEntityProvider
     public IMonsterStrategy? GetStrategy(ushort entityId) =>
         _strategyByEntityId.TryGetValue(entityId, out var s) ? s : null;
 
-    private static int ResolveMaxHpWithOverride(MonsterParamEntry def, MonsterOverrideEntry? ovr)
+    private static long ResolveMaxHpWithOverride(MonsterParamEntry def, MonsterOverrideEntry? ovr)
     {
         if (ovr?.MaxHpLv is null) return ResolveMaxHp(def);
 
-        return Math.Max(1, ovr?.MaxHpLv ?? def.MaxHpLv);
+        return Math.Max(1L, ovr?.MaxHpLv ?? def.MaxHpLv);
     }
 
-    public DamageResult ApplyDamage(ushort entityId, ushort attackerEntityId, int damage)
+    public DamageResult ApplyDamage(ushort entityId, ushort attackerEntityId, long damage)
     {
         if (!_byEntityId.TryGetValue(entityId, out var mob))
             return DamageResult.NotFound;
@@ -150,9 +154,9 @@ public sealed class MonsterManager : IMonsterEntityProvider
         return true;
     }
 
-    private static int ResolveMaxHp(MonsterParamEntry def)
+    private static long ResolveMaxHp(MonsterParamEntry def)
     {
-        return Math.Max(1, def.MaxHpLv);
+        return Math.Max(1L, def.MaxHpLv);
     }
 
     public static int ResolveMaxMp(MonsterParamEntry def)

@@ -9,6 +9,9 @@ public sealed class HealthStatusPacket
 
         public uint CurrentHp { get; init; }
 
+    public static HealthStatusPacket Of(long currentHp) =>
+        new() { CurrentHp = WireLimits.Int32FieldUnsigned(currentHp) };
+
     public byte[] EncodePayload()
     {
         var w = new PacketWriter(PayloadSize);

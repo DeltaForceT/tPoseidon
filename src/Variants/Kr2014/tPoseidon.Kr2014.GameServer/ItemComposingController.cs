@@ -135,7 +135,7 @@ internal sealed class ItemComposingController
             return;
         }
         _properties.Replace(baseItem.ItemUid, ItemComposingRules.Apply(baseProperties, look));
-        stats.GrantMoney((int)((long)result.RemainMoney - stats.Money), tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
+        stats.GrantMoney(result.RemainMoney - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
         player.TimedItems.Forget(material.ItemUid);
         var materialOperation = EquipUpgradeOperations.ToBag(result.Items.First(row => row.ItemUid == material.ItemUid));
         BagOperation? supportOperation = usesCatalyst is null ? null : EquipUpgradeOperations.ToBag(result.Items.First(row => row.ItemUid == usesCatalyst.ItemUid));

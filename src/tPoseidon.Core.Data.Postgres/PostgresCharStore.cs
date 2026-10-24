@@ -84,7 +84,7 @@ public sealed class PostgresCharStore : ICharStore
         cmd.Parameters.AddWithValue("ftype", (short)character.FType);
         cmd.Parameters.AddWithValue("job_tier", (short)character.JobTier);
         cmd.Parameters.AddWithValue("hair", (int)character.Hair);
-        cmd.Parameters.AddWithValue("money", (long)character.Money);
+        cmd.Parameters.AddWithValue("money", character.Money);
         cmd.Parameters.AddWithValue("level", (int)character.Level);
         cmd.Parameters.AddWithValue("position_x", (int)character.PositionX);
         cmd.Parameters.AddWithValue("position_y", (int)character.PositionY);
@@ -96,8 +96,8 @@ public sealed class PostgresCharStore : ICharStore
         cmd.Parameters.AddWithValue("pts_m", (short)character.PtsM);
         cmd.Parameters.AddWithValue("pts_s", (short)character.PtsS);
         cmd.Parameters.AddWithValue("pts_c", (short)character.PtsC);
-        cmd.Parameters.AddWithValue("hp", (int)character.CurrentHp);
-        cmd.Parameters.AddWithValue("mp", (int)character.CurrentMp);
+        cmd.Parameters.AddWithValue("hp", character.CurrentHp);
+        cmd.Parameters.AddWithValue("mp", character.CurrentMp);
 
         try
         {
@@ -181,12 +181,12 @@ public sealed class PostgresCharStore : ICharStore
                 tm_level_p = @tlp, tm_level_m = @tlm, tm_level_s = @tls, tm_level_c = @tlc
               WHERE character_id = @character_id",
             conn);
-        cmd.Parameters.AddWithValue("hp", (int)snapshot.CurrentHp);
-        cmd.Parameters.AddWithValue("mp", (int)snapshot.CurrentMp);
+        cmd.Parameters.AddWithValue("hp", snapshot.CurrentHp);
+        cmd.Parameters.AddWithValue("mp", snapshot.CurrentMp);
         cmd.Parameters.AddWithValue("level", (int)snapshot.Level);
         cmd.Parameters.AddWithValue("exp", (long)snapshot.Exp);
-        cmd.Parameters.AddWithValue("money", (long)snapshot.Money);
-        cmd.Parameters.AddWithValue("tm_exp", (int)snapshot.TmExp);
+        cmd.Parameters.AddWithValue("money", snapshot.Money);
+        cmd.Parameters.AddWithValue("tm_exp", snapshot.TmExp);
         cmd.Parameters.AddWithValue("tm_level", (short)snapshot.TmLevel);
         cmd.Parameters.AddWithValue("tm_point", (short)snapshot.TmPoint);
         cmd.Parameters.AddWithValue("ap", (short)snapshot.ApPoints);
@@ -220,7 +220,7 @@ public sealed class PostgresCharStore : ICharStore
         FType = (FType)reader.GetInt16(5),
         JobTier = (byte)reader.GetInt16(6),
         Hair = (ushort)reader.GetInt32(7),
-        Money = unchecked((uint)reader.GetInt64(8)),
+        Money = reader.GetInt64(8),
         Level = (ushort)reader.GetInt32(9),
         PositionX = (ushort)reader.GetInt32(10),
         PositionY = (ushort)reader.GetInt32(11),
@@ -231,8 +231,8 @@ public sealed class PostgresCharStore : ICharStore
         PtsM = (byte)reader.GetInt16(16),
         PtsS = (byte)reader.GetInt16(17),
         PtsC = (byte)reader.GetInt16(18),
-        CurrentHp = unchecked((uint)reader.GetInt32(19)),
-        CurrentMp = unchecked((uint)reader.GetInt32(20)),
+        CurrentHp = reader.GetInt64(19),
+        CurrentMp = reader.GetInt64(20),
         Exp = unchecked((ulong)reader.GetInt64(21)),
         TmExpPower = unchecked((ulong)reader.GetInt64(22)),
         TmExpMagic = unchecked((ulong)reader.GetInt64(23)),
@@ -261,7 +261,7 @@ public sealed class PostgresCharStore : ICharStore
         TmLevelCharm = (ushort)reader.GetInt16(46),
         TmPoint = (ushort)reader.GetInt16(47),
         TmLevel = (ushort)reader.GetInt16(48),
-        TmExp = unchecked((uint)reader.GetInt32(49)),
+        TmExp = reader.GetInt64(49),
         Type2 = (ushort)reader.GetInt16(50),
         Job2 = (byte)reader.GetInt16(51),
         Job2ChangedAt = new DateTimeOffset(reader.GetDateTime(52), TimeSpan.Zero),

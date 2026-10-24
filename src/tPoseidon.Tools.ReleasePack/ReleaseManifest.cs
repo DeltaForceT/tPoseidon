@@ -12,18 +12,13 @@ internal sealed class ReleaseManifest
 {
     public const string Schema = "tposeidon/release-manifest/1";
     public const string Product = "tPoseidon";
-    public const string DrillEggProduct = "tPoseidon Drill Egg";
     public const string FilePrefix = "tposeidon";
-    public const string DrillEggFilePrefix = "tposeidon-drill-egg";
 
     private readonly BuildIdentity _identity;
     private readonly IReadOnlyList<PackageResult> _packages;
-    private readonly string _product;
 
-    public ReleaseManifest(string product, BuildIdentity identity, IReadOnlyList<PackageResult> packages)
+    public ReleaseManifest(BuildIdentity identity, IReadOnlyList<PackageResult> packages)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(product);
-        _product = product;
         _identity = identity ?? throw new ArgumentNullException(nameof(identity));
         _packages = packages ?? throw new ArgumentNullException(nameof(packages));
     }
@@ -36,7 +31,7 @@ internal sealed class ReleaseManifest
         using var json = new Utf8JsonWriter(file, new JsonWriterOptions { Indented = true });
         json.WriteStartObject();
         json.WriteString("schema", Schema);
-        json.WriteString("product", _product);
+        json.WriteString("product", Product);
         json.WriteString("version", _identity.Version);
         json.WriteString("commit", _identity.Commit);
         json.WriteString("buildTag", _identity.Tag);

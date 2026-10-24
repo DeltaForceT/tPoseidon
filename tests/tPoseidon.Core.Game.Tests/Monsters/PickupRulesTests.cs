@@ -179,8 +179,9 @@ public sealed class PickupRulesTests
     [Fact]
     public void MoneyStopsAtItsLimit()
     {
-        Assert.True(PickupRules.MoneyFits(PickupRules.MoneyLimit - 30, 30));
-        Assert.False(PickupRules.MoneyFits(PickupRules.MoneyLimit - 29, 30));
+        const long limit = 2_100_000_000;
+        Assert.True(PickupRules.MoneyFits(limit - 30, 30, limit));
+        Assert.False(PickupRules.MoneyFits(limit - 29, 30, limit));
     }
 
     [Fact]

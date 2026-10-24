@@ -26,40 +26,40 @@ public static class QuestResultFrames
     public static byte[] Result(
         IReadOnlyList<BagOperation> operations,
         IReadOnlyList<(uint ItemId, ushort Count)> rewards,
-        uint exp,
-        uint tmExp,
+        long exp,
+        long tmExp,
         uint questId,
         ushort resultRowCount,
-        uint gelder)
+        long gelder)
     {
         var w = new PacketWriter(64);
         WriteOperationsAndRewards(w, operations, rewards);
-        w.WriteUInt32(exp);
-        w.WriteUInt32(tmExp);
+        w.WriteUInt32Field(exp);
+        w.WriteUInt32Field(tmExp);
         w.WriteUInt32(questId);
         w.WriteUInt16(resultRowCount);
-        w.WriteUInt32(gelder);
+        w.WriteUInt32Field(gelder);
         return w.ToArray();
     }
 
     public static byte[] QuestResult(
         IReadOnlyList<BagOperation> operations,
         IReadOnlyList<(uint ItemId, ushort Count)> rewards,
-        uint exp,
-        uint tmExp,
+        long exp,
+        long tmExp,
         ushort questId,
         ushort count,
-        uint gelder,
+        long gelder,
         ushort rewardSkill,
         ushort rewardSkillLevel)
     {
         var w = new PacketWriter(64);
         WriteOperationsAndRewards(w, operations, rewards);
-        w.WriteUInt32(exp);
-        w.WriteUInt32(tmExp);
+        w.WriteUInt32Field(exp);
+        w.WriteUInt32Field(tmExp);
         w.WriteUInt16(questId);
         w.WriteUInt16(count);
-        w.WriteUInt32(gelder);
+        w.WriteUInt32Field(gelder);
         w.WriteUInt16(rewardSkill);
         w.WriteUInt16(rewardSkillLevel);
         return w.ToArray();
@@ -68,25 +68,25 @@ public static class QuestResultFrames
     public static byte[] MonsterQuestResult(
         IReadOnlyList<BagOperation> operations,
         IReadOnlyList<(uint ItemId, ushort Count)> rewards,
-        uint exp,
-        uint tmExp,
+        long exp,
+        long tmExp,
         ushort questId,
-        uint gelder)
+        long gelder)
     {
         var w = new PacketWriter(64);
         WriteOperationsAndRewards(w, operations, rewards);
-        w.WriteUInt32(exp);
-        w.WriteUInt32(tmExp);
+        w.WriteUInt32Field(exp);
+        w.WriteUInt32Field(tmExp);
         w.WriteUInt16(questId);
-        w.WriteUInt32(gelder);
+        w.WriteUInt32Field(gelder);
         return w.ToArray();
     }
 
-    public static byte[] PartyQuestResult(IReadOnlyList<BagOperation> operations, uint exp, uint tmExp, uint questId)
+    public static byte[] PartyQuestResult(IReadOnlyList<BagOperation> operations, long exp, long tmExp, uint questId)
     {
         var w = new PacketWriter(32);
-        w.WriteUInt32(exp);
-        w.WriteUInt32(tmExp);
+        w.WriteUInt32Field(exp);
+        w.WriteUInt32Field(tmExp);
         WriteOperations(w, operations);
         w.WriteUInt32(questId);
         return w.ToArray();

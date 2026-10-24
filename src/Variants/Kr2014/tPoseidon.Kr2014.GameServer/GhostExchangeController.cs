@@ -168,7 +168,7 @@ internal sealed class GhostExchangeController
                 $"store refused with code {result.Error}").ConfigureAwait(false);
             return false;
         }
-        stats.GrantMoney((int)((long)result.RemainMoney - stats.Money), tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
+        stats.GrantMoney(result.RemainMoney - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
         foreach (var removed in result.Items.Where(row => row.Action == EquipUpgradeAction.Delete)) player.TimedItems.Forget(removed.ItemUid);
         await SendAsync(player, Opcode.S2C_GHOST_EXCHANGED, GhostExchangeFrames.Exchanged(result.Items.Select(EquipUpgradeOperations.ToBag).ToList())).ConfigureAwait(false);
         return true;

@@ -170,13 +170,12 @@ public class DamageCalculatorTests
     [Fact]
     public void DamageCap_RespectsMaxDamagePerHit()
     {
-        var rates = new ServerRates();
+        var rates = new ServerRates { Caps = new ServerRates.CapsSection { MaxDamagePerHit = 65535 } };
         var calc = new DamageCalculator(rates);
         var attacker = new AttackerStats(Ap: 100000, Ma: 0, Ac: 0, GunAp: 0);
         var defender = DefenderWith();
         var result = calc.Compute(attacker, defender, new DamageInput(DamageKind.PhysicalMelee));
-        Assert.True(result.Damage <= rates.Caps.MaxDamagePerHit);
-        Assert.True(result.Damage <= ushort.MaxValue);
+        Assert.Equal(65535L, result.Damage);
     }
 
     [Fact]

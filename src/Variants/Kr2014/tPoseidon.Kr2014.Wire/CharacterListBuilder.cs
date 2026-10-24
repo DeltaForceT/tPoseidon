@@ -102,7 +102,7 @@ public static class CharacterListBuilder
         entry[SecondJobMirrorOffset] = (byte)(secondJobClass & 0xFF);
         entry[JobTierOffset] = character.JobTier;
         WriteUInt16Le(entry, HairOffset, character.Hair);
-        WriteUInt32Le(entry, MoneyOffset, character.Money);
+        WriteUInt32Le(entry, MoneyOffset, WireLimits.Int32FieldUnsigned(character.Money));
         WriteUInt16Le(entry, LevelOffset, character.Level);
 
         if (itemStore is not null)

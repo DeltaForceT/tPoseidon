@@ -25,8 +25,6 @@ public sealed class BankService
     public const int LevelTooLow = 2;
     public const int MoneyTooLow = 3;
     public const int Capacity = 24;
-    public const long MoneyLimit = 100_000_000;
-    public const long CarriedMoneyLimit = 2_099_999_999;
     public const int StackLimit = 32000;
     public const int NotStorableOptions = 0x200 | 0x400;
     public const int NotStorableOption = 0x20000;
@@ -89,7 +87,7 @@ public sealed class BankService
         var stored = _bank.GetItems(character.OwnerAccountId)
             .Select(item => (item, ClassOf(item)))
             .ToList();
-        var bankMoney = (uint)Math.Clamp(_bank.GetMoney(character.OwnerAccountId), 0, uint.MaxValue);
+        var bankMoney = Math.Max(0L, _bank.GetMoney(character.OwnerAccountId));
         await SendAsync(Opcode.S2C_BANK_CONTENTS, BankFrames.Contents(bankMoney, stored, _player.Properties), ct).ConfigureAwait(false);
         _contentsSent = true;
         Console.WriteLine($"{_logTag} {_ctx.Remote}   bank opened: {stored.Count} items, {bankMoney} Gelder stored");
@@ -247,16 +245,16 @@ public sealed class BankService
         var bankMoney = _bank.GetMoney(character.OwnerAccountId);
         ushort? refusal = amount < 1 ? WrongAmount
             : amount > stats.Money ? MoreThanCarried
-            : bankMoney + amount >= MoneyLimit ? AboveBankLimit
+            : amount > stats.BankLimit - bankMoney ? AboveBankLimit
             : null;
         if (refusal is { } code)
         {
             await RefuseAsync(Opcode.S2C_BANK_MONEY_IN_REFUSED, BankFrames.Code(code), $"{amount} Gelder in refused ({code})", ct).ConfigureAwait(false);
             return;
         }
-        stats.GrantMoney(-(int)amount, StatChangeSource.Bank);
+        stats.GrantMoney(-(long)amount, StatChangeSource.Bank);
         var total = _bank.AdjustMoney(character.OwnerAccountId, amount);
-        await SendAsync(Opcode.S2C_BANK_MONEY_IN, BankFrames.Money((uint)total, stats.Money), ct).ConfigureAwait(false);
+        await SendAsync(Opcode.S2C_BANK_MONEY_IN, BankFrames.Money(total, stats.Money), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   bank: {amount} Gelder in, {total} stored, {stats.Money} carried");
     }
 
@@ -272,7 +270,7 @@ public sealed class BankService
         }
         var bankMoney = _bank.GetMoney(character.OwnerAccountId);
         ushort? refusal = bankMoney - amount < 0 ? BankShort
-            : stats.Money + (long)amount > CarriedMoneyLimit ? AboveCarriedLimit
+            : amount > stats.WalletLimit - stats.Money ? AboveCarriedLimit
             : null;
         if (refusal is { } code)
         {
@@ -280,8 +278,8 @@ public sealed class BankService
             return;
         }
         var total = _bank.AdjustMoney(character.OwnerAccountId, -(long)amount);
-        stats.GrantMoney((int)amount, StatChangeSource.Bank);
-        await SendAsync(Opcode.S2C_BANK_MONEY_OUT, BankFrames.Money((uint)total, stats.Money), ct).ConfigureAwait(false);
+        stats.GrantMoney((long)amount, StatChangeSource.Bank);
+        await SendAsync(Opcode.S2C_BANK_MONEY_OUT, BankFrames.Money(total, stats.Money), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   bank: {amount} Gelder out, {total} stored, {stats.Money} carried");
     }
 

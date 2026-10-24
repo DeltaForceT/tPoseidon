@@ -85,10 +85,10 @@ public static class TradeFrames
 
     public static byte[] CheckState(bool isChecked, bool isFirstChecker) => new[] { isChecked ? (byte)1 : (byte)0, isFirstChecker ? (byte)1 : (byte)0 };
 
-    public static byte[] Settled(uint money, IReadOnlyList<BagOperation> operations)
+    public static byte[] Settled(long money, IReadOnlyList<BagOperation> operations)
     {
         var w = new PacketWriter(64);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         w.WriteBytes(QuestResultFrames.ItemOperations(operations));
         return w.ToArray();
     }
@@ -102,7 +102,7 @@ public static class TradeFrames
     private static void WriteRecord(PacketWriter w, TradeRecordView record)
     {
         w.WriteByte(record.Ready ? (byte)1 : (byte)0);
-        w.WriteUInt32(record.Money);
+        w.WriteUInt32Field(record.Money);
         w.WriteUInt16(SlotsPerSide);
         for (var index = 0; index < SlotsPerSide; index++)
         {

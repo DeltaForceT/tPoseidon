@@ -436,7 +436,7 @@ public sealed class SkillRulesTests
         Assert.Equal(70, outcome.Sum);
         Assert.Equal(2, outcome.Landed);
         Assert.Equal(2, outcome.ResultCount);
-        Assert.Equal(new (int, int, ushort)[] { (30, 0, 0xFFFF), (0, 1, 0xFFFF), (40, 3, 0xFFFF) }, outcome.Slots);
+        Assert.Equal(new (long, int, ushort)[] { (30, 0, 0xFFFF), (0, 1, 0xFFFF), (40, 3, 0xFFFF) }, outcome.Slots);
     }
 
     [Fact]
@@ -500,7 +500,7 @@ public sealed class SkillRulesTests
         Assert.Equal(expected, SkillHitShapes.Power(rule, attacker, target, 1.3f, null, null));
     }
 
-    private static readonly int[] ThunderPowers = { 500, 1000 };
+    private static readonly long[] ThunderPowers = { 500, 1000 };
 
     [Fact]
     public void ShadowAndMagicPowerReadTheirColumns()

@@ -30,6 +30,36 @@ public sealed class ProbeAndErrorTests
     }
 
     [Fact]
+    public void ListenerOnTheSameAddressIsSeen()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        try
+        {
+            Assert.True(PortProbe.IsListening(port, "127.0.0.1"));
+            Assert.True(PortProbe.IsListening(port, "0.0.0.0"));
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
+    [Theory]
+    [InlineData("216.39.108.160", "127.0.0.1", false)]
+    [InlineData("127.0.0.1", "127.0.0.1", true)]
+    [InlineData("0.0.0.0", "127.0.0.1", true)]
+    [InlineData("216.39.108.160", "0.0.0.0", true)]
+    [InlineData("::", "127.0.0.1", true)]
+    public void OnlyListenersThatShareTheBindAddressClash(string listenerAddress, string bindAddress, bool clash)
+    {
+        var listeners = new[] { new IPEndPoint(IPAddress.Parse(listenerAddress), 9980) };
+        Assert.Equal(clash, PortProbe.Clashes(listeners, 9980, IPAddress.Parse(bindAddress)));
+        Assert.False(PortProbe.Clashes(listeners, 9981, IPAddress.Parse(bindAddress)));
+    }
+
+    [Fact]
     public void RefusedConnectionExplainsHowToStartPostgres()
     {
         var target = new NpgsqlConnectionStringBuilder { Host = "localhost", Port = 5999, Username = "tposeidon" };

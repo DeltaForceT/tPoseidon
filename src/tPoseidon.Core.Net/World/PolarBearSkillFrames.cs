@@ -1,6 +1,6 @@
 namespace tPoseidon.Core.Net.World;
 
-public readonly record struct PolarBearHit(int Damage, int Kind);
+public readonly record struct PolarBearHit(long Damage, int Kind);
 
 public static class PolarBearSkillFrames
 {
@@ -39,7 +39,7 @@ public static class PolarBearSkillFrames
         w.WriteUInt16(targetEntityId);
         foreach (var hit in hits)
         {
-            w.WriteInt32(hit.Damage);
+            w.WriteInt32Field(hit.Damage);
             w.WriteInt32(hit.Kind);
             w.WriteInt16(UnreadEntryField);
         }

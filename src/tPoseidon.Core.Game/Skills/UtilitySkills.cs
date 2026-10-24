@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 namespace tPoseidon.Core.Game.Skills;
 
 public static class UtilitySkills
@@ -37,9 +38,9 @@ public static class UtilitySkills
 
     public static int BlastOf(int actionId) => actionId == MineMaster ? MineMasterBlast : MineBlast;
 
-    public static int MinePower(int actionId, int da, int lk, float trapAp) => actionId == MineMaster
-        ? (int)((da * MasterDigStep + lk * TrapStep) * (double)trapAp)
-        : (int)((da + lk) * TrapStep * (double)trapAp);
+    public static long MinePower(int actionId, long da, long lk, float trapAp) => actionId == MineMaster
+        ? WireLimits.Saturate((da * MasterDigStep + lk * TrapStep) * (double)trapAp)
+        : WireLimits.Saturate((da + lk) * TrapStep * (double)trapAp);
 
     public static int DashMs(double distance) =>
         distance <= DashStopDistance ? 0 : (int)Math.Min(DashLongestMs, Math.Ceiling((distance - DashStopDistance) / DashSpeed * MillisecondsPerSecond));

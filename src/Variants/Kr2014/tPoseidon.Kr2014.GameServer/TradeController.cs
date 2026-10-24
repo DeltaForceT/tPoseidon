@@ -344,7 +344,7 @@ internal sealed class TradeController
 
     private void Settle(InGameSessionState player, TradeSideResult result)
     {
-        if (player.Stats is { } stats) stats.GrantMoney((int)((long)result.Money - stats.Money), tPoseidon.Core.Game.Stats.StatChangeSource.Trade);
+        if (player.Stats is { } stats) stats.GrantMoney(result.Money - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.Trade);
         foreach (var change in result.Changes)
         {
             if (change.Kind == TradeChangeKind.Removed)

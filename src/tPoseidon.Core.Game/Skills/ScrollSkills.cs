@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Skills.Effects;
 using tPoseidon.Core.LibConfig;
 
@@ -69,5 +70,5 @@ public static class ScrollSkills
         return deltas;
     }
 
-    public static uint Healed(uint hp, uint maxHp, float ratio) => (uint)Math.Min(maxHp, (long)(int)(maxHp * (double)ratio) + hp);
+    public static long Healed(long hp, long maxHp, float ratio) => Math.Min(maxHp, WireLimits.Saturate(maxHp * (double)ratio) + hp);
 }

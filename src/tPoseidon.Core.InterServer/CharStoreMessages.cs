@@ -90,15 +90,15 @@ public static class CharStoreWire
         writer.WriteByte(c.PtsC);
         writer.WriteByte(c.JobTier);
         writer.WriteUInt16(c.Hair);
-        writer.WriteUInt32(c.Money);
+        writer.WriteInt64(c.Money);
         writer.WriteUInt16(c.Level);
         writer.WriteUInt16(c.StarterEarItemIndex);
         writer.WriteUInt16(c.StarterTailItemIndex);
         writer.WriteUInt16(c.PositionX);
         writer.WriteUInt16(c.PositionY);
         writer.WriteUInt16(c.MapId);
-        writer.WriteUInt32(c.CurrentHp);
-        writer.WriteUInt32(c.CurrentMp);
+        writer.WriteInt64(c.CurrentHp);
+        writer.WriteInt64(c.CurrentMp);
         writer.WriteUInt64(c.Exp);
         writer.WriteUInt64(c.TmExpPower);
         writer.WriteUInt64(c.TmExpMagic);
@@ -127,7 +127,7 @@ public static class CharStoreWire
         writer.WriteUInt16(c.TmLevelCharm);
         writer.WriteUInt16(c.TmPoint);
         writer.WriteUInt16(c.TmLevel);
-        writer.WriteUInt32(c.TmExp);
+        writer.WriteInt64(c.TmExp);
         writer.WriteUInt16(c.Type2);
         writer.WriteByte(c.Job2);
         writer.WriteInt64(c.Job2ChangedAt.UtcTicks);
@@ -163,15 +163,15 @@ public static class CharStoreWire
         PtsC = reader.ReadByte(),
         JobTier = reader.ReadByte(),
         Hair = reader.ReadUInt16(),
-        Money = reader.ReadUInt32(),
+        Money = reader.ReadInt64(),
         Level = reader.ReadUInt16(),
         StarterEarItemIndex = reader.ReadUInt16(),
         StarterTailItemIndex = reader.ReadUInt16(),
         PositionX = reader.ReadUInt16(),
         PositionY = reader.ReadUInt16(),
         MapId = reader.ReadUInt16(),
-        CurrentHp = reader.ReadUInt32(),
-        CurrentMp = reader.ReadUInt32(),
+        CurrentHp = reader.ReadInt64(),
+        CurrentMp = reader.ReadInt64(),
         Exp = reader.ReadUInt64(),
         TmExpPower = reader.ReadUInt64(),
         TmExpMagic = reader.ReadUInt64(),
@@ -200,7 +200,7 @@ public static class CharStoreWire
         TmLevelCharm = reader.ReadUInt16(),
         TmPoint = reader.ReadUInt16(),
         TmLevel = reader.ReadUInt16(),
-        TmExp = reader.ReadUInt32(),
+        TmExp = reader.ReadInt64(),
         Type2 = reader.ReadUInt16(),
         Job2 = reader.ReadByte(),
         Job2ChangedAt = new DateTimeOffset(reader.ReadInt64(), TimeSpan.Zero),
@@ -223,12 +223,12 @@ public static class CharStoreWire
 
     private static void WriteStatsSnapshot(PacketWriter writer, CharacterStatsSnapshot s)
     {
-        writer.WriteUInt32(s.CurrentHp);
-        writer.WriteUInt32(s.CurrentMp);
+        writer.WriteInt64(s.CurrentHp);
+        writer.WriteInt64(s.CurrentMp);
         writer.WriteUInt16(s.Level);
         writer.WriteUInt64(s.Exp);
-        writer.WriteUInt32(s.Money);
-        writer.WriteUInt32(s.TmExp);
+        writer.WriteInt64(s.Money);
+        writer.WriteInt64(s.TmExp);
         writer.WriteUInt16(s.TmLevel);
         writer.WriteUInt16(s.TmPoint);
         writer.WriteUInt16(s.ApPoints);
@@ -252,12 +252,12 @@ public static class CharStoreWire
 
     private static CharacterStatsSnapshot ReadStatsSnapshot(ref PacketReader reader) => new()
     {
-        CurrentHp = reader.ReadUInt32(),
-        CurrentMp = reader.ReadUInt32(),
+        CurrentHp = reader.ReadInt64(),
+        CurrentMp = reader.ReadInt64(),
         Level = reader.ReadUInt16(),
         Exp = reader.ReadUInt64(),
-        Money = reader.ReadUInt32(),
-        TmExp = reader.ReadUInt32(),
+        Money = reader.ReadInt64(),
+        TmExp = reader.ReadInt64(),
         TmLevel = reader.ReadUInt16(),
         TmPoint = reader.ReadUInt16(),
         ApPoints = reader.ReadUInt16(),

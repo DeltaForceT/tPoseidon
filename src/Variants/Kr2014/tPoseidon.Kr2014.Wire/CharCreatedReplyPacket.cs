@@ -55,7 +55,7 @@ public sealed class CharCreatedReplyPacket
             Species = character.Species,
             FType = (byte)((byte)character.FType - 1),
             Hair = character.Hair,
-            Money = character.Money,
+            Money = WireLimits.Int32FieldUnsigned(character.Money),
             Level = character.Level,
             JobTier = character.JobTier,
             EarItemIndex = character.StarterEarItemIndex,

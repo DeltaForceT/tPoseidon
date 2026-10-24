@@ -248,7 +248,7 @@ internal sealed class MailController
             var received = result.Value!;
             if (received.MoneyChange != 0)
             {
-                stats.GrantMoney((int)Math.Clamp(received.MoneyChange, int.MinValue, int.MaxValue), tPoseidon.Core.Game.Stats.StatChangeSource.Item);
+                stats.GrantMoney(received.MoneyChange, tPoseidon.Core.Game.Stats.StatChangeSource.Item);
                 await SendAsync(player, Opcode.S2C_MONEY, GroundItemFrames.Money(stats.Money)).ConfigureAwait(false);
             }
             var operations = received.Items.Select(item => new BagOperation(

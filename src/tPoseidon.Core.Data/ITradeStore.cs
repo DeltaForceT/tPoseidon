@@ -34,8 +34,8 @@ public static class TradeRules
     public const uint MaxSettledMoney = 0x7FFFFFFE;
     public const byte CommonClass = 1;
 
-    public static bool MoneySettles(uint own, uint given, uint received) =>
-        (long)own - given + received is >= 0 and <= MaxSettledMoney;
+    public static bool MoneySettles(long own, long given, long received) =>
+        own - given + received is >= 0 and <= MaxSettledMoney;
 }
 
 public interface ITradeStore

@@ -9,6 +9,6 @@ public abstract class BaseMonsterStrategy : IMonsterStrategy
 
     public virtual void OnSpawn(MonsterEntity mob) { }
     public virtual void OnTick(MonsterEntity mob, DateTimeOffset now) { }
-    public virtual void OnDamaged(MonsterEntity mob, ushort attackerEntityId, int damage) { }
+    public virtual void OnDamaged(MonsterEntity mob, ushort attackerEntityId, long damage) { }
     public virtual void OnDeath(MonsterEntity mob, ushort killerEntityId) { }
 }

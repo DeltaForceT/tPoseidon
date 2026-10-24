@@ -1,4 +1,5 @@
 using Npgsql;
+using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Data.Postgres;
 
@@ -27,15 +28,7 @@ public static class PostgresMigrations
 
         
         var files = Directory.GetFiles(migrationsDirectory, "*.sql")
-            .Where(p =>
-            {
-                var name = Path.GetFileName(p);
-                return name.Length >= 4
-                    && char.IsDigit(name[0])
-                    && char.IsDigit(name[1])
-                    && char.IsDigit(name[2])
-                    && name[3] == '_';
-            })
+            .Where(p => MigrationFiles.IsNumbered(Path.GetFileName(p)))
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToArray();
 

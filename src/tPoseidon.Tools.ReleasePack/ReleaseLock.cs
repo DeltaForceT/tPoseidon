@@ -8,8 +8,6 @@ internal sealed class ReleaseLock
 
     public List<RemoteFile> Licenses { get; set; } = new();
 
-    public List<RemoteFile> DrillEggLicenses { get; set; } = new();
-
     public static ReleaseLock Load()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "release.lock.json");

@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Skills.Effects;
 using tPoseidon.Core.LibConfig;
 
@@ -84,11 +85,11 @@ public static class FormSkills
 
     public static bool IsTargeted(int actionId) => actionId is SummonSoldier or ChainOfKnives;
 
-    public static IReadOnlyList<(int Stat, int Delta)> MorphDeltas(MorphRule rule, SkillTableRow row, int ap, int dx, int lk, int dp, int hv)
+    public static IReadOnlyList<(int Stat, int Delta)> MorphDeltas(MorphRule rule, SkillTableRow row, long ap, int dx, long lk, long dp, long hv)
     {
         ArgumentNullException.ThrowIfNull(row);
         float Column(string name) => row.Value(name) ?? 0f;
-        static int Share(int stat, float ratio) => (int)(stat * (double)ratio);
+        static int Share(long stat, float ratio) => WireLimits.SaturateInt32(stat * (double)ratio);
         return rule switch
         {
             MorphRule.WildMutation => new[]
@@ -111,40 +112,40 @@ public static class FormSkills
             {
                 (SkillEffectKinds.StatAp, Share(ap, Column(BeastApColumn))),
                 (SkillEffectKinds.StatDx, -(int)Column(BeastDxColumn)),
-                (SkillEffectKinds.StatDp, Share(dp, Column(BeastDpColumn)) - dp),
-                (SkillEffectKinds.StatHv, Share(hv, Column(BeastHvColumn)) - hv),
+                (SkillEffectKinds.StatDp, WireLimits.SaturateInt32(Share(dp, Column(BeastDpColumn)) - dp)),
+                (SkillEffectKinds.StatHv, WireLimits.SaturateInt32(Share(hv, Column(BeastHvColumn)) - hv)),
                 (SkillEffectKinds.StatLk, -Share(lk, Column(BeastLkColumn))),
             },
             _ => Array.Empty<(int Stat, int Delta)>(),
         };
     }
 
-    public static uint HpAfterMorph(uint hp, float hpRemainRatio) => (uint)Math.Max(0, (int)(hp * (double)hpRemainRatio));
+    public static long HpAfterMorph(long hp, float hpRemainRatio) => Math.Max(0L, WireLimits.Saturate(hp * (double)hpRemainRatio));
 
-    public static int BunkerPool(int da, float ratio) => (int)(da * BunkerDigStep * (double)ratio);
+    public static long BunkerPool(long da, float ratio) => WireLimits.Saturate(da * BunkerDigStep * (double)ratio);
 
     public static int SoldierCards(int minCard, int maxCard, int random) =>
-        (int)((maxCard - minCard + 1) * (random / (double)RandomMax) + minCard);
+        WireLimits.SaturateInt32((maxCard - minCard + 1) * (random / (double)RandomMax) + minCard);
 
-    public static int SoldierPower(int ap, int hv, float damageRatio, int cards)
+    public static long SoldierPower(long ap, long hv, float damageRatio, long cards)
     {
         var scaled = (float)((ap + hv * SoldierAvoidStep) * (double)damageRatio);
-        return (int)(scaled * (double)(float)(cards / SoldierCardDivisor + SoldierCardBase));
+        return WireLimits.Saturate(scaled * (double)(float)(cards / SoldierCardDivisor + SoldierCardBase));
     }
 
     public static float KnifeMultiplier(bool powerThrowActive, int? powerThrowLevel, float? powerThrowRatio) =>
         powerThrowActive && powerThrowLevel is <= 0 && powerThrowRatio is { } ratio ? ratio : 1f;
 
-    public static int KnifePower(int itemAp, float multiplier, int da, float ratio, int thrown, int count)
+    public static long KnifePower(long itemAp, float multiplier, long da, float ratio, int thrown, int count)
     {
         if (count == 0) return 1;
-        var power = (int)((itemAp * (double)multiplier + (da << KnifeDigShift)) * ratio * ((double)thrown / count));
+        var power = WireLimits.Saturate((itemAp * (double)multiplier + (da << KnifeDigShift)) * ratio * ((double)thrown / count));
         return power <= 0 ? 1 : power;
     }
 
-    public static int UpThrowPower(int itemAp, float multiplier, int da, float ratio)
+    public static long UpThrowPower(long itemAp, float multiplier, long da, float ratio)
     {
-        var power = (int)((itemAp * (double)multiplier + da * UpThrowDigStep) * ratio);
+        var power = WireLimits.Saturate((itemAp * (double)multiplier + da * UpThrowDigStep) * ratio);
         return power <= 0 ? 1 : power;
     }
 

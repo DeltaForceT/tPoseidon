@@ -26,16 +26,16 @@ public enum DamageElement
 }
 
 public readonly record struct AttackerStats(
-    int Ap,
-    int Ma,
-    int Ac,
-    int GunAp);
+    long Ap,
+    long Ma,
+    long Ac,
+    long GunAp);
 
 public readonly record struct DefenderStats(
-    int Dp,
-    int Md,
-    int Hv,
-    int CurrentHp,
+    long Dp,
+    long Md,
+    long Hv,
+    long CurrentHp,
     int PhysResistPct,
     int MagicResistPct,
     int GunResistPct,
@@ -51,12 +51,12 @@ public readonly record struct DefenderStats(
 public readonly record struct DamageInput(
     DamageKind Kind,
     DamageElement Element = DamageElement.None,
-    int SkillBaseDamage = 0,
+    long SkillBaseDamage = 0,
     int AttrPercent = 0,
     bool IsCrit = false,
     bool IsMobAttack = false);
 
-public readonly record struct DamageResult(ushort Damage, byte HitFlags, uint HitKind);
+public readonly record struct DamageResult(long Damage, byte HitFlags, uint HitKind);
 
 public sealed class DamageCalculator
 {
@@ -74,7 +74,7 @@ public sealed class DamageCalculator
 
     public DamageResult Compute(AttackerStats attacker, DefenderStats defender, DamageInput input)
     {
-        var critApplied = ResolveCritMultiplier(input) > 1f;
+        var critApplied = ResolveCritMultiplier(input) > 1d;
 
         if (input.Kind == DamageKind.Poison)
         {
@@ -82,21 +82,21 @@ public sealed class DamageCalculator
         }
 
         var raw = ComputeRaw(attacker, input);
-        var mitigated = MathF.Max(1f, raw - MitigationFloor(defender, input));
+        var mitigated = Math.Max(1d, raw - MitigationFloor(defender, input));
 
         if (input.Kind == DamageKind.PhysicalMelee && input.AttrPercent > 0 && input.Element != DamageElement.None)
         {
-            var attrPct = input.AttrPercent / 100f;
-            var attrLayer = (raw * attrPct) - (defender.Dp * _rates.Combat.PhysFactor * attrPct);
-            attrLayer = MathF.Max(0f, attrLayer) * (1f - LookupResistance(defender, input.Element) / 100f);
-            mitigated = (mitigated * (1f - LookupResistance(defender, DamageElement.None, fallbackPhysical: true) / 100f)) + attrLayer;
-            return Build((int)MathF.Floor(mitigated), defender, input, critApplied, alreadyResisted: true);
+            var attrPct = input.AttrPercent / 100d;
+            var attrLayer = (raw * attrPct) - (defender.Dp * (double)_rates.Combat.PhysFactor * attrPct);
+            attrLayer = Math.Max(0d, attrLayer) * (1d - LookupResistance(defender, input.Element) / 100d);
+            mitigated = (mitigated * (1d - LookupResistance(defender, DamageElement.None, fallbackPhysical: true) / 100d)) + attrLayer;
+            return Build(WireLimits.Saturate(Math.Floor(mitigated)), defender, input, critApplied, alreadyResisted: true);
         }
 
-        return Build((int)MathF.Floor(mitigated), defender, input, critApplied);
+        return Build(WireLimits.Saturate(Math.Floor(mitigated)), defender, input, critApplied);
     }
 
-    private float ComputeRaw(AttackerStats attacker, DamageInput input)
+    private double ComputeRaw(AttackerStats attacker, DamageInput input)
     {
         var critMult = ResolveCritMultiplier(input);
         return input.Kind switch
@@ -104,39 +104,38 @@ public sealed class DamageCalculator
             DamageKind.PhysicalMelee => attacker.Ap * critMult,
             DamageKind.PhysicalSkill or DamageKind.PowerSkill => input.SkillBaseDamage * critMult,
             DamageKind.MagicSkill => input.SkillBaseDamage * critMult,
-            DamageKind.Gun => MathF.Max(0f, 20f * (attacker.Ac - _rates.Combat.GunAccuracyOffset) + attacker.GunAp) * critMult,
-            _ => 0f,
+            DamageKind.Gun => Math.Max(0d, 20d * (attacker.Ac - (double)_rates.Combat.GunAccuracyOffset) + attacker.GunAp) * critMult,
+            _ => 0d,
         };
     }
 
-    private float ResolveCritMultiplier(DamageInput input)
+    private double ResolveCritMultiplier(DamageInput input)
     {
-        if (!input.IsCrit) return 1f;
-        if (input.IsMobAttack && !_rates.Combat.MobCanCrit) return 1f;
+        if (!input.IsCrit) return 1d;
+        if (input.IsMobAttack && !_rates.Combat.MobCanCrit) return 1d;
         return _rates.Combat.CritMultiplier;
     }
 
-    private float MitigationFloor(DefenderStats defender, DamageInput input) => input.Kind switch
+    private double MitigationFloor(DefenderStats defender, DamageInput input) => input.Kind switch
     {
-        DamageKind.PhysicalMelee or DamageKind.PhysicalSkill or DamageKind.PowerSkill => _rates.Combat.PhysFactor * defender.Dp,
-        DamageKind.MagicSkill => _rates.Combat.MagicFactor * defender.Md,
-        DamageKind.Gun => _rates.Combat.GunFactor * defender.Hv,
-        _ => 0f,
+        DamageKind.PhysicalMelee or DamageKind.PhysicalSkill or DamageKind.PowerSkill => (double)_rates.Combat.PhysFactor * defender.Dp,
+        DamageKind.MagicSkill => (double)_rates.Combat.MagicFactor * defender.Md,
+        DamageKind.Gun => (double)_rates.Combat.GunFactor * defender.Hv,
+        _ => 0d,
     };
 
-    private DamageResult Build(int preResist, DefenderStats defender, DamageInput input, bool critApplied, bool alreadyResisted = false)
+    private DamageResult Build(long preResist, DefenderStats defender, DamageInput input, bool critApplied, bool alreadyResisted = false)
     {
         var resisted = alreadyResisted
             ? preResist
-            : (int)MathF.Floor(preResist * (1f - LookupResistance(defender, input.Element, fallbackPhysical: input.Kind is DamageKind.PhysicalMelee or DamageKind.PhysicalSkill or DamageKind.PowerSkill, fallbackMagical: input.Kind == DamageKind.MagicSkill, fallbackGun: input.Kind == DamageKind.Gun) / 100f));
+            : WireLimits.Saturate(Math.Floor(preResist * (1d - LookupResistance(defender, input.Element, fallbackPhysical: input.Kind is DamageKind.PhysicalMelee or DamageKind.PhysicalSkill or DamageKind.PowerSkill, fallbackMagical: input.Kind == DamageKind.MagicSkill, fallbackGun: input.Kind == DamageKind.Gun) / 100d)));
 
-        var maxAllowed = (int)Math.Min(_rates.Caps.MaxDamagePerHit, ushort.MaxValue);
-        var clamped = (ushort)Math.Clamp(resisted, 1, maxAllowed);
+        var clamped = Math.Clamp(resisted, 1L, ServerRates.CapsSection.Limit(_rates.Caps.MaxDamagePerHit));
         var (flags, kind) = ResolveHit(input, critApplied);
         return new DamageResult(clamped, flags, kind);
     }
 
-    private static float LookupResistance(
+    private static double LookupResistance(
         DefenderStats defender,
         DamageElement element,
         bool fallbackPhysical = false,

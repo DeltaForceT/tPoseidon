@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 namespace tPoseidon.Core.Game.Skills;
 
 public static class GunSkills
@@ -43,27 +44,27 @@ public static class GunSkills
     public static bool HitsAround(int actionId) => actionId is ShootingSpree or Reckless;
 
     public static SkillHit Hit(
-        SkillAttacker attacker, int weaponPower, SkillTarget target, bool targetIsPlayer, float ratio, float hitCoefficient, float criticalMultiplier,
+        SkillAttacker attacker, long weaponPower, SkillTarget target, bool targetIsPlayer, float ratio, float hitCoefficient, float criticalMultiplier,
         Random rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        var hitChance = Math.Clamp((int)((attacker.Lk - target.Lk + LuckOffset) * HitScale * hitCoefficient), LowestHit, HighestHit);
+        var hitChance = Math.Clamp(WireLimits.Saturate((attacker.Lk - target.Lk + LuckOffset) * HitScale * hitCoefficient), LowestHit, HighestHit);
         if (rng.Next(Percent) >= hitChance) return new SkillHit(0, GunType, SkillDamage.KindMiss, SkillActions.GunElement, 0);
         var criticalChance = Math.Clamp(
-            (int)((attacker.Ac + attacker.Lk * CriticalShare - (target.Hv + target.Lk)) / CriticalDivisor), LowestCritical, HighestCritical);
+            WireLimits.Saturate((attacker.Ac + attacker.Lk * CriticalShare - (target.Hv + target.Lk)) / CriticalDivisor), LowestCritical, HighestCritical);
         var critical = rng.Next(Percent) < criticalChance;
         var avoid = Math.Max(0, target.Hv) * (targetIsPlayer ? PlayerAvoidWeight : MonsterAvoidWeight);
         var raw = (attacker.Ac - AccuracyFloor) * AccuracyWeight + weaponPower + PowerFloor;
         var damage = critical
-            ? Math.Max(1, (int)(raw * CriticalShare * (ratio * criticalMultiplier) - avoid))
-            : Math.Max(0, (int)((float)raw * (double)ratio) - (int)avoid);
+            ? Math.Max(1, WireLimits.Saturate(raw * CriticalShare * (ratio * criticalMultiplier) - avoid))
+            : Math.Max(0, WireLimits.Saturate((float)raw * (double)ratio) - (int)avoid);
         if (target.Resist > Percent) damage = 0;
-        else damage -= (int)(damage * target.Resist * 0.01);
+        else damage -= WireLimits.Saturate(damage * target.Resist * 0.01);
         var kind = critical ? SkillDamage.KindCritical : SkillDamage.KindHit;
         if (damage >= target.Hp) kind |= SkillDamage.KindFinishingFlag;
         return new SkillHit(damage, GunType, kind, SkillActions.GunElement, 0);
     }
 
-    public static int BarrierBreak(int ownerDa, float ratio) =>
-        Math.Min(BarrierCap, (int)((ownerDa * (double)ratio + BarrierFloor) / BarrierDivisor));
+    public static int BarrierBreak(long ownerDa, float ratio) =>
+        Math.Min(BarrierCap, WireLimits.SaturateInt32((ownerDa * (double)ratio + BarrierFloor) / BarrierDivisor));
 }

@@ -39,7 +39,7 @@ public sealed class ServerSupervisor
         ArgumentNullException.ThrowIfNull(server);
         using var process = RunningProcess(server, out var startedUtc);
         var processId = process?.Id;
-        return new ServerState(server, processId, startedUtc, processId is not null && PortProbe.IsListening(server.Port(_settings.Ports)));
+        return new ServerState(server, processId, startedUtc, processId is not null && PortProbe.IsListening(server.Port(_settings.Ports), _settings.Network.BindAddress));
     }
 
     public bool AnyRunning() => ServerCatalog.All.Any(server => State(server).Running);
@@ -57,7 +57,7 @@ public sealed class ServerSupervisor
             }
         }
 
-        if (PortProbe.IsListening(port))
+        if (PortProbe.IsListening(port, _settings.Network.BindAddress))
         {
             throw new HostingException($"Port {port} for the {server.Title.ToLowerInvariant()} is already in use by another program.");
         }
@@ -81,7 +81,7 @@ public sealed class ServerSupervisor
         WritePidFile(server, process);
 
         var deadline = DateTime.UtcNow + server.ReadyTimeout;
-        while (!PortProbe.IsListening(port))
+        while (!PortProbe.IsListening(port, _settings.Network.BindAddress))
         {
             if (process.HasExited)
             {

@@ -7,7 +7,6 @@ public static class ShopPrices
     public const int MaxLines = 20;
     public const int BuyLineSize = 6;
     public const int BuyHeaderSize = 4;
-    public const long MoneyLimit = 2_100_000_000;
     public const int GoodsLimit = 128;
     public const float DefaultRate = 1.0f;
     public const float DefaultShopSellingRate = 0.5f;

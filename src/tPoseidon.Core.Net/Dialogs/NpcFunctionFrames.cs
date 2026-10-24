@@ -48,10 +48,10 @@ public static class NpcFunctionFrames
         return w.ToArray();
     }
 
-    public static byte[] GuildSetup(uint money, int minGelder)
+    public static byte[] GuildSetup(long money, int minGelder)
     {
         var w = new PacketWriter(8);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         w.WriteUInt32((uint)minGelder);
         return w.ToArray();
     }

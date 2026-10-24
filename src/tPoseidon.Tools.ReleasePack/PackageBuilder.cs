@@ -86,7 +86,7 @@ internal sealed class PackageBuilder
             Publish(project, rid, app);
         }
 
-        CopyDirectory(Path.Combine(_repoRoot, "scripts", "migrations"), Path.Combine(app, "migrations"), "*.sql");
+        CopyMigrations(Path.Combine(_repoRoot, "scripts", "migrations"), Path.Combine(app, "migrations"));
 
         var licenseFiles = await PackageTools.LicensesAsync(_lock.Licenses, _cache, ct).ConfigureAwait(false);
 
@@ -133,10 +133,10 @@ internal sealed class PackageBuilder
     private void Publish(string project, string rid, string output) =>
         PackageTools.Publish(_repoRoot, project, rid, output, _identity, []);
 
-    private static void CopyDirectory(string source, string target, string pattern)
+    private static void CopyMigrations(string source, string target)
     {
         Directory.CreateDirectory(target);
-        foreach (var file in Directory.EnumerateFiles(source, pattern))
+        foreach (var file in Directory.EnumerateFiles(source).Where(path => MigrationFiles.IsNumbered(Path.GetFileName(path))))
         {
             File.Copy(file, Path.Combine(target, Path.GetFileName(file)));
         }

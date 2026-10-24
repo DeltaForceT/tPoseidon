@@ -19,15 +19,15 @@ public static class SlotExtendFrames
         return true;
     }
 
-    public static byte[] Result(uint money, IReadOnlyList<BagOperation> operations) => MoneyAndOperations(money, operations);
+    public static byte[] Result(long money, IReadOnlyList<BagOperation> operations) => MoneyAndOperations(money, operations);
 
     public static byte[] Refused(byte code) => [code];
 
-    public static byte[] MoneyAndOperations(uint money, IReadOnlyList<BagOperation> operations)
+    public static byte[] MoneyAndOperations(long money, IReadOnlyList<BagOperation> operations)
     {
         ArgumentNullException.ThrowIfNull(operations);
         var w = new PacketWriter(6 + operations.Count * 24);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         w.WriteBytes(QuestResultFrames.ItemOperations(operations));
         return w.ToArray();
     }

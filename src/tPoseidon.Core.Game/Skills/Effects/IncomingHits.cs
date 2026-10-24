@@ -1,10 +1,11 @@
+using tPoseidon.Core.Common;
 namespace tPoseidon.Core.Game.Skills.Effects;
 
-public sealed record IncomingHit(int Damage, int Type, int Kind, int Element, uint Flags, ushort Extra = 0);
+public sealed record IncomingHit(long Damage, int Type, int Kind, int Element, uint Flags, ushort Extra = 0);
 
-public sealed record HitReflection(int Damage, int Type, int Kind, int Element, uint Flags);
+public sealed record HitReflection(long Damage, int Type, int Kind, int Element, uint Flags);
 
-public sealed record CounterStrike(SkillEffect Effect, int Power, float Coefficient, int MagicLoss, int Element);
+public sealed record CounterStrike(SkillEffect Effect, long Power, float Coefficient, long MagicLoss, int Element);
 
 public sealed record HitInterception(
     IncomingHit Hit,
@@ -12,7 +13,7 @@ public sealed record HitInterception(
     IReadOnlyList<HitReflection> Reflections,
     IReadOnlyList<CounterStrike> Counters);
 
-public readonly record struct HitDefender(ushort EntityId, int Ma, int Ac, int Lk, int Hv);
+public readonly record struct HitDefender(ushort EntityId, long Ma, long Ac, long Lk, long Hv);
 
 public static class IncomingHits
 {
@@ -53,7 +54,7 @@ public static class IncomingHits
     private const double CounterShare = 0.5;
 
     public static HitInterception Intercept(
-        IncomingHit hit, IEnumerable<SkillEffect> effects, HitDefender owner, Func<ushort, int> casterHv)
+        IncomingHit hit, IEnumerable<SkillEffect> effects, HitDefender owner, Func<ushort, long> casterHv)
     {
         ArgumentNullException.ThrowIfNull(hit);
         ArgumentNullException.ThrowIfNull(effects);
@@ -89,7 +90,7 @@ public static class IncomingHits
                     effect.Charges = 0;
                     effect.EndNow();
                 }
-                hit = hit with { Damage = 0, Kind = KindBlockedByGuard, Extra = (ushort)effect.Charges };
+                hit = hit with { Damage = 0, Kind = KindBlockedByGuard, Extra = WireLimits.UInt16Field(effect.Charges) };
                 continue;
             }
             if (kind.AbsorbsHits && effect.Charges > 0)
@@ -112,7 +113,7 @@ public static class IncomingHits
             }
             if (kind.SharesHits && effect.CasterEntityId != owner.EntityId)
             {
-                if (hit.Flags == 0 && hit.Damage > 0) hit = hit with { Damage = (int)(hit.Damage * KnightShare) };
+                if (hit.Flags == 0 && hit.Damage > 0) hit = hit with { Damage = WireLimits.Saturate(hit.Damage * KnightShare) };
                 continue;
             }
             if (kind.ReducesSkillHits)
@@ -155,7 +156,7 @@ public static class IncomingHits
             {
                 counters.Add(new CounterStrike(
                     effect,
-                    (int)(effect.Amount * CounterShare),
+                    WireLimits.Saturate(effect.Amount * CounterShare),
                     effect.Action?.Value(SkillEffectKinds.ApplyRatioColumn) ?? 0f,
                     owner.Ma - (owner.Ac + owner.Lk),
                     kind.CounterElement));
@@ -164,21 +165,21 @@ public static class IncomingHits
         return new HitInterception(hit, shields, reflections, counters);
     }
 
-    public static int SkinReduction(int damage, int casterHv, float ratio)
+    public static long SkinReduction(long damage, long casterHv, float ratio)
     {
-        var points = (int)((casterHv * (double)ratio + ReductionFloor) / ReductionDivisor);
+        var points = WireLimits.Saturate((casterHv * (double)ratio + ReductionFloor) / ReductionDivisor);
         var share = Math.Min(ReductionCap, points / ReductionPercent);
-        return (int)(damage * (double)share);
+        return WireLimits.Saturate(damage * (double)share);
     }
 
-    public static int MirrorShare(int damage, int ownerHv, float ratio)
+    public static long MirrorShare(long damage, long ownerHv, float ratio)
     {
         var share = Math.Min(ReflectCap, (ownerHv / ReflectAvoidScale + ReflectFloor) * ratio);
-        return (int)(damage * share);
+        return WireLimits.Saturate(damage * share);
     }
 
-    public static int BarrierShare(int damage, int ownerMa, float reflexRatio) =>
-        Math.Min((int)(damage * (double)(ownerMa - BarrierMagicFloor) * reflexRatio * BarrierPercent), (int)(damage * BarrierCap));
+    public static long BarrierShare(long damage, long ownerMa, float reflexRatio) =>
+        Math.Min(WireLimits.Saturate(damage * (double)(ownerMa - BarrierMagicFloor) * reflexRatio * BarrierPercent), WireLimits.Saturate(damage * BarrierCap));
 
     private static bool Unabsorbable(IncomingHit hit) => (hit.Flags & (FlagUnabsorbable | FlagUnabsorbableOther)) != 0;
 }

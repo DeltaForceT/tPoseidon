@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Characters;
 
 namespace tPoseidon.Core.Net.Social;
@@ -73,9 +74,9 @@ public sealed class GameMasterRates
         }
     }
 
-    public int ScaleExp(int gain) => Scale(gain, ExpPercents.Exp);
+    public long ScaleExp(long gain) => Scale(gain, ExpPercents.Exp);
 
-    public int ScaleTm(int gain) => Scale(gain, ExpPercents.Tm);
+    public long ScaleTm(long gain) => Scale(gain, ExpPercents.Tm);
 
     public float ExpSlotRate => SlotRate(ExpPercents.Exp);
 
@@ -88,10 +89,11 @@ public sealed class GameMasterRates
         return (float)(scaled + SlotEpsilon);
     }
 
-    public static int Scale(int gain, ushort percent)
+    public static long Scale(long gain, ushort percent)
     {
         if (gain <= 0 || percent == 0) return gain;
         var rate = SlotRate(percent);
+        if (gain > int.MaxValue) return WireLimits.Saturate(gain + Math.Truncate(gain * (double)rate));
         var sum = (float)gain + MathF.Truncate(gain * rate);
         return sum >= int.MaxValue ? int.MaxValue : (int)sum;
     }

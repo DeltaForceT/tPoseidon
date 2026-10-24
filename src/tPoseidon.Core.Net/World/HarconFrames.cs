@@ -106,7 +106,7 @@ public static class HarconFrames
 
     public const int MaxGauges = 6;
 
-    public static byte[] GameStart(IReadOnlyList<HarconMember> entered, int failCount, IReadOnlyList<(ushort EntityId, int Value)> gauges, byte[] itemChange, Encoding text)
+    public static byte[] GameStart(IReadOnlyList<HarconMember> entered, int failCount, IReadOnlyList<(ushort EntityId, long Value)> gauges, byte[] itemChange, Encoding text)
     {
         ArgumentNullException.ThrowIfNull(entered);
         ArgumentNullException.ThrowIfNull(gauges);
@@ -124,7 +124,7 @@ public static class HarconFrames
         return w.ToArray();
     }
 
-    public static byte[] Gauges(IReadOnlyList<(ushort EntityId, int Value)> gauges)
+    public static byte[] Gauges(IReadOnlyList<(ushort EntityId, long Value)> gauges)
     {
         ArgumentNullException.ThrowIfNull(gauges);
         var w = new PacketWriter(1 + gauges.Count * 6);
@@ -132,14 +132,14 @@ public static class HarconFrames
         return w.ToArray();
     }
 
-    private static void WriteGauges(PacketWriter w, IReadOnlyList<(ushort EntityId, int Value)> gauges)
+    private static void WriteGauges(PacketWriter w, IReadOnlyList<(ushort EntityId, long Value)> gauges)
     {
         var count = Math.Min(gauges.Count, MaxGauges);
         w.WriteByte((byte)count);
         for (var index = 0; index < count; index++)
         {
             w.WriteUInt16(gauges[index].EntityId);
-            w.WriteUInt32((uint)Math.Max(0, gauges[index].Value));
+            w.WriteUInt32Field(gauges[index].Value);
         }
     }
 

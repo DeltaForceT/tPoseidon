@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Combat;
@@ -25,7 +26,7 @@ public sealed class SkillCastResolver
                     ?? _esaii.GetBySkillAndLevel(esaiiTable, 1);
         if (entry is null) return DefaultCastDelayMs;
 
-        return (int)(entry.Delay * 1000f);
+        return WireLimits.SaturateInt32(entry.Delay * 1000f);
     }
 
     public int GetCooldownMs(ISkill skill, int skillLevel)
@@ -37,7 +38,7 @@ public sealed class SkillCastResolver
                     ?? _esaii.GetBySkillAndLevel(esaiiTable, 1);
         if (entry is null) return 0;
 
-        return (int)(entry.CoolTime * 1000f);
+        return WireLimits.SaturateInt32(entry.CoolTime * 1000f);
     }
 
     public int GetMpCost(ISkill skill, int skillLevel)
@@ -60,7 +61,7 @@ public sealed class SkillCastResolver
         return entry?.Range ?? 0;
     }
 
-    public int ComputeDamage(ISkill skill, int skillLevel, int attackerStat, int defenderDp)
+    public long ComputeDamage(ISkill skill, int skillLevel, long attackerStat, long defenderDp)
     {
         var esaTable = TrimTableName(skill.EsaTableName, "ESAction_");
         if (esaTable.Length == 0) return DefaultDamage;
@@ -70,9 +71,9 @@ public sealed class SkillCastResolver
         if (entry is null) return DefaultDamage;
 
         var baseDamage = entry.Ratio1 + (attackerStat * entry.Ratio2 / 100);
-        var raw = (int)(baseDamage * entry.ApplyRatio);
+        var raw = WireLimits.Saturate(baseDamage * entry.ApplyRatio);
         var afterDefense = raw - defenderDp;
-        return Math.Max(1, afterDefense);
+        return Math.Max(1L, afterDefense);
     }
 
     private static string TrimTableName(string raw, string prefix)

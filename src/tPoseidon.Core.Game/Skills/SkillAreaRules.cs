@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Skills;
@@ -30,9 +31,9 @@ public static class SkillAreaRules
 
     public static bool Reaches(float distance, float radius) => !(radius < distance);
 
-    public static int WithFalloff(int damage, float distance, float radius)
+    public static long WithFalloff(long damage, float distance, float radius)
     {
         var falloff = 1.0f - distance / radius;
-        return (int)Math.Truncate((float)damage * falloff);
+        return WireLimits.Saturate(Math.Truncate((float)damage * falloff));
     }
 }

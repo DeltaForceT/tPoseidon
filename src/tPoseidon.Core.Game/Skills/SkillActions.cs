@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Skills;
@@ -129,7 +130,7 @@ public static class SkillActions
             bonus = 1f;
             coefficient = 1f;
         }
-        var power = (int)Math.Truncate((action.Amount(ArrowPowerColumn) ?? 0) * (double)bonus);
+        var power = WireLimits.Saturate(Math.Truncate((action.Amount(ArrowPowerColumn) ?? 0) * (double)bonus));
         return SkillDamage.Magic(attacker, power, target, coefficient, ManaArrowMagicLoss, NoPropertyElement, rng);
     }
 
@@ -159,8 +160,8 @@ public static class SkillActions
         var gauge = shields.Gauge;
         var bunker = shields.Bunker;
         var guards = shields.GuardCount;
-        var slots = new List<(int Damage, int Kind, ushort Third)>(hits.Count);
-        var sum = 0;
+        var slots = new List<(long Damage, int Kind, ushort Third)>(hits.Count);
+        long sum = 0;
         var landed = 0;
         var shieldHits = 0;
         foreach (var hit in hits)
@@ -200,7 +201,7 @@ public static class SkillActions
         return new TornadoOutcome(slots, sum, landed, shieldHits, shields.Any);
     }
 
-    private static (int Damage, int Kind, ushort Third) Absorb(ref int left, SkillHit hit)
+    private static (long Damage, int Kind, ushort Third) Absorb(ref long left, SkillHit hit)
     {
         if (left >= hit.Damage)
         {
@@ -214,11 +215,11 @@ public static class SkillActions
 
     public const int TornadoUncountedKind = 2;
 
-    public static (uint Hp, bool Healed) Heal(uint hp, uint maxHp, float ratio)
+    public static (long Hp, bool Healed) Heal(long hp, long maxHp, float ratio)
     {
-        var raised = (long)Math.Truncate(hp + maxHp * (double)ratio);
+        var raised = WireLimits.Saturate(Math.Truncate(hp + maxHp * (double)ratio));
         var healed = raised > hp && hp < maxHp;
-        return ((uint)Math.Clamp(raised, 0, maxHp), healed);
+        return (Math.Clamp(raised, 0L, maxHp), healed);
     }
 
     public static int TmExpForUse(int skillExp, int casterLevel, int targetLevel)

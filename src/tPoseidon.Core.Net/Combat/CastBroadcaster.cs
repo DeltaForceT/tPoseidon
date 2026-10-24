@@ -97,7 +97,7 @@ public sealed class CastBroadcaster
 
         _monsters.ApplyDamage(targetEid, casterEid, damage);
 
-        var resolvedCtx = ctx with { Damage = (ushort)damage };
+        var resolvedCtx = ctx with { Damage = WireLimits.UInt16Field(damage) };
 
         var castEnd = CastChainSelector.CastEndChain(skill);
         foreach (var builder in castEnd)

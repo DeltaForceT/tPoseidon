@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Skills;
@@ -13,7 +14,7 @@ public sealed record ChainShape(ChainTail Tail, bool TargetInHeader, bool Scaled
 
 public sealed record ChainVictim(ushort EntityId, IReadOnlyList<SkillHit> Hits)
 {
-    public int Sum => Hits.Where(Counts).Sum(hit => hit.Damage);
+    public long Sum => Hits.Where(Counts).Sum(hit => hit.Damage);
 
     public int Landed => Hits.Count(Counts);
 
@@ -75,8 +76,8 @@ public static class ChainHits
 
     public static int GalderCost(int hits) => hits * GaldersPerHit;
 
-    public static int BlazingHits(int dexterity) =>
-        Math.Clamp((BlazingDexterityBase - dexterity) / BlazingDexterityStep + 1, 0, BlazingHitsCap);
+    public static int BlazingHits(long dexterity) =>
+        (int)Math.Clamp((BlazingDexterityBase - dexterity) / BlazingDexterityStep + 1, 0L, BlazingHitsCap);
 
     public static ushort? Refusal(int actionId, SkillTableRow? action, long money, IReadOnlyDictionary<int, int> learned)
     {
@@ -89,13 +90,13 @@ public static class ChainHits
         };
     }
 
-    public static int AttackPower(SkillTableRow action, SkillAttacker attacker)
+    public static long AttackPower(SkillTableRow action, SkillAttacker attacker)
     {
         ArgumentNullException.ThrowIfNull(action);
         return Truncate(attacker.Ap * (double)(action.Value(RatioColumn) ?? 0f));
     }
 
-    public static (int First, int Second) ComboPowers(SkillTableRow action, SkillAttacker attacker, int firstLevel, int secondLevel)
+    public static (long First, long Second) ComboPowers(SkillTableRow action, SkillAttacker attacker, int firstLevel, int secondLevel)
     {
         ArgumentNullException.ThrowIfNull(action);
         var ratio = (double)(action.Value(RatioColumn) ?? 0f);
@@ -105,7 +106,7 @@ public static class ChainHits
         return (Truncate(first), Truncate(second));
     }
 
-    public static int GalderPower(SkillTableRow action)
+    public static long GalderPower(SkillTableRow action)
     {
         ArgumentNullException.ThrowIfNull(action);
         return Truncate((action.Value(RatioColumn) ?? 0f) * GalderPowerScale);
@@ -130,7 +131,7 @@ public static class ChainHits
             case TetraPunch:
             {
                 var power = AttackPower(action, attacker);
-                var previous = 0;
+                var previous = 0L;
                 for (var hitIndex = 0; hitIndex < PunchHits; hitIndex++)
                 {
                     var hit = SkillDamage.Physical(attacker, power, target, coefficient, SkillActions.NoElement, rng);
@@ -174,5 +175,5 @@ public static class ChainHits
         return hits;
     }
 
-    private static int Truncate(double value) => (int)Math.Clamp(Math.Truncate(value), int.MinValue, int.MaxValue);
+    private static long Truncate(double value) => WireLimits.Saturate(Math.Truncate(value));
 }

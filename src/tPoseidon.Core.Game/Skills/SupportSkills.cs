@@ -1,10 +1,11 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Skills;
 
-public readonly record struct HealResult(uint Hp, bool Healed);
+public readonly record struct HealResult(long Hp, bool Healed);
 
-public readonly record struct ManaConversion(bool Applied, uint Hp, uint Mp);
+public readonly record struct ManaConversion(bool Applied, long Hp, long Mp);
 
 public static class SupportSkills
 {
@@ -39,25 +40,25 @@ public static class SupportSkills
 
     public static bool TargetsDead(int actionId) => actionId == Revival;
 
-    public static int FirstAidHeal(int ma, int lk, float ratio) => (int)((ma + lk) * FirstAidShare * ratio);
+    public static long FirstAidHeal(long ma, long lk, float ratio) => WireLimits.Saturate((ma + lk) * FirstAidShare * ratio);
 
-    public static int GraceHeal(uint memberMaxHp, int casterMa, float ratio) =>
-        (int)(memberMaxHp * (double)ratio) + (int)(casterMa * (double)ratio * GraceMagicScale);
+    public static long GraceHeal(long memberMaxHp, long casterMa, float ratio) =>
+        WireLimits.Saturate(memberMaxHp * (double)ratio) + WireLimits.Saturate(casterMa * (double)ratio * GraceMagicScale);
 
-    public static HealResult Heal(uint hp, uint maxHp, int heal)
+    public static HealResult Heal(long hp, long maxHp, long heal)
     {
-        var raised = (long)hp + heal;
+        var raised = hp + heal;
         var healed = raised > hp && hp < maxHp;
-        return new HealResult((uint)Math.Clamp(Math.Min(raised, maxHp), 0, uint.MaxValue), healed);
+        return new HealResult(Math.Clamp(Math.Min(raised, maxHp), 0L, long.MaxValue), healed);
     }
 
-    public static ManaConversion ConvertMana(uint hp, uint maxHp, uint mp, uint maxMp, float hpRatio, float ratio)
+    public static ManaConversion ConvertMana(long hp, long maxHp, long mp, long maxMp, float hpRatio, float ratio)
     {
-        var cost = (long)(maxHp * (double)hpRatio);
-        var gain = (long)(maxHp * (double)hpRatio * ratio);
+        var cost = WireLimits.Saturate(maxHp * (double)hpRatio);
+        var gain = WireLimits.Saturate(maxHp * (double)hpRatio * ratio);
         var newHp = hp - cost;
         if (newHp <= 0) return new ManaConversion(false, hp, mp);
-        return new ManaConversion(true, (uint)newHp, (uint)Math.Min((long)mp + gain, maxMp));
+        return new ManaConversion(true, newHp, Math.Min(mp + gain, maxMp));
     }
 
     public static IReadOnlyList<int> CleansedBy(SkillTableRow action, int entries)

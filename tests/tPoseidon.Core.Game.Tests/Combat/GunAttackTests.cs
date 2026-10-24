@@ -8,13 +8,13 @@ public sealed class GunAttackTests
     private static SkillTarget Target(int hv = 2, int lk = 10, int hp = 5000, int resist = 0) =>
         new(Dp: 0, Hv: hv, Md: 0, Lk: lk, Hp: hp, Level: 1, Resist: resist);
 
-    private static (int Damage, int Kind) Shoot(SkillTarget target, bool critical = false, float multiplier = 1f, bool targetIsPlayer = false, int roll = 0) =>
+    private static (long Damage, int Kind) Shoot(SkillTarget target, bool critical = false, float multiplier = 1f, bool targetIsPlayer = false, int roll = 0) =>
         GunAttack.Shot(attackerAc: 60, attackerLk: 10, power: 100, multiplier, critical, target, targetIsPlayer, _ => roll);
 
     [Fact]
     public void NormalShot_IsAccuracyAndPowerLessTheMonsterDefense()
     {
-        Assert.Equal((280, SkillDamage.KindHit), Shoot(Target()));
+        Assert.Equal((280L, SkillDamage.KindHit), Shoot(Target()));
     }
 
     [Fact]

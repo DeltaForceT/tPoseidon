@@ -13,13 +13,13 @@ public static class PlayerRevivalFrames
     public static readonly TimeSpan CompletionDelay = TimeSpan.FromMilliseconds(1500);
     public static readonly TimeSpan Protection = TimeSpan.FromMilliseconds(5000);
 
-    public static byte[] RestartNotice(ushort mapId, uint hp)
+    public static byte[] RestartNotice(ushort mapId, long hp)
     {
         var w = new PacketWriter(RestartNoticeSize);
         w.WriteUInt16(mapId);
         w.WriteUInt16(0);
         w.WriteUInt16(0);
-        w.WriteUInt32(hp);
+        w.WriteUInt32Field(hp);
         return w.ToArray();
     }
 

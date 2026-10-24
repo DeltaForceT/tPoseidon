@@ -126,10 +126,10 @@ public static class GroundItemFrames
         return new BagOperation(kind, itemClass, itemId, itemUid, count, mixSlot);
     }
 
-    public static byte[] Money(uint total)
+    public static byte[] Money(long total)
     {
         var w = new PacketWriter(MoneySize);
-        w.WriteUInt32(total);
+        w.WriteUInt32Field(total);
         return w.ToArray();
     }
 

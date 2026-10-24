@@ -131,7 +131,7 @@ public sealed class MonsterAITicker
 
             if (mob.NextStrikeAt > now) continue;
 
-            int damage;
+            long damage;
             byte hitFlags;
             uint hitKind;
             if (_damage is not null)
@@ -154,7 +154,7 @@ public sealed class MonsterAITicker
             }
             else
             {
-                damage = Math.Max(1, def.ApLv);
+                damage = Math.Max(1L, def.ApLv);
                 hitFlags = DamageHitFlags.MobHit;
                 hitKind = DamageHitKind.MobToPlayer;
             }
@@ -205,7 +205,7 @@ public readonly record struct MonsterStrike(
     ushort MobY,
     ushort TargetX,
     ushort TargetY,
-    int Damage,
+    long Damage,
     byte HitFlags = DamageHitFlags.MobHit,
     uint HitKind = DamageHitKind.MobToPlayer);
 
@@ -213,7 +213,7 @@ public readonly record struct PlayerSnapshot(
     ushort EntityId,
     ushort X,
     ushort Y,
-    int Dp = 0,
-    int Md = 0,
-    int Hv = 0,
-    int CurrentHp = int.MaxValue);
+    long Dp = 0,
+    long Md = 0,
+    long Hv = 0,
+    long CurrentHp = long.MaxValue);

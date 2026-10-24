@@ -12,7 +12,6 @@
   <ItemGroup>
     <ProjectReference Include="..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
     <ProjectReference Include="..\tPoseidon.Core.Crypto\tPoseidon.Core.Crypto.csproj" />
-    <ProjectReference Include="..\tPoseidon.Gacha.Art\tPoseidon.Gacha.Art.csproj" />
   </ItemGroup>
 
 </Project>

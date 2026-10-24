@@ -8,7 +8,6 @@ public static class PickupRules
     public const int RequestMoveTypeOffset = 2;
 
     public const double ReachInCells = 4.0;
-    public const long MoneyLimit = 2_100_000_000;
     public const int BagCapacity = 300;
 
     public const int WalkFirstRing = 3;
@@ -64,9 +63,9 @@ public static class PickupRules
         return joinsStack ? carried : bagItems < BagCapacity && (added == 0 || carried);
     }
 
-    public static bool MoneyFits(long held, long amount)
+    public static bool MoneyFits(long held, long amount, long limit)
     {
-        var total = held + amount;
-        return total >= 0 && total <= MoneyLimit;
+        if (amount < 0 || held < 0 || held > limit) return false;
+        return amount <= limit - held;
     }
 }

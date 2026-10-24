@@ -224,7 +224,7 @@ public static class MeleeSwingFrames
         w.WriteUInt16(strike.AttackerY);
         w.WriteUInt16(strike.TargetX);
         w.WriteUInt16(strike.TargetY);
-        w.WriteInt16((short)Math.Clamp(strike.Damage, 0, short.MaxValue));
+        w.WriteInt16Field(strike.Damage);
         w.WriteByte(result);
         return w.ToArray();
     }
@@ -233,7 +233,7 @@ public static class MeleeSwingFrames
     {
         var w = new PacketWriter(HitResultSize);
         w.WriteUInt16(strike.TargetEntityId);
-        w.WriteInt32(strike.Damage);
+        w.WriteInt32Field(strike.Damage);
         w.WriteInt32(DeathTypeNormal);
         w.WriteInt32(result);
         w.WriteInt32(0);
@@ -247,7 +247,7 @@ public static class MeleeSwingFrames
     {
         var w = new PacketWriter(MonsterHpSize);
         w.WriteUInt16(strike.TargetEntityId);
-        w.WriteInt32(Math.Max(0, strike.MobHpAfter));
+        w.WriteUInt32Field(Math.Max(0L, strike.MobHpAfter));
         w.WriteUInt16(0);
         w.WriteByte(0);
         return w.ToArray();

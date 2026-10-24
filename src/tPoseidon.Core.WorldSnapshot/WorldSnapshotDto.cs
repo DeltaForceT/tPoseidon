@@ -110,7 +110,7 @@ public sealed record MonsterEntityDto
     public required string Name { get; init; }
     public required ushort SpawnX { get; init; }
     public required ushort SpawnY { get; init; }
-    public required int MaxHp { get; init; }
+    public required long MaxHp { get; init; }
     public required int Level { get; init; }
     public required ushort SpawnPointId { get; init; }
     public required bool IsBoss { get; init; }

@@ -42,12 +42,12 @@ public static class SkillEffectFrames
                 break;
             case SkillEffectTail.ModeRadiusPoint:
                 tail.WriteByte((byte)effect.Mode);
-                tail.WriteUInt16((ushort)effect.Magnitude);
+                tail.WriteUInt16Field(effect.Magnitude);
                 tail.WriteUInt16(effect.Point?.X ?? 0);
                 tail.WriteUInt16(effect.Point?.Y ?? 0);
                 break;
             case SkillEffectTail.RadiusOnly:
-                tail.WriteInt32(effect.Magnitude);
+                tail.WriteInt32Field(effect.Magnitude);
                 break;
             case SkillEffectTail.ModeThenStrings:
                 tail.WriteByte((byte)effect.Mode);
@@ -68,25 +68,25 @@ public static class SkillEffectFrames
                 break;
             case SkillEffectTail.IntervalThenHeal:
                 tail.WriteInt32(effect.TickMs);
-                tail.WriteInt32(effect.Magnitude);
+                tail.WriteInt32Field(effect.Magnitude);
                 break;
             case SkillEffectTail.ModeThenTarget:
                 tail.WriteByte((byte)effect.Mode);
                 tail.WriteUInt16(targetEntityId);
                 break;
             case SkillEffectTail.CurrentThenMax:
-                tail.WriteInt32(effect.Charges);
-                tail.WriteInt32(effect.Magnitude);
+                tail.WriteInt32Field(effect.Charges);
+                tail.WriteInt32Field(effect.Magnitude);
                 break;
             case SkillEffectTail.ChargeCount:
-                tail.WriteUInt16((ushort)effect.Charges);
+                tail.WriteUInt16Field(effect.Charges);
                 break;
             case SkillEffectTail.RadiusPercent:
                 tail.WriteUInt32(BitConverter.SingleToUInt32Bits(effect.TailFloat));
                 break;
             case SkillEffectTail.ModeThenAmount:
                 tail.WriteByte((byte)effect.Mode);
-                tail.WriteInt32(effect.Magnitude);
+                tail.WriteInt32Field(effect.Magnitude);
                 break;
         }
         if (effect.Kind.ModeLast) tail.WriteByte((byte)effect.Mode);
@@ -135,12 +135,12 @@ public static class SkillEffectFrames
         return changes;
     }
 
-    public static byte[] ShieldGauge(ushort objectId, int current, int max)
+    public static byte[] ShieldGauge(ushort objectId, long current, long max)
     {
         var w = new PacketWriter(ShieldGaugeSize);
         w.WriteUInt16(objectId);
-        w.WriteInt32(current);
-        w.WriteInt32(max);
+        w.WriteInt32Field(current);
+        w.WriteInt32Field(max);
         return w.ToArray();
     }
 

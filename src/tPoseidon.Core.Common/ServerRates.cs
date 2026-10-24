@@ -34,10 +34,13 @@ public sealed class ServerRates
         public ushort MaxTmLevel { get; init; } = 600;
         public ushort StatPtsPerLevel { get; init; } = 4;
         public ushort MaxStatPtsPerStat { get; init; } = 65535;
-        public uint MaxDamagePerHit { get; init; } = 65535;
-        public ulong MaxHpPool { get; init; } = uint.MaxValue;
-        public ulong MaxMpPool { get; init; } = uint.MaxValue;
-        public ulong MaxGalder { get; init; } = uint.MaxValue;
+        public ulong MaxDamagePerHit { get; init; }
+        public ulong MaxHpPool { get; init; }
+        public ulong MaxMpPool { get; init; }
+        public ulong MaxGalder { get; init; }
+        public ulong MaxBankGalder { get; init; }
+
+        public static long Limit(ulong cap) => cap == 0 ? long.MaxValue : (long)Math.Min(cap, long.MaxValue);
     }
 
     public sealed class CombatSection
@@ -67,24 +70,24 @@ public sealed class ServerRates
     public CombatSection Combat { get; init; } = new();
     public CadenceSection Cadence { get; init; } = new();
 
-    public int ScaleExp(int baseExp)
+    public long ScaleExp(long baseExp)
     {
         if (baseExp <= 0) return 0;
         var bonus = 1.0 + ExpHelper.ExpPcRoom + ExpHelper.ExpEvent;
-        return ClampToInt(baseExp * bonus * Global.ExpRate);
+        return RoundToLong(baseExp * bonus * Global.ExpRate);
     }
 
-    public int ScaleTmxp(int baseTmxp)
+    public long ScaleTmxp(long baseTmxp)
     {
         if (baseTmxp <= 0) return 0;
         var bonus = 1.0 + ExpHelper.TmPcRoom + ExpHelper.TmEvent;
-        return ClampToInt(baseTmxp * bonus * Global.TmxpRate);
+        return RoundToLong(baseTmxp * bonus * Global.TmxpRate);
     }
 
-    public int ScaleGalder(int baseGalder)
+    public long ScaleGalder(long baseGalder)
     {
         if (baseGalder <= 0) return 0;
-        return ClampToInt(baseGalder * Global.GalderRate);
+        return RoundToLong(baseGalder * Global.GalderRate);
     }
 
     public double ScaleDropChance(double baseChance)
@@ -94,11 +97,11 @@ public sealed class ServerRates
         return scaled > 1.0 ? 1.0 : scaled;
     }
 
-    private static int ClampToInt(double v)
+    private static long RoundToLong(double v)
     {
         if (v <= 0) return 0;
-        if (v >= int.MaxValue) return int.MaxValue;
-        return (int)Math.Round(v);
+        if (v >= long.MaxValue) return long.MaxValue;
+        return (long)Math.Round(v);
     }
 
     public static ServerRates LoadFromFile(string path)

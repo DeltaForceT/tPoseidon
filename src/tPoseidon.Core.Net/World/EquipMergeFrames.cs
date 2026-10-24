@@ -21,12 +21,12 @@ public static class EquipMergeFrames
         return true;
     }
 
-    public static byte[] Result(bool success, uint money, IReadOnlyList<BagOperation> operations)
+    public static byte[] Result(bool success, long money, IReadOnlyList<BagOperation> operations)
     {
         ArgumentNullException.ThrowIfNull(operations);
         var w = new PacketWriter(8 + operations.Count * 24);
         w.WriteByte(success ? (byte)1 : (byte)0);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         w.WriteByte((byte)operations.Count);
         foreach (var operation in operations) w.WriteBytes(QuestResultFrames.ItemOperation(operation));
         return w.ToArray();

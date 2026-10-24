@@ -97,12 +97,12 @@ public static class FortuneFrames
         return true;
     }
 
-    public static byte[] Paid(ulong characterId, uint money, IReadOnlyList<FortunePaidJoker> jokers)
+    public static byte[] Paid(ulong characterId, long money, IReadOnlyList<FortunePaidJoker> jokers)
     {
         ArgumentNullException.ThrowIfNull(jokers);
         var w = new PacketWriter(13 + jokers.Count * 32);
         w.WriteUInt64(characterId);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         w.WriteByte((byte)jokers.Count);
         foreach (var joker in jokers)
         {

@@ -19,7 +19,7 @@ public sealed class MonsterEntity
             else _resistLoss[element] = left;
         }
     }
-    private int _hp;
+    private long _hp;
     private ushort _curX;
     private ushort _curY;
 
@@ -42,7 +42,8 @@ public sealed class MonsterEntity
     public required string Name { get; init; }
     public required ushort SpawnX { get; init; }
     public required ushort SpawnY { get; init; }
-    public required int MaxHp { get; init; }
+    public required long MaxHp { get; init; }
+    public Func<long>? DamageLimit { get; init; }
     public required int Level { get; init; }
 
     public ushort SpawnPointId { get; init; }
@@ -279,7 +280,7 @@ public sealed class MonsterEntity
         }
     }
 
-    public int CurrentHp
+    public long CurrentHp
     {
         get { lock (_lock) return _hp; }
     }
@@ -316,19 +317,19 @@ public sealed class MonsterEntity
     public const ushort NoOwner = 0;
 
     private ushort _ownerEntityId;
-    private int _hpWhenOwned;
+    private long _hpWhenOwned;
 
     public ushort OwnerEntityId
     {
         get { lock (_lock) return _ownerEntityId; }
     }
 
-    public int HpWhenOwned
+    public long HpWhenOwned
     {
         get { lock (_lock) return _hpWhenOwned; }
     }
 
-    public void TakeOwner(ushort ownerEntityId, int hpWhenOwned)
+    public void TakeOwner(ushort ownerEntityId, long hpWhenOwned)
     {
         lock (_lock)
         {
@@ -352,23 +353,24 @@ public sealed class MonsterEntity
         get { lock (_lock) return _hp <= 0; }
     }
 
-    public void InitHp(int initialHp)
+    public void InitHp(long initialHp)
     {
         lock (_lock) _hp = initialHp;
     }
 
-    public void RaiseHp(int hp)
+    public void RaiseHp(long hp)
     {
         lock (_lock)
         {
             if (_hp <= 0) return;
-            _hp = Math.Clamp(Math.Max(hp, _hp), 0, MaxHp);
+            _hp = Math.Clamp(Math.Max(hp, _hp), 0L, MaxHp);
         }
     }
 
-    public int ApplyDamage(int amount)
+    public long ApplyDamage(long amount)
     {
         if (amount <= 0) return 0;
+        if (DamageLimit is { } limit) amount = Math.Min(amount, limit());
         lock (_lock)
         {
             if (_hp <= 0) return 0;

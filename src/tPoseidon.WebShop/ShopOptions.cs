@@ -3,19 +3,14 @@ using tPoseidon.Core.Data;
 
 namespace tPoseidon.WebShop;
 
-public sealed record ShopOptions(string Urls, string LibConfigPath, string PagesDirectory, string? ArtDirectory, CashShopPolicy Cash)
+public sealed record ShopOptions(string Urls, string LibConfigPath, CashShopPolicy Cash)
 {
     public const string UrlsVariable = "MT_WEBSHOP_URLS";
     public const string LibConfigVariable = "MT_LIBCONFIG_PATH";
-    public const string PagesVariable = "MT_WEBSHOP_PAGES";
-    public const string ArtVariable = "MT_WEBSHOP_ART";
     public const string CashModeVariable = "MT_CASH_MODE";
     public const string CashStartVariable = "MT_CASH_START";
     public const int WorldCode = 1;
     public const string DefaultUrls = "http://127.0.0.1:9990";
-    public const string GachaCollectionFolder = "gacha";
-    public const string DrillGameFolder = "tw-drill-egg";
-    public const string ArtFolder = "art";
 
     public static ShopOptions FromEnvironment()
     {
@@ -25,15 +20,9 @@ public sealed record ShopOptions(string Urls, string LibConfigPath, string Pages
                 RepoRoot.Data("variants", "Kr2014", "libconfig.dat"),
                 RepoRoot.Data("variants", "Kr2014", "libconfig_eng.dat"),
                 RepoRoot.Data("krn-2014.01.28", "libconfig_decrypted.xml"));
-        var pages = Environment.GetEnvironmentVariable(PagesVariable)
-            ?? Path.Combine(AppContext.BaseDirectory, "pages");
-        var art = Environment.GetEnvironmentVariable(ArtVariable);
-        var collectionArt = RepoRoot.Data(GachaCollectionFolder, DrillGameFolder, ArtFolder);
         return new ShopOptions(
             string.IsNullOrWhiteSpace(urls) ? DefaultUrls : urls.Trim(),
             libconfig,
-            pages,
-            string.IsNullOrWhiteSpace(art) ? (Directory.Exists(collectionArt) ? collectionArt : null) : art.Trim(),
             CashFromEnvironment());
     }
 

@@ -108,7 +108,7 @@ internal sealed class SlotExtendController
             await RefuseAsync(player, SlotExtendRules.Unknown, $"store refused with code {result.Error}").ConfigureAwait(false);
             return;
         }
-        stats.GrantMoney((int)((long)result.RemainMoney - stats.Money), tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
+        stats.GrantMoney(result.RemainMoney - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
         foreach (var removed in result.Items.Where(row => row.Action == EquipUpgradeAction.Delete)) player.TimedItems.Forget(removed.ItemUid);
         await SendAsync(player, Opcode.S2C_SLOT_EXTEND_RESULT, SlotExtendFrames.Result(result.RemainMoney, result.Items.Select(EquipUpgradeOperations.ToBag).ToList())).ConfigureAwait(false);
         Log(player, $"item {equipment.ItemIndex} slot {equipment.ItemSlot} -> {target}: {(success ? "success" : guarded ? "failed, guarded" : "failed, destroyed")} (chance {chance:F2}%, material {material.ItemIndex}, {subs.Count} sub items)");

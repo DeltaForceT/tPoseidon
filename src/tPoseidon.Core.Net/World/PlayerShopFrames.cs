@@ -110,18 +110,18 @@ public static class PlayerShopFrames
         return true;
     }
 
-    public static byte[] Bought(uint money, BagOperation operation)
+    public static byte[] Bought(long money, BagOperation operation)
     {
         var w = new PacketWriter(28);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         w.WriteBytes(QuestResultFrames.ItemOperation(operation));
         return w.ToArray();
     }
 
-    public static byte[] Sold(uint money, ushort count, BagOperation operation)
+    public static byte[] Sold(long money, ushort count, BagOperation operation)
     {
         var w = new PacketWriter(30);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         w.WriteUInt16(count);
         w.WriteBytes(QuestResultFrames.ItemOperation(operation));
         return w.ToArray();

@@ -83,7 +83,7 @@ public sealed class GmToolTransport : IGmToolTransport
     public bool? IsListening(GmToolEndpoint endpoint)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
-        return endpoint.IsLocal ? PortProbe.IsListening(endpoint.Port) : null;
+        return endpoint.IsLocal ? PortProbe.IsListening(endpoint.Port, endpoint.Host) : null;
     }
 }
 

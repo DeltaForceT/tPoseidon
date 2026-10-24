@@ -627,7 +627,7 @@ public sealed class PortsPage : WizardPage
     public bool Validate()
     {
         var entries = _rows.Select(row => (row.Server.Title, row.Box.Text ?? "")).ToList();
-        if (PortPlan.Validate(entries, PortProbe.IsListening) is { } issue)
+        if (PortPlan.Validate(entries, port => PortProbe.IsListening(port, _state.Settings.Network.BindAddress)) is { } issue)
         {
             foreach (var row in _rows.Where(row => issue.Servers.Contains(row.Server.Title)))
             {

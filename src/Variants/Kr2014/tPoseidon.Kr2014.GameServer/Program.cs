@@ -689,7 +689,7 @@ var npcManager = new tPoseidon.Core.Net.World.NpcManager(
     log: msg => Console.WriteLine($"{LogTag} {msg}"),
     pinnedEntityIds: tPoseidon.Core.Net.World.NpcManager.CoralTownPinnedIds());
 
-var monsterManager = new tPoseidon.Core.Game.Monsters.MonsterManager(monsterCatalog, idAllocator, dropCatalog, monsterOverridesProvider);
+var monsterManager = new tPoseidon.Core.Game.Monsters.MonsterManager(monsterCatalog, idAllocator, dropCatalog, monsterOverridesProvider, damageLimit: () => ServerRates.CapsSection.Limit(serverRatesProvider.Current.Caps.MaxDamagePerHit));
 var groundItems = new GroundItemField();
 var globalActionManager = new tPoseidon.Core.Game.Combat.ActionManager();
 
@@ -1984,7 +1984,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }
             if (character.CurrentHp < 1)
             {
-                var maxHpAtLogin = (uint)Math.Max(0, StatsWithEquipment(character).Hp);
+                var maxHpAtLogin = Math.Max(0L, (long)StatsWithEquipment(character).Hp);
                 character.CurrentHp = tPoseidon.Core.Game.Stats.StatManager.RestartHp(maxHpAtLogin);
                 Console.WriteLine($"{LogTag} {ctx.Remote} GAME_INIT — character saved without HP logs in with {character.CurrentHp} of {maxHpAtLogin}");
             }
@@ -2557,7 +2557,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 if (sessionCt.IsCancellationRequested) return;
                 try
                 {
-                    var pkt = new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = ev.NewHp };
+                    var pkt = tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(ev.NewHp);
                     byte rk;
                     lock (moveRng) rk = (byte)moveRng.Next(1, 256);
                     await ctx.SendFrameAsync(Opcode.S2C_HEALTH_STATUS,
@@ -2571,7 +2571,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 if (sessionCt.IsCancellationRequested) return;
                 try
                 {
-                    var pkt = new tPoseidon.Core.Net.Packets.ManaStatusPacket { CurrentMp = ev.NewMp };
+                    var pkt = tPoseidon.Core.Net.Packets.ManaStatusPacket.Of(ev.NewMp);
                     byte rk;
                     lock (moveRng) rk = (byte)moveRng.Next(1, 256);
                     await ctx.SendFrameAsync(Opcode.S2C_MANA_STATUS,
@@ -2895,7 +2895,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             state.Cast = null;
         }
 
-        IReadOnlyList<(Opcode Opcode, byte[] Payload, SwingAudience Audience)> GainExp(int gain, bool fromSwing, bool gmRate)
+        IReadOnlyList<(Opcode Opcode, byte[] Payload, SwingAudience Audience)> GainExp(long gain, bool fromSwing, bool gmRate)
         {
             if (statManager is null || currentChar is null || !liveSessions.TryGetValue(ctx, out var progressSt))
             {
@@ -2912,7 +2912,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             {
                 FlushStatsToDb("exp");
                 return fromSwing
-                    ? new[] { (Opcode.S2C_OP_0406_TBD, ProgressFrames.ExpGained((uint)gain), SwingAudience.Attacker) }
+                    ? new[] { (Opcode.S2C_OP_0406_TBD, ProgressFrames.ExpGained(gain), SwingAudience.Attacker) }
                     : new[] { (Opcode.S2C_EXP_VALUE, PlayerDeathFrames.ExpValue(outcome.Exp), SwingAudience.Attacker) };
             }
 
@@ -2957,7 +2957,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             return new[]
             {
                 (Opcode.S2C_OP_0027_TBD,
-                    ProgressFrames.LevelUp(block, statManager.CurrentHp, statManager.CurrentMp, (uint)Math.Min(outcome.Exp, uint.MaxValue)),
+                    ProgressFrames.LevelUp(block, statManager.CurrentHp, statManager.CurrentMp, outcome.Exp),
                     SwingAudience.Attacker),
                 (Opcode.S2C_OP_0028_TBD,
                     ProgressFrames.LevelSeen(progressSt.PlayerEntityId, outcome.Level),
@@ -2965,7 +2965,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }.Concat(soulSeeds.Event(progressSt, SoulSeedRules.LevelUpEvent, 1).Select(seedFrame => (seedFrame.Opcode, seedFrame.Payload, SwingAudience.Attacker))).ToArray();
         }
 
-        async Task GiveQuestProgressAsync(int exp, int tmExp, CancellationToken questCt)
+        async Task GiveQuestProgressAsync(long exp, long tmExp, CancellationToken questCt)
         {
             if (!liveSessions.TryGetValue(ctx, out var questSt)) return;
             if (exp > 0)
@@ -2995,10 +2995,10 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }
         }
 
-        IReadOnlyList<(Opcode Opcode, byte[] Payload)> GainTmExp(int gain) =>
+        IReadOnlyList<(Opcode Opcode, byte[] Payload)> GainTmExp(long gain) =>
             GainTmExpFrom(gain, ProgressFrames.TmFromMonsterKill, gmRate: true);
 
-        IReadOnlyList<(Opcode Opcode, byte[] Payload)> GainTmExpFrom(int gain, byte source, bool gmRate)
+        IReadOnlyList<(Opcode Opcode, byte[] Payload)> GainTmExpFrom(long gain, byte source, bool gmRate)
         {
             if (statManager is null || currentChar is null) return Array.Empty<(Opcode Opcode, byte[] Payload)>();
             if (gmRate) gain = gameMasters.Rates.ScaleTm(gain);
@@ -4171,7 +4171,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 var mobInfo = new MobTargetInfoPacket
                 {
                     EntityId = targetEntity,
-                    FieldAt02Tbd = (uint)Math.Max(0, mob.CurrentHp),
+                    FieldAt02Tbd = WireLimits.Int32FieldUnsigned(mob.CurrentHp),
                     FieldAt06Tbd = mobDefinition is null
                         ? 0u
                         : (uint)Math.Max(0, tPoseidon.Core.Game.Monsters.MonsterManager.ResolveMaxMp(mobDefinition)),
@@ -6048,10 +6048,10 @@ float DarkBonusOf(InGameSessionState bonusState) =>
         .DefaultIfEmpty(0f)
         .Max();
 
-int ShieldPool(InGameSessionState shieldCaster, tPoseidon.Core.LibConfig.SkillTableRow shieldRow, tPoseidon.Core.Game.Skills.Effects.SkillEffectKind shieldKind) =>
+long ShieldPool(InGameSessionState shieldCaster, tPoseidon.Core.LibConfig.SkillTableRow shieldRow, tPoseidon.Core.Game.Skills.Effects.SkillEffectKind shieldKind) =>
     shieldKind.PoolFromDig
         ? FormSkills.BunkerPool(shieldCaster.PlayerDa, shieldRow.Value(shieldKind.AmountColumn) ?? 0f)
-        : (int)Math.Truncate(shieldCaster.PlayerMa * tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.ShieldPoolScale * (double)(shieldRow.Value(shieldKind.AmountColumn) ?? 0f));
+        : WireLimits.Saturate(Math.Truncate(shieldCaster.PlayerMa * tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.ShieldPoolScale * (double)(shieldRow.Value(shieldKind.AmountColumn) ?? 0f)));
 
 int RangeBonusOf(InGameSessionState rangeState) =>
     rangeState.Effects.Snapshot().Where(held => held.IsApplied && held.Kind.RangeColumn is not null).Sum(held => (int)held.Amount);
@@ -6068,12 +6068,12 @@ int[] ApplyEffectDeltas(InGameSessionState state)
     var deltas = state.Effects.Deltas(EffectBasesOf(state), EffectCasterOf);
     var passiveBonuses = PassiveStats.Bonuses(state.Skills, skillBook);
     for (var stat = 0; stat < deltas.Length; stat++) deltas[stat] += passiveBonuses[stat];
-    state.PlayerMaxHp = (uint)Math.Max(0, effectBase.Hp + deltas[tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatHp]);
-    state.PlayerMaxMp = (uint)Math.Max(0, effectBase.Mp + deltas[tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatMp]);
+    state.PlayerMaxHp = Math.Clamp((long)effectBase.Hp + deltas[tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatHp], 0L, ServerRates.CapsSection.Limit(serverRatesProvider.Current.Caps.MaxHpPool));
+    state.PlayerMaxMp = Math.Clamp((long)effectBase.Mp + deltas[tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatMp], 0L, ServerRates.CapsSection.Limit(serverRatesProvider.Current.Caps.MaxMpPool));
     state.PlayerMaxWt = effectBase.Wt + deltas[tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatWt];
-    state.PlayerAp = (ushort)Math.Clamp(effectBase.Ap + deltas[MonsterStat.Ap], 0, ushort.MaxValue);
-    state.PlayerMa = (ushort)Math.Clamp(effectBase.Ma + deltas[MonsterStat.Ma], 0, ushort.MaxValue);
-    state.PlayerAc = (ushort)Math.Clamp(effectBase.Ac + deltas[MonsterStat.Ac], 0, ushort.MaxValue);
+    state.PlayerAp = Math.Max(0L, (long)effectBase.Ap + deltas[MonsterStat.Ap]);
+    state.PlayerMa = Math.Max(0L, (long)effectBase.Ma + deltas[MonsterStat.Ma]);
+    state.PlayerAc = Math.Max(0L, (long)effectBase.Ac + deltas[MonsterStat.Ac]);
     state.PlayerDx = Math.Max(0, effectBase.Dx) + deltas[MonsterStat.Dx];
     state.PlayerLk = effectBase.Lk + deltas[MonsterStat.Lk];
     state.PlayerDp = effectBase.Dp + deltas[MonsterStat.Dp];
@@ -6895,7 +6895,7 @@ var npcLoopTask = Task.Run(async () =>
             : (caster.PlayerX, caster.PlayerY);
         var attacker = new SkillAttacker(
             caster.PlayerAp, caster.PlayerAc, caster.PlayerMa, caster.PlayerLk, areaStats.Level,
-            caster.PlayerDa, (int)Math.Min(areaStats.CurrentHp, int.MaxValue), (int)Math.Min(caster.PlayerMaxHp, int.MaxValue),
+            caster.PlayerDa, areaStats.CurrentHp, caster.PlayerMaxHp,
             caster.PlayerHv, caster.PlayerDx, caster.PlayerDp, DarkBonus: DarkBonusOf(caster), Weight: CarriedWeightOf(caster),
             ElementBonus: shape.ElementSlot >= 0 ? SkillHitShapes.DefaultElementStep * ElementTotalOf(caster, shape.ElementSlot) : 0);
 
@@ -7016,7 +7016,7 @@ var npcLoopTask = Task.Run(async () =>
             targetLevel = curedStats.Level;
             if (!await SendFromLoopAsync(
                 new[] { player }, Opcode.S2C_HEALTH_STATUS,
-                new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = curedStats.CurrentHp }.EncodePayload(),
+                tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(curedStats.CurrentHp).EncodePayload(),
                 MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false))
             {
                 return false;
@@ -7024,7 +7024,7 @@ var npcLoopTask = Task.Run(async () =>
         }
         else if (curedMonster is not null)
         {
-            var (raised, didHeal) = SkillActions.Heal((uint)Math.Max(0, curedMonster.CurrentHp), (uint)Math.Max(0, curedMonster.MaxHp), ratio);
+            var (raised, didHeal) = SkillActions.Heal(Math.Max(0L, curedMonster.CurrentHp), Math.Max(0L, curedMonster.MaxHp), ratio);
             curedMonster.RaiseHp((int)raised);
             healed = didHeal;
             targetId = curedMonster.EntityId;
@@ -7068,7 +7068,7 @@ var npcLoopTask = Task.Run(async () =>
                 action,
                 new SkillAttacker(
                     caster.PlayerAp, caster.PlayerAc, caster.PlayerMa, caster.PlayerLk, tornadoStats.Level,
-                    caster.PlayerDa, (int)Math.Min(tornadoStats.CurrentHp, int.MaxValue), (int)Math.Min(caster.PlayerMaxHp, int.MaxValue), DarkBonus: DarkBonusOf(caster)),
+                    caster.PlayerDa, tornadoStats.CurrentHp, caster.PlayerMaxHp, DarkBonus: DarkBonusOf(caster)),
                 new SkillTarget(
                     targetDefinition.DpLv + target.StatDelta(MonsterStat.Dp),
                     targetDefinition.HvLv + target.StatDelta(MonsterStat.Hv),
@@ -7136,7 +7136,7 @@ var npcLoopTask = Task.Run(async () =>
         if (caster.Stats is not { } chainStats) return true;
         var attacker = new SkillAttacker(
             caster.PlayerAp, caster.PlayerAc, caster.PlayerMa, caster.PlayerLk, chainStats.Level,
-            caster.PlayerDa, (int)Math.Min(chainStats.CurrentHp, int.MaxValue), (int)Math.Min(caster.PlayerMaxHp, int.MaxValue),
+            caster.PlayerDa, chainStats.CurrentHp, caster.PlayerMaxHp,
             caster.PlayerHv, caster.PlayerDx, caster.PlayerDp, DarkBonus: DarkBonusOf(caster));
         AreaCandidate CandidateOf(MonsterEntity monster)
         {
@@ -7267,7 +7267,7 @@ var npcLoopTask = Task.Run(async () =>
                 action,
                 new SkillAttacker(
                     caster.PlayerAp, caster.PlayerAc, caster.PlayerMa, caster.PlayerLk, bearStats.Level,
-                    caster.PlayerDa, (int)Math.Min(bearStats.CurrentHp, int.MaxValue), (int)Math.Min(caster.PlayerMaxHp, int.MaxValue),
+                    caster.PlayerDa, bearStats.CurrentHp, caster.PlayerMaxHp,
                     caster.PlayerHv, caster.PlayerDx, DarkBonus: DarkBonusOf(caster)),
                 new SkillTarget(
                     targetDefinition.DpLv + target.StatDelta(MonsterStat.Dp),
@@ -7339,7 +7339,7 @@ var npcLoopTask = Task.Run(async () =>
         var (centreX, centreY) = selected.GetInterpolatedPosition(now);
         var attacker = new SkillAttacker(
             caster.PlayerAp, caster.PlayerAc, caster.PlayerMa, caster.PlayerLk, ringStats.Level,
-            caster.PlayerDa, (int)Math.Min(ringStats.CurrentHp, int.MaxValue), (int)Math.Min(caster.PlayerMaxHp, int.MaxValue), DarkBonus: DarkBonusOf(caster));
+            caster.PlayerDa, ringStats.CurrentHp, caster.PlayerMaxHp, DarkBonus: DarkBonusOf(caster));
 
         var blockId = commandBlockIds.Next();
         if (!await SendStrikeFramesAsync(
@@ -7440,17 +7440,17 @@ var npcLoopTask = Task.Run(async () =>
         }
         if (hpCost > 0 || mpCost > 0)
         {
-            payerStats.SetVitals(payerStats.CurrentHp - (uint)hpCost, payerStats.CurrentMp - (uint)mpCost);
+            payerStats.SetVitals(payerStats.CurrentHp - hpCost, payerStats.CurrentMp - mpCost);
             if (hpCost > 0 && !await SendFromLoopAsync(
                 payerOnly, Opcode.S2C_HEALTH_STATUS,
-                new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = payerStats.CurrentHp }.EncodePayload(),
+                tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(payerStats.CurrentHp).EncodePayload(),
                 MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false))
             {
                 return null;
             }
             if (mpCost > 0 && !await SendFromLoopAsync(
                 payerOnly, Opcode.S2C_MANA_STATUS,
-                new tPoseidon.Core.Net.Packets.ManaStatusPacket { CurrentMp = payerStats.CurrentMp }.EncodePayload(),
+                tPoseidon.Core.Net.Packets.ManaStatusPacket.Of(payerStats.CurrentMp).EncodePayload(),
                 MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false))
             {
                 return null;
@@ -7533,7 +7533,7 @@ var npcLoopTask = Task.Run(async () =>
         ushort castByEntityId = 0,
         int bestPartyDefence = 0,
         (ushort X, ushort Y)? groundPoint = null,
-        int? magnitude = null,
+        long? magnitude = null,
         int? durationMs = null)
     {
         var caster = session.Value;
@@ -7972,11 +7972,11 @@ var npcLoopTask = Task.Run(async () =>
                 periodicStats.SetVitals((uint)drainedHp, (uint)drainedMp);
                 return await SendFromLoopAsync(
                         ownerOnly, Opcode.S2C_HEALTH_STATUS,
-                        new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = periodicStats.CurrentHp }.EncodePayload(),
+                        tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(periodicStats.CurrentHp).EncodePayload(),
                         MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false)
                     && await SendFromLoopAsync(
                         ownerOnly, Opcode.S2C_MANA_STATUS,
-                        new tPoseidon.Core.Net.Packets.ManaStatusPacket { CurrentMp = periodicStats.CurrentMp }.EncodePayload(),
+                        tPoseidon.Core.Net.Packets.ManaStatusPacket.Of(periodicStats.CurrentMp).EncodePayload(),
                         MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false);
             }
             case tPoseidon.Core.Game.Skills.Effects.SkillPeriodicHit.LowLifeCheck:
@@ -8017,11 +8017,11 @@ var npcLoopTask = Task.Run(async () =>
                 if (periodicStats.CurrentHp < owner.PlayerMaxHp)
                 {
                     periodicStats.SetVitals(
-                        (uint)Math.Min((long)owner.PlayerMaxHp, (long)periodicStats.CurrentHp + effect.Magnitude), periodicStats.CurrentMp);
+                        Math.Min(owner.PlayerMaxHp, periodicStats.CurrentHp + effect.Magnitude), periodicStats.CurrentMp);
                 }
                 return await SendFromLoopAsync(
                     ownerOnly, Opcode.S2C_HEALTH_STATUS,
-                    new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = periodicStats.CurrentHp }.EncodePayload(),
+                    tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(periodicStats.CurrentHp).EncodePayload(),
                     MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false);
             }
             default:
@@ -8178,7 +8178,7 @@ var npcLoopTask = Task.Run(async () =>
         foreach (var reflection in interception.Reflections)
         {
             var resist = SkillActions.ResistOf(senderDefinition, reflection.Element) - sender.ResistLoss(reflection.Element);
-            var reflected = resist > 100 ? 0 : reflection.Damage - (int)(reflection.Damage * resist * 0.01);
+            var reflected = resist > 100 ? 0 : reflection.Damage - WireLimits.Saturate(reflection.Damage * resist * 0.01);
             var reflectedHit = new SkillHit(reflected, reflection.Type, reflection.Kind, reflection.Element, 0, (int)reflection.Flags);
             if (!await PeriodicStrikeAsync(guarded, sender, reflectedHit, sessions, mapId, zoneGeometry, now, battleEvents).ConfigureAwait(false))
             {
@@ -8450,7 +8450,7 @@ var npcLoopTask = Task.Run(async () =>
                 casterStats.SetVitals(healed.Hp, casterStats.CurrentMp);
                 if (healed.Healed && !await SendFromLoopAsync(
                         casterOnly, Opcode.S2C_HEALTH_STATUS,
-                        new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = casterStats.CurrentHp }.EncodePayload(),
+                        tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(casterStats.CurrentHp).EncodePayload(),
                         MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false))
                 {
                     return false;
@@ -8473,11 +8473,11 @@ var npcLoopTask = Task.Run(async () =>
                     casterStats.SetVitals(conversion.Hp, conversion.Mp);
                     if (!await SendFromLoopAsync(
                             casterOnly, Opcode.S2C_MANA_STATUS,
-                            new tPoseidon.Core.Net.Packets.ManaStatusPacket { CurrentMp = casterStats.CurrentMp }.EncodePayload(),
+                            tPoseidon.Core.Net.Packets.ManaStatusPacket.Of(casterStats.CurrentMp).EncodePayload(),
                             MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false)
                         || !await SendFromLoopAsync(
                             casterOnly, Opcode.S2C_HEALTH_STATUS,
-                            new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = casterStats.CurrentHp }.EncodePayload(),
+                            tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(casterStats.CurrentHp).EncodePayload(),
                             MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false))
                     {
                         return false;
@@ -8525,7 +8525,7 @@ var npcLoopTask = Task.Run(async () =>
                     var graced = SupportSkills.Heal(holderStats.CurrentHp, holder.PlayerMaxHp, grace);
                     holderStats.SetVitals(graced.Hp, holderStats.CurrentMp);
                     var inBlock = graced.Healed
-                        ? new[] { (Opcode.S2C_HEALTH_STATUS, new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = holderStats.CurrentHp }.EncodePayload()) }
+                        ? new[] { (Opcode.S2C_HEALTH_STATUS, tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(holderStats.CurrentHp).EncodePayload()) }
                         : Array.Empty<(Opcode Opcode, byte[] Payload)>();
                     if (!await SendStrikeFramesAsync(
                         SkillFrames.EncodeSupport(
@@ -8900,7 +8900,7 @@ var npcLoopTask = Task.Run(async () =>
         (int X, int Y) centre = field.Kind.FollowsCaster || field.Point is not { } fieldPoint
             ? (owner.PlayerX, owner.PlayerY)
             : (fieldPoint.X, fieldPoint.Y);
-        var radius = field.Magnitude;
+        var radius = WireLimits.SaturateInt32(field.Magnitude);
         var limit = Math.Min(field.Kind.FieldLimitCap, field.Kind.FieldLimitColumn is { } limitColumn ? fieldRow.Amount(limitColumn) ?? 0 : int.MaxValue);
         if (field.Kind.FieldTracks)
         {
@@ -9076,7 +9076,7 @@ var npcLoopTask = Task.Run(async () =>
         return true;
     }
 
-    int GunPowerOf(tPoseidon.Core.Game.Items.WornItem gun)
+    long GunPowerOf(tPoseidon.Core.Game.Items.WornItem gun)
     {
         var properties = itemPropertyRules.Full(gun.Definition, itemPropertyStore.ForItem(gun.Item.ItemUid));
         return properties.Any(property => property.Id == tPoseidon.Core.Game.Items.ItemPropertyRules.GunApId)
@@ -9268,7 +9268,7 @@ var npcLoopTask = Task.Run(async () =>
             {
                 continue;
             }
-            int? stored = null;
+            long? stored = null;
             if (rider.EffectAction == SkillRiders.CruelFlame)
             {
                 if (caster.Stats is not { } burnerStats || monsterCatalog.GetById(target.MonsterParamId) is not { } burnedDefinition) continue;
@@ -9595,7 +9595,7 @@ var npcLoopTask = Task.Run(async () =>
 
     SkillAttacker ObjectAttackerOf(InGameSessionState caster, tPoseidon.Core.Game.Stats.StatManager stats) => new(
         caster.PlayerAp, caster.PlayerAc, caster.PlayerMa, caster.PlayerLk, stats.Level,
-        caster.PlayerDa, (int)Math.Min(stats.CurrentHp, int.MaxValue), (int)Math.Min(caster.PlayerMaxHp, int.MaxValue),
+        caster.PlayerDa, stats.CurrentHp, caster.PlayerMaxHp,
         caster.PlayerHv, caster.PlayerDx, caster.PlayerDp, DarkBonus: DarkBonusOf(caster));
 
     tPoseidon.Core.Game.Skills.Effects.SkillEffectMode ObjectModeAgainst(
@@ -9628,7 +9628,7 @@ var npcLoopTask = Task.Run(async () =>
         tPoseidon.Core.Game.Skills.Effects.SkillPeriodicHit periodic = tPoseidon.Core.Game.Skills.Effects.SkillPeriodicHit.None,
         int tickMs = 0,
         (ushort X, ushort Y)? point = null,
-        int magnitude = 0,
+        long magnitude = 0,
         ushort trackedEntityId = 0,
         sbyte? limiterClass = null)
     {
@@ -10422,9 +10422,9 @@ var npcLoopTask = Task.Run(async () =>
                 hitObject.EndNow();
                 if (hitObject.PeriodCount++ > 0 || hitObject.Action is not { } boomRow || owner.Stats is not { } boomStats) return true;
                 var (lost, victimDamage) = ObjectHits.KamikazeBlast(
-                    (int)Math.Min(boomStats.CurrentHp, int.MaxValue),
+                    boomStats.CurrentHp,
                     boomRow.Value(ObjectHits.HpRemainColumn) ?? 0f, boomRow.Value(ObjectHits.RatioColumn) ?? 0f);
-                boomStats.SetVitals((uint)Math.Max(0, (long)boomStats.CurrentHp - lost), boomStats.CurrentMp);
+                boomStats.SetVitals(Math.Max(0L, boomStats.CurrentHp - lost), boomStats.CurrentMp);
                 var victims = MonstersAround(owner, sessions, mapId, (owner.PlayerX, owner.PlayerY), boomRow.Amount(ObjectHits.RadiusColumn) ?? 0, skipsFlyers: false, now)
                     .Take(ObjectHits.LimitOf(boomRow, ObjectHits.KamikazeVictims))
                     .ToList();
@@ -10440,7 +10440,7 @@ var npcLoopTask = Task.Run(async () =>
                     owner.PlayerEntityId, owner.PlayerEntityId, MonsterEntity.NoOwner, sessions).ConfigureAwait(false)
                     || !await SendFromLoopAsync(
                         new[] { session }, Opcode.S2C_HEALTH_STATUS,
-                        new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = boomStats.CurrentHp }.EncodePayload(),
+                        tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(boomStats.CurrentHp).EncodePayload(),
                         MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false))
                 {
                     return false;
@@ -10467,7 +10467,7 @@ var npcLoopTask = Task.Run(async () =>
         tPoseidon.Core.LibConfig.SkillTableRow action,
         MonsterEntity victim,
         tPoseidon.Core.Game.Skills.Effects.SkillEffectMode mode,
-        int magnitude,
+        long magnitude,
         ushort blockId,
         (ushort X, ushort Y)? point = null,
         bool checksDebuff = true)
@@ -10787,7 +10787,7 @@ var npcLoopTask = Task.Run(async () =>
         {
             return true;
         }
-        var victims = MonstersAround(owner, sessions, mapId, (fieldAt.X, fieldAt.Y), field.Magnitude, skipsFlyers: true, now)
+        var victims = MonstersAround(owner, sessions, mapId, (fieldAt.X, fieldAt.Y), WireLimits.SaturateInt32(field.Magnitude), skipsFlyers: true, now)
             .Take(ObjectEffects.ElectricFieldVictims)
             .Select(monster => monster.EntityId)
             .ToList();
@@ -10983,7 +10983,7 @@ var npcLoopTask = Task.Run(async () =>
         {
             return true;
         }
-        if (MonstersAround(owner, sessions, mapId, (mineAt.X, mineAt.Y), mine.Magnitude, skipsFlyers: true, now).FirstOrDefault() is not { } victim
+        if (MonstersAround(owner, sessions, mapId, (mineAt.X, mineAt.Y), WireLimits.SaturateInt32(mine.Magnitude), skipsFlyers: true, now).FirstOrDefault() is not { } victim
             || monsterCatalog.GetById(victim.MonsterParamId) is not { } victimDefinition)
         {
             return true;
@@ -11021,7 +11021,7 @@ var npcLoopTask = Task.Run(async () =>
 
     int MorphStatValueOf(InGameSessionState player, int stat) => stat switch
     {
-        tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatAp => player.PlayerAp,
+        tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatAp => WireLimits.SaturateInt32(player.PlayerAp),
         tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatDx => player.PlayerDx,
         tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatLk => player.PlayerLk,
         tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatDp => player.PlayerDp,
@@ -11067,7 +11067,7 @@ var npcLoopTask = Task.Run(async () =>
         Console.WriteLine($"{LogTag} [skill] 0x{player.PlayerEntityId:X4} returns to normal form, HP {morphStats.CurrentHp}");
         return await SendFromLoopAsync(
             new[] { owner }, Opcode.S2C_HEALTH_STATUS,
-            new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = morphStats.CurrentHp }.EncodePayload(),
+            tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(morphStats.CurrentHp).EncodePayload(),
             MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false);
     }
 
@@ -11082,7 +11082,7 @@ var npcLoopTask = Task.Run(async () =>
         }
         drainStats.SetVitals(drainStats.CurrentHp, drainStats.CurrentMp - (uint)Math.Max(0, unit));
         return await SendFromLoopAsync(
-            new[] { owner }, Opcode.S2C_MANA_STATUS, new tPoseidon.Core.Net.Packets.ManaStatusPacket { CurrentMp = drainStats.CurrentMp }.EncodePayload(),
+            new[] { owner }, Opcode.S2C_MANA_STATUS, tPoseidon.Core.Net.Packets.ManaStatusPacket.Of(drainStats.CurrentMp).EncodePayload(),
             MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false);
     }
 
@@ -11169,7 +11169,7 @@ var npcLoopTask = Task.Run(async () =>
         return true;
     }
 
-    IReadOnlyList<SkillHit> KnifeHits(InGameSessionState caster, tPoseidon.Core.Game.Stats.StatManager stats, MonsterEntity victim, int power, float coefficient, int count, int split)
+    IReadOnlyList<SkillHit> KnifeHits(InGameSessionState caster, tPoseidon.Core.Game.Stats.StatManager stats, MonsterEntity victim, long power, float coefficient, int count, int split)
     {
         if (monsterCatalog.GetById(victim.MonsterParamId) is not { } victimDefinition) return Array.Empty<SkillHit>();
         var attacker = ObjectAttackerOf(caster, stats);
@@ -11405,7 +11405,7 @@ var npcLoopTask = Task.Run(async () =>
         {
             var power = KnockSkills.Power(
                 KnockSkills.PushedDistance((victimAt.x, victimAt.y), (pushedTo.X, pushedTo.Y)),
-                (int)Math.Min(stats.CurrentHp, int.MaxValue), action.Value(KnockSkills.RatioColumn) ?? 0f);
+                stats.CurrentHp, action.Value(KnockSkills.RatioColumn) ?? 0f);
             lock (npcLoopRng)
             {
                 hit = SkillDamage.Physical(
@@ -11485,7 +11485,7 @@ var npcLoopTask = Task.Run(async () =>
             healedStats.SetVitals(ScrollSkills.Healed(healedStats.CurrentHp, healed.Value.PlayerMaxHp, ratio), healedStats.CurrentMp);
             return await SendFromLoopAsync(
                 new[] { healed }, Opcode.S2C_HEALTH_STATUS,
-                new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = healedStats.CurrentHp }.EncodePayload(),
+                tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(healedStats.CurrentHp).EncodePayload(),
                 MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false);
         }
         if (!await HealAsync(session).ConfigureAwait(false)) return false;
@@ -11561,8 +11561,8 @@ var npcLoopTask = Task.Run(async () =>
 
     SkillTarget PlayerTargetOf(InGameSessionState player, int element) => new(
         player.PlayerDp, player.PlayerHv, player.PlayerMd, player.PlayerLk,
-        (int)Math.Min(player.Stats?.CurrentHp ?? 0, int.MaxValue), player.Stats?.Level ?? 0, ElementTotalOf(player, ElementSlots.ResistSlotOf(element)),
-        (int)Math.Min(player.PlayerMaxHp, int.MaxValue), player.CombatBase.Dp);
+        player.Stats?.CurrentHp ?? 0, player.Stats?.Level ?? 0, ElementTotalOf(player, ElementSlots.ResistSlotOf(element)),
+        player.PlayerMaxHp, player.CombatBase.Dp);
 
     List<KeyValuePair<S2SessionContext, InGameSessionState>> PlayersAround(
         List<KeyValuePair<S2SessionContext, InGameSessionState>> sessions, (int X, int Y) centre, float radius) =>
@@ -11835,7 +11835,7 @@ var npcLoopTask = Task.Run(async () =>
     {
         if (attacker.IsDead || attacker.NextSwingAt > now) return true;
         if (victim.IsDead || victim.Stats is not { } victimStats) return true;
-        var hpBefore = (int)Math.Min(victimStats.CurrentHp, int.MaxValue);
+        var hpBefore = victimStats.CurrentHp;
         tPoseidon.Core.Game.Combat.MeleeOutcome outcome;
         lock (npcLoopRng)
         {
@@ -11923,7 +11923,7 @@ var npcLoopTask = Task.Run(async () =>
             Killed: fatal,
             NextSwingAtUtc: attacker.NextSwingAt,
             MonsterParamId: 0,
-            MobMaxHp: (int)Math.Min(victim.PlayerMaxHp, int.MaxValue),
+            MobMaxHp: victim.PlayerMaxHp,
             MobHpBefore: hpBefore);
         if (!await SendStrikeFramesAsync(
             MeleeSwingFrames.EncodeOnPlayer(strike, blockId, beforeHit, afterHit),
@@ -11974,14 +11974,14 @@ var npcLoopTask = Task.Run(async () =>
         var power = row.Amount(MonsterSkills.PowerColumn) ?? 0;
         var radius = (float)(row.Amount(MonsterSkills.RadiusColumn) ?? 0);
         Console.WriteLine($"{LogTag} [skill] monster 0x{monster.EntityId:X4} casts skill {skill.Id} level {cast.Level} (action {skill.ActionId}) at 0x{cast.TargetEntityId:X4}");
-        SkillHit Magic(InGameSessionState victim, int magicPower, int loss, int element)
+        SkillHit Magic(InGameSessionState victim, long magicPower, long loss, int element)
         {
             lock (npcLoopRng)
             {
                 return SkillDamage.Magic(attacker, magicPower, PlayerTargetOf(victim, element), coefficient, loss, element, npcLoopRng);
             }
         }
-        SkillHit Physical(InGameSessionState victim, int physicalPower)
+        SkillHit Physical(InGameSessionState victim, long physicalPower)
         {
             lock (npcLoopRng)
             {
@@ -12160,7 +12160,7 @@ var npcLoopTask = Task.Run(async () =>
         KeyValuePair<S2SessionContext, InGameSessionState>? playerOwner,
         tPoseidon.Core.Game.Skills.Effects.SkillEffectMode mode,
         float amount,
-        int magnitude,
+        long magnitude,
         List<KeyValuePair<S2SessionContext, InGameSessionState>> sessions,
         ushort blockId,
         (ushort X, ushort Y)? point = null,
@@ -12244,7 +12244,7 @@ var npcLoopTask = Task.Run(async () =>
                 return SkillDamage.Magic(attacker, power, PlayerTargetOf(victim, element), coefficient, MonsterSkills.MagicLoss, element, npcLoopRng);
             }
         }
-        SkillHit Physical(InGameSessionState victim, int physicalPower)
+        SkillHit Physical(InGameSessionState victim, long physicalPower)
         {
             lock (npcLoopRng)
             {
@@ -12408,7 +12408,7 @@ var npcLoopTask = Task.Run(async () =>
         {
             if (!MonsterSkills.PoisonStrikeDue(effect.ElapsedMs, effect.PeriodCount, (int)effect.Amount)) return true;
             effect.PeriodCount++;
-            var damage = MonsterSkills.PoisonDamage(effect.Magnitude, (int)Math.Min(victimStats.CurrentHp, int.MaxValue));
+            var damage = MonsterSkills.PoisonDamage(effect.Magnitude, victimStats.CurrentHp);
             if (damage <= 0) return true;
             hit = new SkillHit(damage, SkillDamage.PhysicalType, MonsterSkills.PoisonKind, SkillActions.NoElement, 0);
         }
@@ -12931,7 +12931,7 @@ var npcLoopTask = Task.Run(async () =>
         {
             power = tPoseidon.Core.Game.Combat.GunAttack.CustomizedPower(power, customized.Amount);
         }
-        (int Damage, int Kind) shot;
+        (long Damage, int Kind) shot;
         lock (npcLoopRng)
         {
             shot = tPoseidon.Core.Game.Combat.GunAttack.Shot(
@@ -12983,7 +12983,7 @@ var npcLoopTask = Task.Run(async () =>
             monsterManager.GetByMap(mapId).Select(CandidateOf));
         var attacker = new SkillAttacker(
             owner.PlayerAp, owner.PlayerAc, owner.PlayerMa, owner.PlayerLk, wheelStats.Level,
-            owner.PlayerDa, (int)Math.Min(wheelStats.CurrentHp, int.MaxValue), (int)Math.Min(owner.PlayerMaxHp, int.MaxValue),
+            owner.PlayerDa, wheelStats.CurrentHp, owner.PlayerMaxHp,
             owner.PlayerHv, owner.PlayerDx, owner.PlayerDp, DarkBonus: DarkBonusOf(owner));
         foreach (var victimId in victims)
         {
@@ -13274,7 +13274,7 @@ var npcLoopTask = Task.Run(async () =>
                     await partyQuests.KilledAsync(ownerCharacter.CharacterId, strike.MonsterParamId, CancellationToken.None).ConfigureAwait(false);
                 }
                 var tm = CombatExperience.TmForKill(
-                    struckDefinition.Tm, struckMonster.HpWhenOwned, struckMonster.MaxHp, struckMonster.Level, ownerStats.Level);
+                    struckDefinition.Tm, WireLimits.Int32Field(struckMonster.HpWhenOwned), WireLimits.Int32Field(struckMonster.MaxHp), struckMonster.Level, ownerStats.Level);
                 var tmSplit = owner.Character is { } tmEarner ? partyShares.SplitTm(tmEarner.CharacterId, tm) : null;
                 if (tmSplit is null)
                 {
@@ -13305,7 +13305,7 @@ var npcLoopTask = Task.Run(async () =>
             Array.Empty<(Opcode Opcode, byte[] Payload, SwingAudience Audience)>();
         if (striker is { Stats: { } strikerStats, GainHitExp: { } gainExp } && struckMonster is not null && struckDefinition is not null)
         {
-            var share = CombatExperience.Share(struckDefinition.Exp, strike.Damage, strike.MobHpBefore, struckMonster.MaxHp);
+            var share = CombatExperience.Share(struckDefinition.Exp, WireLimits.Int32Field(strike.Damage), WireLimits.Int32Field(strike.MobHpBefore), WireLimits.Int32Field(struckMonster.MaxHp));
             var hitExp = CombatExperience.ForHit(share, strikerStats.Level, struckMonster.Level, experienceDivisor);
             var expSplit = striker.Character is { } expEarner ? partyShares.SplitExp(expEarner.CharacterId, hitExp) : null;
             if (expSplit is null)
@@ -14124,7 +14124,7 @@ var npcLoopTask = Task.Run(async () =>
                 {
                     var skillAttacker = new SkillAttacker(
                         caster.PlayerAp, caster.PlayerAc, caster.PlayerMa, caster.PlayerLk, casterStats.Level,
-                        caster.PlayerDa, (int)Math.Min(casterStats.CurrentHp, int.MaxValue), (int)Math.Min(caster.PlayerMaxHp, int.MaxValue),
+                        caster.PlayerDa, casterStats.CurrentHp, caster.PlayerMaxHp,
                         caster.PlayerHv, caster.PlayerDx, WeaponDa: WeaponDaOf(casterCharacter.CharacterId), DarkBonus: DarkBonusOf(caster),
                         ElementBonus: castShape is { ElementSlot: >= 0 } elementShape ? elementShape.ElementStep * ElementTotalOf(caster, elementShape.ElementSlot) : 0);
                     var skillTarget = new SkillTarget(
@@ -14145,7 +14145,7 @@ var npcLoopTask = Task.Run(async () =>
                         lock (npcLoopRng)
                         {
                             counter = SkillDamage.Physical(
-                                skillAttacker, (int)(caster.PlayerAp * (double)(counterRow.Value(SkillHitShapes.RatioColumn) ?? 0f)), skillTarget,
+                                skillAttacker, WireLimits.Saturate(caster.PlayerAp * (double)(counterRow.Value(SkillHitShapes.RatioColumn) ?? 0f)), skillTarget,
                                 SkillRiders.CounterPunchCoefficient(caster.PlayerAc), SkillActions.NoElement, npcLoopRng);
                         }
                         if (counter.Damage > 0)
@@ -14271,7 +14271,7 @@ var npcLoopTask = Task.Run(async () =>
                 var pickupFrames = new List<(Opcode Opcode, byte[] Payload, ushort BlockId, bool ToPickerOnly)>();
                 if (picked.IsMoney)
                 {
-                    if (!PickupRules.MoneyFits(pickerStats.Money, picked.Count))
+                    if (!PickupRules.MoneyFits(pickerStats.Money, picked.Count, pickerStats.WalletLimit))
                     {
                         Console.WriteLine($"{LogTag} [items] 0x{picker.PlayerEntityId:X4} cannot hold {picked.Count} more money (has {pickerStats.Money})");
                         pickupFrames.Add((Opcode.S2C_MONEY_FULL, GroundItemFrames.MoneyFull(), MeleeSwingFrames.NoBlock, true));
@@ -14393,9 +14393,9 @@ var npcLoopTask = Task.Run(async () =>
                         await watcher.Value.SendFrameAsync(Opcode.NPC_SPAWN, respawnPayload, (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
                     }
                     await revived.SendFrameAsync(Opcode.S2C_HEALTH_STATUS,
-                        new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = revivedStats.CurrentHp }.EncodePayload(), (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
+                        tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(revivedStats.CurrentHp).EncodePayload(), (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
                     await revived.SendFrameAsync(Opcode.S2C_MANA_STATUS,
-                        new tPoseidon.Core.Net.Packets.ManaStatusPacket { CurrentMp = revivedStats.CurrentMp }.EncodePayload(), (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
+                        tPoseidon.Core.Net.Packets.ManaStatusPacket.Of(revivedStats.CurrentMp).EncodePayload(), (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
                     await revived.SendFrameAsync(Opcode.S2C_RESURRECTION_DONE, Array.Empty<byte>(), (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
@@ -14480,30 +14480,30 @@ var npcLoopTask = Task.Run(async () =>
                 var sinceLastRecovery = resting.RecoveryTickedAt == default ? TimeSpan.Zero : now - resting.RecoveryTickedAt;
                 if (sinceLastRecovery > longestRecoveryTick) sinceLastRecovery = longestRecoveryTick;
                 resting.RecoveryTickedAt = now;
-                var hpBefore = (int)Math.Min(restingStats.CurrentHp, int.MaxValue);
-                var mpBefore = (int)Math.Min(restingStats.CurrentMp, int.MaxValue);
+                var hpBefore = restingStats.CurrentHp;
+                var mpBefore = restingStats.CurrentMp;
                 var recovered = resting.Recovery.Tick(
                     (int)sinceLastRecovery.TotalMilliseconds,
                     hpBefore,
-                    (int)Math.Min(resting.PlayerMaxHp, int.MaxValue),
+                    resting.PlayerMaxHp,
                     mpBefore,
-                    (int)Math.Min(resting.PlayerMaxMp, int.MaxValue),
+                    resting.PlayerMaxMp,
                     resting.Pet is { } restingPet
                         ? tPoseidon.Core.Game.Pets.PetRules.WithRecoveryBonus(ManaRecoveryOf(resting), restingPet.Recovery)
                         : ManaRecoveryOf(resting));
                 if (recovered.Hp is null && recovered.Mp is null) continue;
-                restingStats.SetVitals((uint)(recovered.Hp ?? hpBefore), (uint)(recovered.Mp ?? mpBefore));
+                restingStats.SetVitals(recovered.Hp ?? hpBefore, recovered.Mp ?? mpBefore);
                 try
                 {
                     if (recovered.Hp is { } hpNow)
                     {
                         await resting.SendFrameAsync(Opcode.S2C_HEALTH_STATUS,
-                            new tPoseidon.Core.Net.Packets.HealthStatusPacket { CurrentHp = (uint)hpNow }.EncodePayload(), (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
+                            tPoseidon.Core.Net.Packets.HealthStatusPacket.Of(hpNow).EncodePayload(), (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
                     }
                     if (recovered.Mp is { } mpNow)
                     {
                         await resting.SendFrameAsync(Opcode.S2C_MANA_STATUS,
-                            new tPoseidon.Core.Net.Packets.ManaStatusPacket { CurrentMp = (uint)mpNow }.EncodePayload(), (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
+                            tPoseidon.Core.Net.Packets.ManaStatusPacket.Of(mpNow).EncodePayload(), (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
                     }
                 }
                 catch (OperationCanceledException)
@@ -14559,7 +14559,7 @@ var npcLoopTask = Task.Run(async () =>
                     targetState.PlayerHv,
                     targetState.PlayerLk,
                     targetStats.Level,
-                    (int)Math.Min(targetStats.CurrentHp, int.MaxValue),
+                    targetStats.CurrentHp,
                     targetState.IsProtected(now));
             }
             battleEvents.AddRange(monsterBattleCycle.Tick(
@@ -14769,9 +14769,9 @@ internal sealed class InGameSessionState
 
     public bool AutoAttackActive { get; set; }
     public DateTimeOffset NextSwingAt { get; set; }
-    public ushort PlayerAp { get; set; }
-    public ushort PlayerMa { get; set; }
-    public ushort PlayerAc { get; set; }
+    public long PlayerAp { get; set; }
+    public long PlayerMa { get; set; }
+    public long PlayerAc { get; set; }
     public int PlayerDx { get; set; }
     public int PlayerCharacterType { get; set; }
     public int PlayerLk { get; set; }
@@ -14819,7 +14819,7 @@ internal sealed class InGameSessionState
     public Func<tPoseidon.Core.Net.Dialogs.ZoneChangeRequest, CancellationToken, Task>? RequestZoneChange { get; set; }
     public tPoseidon.Core.Game.Stats.StatManager? Stats { get; set; }
     public bool IsDead { get; set; }
-    public uint PlayerMaxHp { get; set; }
+    public long PlayerMaxHp { get; set; }
     public tPoseidon.Core.Game.Combat.EngagementList Engagements { get; } = new();
     public NaturalRecovery Recovery { get; } = new();
 
@@ -14831,9 +14831,9 @@ internal sealed class InGameSessionState
     public RecoveryAmounts RecoveryAmounts { get; set; }
     public int RecoveryType { get; set; }
     public DateTimeOffset RecoveryTickedAt { get; set; }
-    public Func<int, IReadOnlyList<(Opcode Opcode, byte[] Payload, SwingAudience Audience)>>? GainHitExp { get; set; }
-    public Func<int, IReadOnlyList<(Opcode Opcode, byte[] Payload)>>? GainKillTmExp { get; set; }
-    public uint PlayerMaxMp { get; set; }
+    public Func<long, IReadOnlyList<(Opcode Opcode, byte[] Payload, SwingAudience Audience)>>? GainHitExp { get; set; }
+    public Func<long, IReadOnlyList<(Opcode Opcode, byte[] Payload)>>? GainKillTmExp { get; set; }
+    public long PlayerMaxMp { get; set; }
     public Character? Character { get; set; }
     public DateTimeOffset ResurrectionCompletesAt { get; set; }
     public DateTimeOffset ProtectedUntil { get; set; }
@@ -14857,10 +14857,10 @@ internal sealed class InGameSessionState
     public SkillCast? Cast { get; set; }
     public SkillCooldowns Cooldowns { get; } = new();
     public DateTimeOffset CooldownsTickedAt { get; set; }
-    public Func<int, IReadOnlyList<(Opcode Opcode, byte[] Payload)>>? GainSkillTmExp { get; set; }
-    public Func<int, IReadOnlyList<(Opcode Opcode, byte[] Payload, SwingAudience Audience)>>? GainExpTotal { get; set; }
-    public Func<int, IReadOnlyList<(Opcode Opcode, byte[] Payload, SwingAudience Audience)>>? GainRewardExp { get; set; }
-    public Func<int, IReadOnlyList<(Opcode Opcode, byte[] Payload)>>? GainRewardTmExp { get; set; }
+    public Func<long, IReadOnlyList<(Opcode Opcode, byte[] Payload)>>? GainSkillTmExp { get; set; }
+    public Func<long, IReadOnlyList<(Opcode Opcode, byte[] Payload, SwingAudience Audience)>>? GainExpTotal { get; set; }
+    public Func<long, IReadOnlyList<(Opcode Opcode, byte[] Payload, SwingAudience Audience)>>? GainRewardExp { get; set; }
+    public Func<long, IReadOnlyList<(Opcode Opcode, byte[] Payload)>>? GainRewardTmExp { get; set; }
     public Action? RecomputeStats { get; set; }
     public int PlayerDa { get; set; }
     public DrillDig? Dig { get; set; }

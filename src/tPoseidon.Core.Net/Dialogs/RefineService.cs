@@ -235,7 +235,7 @@ public sealed class RefineService
         w.WriteUInt64(BagItemIds.OnWire(target.ItemUid));
         w.WriteUInt16((ushort)propertyId.Value);
         w.WriteUInt16((ushort)value);
-        w.WriteUInt32(stats.Money);
+        w.WriteUInt32Field(stats.Money);
         await SendAsync(Opcode.S2C_REFINE_RESULT, w.ToArray(), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   refine item {target.ItemIndex} level {level} -> {(success ? level + 1 : level)}: {(success ? $"success, property {propertyId} = {value}" : "failed, item broken")} (chance {chance / 100:F2}%, fee {fee})");
     }

@@ -62,7 +62,7 @@ public static class ItemUseRules
         return null;
     }
 
-    public static bool PotionNotNeeded(ItemParamEntry definition, uint hp, uint maxHp, uint mp, uint maxMp)
+    public static bool PotionNotNeeded(ItemParamEntry definition, long hp, long maxHp, long mp, long maxMp)
     {
         ArgumentNullException.ThrowIfNull(definition);
         return (definition.Hp > 0 && hp >= maxHp) || (definition.Mp > 0 && mp >= maxMp);

@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Skills;
@@ -60,24 +61,24 @@ public static class ThrowSkills
         return min == max ? min : random * (max + 1 - min) / RandomSpan + min;
     }
 
-    public static int OnePairPower(SkillTableRow action, int ap, int hv, int cards, bool ladyLuck)
+    public static long OnePairPower(SkillTableRow action, long ap, long hv, long cards, bool ladyLuck)
     {
         ArgumentNullException.ThrowIfNull(action);
-        var power = (int)((ap + AvoidStep * hv) * (double)(action.Value(RatioColumn) ?? 0f));
-        return ladyLuck ? (int)(power * (double)((float)(cards / LuckCardScale) + 1.0f)) : power;
+        var power = WireLimits.Saturate((ap + AvoidStep * hv) * (double)(action.Value(RatioColumn) ?? 0f));
+        return ladyLuck ? WireLimits.Saturate(power * (double)((float)(cards / LuckCardScale) + 1.0f)) : power;
     }
 
-    public static int FourCardPower(SkillTableRow action, int ap, int da)
+    public static long FourCardPower(SkillTableRow action, long ap, long da)
     {
         ArgumentNullException.ThrowIfNull(action);
-        return (int)((ap + DigStep * da) * (double)(action.Value(RatioColumn) ?? 0f));
+        return WireLimits.Saturate((ap + DigStep * da) * (double)(action.Value(RatioColumn) ?? 0f));
     }
 
-    public static int ThrownPower(ItemParamEntry item, int da, float multiplier, float ratio)
+    public static long ThrownPower(ItemParamEntry item, long da, float multiplier, float ratio)
     {
         ArgumentNullException.ThrowIfNull(item);
         var power = item.Type == ThrowItemType
-            ? (int)((item.Ap * multiplier + da * ThrowDigStep) * (double)ratio)
+            ? WireLimits.Saturate((item.Ap * multiplier + da * ThrowDigStep) * (double)ratio)
             : item.Weight / 2;
         return Math.Max(1, power);
     }
@@ -92,5 +93,5 @@ public static class ThrowSkills
         return GalderBands[^1].Pay;
     }
 
-    public static int GalderPower(int pay, float ratio) => ratio < 0f ? 0 : (int)(pay * (double)ratio);
+    public static long GalderPower(long pay, float ratio) => ratio < 0f ? 0 : WireLimits.Saturate(pay * (double)ratio);
 }

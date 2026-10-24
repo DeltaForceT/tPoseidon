@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 namespace tPoseidon.Core.Game.Skills;
 
 public static class KnockSkills
@@ -59,5 +60,5 @@ public static class KnockSkills
         return (short)(int)Math.Sqrt((float)(dx * dx + dy * dy));
     }
 
-    public static int Power(int pushed, int casterHp, float ratio) => (int)(unchecked((pushed + DistanceBase) * casterHp) * (double)ratio / PowerDivisor);
+    public static long Power(long pushed, long casterHp, float ratio) => WireLimits.Saturate(unchecked((pushed + DistanceBase) * casterHp) * (double)ratio / PowerDivisor);
 }

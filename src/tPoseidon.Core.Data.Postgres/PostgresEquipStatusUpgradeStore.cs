@@ -49,7 +49,7 @@ public sealed class PostgresEquipStatusUpgradeStore : IEquipStatusUpgradeStore
         }
         if (BagCount(conn, tx, upgrade.CharacterId) > upgrade.BagCapacity) return EquipStatusUpgradeResult.Refused(EquipStatusUpgradeRules.BagFull);
         var remain = money - upgrade.Fee;
-        Execute(conn, tx, "UPDATE characters SET money = @m WHERE character_id = @ch", ("m", (long)remain), ("ch", unchecked((long)upgrade.CharacterId)));
+        Execute(conn, tx, "UPDATE characters SET money = @m WHERE character_id = @ch", ("m", remain), ("ch", unchecked((long)upgrade.CharacterId)));
         tx.Commit();
         return new EquipStatusUpgradeResult(EquipStatusUpgradeRules.Ok, remain, applied);
     }
@@ -100,11 +100,11 @@ public sealed class PostgresEquipStatusUpgradeStore : IEquipStatusUpgradeStore
         return (ulong)uid;
     }
 
-    private static uint? LockMoney(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId)
+    private static long? LockMoney(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId)
     {
         using var cmd = new NpgsqlCommand("SELECT money FROM characters WHERE character_id = @ch FOR UPDATE", conn, tx);
         cmd.Parameters.AddWithValue("ch", unchecked((long)characterId));
-        return cmd.ExecuteScalar() is { } money and not DBNull ? (uint)Math.Max(0L, Convert.ToInt64(money, CultureInfo.InvariantCulture)) : null;
+        return cmd.ExecuteScalar() is { } money and not DBNull ? Math.Max(0L, Convert.ToInt64(money, CultureInfo.InvariantCulture)) : null;
     }
 
     private static int BagCount(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId)

@@ -121,7 +121,7 @@ public sealed class ShopTrade
 
         var operations = new List<BagOperation>(orders.Count);
         foreach (var (itemId, count) in orders) operations.Add(Grant(character.CharacterId, itemId, count));
-        stats.GrantMoney(-(int)total, StatChangeSource.Item);
+        stats.GrantMoney(-total, StatChangeSource.Item);
         await SendAsync(Opcode.S2C_SHOP_BOUGHT, ShopFrames.Traded(stats.Money, operations), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   shop 0x{shopEntityId:X4}: bought {string.Join(", ", orders.Select(o => $"{o.ItemId} x{o.Count}"))} for {total}, money {stats.Money}");
         return null;
@@ -168,7 +168,7 @@ public sealed class ShopTrade
             var row = offer.Goods.FirstOrDefault(entry => entry.ItemId == held.ItemIndex);
             total += (long)ShopPrices.SellUnitPrice(offer.PriceRate, definition.Value, row, offer.SellingRate) * count;
         }
-        if (!offer.SellsSkillCards && stats.Money + total > ShopPrices.MoneyLimit) return (Opcode.S2C_MONEY_FULL, ShopFrames.MoneyFull());
+        if (!offer.SellsSkillCards && !PickupRules.MoneyFits(stats.Money, total, stats.WalletLimit)) return (Opcode.S2C_MONEY_FULL, ShopFrames.MoneyFull());
 
         var operations = new List<BagOperation>(sales.Count);
         foreach (var (held, definition, count) in sales)
@@ -185,7 +185,7 @@ public sealed class ShopTrade
                 operations.Add(new BagOperation(QuestResultFrames.Removed, definition.ObjectClass, (uint)held.ItemIndex, wireUid, 0));
             }
         }
-        stats.GrantMoney((int)Math.Min(total, int.MaxValue), StatChangeSource.Item);
+        stats.GrantMoney(total, StatChangeSource.Item);
         await SendAsync(Opcode.S2C_SHOP_SOLD, ShopFrames.Traded(stats.Money, operations), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   shop 0x{shopEntityId:X4}: sold {string.Join(", ", sales.Select(s => $"{s.Held.ItemIndex} x{s.Count}"))} for {total}, money {stats.Money}");
         return null;

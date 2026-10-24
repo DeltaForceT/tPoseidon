@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Skills;
@@ -213,10 +214,10 @@ public static class SkillHitShapes
     public static int RestartDelayMs(int actionId, int attackMs, int attackReadyMs, int standardDelayMs) =>
         actionId == UpperSmash ? 2 * (attackMs + attackReadyMs) : standardDelayMs;
 
-    public static int Power(SkillPowerRule rule, SkillAttacker attacker, float ratio) =>
+    public static long Power(SkillPowerRule rule, SkillAttacker attacker, float ratio) =>
         Power(rule, attacker, default, ratio, null, null);
 
-    public static int Power(SkillPowerRule rule, SkillAttacker attacker, SkillTarget target, float ratio, SkillTableRow? action, Random? rng) => rule switch
+    public static long Power(SkillPowerRule rule, SkillAttacker attacker, SkillTarget target, float ratio, SkillTableRow? action, Random? rng) => rule switch
     {
         SkillPowerRule.AttackTimesRatio => Truncate(attacker.Ap * (double)ratio),
         SkillPowerRule.DigTimesRatio => Truncate((attacker.Da + 1) * DigPowerStep * (double)ratio),
@@ -282,5 +283,5 @@ public static class SkillHitShapes
         return (ratio + (enhancer.Value(RatioColumn) ?? 0f), enhancedApply > 0f ? enhancedApply : applyRatio);
     }
 
-    private static int Truncate(double value) => (int)Math.Clamp(Math.Truncate(value), int.MinValue, int.MaxValue);
+    private static long Truncate(double value) => WireLimits.Saturate(Math.Truncate(value));
 }

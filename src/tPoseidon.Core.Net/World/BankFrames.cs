@@ -13,12 +13,12 @@ public static class BankFrames
     public static byte[] AlreadyLoaded() => new[] { AlreadySent };
 
     public static byte[] Contents(
-        uint bankMoney, IReadOnlyList<(Item Item, byte ItemClass)> items, Func<Item, IReadOnlyList<ItemProperty>>? properties = null)
+        long bankMoney, IReadOnlyList<(Item Item, byte ItemClass)> items, Func<Item, IReadOnlyList<ItemProperty>>? properties = null)
     {
         ArgumentNullException.ThrowIfNull(items);
         var w = new PacketWriter(16 + items.Count * 26);
         w.WriteByte(Sent);
-        w.WriteUInt32(bankMoney);
+        w.WriteUInt32Field(bankMoney);
         WriteStoredItems(w, items, properties);
         return w.ToArray();
     }
@@ -73,11 +73,11 @@ public static class BankFrames
         return w.ToArray();
     }
 
-    public static byte[] Money(uint bankMoney, uint money)
+    public static byte[] Money(long bankMoney, long money)
     {
         var w = new PacketWriter(8);
-        w.WriteUInt32(bankMoney);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(bankMoney);
+        w.WriteUInt32Field(money);
         return w.ToArray();
     }
 

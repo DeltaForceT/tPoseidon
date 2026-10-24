@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Skills.Effects;
 using tPoseidon.Core.LibConfig;
 
@@ -110,41 +111,41 @@ public static class ObjectHits
 
     public static int GalderCostOf(int actionId) => actionId == MultiGellder ? MultiGellderCost : GellderCost;
 
-    public static int ElementPower(int elementAttack, int power) => elementAttack * ElementTripled + power;
+    public static long ElementPower(int elementAttack, long power) => elementAttack * ElementTripled + power;
 
-    public static int RatioPower(int ap, float ratio) => (int)(ap * (double)ratio);
+    public static long RatioPower(long ap, float ratio) => WireLimits.Saturate(ap * (double)ratio);
 
-    public static int GalderPower(int cost, float ratio) => (int)(cost * (double)ratio);
+    public static long GalderPower(long cost, float ratio) => WireLimits.Saturate(cost * (double)ratio);
 
-    public static int FlashPower(int ap, int ac, bool power) => ac * (power ? PowerFlashAcStep : FlashAcStep) + ap;
+    public static long FlashPower(long ap, long ac, bool power) => ac * (power ? PowerFlashAcStep : FlashAcStep) + ap;
 
-    public static int CardPower(int ap, int hv, float ratio) => (int)((ap + hv * CardHvStep) * (double)ratio);
+    public static long CardPower(long ap, long hv, float ratio) => WireLimits.Saturate((ap + hv * CardHvStep) * (double)ratio);
 
-    public static int CardFalloff(int damage, float distance, int radius)
+    public static long CardFalloff(long damage, float distance, int radius)
     {
         if (radius <= 0) return damage;
         var fall = (float)(1.0 - distance / radius);
-        return (int)(damage * (double)fall);
+        return WireLimits.Saturate(damage * (double)fall);
     }
 
-    public static int CelestialPower(int ap, int scan)
+    public static long CelestialPower(long ap, int scan)
     {
         var scaled = (float)(scan + CelestialBase);
-        return ap + (int)(ap * (double)scaled / CelestialDivisor);
+        return ap + WireLimits.Saturate(ap * (double)scaled / CelestialDivisor);
     }
 
-    public static (int Lost, int VictimDamage) KamikazeBlast(int hp, float hpRemainRatio, float ratio)
+    public static (long Lost, long VictimDamage) KamikazeBlast(long hp, float hpRemainRatio, float ratio)
     {
-        var kept = (int)(hp * (double)hpRemainRatio);
+        var kept = WireLimits.Saturate(hp * (double)hpRemainRatio);
         var lost = hp - kept;
-        return (lost, (int)(lost * (double)ratio));
+        return (lost, WireLimits.Saturate(lost * (double)ratio));
     }
 
     public static float FlightSpeed(int actionId) => actionId == PowerFlashAttack ? PowerFlashSpeed : FlashSpeed;
 
     public static bool Lands(int attackerLk, int targetLk, float coefficient, int roll)
     {
-        var chance = (int)((attackerLk - targetLk + LuckHitBase) * HitScale * coefficient);
+        var chance = WireLimits.Saturate((attackerLk - targetLk + LuckHitBase) * HitScale * coefficient);
         return roll < Math.Clamp(chance, LowestHitChance, HighestHitChance);
     }
 

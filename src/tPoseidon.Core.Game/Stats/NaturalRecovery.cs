@@ -2,7 +2,7 @@ namespace tPoseidon.Core.Game.Stats;
 
 public readonly record struct RecoveryAmounts(int Hp, int Mp);
 
-public readonly record struct RecoveryReport(int? Hp, int? Mp);
+public readonly record struct RecoveryReport(long? Hp, long? Mp);
 
 public sealed class NaturalRecovery
 {
@@ -61,7 +61,7 @@ public sealed class NaturalRecovery
 
     public int Period { get; set; } = PeriodMs;
 
-    public RecoveryReport Tick(int elapsedMs, int hp, int maxHp, int mp, int maxMp, RecoveryAmounts amounts)
+    public RecoveryReport Tick(int elapsedMs, long hp, long maxHp, long mp, long maxMp, RecoveryAmounts amounts)
     {
         lock (_gate)
         {
@@ -78,8 +78,8 @@ public sealed class NaturalRecovery
         }
     }
 
-    private static int? Recover(
-        int elapsedMs, int value, int max, int amount, int periodMs, ref int countdownMs, ref int reportsWhileFull)
+    private static long? Recover(
+        int elapsedMs, long value, long max, int amount, int periodMs, ref int countdownMs, ref int reportsWhileFull)
     {
         countdownMs -= elapsedMs;
         if (countdownMs >= 1) return null;

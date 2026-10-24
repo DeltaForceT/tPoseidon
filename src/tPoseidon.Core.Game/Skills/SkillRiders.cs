@@ -46,10 +46,10 @@ public static class SkillRiders
 
     public static IReadOnlyList<SkillRider> Of(int actionId) => Riders.TryGetValue(actionId, out var riders) ? riders : Array.Empty<SkillRider>();
 
-    public static bool Gates(SkillHit hit, int victimHp) =>
+    public static bool Gates(SkillHit hit, long victimHp) =>
         victimHp > 0 && (hit.Kind & SkillDamage.KindMask) is not (SkillDamage.KindMiss or 2 or 6 or 8);
 
-    public static float CounterPunchCoefficient(int ac) => (float)((ac - CounterPunchFloor) * CounterPunchScale);
+    public static float CounterPunchCoefficient(long ac) => (float)((ac - CounterPunchFloor) * CounterPunchScale);
 
     public static bool Stuns(float stunRatio, int roll) => roll <= (int)(stunRatio * 100.0);
 }

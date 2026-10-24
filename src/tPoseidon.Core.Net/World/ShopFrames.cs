@@ -45,10 +45,10 @@ public static class ShopFrames
         return w.ToArray();
     }
 
-    public static byte[] Traded(uint money, IReadOnlyList<BagOperation> operations)
+    public static byte[] Traded(long money, IReadOnlyList<BagOperation> operations)
     {
         var w = new PacketWriter(32);
-        w.WriteUInt32(money);
+        w.WriteUInt32Field(money);
         w.WriteBytes(QuestResultFrames.ItemOperations(operations));
         return w.ToArray();
     }

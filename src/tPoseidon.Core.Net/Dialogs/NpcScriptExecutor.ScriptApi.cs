@@ -96,9 +96,8 @@ public sealed partial class NpcScriptExecutor
     public bool ChangeMoneyForScript(long delta)
     {
         if (_player.Stats() is not { } stats) return false;
-        if (delta > int.MaxValue || delta < int.MinValue) throw new ScriptRuntimeException("A money amount cannot exceed 2147483647");
-        if (delta < 0 && stats.Money < -delta) return false;
-        stats.GrantMoney((int)delta, StatChangeSource.GM);
+        if (delta < 0 && stats.Money + delta < 0) return false;
+        stats.GrantMoney(delta, StatChangeSource.GM);
         return true;
     }
 
@@ -107,8 +106,7 @@ public sealed partial class NpcScriptExecutor
 
     public Task GrantProgressForScript(long exp, long technique, CancellationToken ct)
     {
-        if (exp > int.MaxValue || technique > int.MaxValue) throw new ScriptRuntimeException("An experience amount cannot exceed 2147483647");
-        return _player.GrantProgress((int)exp, (int)technique, ct);
+        return _player.GrantProgress(exp, technique, ct);
     }
 
     public bool QuestActiveForScript(long questId) =>

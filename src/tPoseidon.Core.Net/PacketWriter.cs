@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using System.Buffers.Binary;
 using System.Text;
 
@@ -39,6 +40,16 @@ public sealed class PacketWriter
     }
 
     public void WriteInt32(int value) => WriteUInt32((uint)value);
+
+    public void WriteInt32Field(long value) => WriteInt32(WireLimits.SaturateInt32(value));
+
+    public void WriteUInt32Field(long value) => WriteUInt32(WireLimits.Int32FieldUnsigned(value));
+
+    public void WriteUInt32Field(ulong value) => WriteUInt32(WireLimits.Int32FieldUnsigned(value));
+
+    public void WriteInt16Field(long value) => WriteInt16(WireLimits.Int16Field(value));
+
+    public void WriteUInt16Field(long value) => WriteUInt16(WireLimits.UInt16Field(value));
 
     public void WriteUInt64(ulong value)
     {

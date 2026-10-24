@@ -2,6 +2,15 @@
 
 Every release is listed here, newest first. Versions look like `0.MINOR.PATCH-beta`; [BETA.md](docs/beta/BETA.md) explains what the numbers mean. Back up your database before every update. A release that changes the database says so at the top.
 
+## Unreleased
+
+This update changes the database (migration 075 widens `hp`, `mp` and `tm_exp` of `characters` to 64-bit and relaxes the upper bound of `money`). Back up first.
+
+- Damage, HP, MP, EXP, TM EXP and Galder are no longer capped by the server. They are 64-bit on the server and in the database; the client still shows at most 2,147,483,647 of any value, and the server sends that maximum instead of letting the number wrap. [docs/beta/SYSTEMS.md](docs/beta/SYSTEMS.md) lists what the client limits.
+- The caps in `data/server_rates.json` are optional and `0` means no limit. A new `MaxBankGalder` limit was added.
+- The bank, carried-Galder, pick-up and NPC shop limits of 2,100,000,000 and 100,000,000 are gone; set `MaxGalder` or `MaxBankGalder` to bring a limit back.
+- A player's attack, magic attack and accuracy are no longer cut at 65,535 when the server works out damage.
+
 ## 0.55.0-beta
 
 The first public beta, released as v0.55 Beta. It targets the KR 2014 client. [docs/beta/SYSTEMS.md](docs/beta/SYSTEMS.md) has the full list of what works, what needs testing and what is missing.

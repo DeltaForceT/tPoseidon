@@ -200,10 +200,10 @@ public static class EnterWorldBatchSynthesizer
 
         await SendFrameAsync(ctx, Opcode.GAME_UNK_325, randKey: 0x87, new ColorOrFlagPacket0325().EncodePayload(), ct);
 
-        var hp = new HealthStatusPacket { CurrentHp = character.CurrentHp };
+        var hp = HealthStatusPacket.Of(character.CurrentHp);
         await SendFrameAsync(ctx, Opcode.S2C_HEALTH_STATUS, randKey: 0x2F, hp.EncodePayload(), ct);
 
-        var mp = new ManaStatusPacket { CurrentMp = character.CurrentMp };
+        var mp = ManaStatusPacket.Of(character.CurrentMp);
         await SendFrameAsync(ctx, Opcode.S2C_MANA_STATUS, randKey: 0xF1, mp.EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_UNK_477, randKey: 0x15, new TimestampedSparsePacket0477().EncodePayload(), ct);
@@ -268,11 +268,11 @@ public static class EnterWorldBatchSynthesizer
             PositionX = character.PositionX,
             PositionY = character.PositionY,
             ReturnMapId = tPoseidon.Core.Game.Warp.RestartArrival.NormalizeReturnMap(character.Home),
-            Money = character.Money,
-            Hp = (int)Math.Min(character.CurrentHp, int.MaxValue),
-            Mp = (int)Math.Min(character.CurrentMp, int.MaxValue),
-            TmExp = character.TmExp,
-            Exp = (uint)Math.Min(character.Exp, uint.MaxValue),
+            Money = tPoseidon.Core.Common.WireLimits.Int32FieldUnsigned(character.Money),
+            Hp = tPoseidon.Core.Common.WireLimits.Int32Field(character.CurrentHp),
+            Mp = tPoseidon.Core.Common.WireLimits.Int32Field(character.CurrentMp),
+            TmExp = tPoseidon.Core.Common.WireLimits.Int32FieldUnsigned(character.TmExp),
+            Exp = tPoseidon.Core.Common.WireLimits.Int32FieldUnsigned(character.Exp),
             Hair = (byte)(character.Hair & 0xFF),
             WarehouseSlots = character.WarehouseSlots,
         };
@@ -520,10 +520,10 @@ public static class EnterWorldBatchSynthesizer
         await SendFrameAsync(ctx, Opcode.ENTITY_ID_ECHO, randKey: 0x0B, entityEcho.EncodePayload(), ct);
         await SendFrameAsync(ctx, Opcode.GAME_UNK_325, randKey: 0x87, new ColorOrFlagPacket0325().EncodePayload(), ct);
 
-        var hp = new HealthStatusPacket { CurrentHp = character.CurrentHp };
+        var hp = HealthStatusPacket.Of(character.CurrentHp);
         await SendFrameAsync(ctx, Opcode.S2C_HEALTH_STATUS, randKey: 0x2F, hp.EncodePayload(), ct);
 
-        var mp = new ManaStatusPacket { CurrentMp = character.CurrentMp };
+        var mp = ManaStatusPacket.Of(character.CurrentMp);
         await SendFrameAsync(ctx, Opcode.S2C_MANA_STATUS, randKey: 0xF1, mp.EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_UNK_477, randKey: 0x15, new TimestampedSparsePacket0477().EncodePayload(), ct);

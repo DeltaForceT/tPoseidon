@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Skills;
@@ -255,7 +256,7 @@ public static class SkillAreaShapes
         return victims;
     }
 
-    public static int Power(AreaShape shape, SkillTableRow action, SkillAttacker attacker)
+    public static long Power(AreaShape shape, SkillTableRow action, SkillAttacker attacker)
     {
         ArgumentNullException.ThrowIfNull(shape);
         ArgumentNullException.ThrowIfNull(action);
@@ -296,5 +297,5 @@ public static class SkillAreaShapes
         return candidate.OwnerEntityId == 0 || candidate.OwnerEntityId == casterEntityId;
     }
 
-    private static int Truncate(double value) => (int)Math.Clamp(Math.Truncate(value), int.MinValue, int.MaxValue);
+    private static long Truncate(double value) => WireLimits.Saturate(Math.Truncate(value));
 }
