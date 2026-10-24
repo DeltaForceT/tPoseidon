@@ -44,8 +44,6 @@ public sealed class SessionParam1Packet
         var output = new byte[PayloadSize];
         Array.Copy(BaseBytes, output, PayloadSize);
 
-
-
         for (var i = 0; i < 8; i++)
         {
             output[CharUidOffset + i] = (byte)((SelectedCharUid >> (i * 8)) & 0xFF);

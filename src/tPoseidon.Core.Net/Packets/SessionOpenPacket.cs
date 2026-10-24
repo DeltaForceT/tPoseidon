@@ -8,9 +8,6 @@ public sealed class SessionOpenPacket
 
     public static SessionOpenPacket DecodePayload(ReadOnlySpan<byte> payload)
     {
-
-
-
         if (payload.Length is not (0 or 2))
         {
             throw new InvalidPacketException(

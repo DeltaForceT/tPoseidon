@@ -115,48 +115,11 @@ var host = new S2ServerHost
             var clientIp = ctx.Remote?.Address ?? System.Net.IPAddress.None;
             accountStore.IssueGameAuthcode(account.AccountId, authcode, clientIp);
 
-
-
-
-
             var token = accountStore.IssueSessionToken(account.AccountId, TimeSpan.FromMinutes(5));
             Console.WriteLine($"{LogTag} {ctx.Remote} auth OK account={account.AccountId} authcode=0x{authcode:X16} (session token 0x{token.Value:X8}, state=2)");
             ctx.Guard.LoginSucceeded(pkt.Username);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             await SendFrameAsync((ushort)Opcode.SERVER_LIST, 0xA1, serverListPlaintext);
-
-
-
-
-
-
-
-
 
             var worldName   = Environment.GetEnvironmentVariable("MT_WORLD_NAME")   ?? "ModernTrickster";
             var channelName = Environment.GetEnvironmentVariable("MT_CHANNEL_NAME") ?? "Main";
@@ -201,11 +164,6 @@ var host = new S2ServerHost
             {
                 Console.Error.WriteLine($"{LogTag} {ctx.Remote} SELECT_SERVER account={selectingAccount}: account is not in the logged-in state 2; the channel will refuse it");
             }
-
-
-
-
-
 
             var handoff = new ChannelHandoffPacket
             {

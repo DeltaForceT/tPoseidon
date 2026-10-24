@@ -18,5 +18,4 @@ public sealed class Packet002BTbd
         buf[2] = EndFlag;
         return buf;
     }
-
 }

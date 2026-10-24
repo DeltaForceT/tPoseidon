@@ -17,18 +17,11 @@ public sealed class InMemoryTutorialSystemLookup : ITutorialSystemLookup
         {
             _byId[entry.Id] = entry;
 
-
-
-
-
-
             var key = (entry.StartNpcID, entry.StartMapID);
             if (!_byStartNpcMap.ContainsKey(key))
             {
                 _byStartNpcMap[key] = entry;
             }
-
-
 
             if (entry.QuestId != 0)
             {

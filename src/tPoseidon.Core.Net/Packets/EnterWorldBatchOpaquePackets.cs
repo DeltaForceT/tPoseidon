@@ -26,7 +26,6 @@ public sealed class GameBatchHeaderPacket
         buf[o] = (byte)(v & 0xFF);
         buf[o + 1] = (byte)((v >> 8) & 0xFF);
     }
-
 }
 
 public sealed class GameBatchFloatArrayPacket
@@ -71,7 +70,6 @@ public sealed class GameBatchFloatArrayPacket
         }
         return buf;
     }
-
 }
 
 public sealed class SlotCountPacket
@@ -89,7 +87,6 @@ public sealed class SlotCountPacket
         buf[3] = (byte)((Count >> 24) & 0xFF);
         return buf;
     }
-
 }
 
 public sealed class HeadingVectorPacket
@@ -130,7 +127,6 @@ public sealed class ColorOrFlagPacket0325
     public byte ByteATbd { get; init; }
 
     public byte[] EncodePayload() => new[] { ByteR, ByteG, ByteB, ByteATbd };
-
 }
 
 public sealed class TimestampedSparsePacket0477
@@ -148,7 +144,6 @@ public sealed class TimestampedSparsePacket0477
         buf[15] = (byte)((TimestampLow >> 24) & 0xFF);
         return buf;
     }
-
 }
 
 public sealed class MapHandoffAckPacket
@@ -166,5 +161,4 @@ public sealed class MapHandoffAckPacket
         buf[3] = (byte)((Status >> 24) & 0xFF);
         return buf;
     }
-
 }

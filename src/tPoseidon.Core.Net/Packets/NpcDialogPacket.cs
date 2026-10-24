@@ -58,14 +58,10 @@ public sealed class NpcDialogPacket
         var portraitType = (ushort)(payload[2] | (payload[3] << 8));
         var npcSType = payload[4];
 
-
-
-
         var text = string.Empty;
         if (payload.Length > 5)
         {
             var textRegion = payload[5..];
-
 
             var end = textRegion.Length;
             while (end > 0 && textRegion[end - 1] == 0) end--;

@@ -94,5 +94,4 @@ public sealed class PlayerMeleeTicker
         }
         return strikes;
     }
-
 }

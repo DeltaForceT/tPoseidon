@@ -232,7 +232,6 @@ device.OnPacketArrival += (_, e) =>
     var dstIp = ipPkt?.DestinationAddress?.ToString() ?? "?";
     var direction = remotePort == 0
 
-
         ? (dstIp == targetIp.ToString() ? "C->S" : "S->C")
         : (tcp.DestinationPort == remotePort ? "C->S" : "S->C");
     var len = tcp.PayloadData?.Length ?? 0;

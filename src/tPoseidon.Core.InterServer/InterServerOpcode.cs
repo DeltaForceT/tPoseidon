@@ -226,5 +226,4 @@ public enum InterServerOpcode : ushort
     TpSoulLoadAckCancel = 0xF0B2,
     TpSoulSave = 0xF0B3,
     TpSoulGuardianSave = 0xF0B4,
-
 }

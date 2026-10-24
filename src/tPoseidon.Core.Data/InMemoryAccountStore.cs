@@ -52,7 +52,6 @@ public sealed class InMemoryAccountStore : IAccountStore
         }
         if (!_accountsByUsername.TryAdd(account.Username, account))
         {
-
             _accountsById.TryRemove(account.AccountId, out _);
             throw new InvalidOperationException(
                 $"Username '{account.Username}' already seeded.");
@@ -84,8 +83,6 @@ public sealed class InMemoryAccountStore : IAccountStore
         var account = GetAccountByUsername(username);
         if (account is null) return null;
 
-
-
         return CryptographicOperations.FixedTimeEquals(
             System.Text.Encoding.UTF8.GetBytes(account.PasswordPlaceholder),
             System.Text.Encoding.UTF8.GetBytes(passwordPlaceholder))
@@ -115,9 +112,6 @@ public sealed class InMemoryAccountStore : IAccountStore
         if (!_sessionTokens.TryRemove(tokenValue, out var token)) return null;
         if (token.IsExpired(_clock.GetUtcNow()))
         {
-
-
-
             return null;
         }
         return token;
@@ -127,11 +121,6 @@ public sealed class InMemoryAccountStore : IAccountStore
     {
         var account = GetAccountById(accountId);
         if (account is null) return Array.Empty<Character>();
-
-
-
-
-
 
         return _charactersById.Values
             .Where(c => c.OwnerAccountId == accountId)

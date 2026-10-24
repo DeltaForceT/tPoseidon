@@ -18,5 +18,4 @@ public sealed class EntityTickPingPacket
         w.WriteByte(ReservedByte);
         return w.ToArray();
     }
-
 }

@@ -145,8 +145,6 @@ public static class Md3MapReader
             off += 24;
         }
 
-
-
         return new Md3Map
         {
             MapSizeX = mapSizeX,

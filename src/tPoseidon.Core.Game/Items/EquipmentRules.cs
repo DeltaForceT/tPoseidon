@@ -342,5 +342,4 @@ public static class EquipmentRules
         stats.Ap, stats.Ac, stats.Dx, stats.Mp, stats.Ma, stats.Md,
         stats.Wt, stats.Da, stats.Lk, stats.Hp, stats.Dp, stats.Hv,
     };
-
 }

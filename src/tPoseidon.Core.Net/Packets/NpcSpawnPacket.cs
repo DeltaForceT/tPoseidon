@@ -55,7 +55,6 @@ public sealed class NpcSpawnPacket
 
         var nameBytes = Encoding.UTF8.GetBytes(Name);
 
-
         var trailer = Trailer.Span;
         var total = 22 + nameBytes.Length + 1 + trailer.Length;
 

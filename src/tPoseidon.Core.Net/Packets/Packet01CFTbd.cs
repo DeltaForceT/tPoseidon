@@ -21,5 +21,4 @@ public sealed class Packet01CFTbd
         w.WriteByte(Loop);
         return w.ToArray();
     }
-
 }

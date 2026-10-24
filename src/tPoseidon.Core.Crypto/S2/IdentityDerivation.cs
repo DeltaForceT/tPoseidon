@@ -52,8 +52,6 @@ public sealed class IdentityDerivation : IS2CipherDerivation
 
     public byte UpdateSessionKey(byte oldSessionKey, ushort plaintextChecksum, KeyTable table)
     {
-
-
         var k = oldSessionKey;
         k ^= (byte)(plaintextChecksum & 0xFF);
         k ^= (byte)((plaintextChecksum >> 8) & 0xFF);

@@ -21,5 +21,4 @@ public sealed class HaltPacket
         buf[6] = Flag;
         return buf;
     }
-
 }

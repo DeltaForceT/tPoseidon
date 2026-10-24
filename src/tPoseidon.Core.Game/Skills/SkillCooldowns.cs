@@ -32,5 +32,4 @@ public sealed class SkillCooldowns
         if (over is null) return;
         foreach (var skillId in over) _running.Remove(skillId);
     }
-
 }

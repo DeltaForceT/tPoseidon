@@ -8,7 +8,6 @@ public sealed class PlayerPositionRegistry
 
     public IEnumerable<PlayerPosition> OnMap(ushort mapId)
         => _byEntityId.Values.Where(p => p.MapId == mapId);
-
 }
 
 public sealed record PlayerPosition

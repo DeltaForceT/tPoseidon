@@ -197,7 +197,6 @@ public abstract class SeaHandler : CompositionCustomVisualHandler
         new() { IsAntialias = true, Color = color, Style = SKPaintStyle.Stroke, StrokeWidth = width, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
 }
 
-
 public enum ServerStatus
 {
     Stopped,

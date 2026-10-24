@@ -23,21 +23,8 @@ public static class CharacterListBuilder
     private const int MoneyOffset = 0x27;
     private const int LevelOffset = 0x2B;
 
-
-
-
-
-
-
-
     private const int EarItemOffset = 0x41;
     private const int TailItemOffset = 0x45;
-
-
-
-
-
-
 
     private const int EquipBlockOffset = 0x2D;
     private const int EquipBlockSlots = 5;
@@ -67,7 +54,6 @@ public static class CharacterListBuilder
         return new CharacterListPacket
         {
             Entries = entries,
-
         };
     }
 
@@ -84,8 +70,6 @@ public static class CharacterListBuilder
         WriteUInt64Le(entry, CharIdOffset, character.CharacterId);
 
         entry[SlotOffset] = character.Slot;
-
-
 
         var nameBytes = Encoding.ASCII.GetBytes(character.Name);
         if (nameBytes.Length >= NameRegionBytes)
@@ -110,12 +94,6 @@ public static class CharacterListBuilder
 
         WriteUInt16Le(entry, FirstJobSpeciesOffset, (ushort)character.Species);
 
-
-
-
-
-
-
         var secondJobClass = character.JobTier >= 2
             ? SpeciesDefaults.SecondJobClassIdForFirstJob(character.Species)
             : (ushort)0;
@@ -124,7 +102,6 @@ public static class CharacterListBuilder
         entry[FTypeOffset] = (byte)((byte)character.FType - 1);
 
         entry[SpeciesMirrorOffset] = (byte)character.Species;
-
 
         entry[SecondJobMirrorOffset] = (byte)(secondJobClass & 0xFF);
 
@@ -135,7 +112,6 @@ public static class CharacterListBuilder
         WriteUInt32Le(entry, MoneyOffset, WireLimits.Int32FieldUnsigned(character.Money));
 
         WriteUInt16Le(entry, LevelOffset, character.Level);
-
 
         if (itemStore is not null)
         {

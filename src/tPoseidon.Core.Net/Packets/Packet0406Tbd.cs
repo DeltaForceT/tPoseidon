@@ -16,5 +16,4 @@ public sealed class Packet0406Tbd
         BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(0, 4), PostAnimCode);
         return buf;
     }
-
 }

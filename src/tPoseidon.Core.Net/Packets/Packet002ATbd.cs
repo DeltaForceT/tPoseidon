@@ -28,5 +28,4 @@ public sealed class Packet002ATbd
         BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(22, 4), HitKind);
         return buf;
     }
-
 }

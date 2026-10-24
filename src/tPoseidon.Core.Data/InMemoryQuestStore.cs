@@ -40,8 +40,6 @@ public sealed class InMemoryQuestStore : IQuestStore
 
     public bool UpdateMonsterProgress(ulong characterId, int questId, int monsterId, short killCount, int recordTime)
     {
-
-
         foreach (var qt in new byte[] { 2, 5 })
         {
             var key = new QuestKey(characterId, qt, questId, monsterId);
@@ -49,8 +47,6 @@ public sealed class InMemoryQuestStore : IQuestStore
             {
                 var updated = existing with { KillCount = killCount, RecordTime = recordTime };
                 if (_active.TryUpdate(key, updated, existing)) return true;
-
-
 
                 return false;
             }

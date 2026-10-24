@@ -36,5 +36,4 @@ public sealed class LevelExpTable
             new Dictionary<int, ulong>(expToNext),
             tmxpToNext is null ? new() : new Dictionary<int, ulong>(tmxpToNext));
     }
-
 }

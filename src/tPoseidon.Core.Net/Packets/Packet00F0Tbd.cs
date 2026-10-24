@@ -16,5 +16,4 @@ public sealed class Packet00F0Tbd
         buf[2] = FieldAt02Tbd;
         return buf;
     }
-
 }

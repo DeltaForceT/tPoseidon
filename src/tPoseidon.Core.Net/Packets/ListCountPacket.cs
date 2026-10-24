@@ -15,5 +15,4 @@ public sealed class ListCountPacket
         buf[1] = (byte)((Count >> 8) & 0xFF);
         return buf;
     }
-
 }

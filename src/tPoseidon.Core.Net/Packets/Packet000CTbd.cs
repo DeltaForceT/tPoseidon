@@ -29,5 +29,4 @@ public sealed class Packet000CTbd
         buf[26] = ConstAt1A;
         return buf;
     }
-
 }

@@ -1336,13 +1336,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
     {
         systemLink.Register(ctx);
 
-
-
-
-
-
-
-
         var actionState = (byte)0x00;
 
         Character? currentChar = null;
@@ -1927,13 +1920,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         ctx.Dispatcher.Register(Opcode.GAME_INIT, async (_, payload, innerCt) =>
         {
-
-
-
-
-
-
-
             var peerIp = ctx.Remote?.Address ?? System.Net.IPAddress.None;
             var pending = accountStore.FindPendingGameJoin(peerIp, TimeSpan.FromSeconds(30));
             if (pending is null)
@@ -1988,8 +1974,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             EnsureStatManagerWired();
             npcScript.LoadForCharacter(character.CharacterId);
 
-
-
             try
             {
                 accountStore.TransitionToInGame(pending.AccountId, pending.Island);
@@ -2009,11 +1993,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             {
                 Console.WriteLine($"{LogTag} {ctx.Remote} GAME_INIT account={pending.AccountId} safety-lock active (lock_flag=0x{lockFlag:X2}); client-side dialog flow expected (no server-side gating yet)");
             }
-
-
-
-
-
 
             var entityId = moveEntityId;
 
@@ -2082,24 +2061,11 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             await soulSeeds.LoadAsync(sessionState, character.CharacterId, innerCt).ConfigureAwait(false);
         });
 
-
-
-
         ctx.Dispatcher.Register(Opcode.GAME_PHASE_2, (_, _, _) =>
         {
             Console.WriteLine($"{LogTag} {ctx.Remote} GAME_PHASE_2 received (informational; batch already sent)");
             return Task.CompletedTask;
         });
-
-
-
-
-
-
-
-
-
-
 
         async Task EmitMobSpawnsForCurrentMapAsync(string trigger)
         {
@@ -2223,20 +2189,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         ctx.Dispatcher.Register(Opcode.C2S_OP_034D_CLIENT_LOCAL_PING, (_, _, _) => Task.CompletedTask);
 
-
-
-
-
         ctx.Dispatcher.Register(Opcode.C2S_OP_04AF_CLIENT_LOCAL_PING, (_, _, _) => Task.CompletedTask);
-
-
-
-
-
-
-
-
-
 
         var sessionMovType = (byte)0x02;
         int playerLastX = currentChar?.PositionX ?? 0;
@@ -2354,29 +2307,12 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 Flag = move.Flag,
             };
 
-
-
-
             byte randKey;
             lock (moveRng) randKey = (byte)moveRng.Next(1, 256);
             await ctx.SendFrameAsync(Opcode.ENTITY_MOVE, echo.EncodePayload(), randKey: randKey, moveCt)
                 .ConfigureAwait(false);
             if (moveSt is not null) await SendToOthersOnMapAsync(moveSt, Opcode.ENTITY_MOVE, echo.EncodePayload()).ConfigureAwait(false);
-
-
-
-
-
-
         });
-
-
-
-
-
-
-
-
 
         ctx.Dispatcher.Register(Opcode.C2S_REST_ACTION, async (_, payload, actionCt) =>
         {
@@ -2392,9 +2328,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             {
                 deadActionSt.RecoveryAmounts = postureAmounts;
             }
-
-
-
 
             var broadcast = new byte[3]
             {
@@ -2416,12 +2349,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 _    => $"unknown(0x{newState:X2})",
             };
             Console.WriteLine($"{LogTag} {ctx.Remote} action: {label} → echoed S2C 0x0040 broadcast");
-
-
-
-
-
-
 
             if (newState == 0x02 || newState == 0x0D)
             {
@@ -2456,19 +2383,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         ctx.Dispatcher.Register(Opcode.C2S_MEMORY_PORT_DELETE, (_, payload, portCt) =>
             liveSessions.TryGetValue(ctx, out var deletePortSt) ? memoryPorts.DeleteAsync(deletePortSt, payload, portCt) : Task.CompletedTask);
 
-
-
-
-
-
-
-
-
         ushort targetedNpcEntityId = 0;
-
-
-
-
 
         Task ReleaseSessionAsync()
         {
@@ -2523,14 +2438,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             return Task.WhenAll(leaving);
         }
         sessionReleases[ctx] = ReleaseSessionAsync;
-
-
-
-
-
-
-
-
 
         ushort ResolveAttackSpeedStat(Character c) => c.DxPoints;
 
@@ -3048,24 +2955,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 Console.WriteLine($"{LogTag} {ctx.Remote}   stats flushed ({trigger}): hp={snapshot.CurrentHp} mp={snapshot.CurrentMp} lvl={snapshot.Level} exp={snapshot.Exp} money={snapshot.Money}");
             }
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         Task SendShopFrameAsync(Opcode opcode, byte[] payload, CancellationToken shopCt)
         {
@@ -3974,12 +3863,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 return;
             }
 
-
-
-
-
-
-
             currentChar = accountStore.GetCharacterById(req.CharId);
             if (currentChar is null)
             {
@@ -4049,9 +3932,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }
 
             warpManager.ReleaseLandingClaim(currentChar.CharacterId);
-
-
-
 
             var warpedState = liveSessions.GetOrAdd(ctx, _ => new InGameSessionState
             {
@@ -4787,9 +4667,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         RegisterCombatTracer(Opcode.C2S_OP_1B69_TBD,    "C2S_CHAR_ACTION_69");
         RegisterCombatTracer(Opcode.S2C_OP_1BA3_TBD,            "0x1BA3 (table: C2S_CHAR_ACTION_A3)");
 
-
-
-
         async Task RefuseSkillAsync(ushort code, CancellationToken refuseCt)
         {
             byte rkRefuse;
@@ -5274,10 +5151,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             pickSt.PickupAt = requestedAt;
         });
 
-
-
-
-
         ctx.Dispatcher.Register(Opcode.C2S_TARGET_SELECT, async (_, payload, targetCt) =>
         {
             var rawHex = payload.Length == 0 ? "<empty>" : Convert.ToHexString(payload.Span);
@@ -5290,19 +5163,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             var bytes = payload.ToArray();
             targetedNpcEntityId = (ushort)(bytes[0] | (bytes[1] << 8));
             Console.WriteLine($"{LogTag} {ctx.Remote} target-select entity 0x{targetedNpcEntityId:X4}");
-
-
-
-
-
-
-
-
-
-
-
-
-
 
             var npcEntityForOpen = worldEntities.Get(targetedNpcEntityId);
             if (npcEntityForOpen is null)
@@ -5324,20 +5184,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 Console.WriteLine($"{LogTag} {ctx.Remote}   (no dialog source for type {npcType} on map {npcEntityForOpen.MapId}; ignored)");
             }
         });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         ctx.Dispatcher.Register(Opcode.C2S_QUEST_CANCEL, async (_, payload, cancelCt) =>
         {
@@ -5364,10 +5210,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             if (await scriptDialog.HandlePageLinkAsync(entityId, page, advanceCt).ConfigureAwait(false)) return;
             await npcScript.ShowMessageAsync(entityId, page, advanceCt).ConfigureAwait(false);
         });
-
-
-
-
 
         void TrackReturnMap(bool atLogin)
         {
@@ -14699,7 +14541,6 @@ if (masterClient is not null)
 }
 
 await worldHeartbeat.DisposeAsync();
-
 
 internal static class PortalClick
 {

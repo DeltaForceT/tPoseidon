@@ -31,19 +31,6 @@ internal static class PcapTcpReassembler
 
         if (pcap.Length < 24) return new List<FlowStream>();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
         var linkType = (int)BinaryPrimitives.ReadUInt32LittleEndian(pcap.AsSpan(20, 4));
         var linkHeaderBytes = linkType switch
         {
@@ -65,14 +52,9 @@ internal static class PcapTcpReassembler
 
             if (linkType == 1)
             {
-
                 var ethertype = BinaryPrimitives.ReadUInt16BigEndian(pkt.Slice(12, 2));
                 if (ethertype != 0x0800) continue;
             }
-
-
-
-
 
             var ip = pkt.Slice(linkHeaderBytes);
 
@@ -86,7 +68,6 @@ internal static class PcapTcpReassembler
             if (tcp.Length < 20) continue;
             var srcPort = BinaryPrimitives.ReadUInt16BigEndian(tcp.Slice(0, 2));
             var dstPort = BinaryPrimitives.ReadUInt16BigEndian(tcp.Slice(2, 2));
-
 
             if (dir == Direction.ServerToClient && srcPort != serverPort) continue;
             if (dir == Direction.ClientToServer && dstPort != serverPort) continue;
@@ -109,13 +90,8 @@ internal static class PcapTcpReassembler
         var result = new List<FlowStream>(perFlow.Count);
         foreach (var (flow, segs) in perFlow)
         {
-
-
-
             var origin = segs[0].Seq;
             segs.Sort((a, b) => ((int)(a.Seq - origin)).CompareTo((int)(b.Seq - origin)));
-
-
 
             using var ms = new MemoryStream();
             var expected = segs[0].Seq;
@@ -125,7 +101,6 @@ internal static class PcapTcpReassembler
                 var delta = (int)(seq - expected);
                 if (delta < 0)
                 {
-
                     var skip = -delta;
                     if (skip >= payload.Length) continue;
                     ms.Write(payload, skip, payload.Length - skip);
@@ -135,7 +110,6 @@ internal static class PcapTcpReassembler
                 }
                 if (delta > 0)
                 {
-
                     break;
                 }
                 ms.Write(payload, 0, payload.Length);

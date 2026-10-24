@@ -120,8 +120,6 @@ public static class CharacterListBuilder
         WriteUInt32Le(entry, EarItemOffset, character.StarterEarItemIndex);
         WriteUInt32Le(entry, TailItemOffset, character.StarterTailItemIndex);
 
-
-
         return entry;
     }
 

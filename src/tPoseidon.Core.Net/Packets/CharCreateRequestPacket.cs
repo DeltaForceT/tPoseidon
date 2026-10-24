@@ -48,7 +48,6 @@ public sealed class CharCreateRequestPacket
 
     public static CharCreateRequestPacket DecodePayload(ReadOnlySpan<byte> payload)
     {
-
         if (payload.Length < 1 + FixedTailBytes)
         {
             throw new InvalidPacketException(

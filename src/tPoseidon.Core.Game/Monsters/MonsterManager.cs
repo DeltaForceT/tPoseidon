@@ -198,7 +198,6 @@ public sealed class MonsterManager : IMonsterEntityProvider
             RollDropTableRecursive(mob, sub.TableId, dropped, visited, depth + 1);
         }
     }
-
 }
 
 public enum DamageResult

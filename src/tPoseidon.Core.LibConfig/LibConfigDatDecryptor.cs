@@ -106,5 +106,4 @@ public static class LibConfigDatDecryptor
         BinaryPrimitives.WriteUInt32BigEndian(outBlock[..4], v0);
         BinaryPrimitives.WriteUInt32BigEndian(outBlock.Slice(4, 4), v1);
     }
-
 }

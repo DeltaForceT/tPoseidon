@@ -20,5 +20,4 @@ public sealed class Packet011ETbd
         buf[8] = Flag;
         return buf;
     }
-
 }

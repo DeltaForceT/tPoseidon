@@ -16,5 +16,4 @@ public sealed class Packet016DTbd
         BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(2, 2), CasterEntityId);
         return buf;
     }
-
 }

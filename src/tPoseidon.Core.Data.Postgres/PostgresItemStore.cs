@@ -22,7 +22,6 @@ public sealed class PostgresItemStore : IItemStore
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var tx = conn.BeginTransaction();
 
-
         if (slotKind == SlotKind.Equipment)
         {
             using var checkCmd = new NpgsqlCommand(
@@ -146,7 +145,6 @@ public sealed class PostgresItemStore : IItemStore
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var tx = conn.BeginTransaction();
 
-
         long charUid;
         using (var lookupCmd = new NpgsqlCommand(
             "SELECT char_uid FROM item_char WHERE item_uid = @item_uid",
@@ -243,8 +241,6 @@ public sealed class PostgresItemStore : IItemStore
 
     public bool Delete(ulong itemUid)
     {
-
-
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var cmd = new NpgsqlCommand(
             "DELETE FROM items WHERE item_uid = @item_uid",

@@ -16,5 +16,4 @@ public sealed class PlayerPresenceResetPacket
         BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(0, 4), Value);
         return buf;
     }
-
 }

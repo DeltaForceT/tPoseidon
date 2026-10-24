@@ -43,8 +43,6 @@ public static class NpgsqlDataSourceExtensions
     {
         var schema = ActiveSchemaProvider.Current;
 
-
-
         await using var cmd = new NpgsqlCommand($"SET search_path TO \"{schema}\", public", conn);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }

@@ -16,5 +16,4 @@ public sealed class Packet011DTbd
         BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(1, 4), CombatSequence);
         return buf;
     }
-
 }

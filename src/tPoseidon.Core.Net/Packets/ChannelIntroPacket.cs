@@ -67,7 +67,6 @@ public sealed class ChannelIntroPacket
 
     public static ChannelIntroPacket DecodePayload(ReadOnlySpan<byte> payload)
     {
-
         if (payload.Length < 2 + FixedTrailerBytes)
         {
             throw new InvalidPacketException(

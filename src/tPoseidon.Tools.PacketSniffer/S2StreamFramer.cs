@@ -81,7 +81,6 @@ internal sealed class S2StreamFramer
 
     private void EnsureCapacity(int needed)
     {
-
         if (_start + needed > _buffer.Length) Compact();
         if (needed <= _buffer.Length) return;
         var grown = Math.Max(needed, _buffer.Length * 2);

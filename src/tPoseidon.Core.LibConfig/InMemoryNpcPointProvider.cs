@@ -24,7 +24,6 @@ public sealed class InMemoryNpcPointProvider : INpcPointProvider
         const ushort coralTownMapId = 148;
         return new InMemoryNpcPointProvider(new[]
         {
-
             (((ushort)coralTownMapId, (ushort)2), NpcPoint.Xy(1062f, 2076f)),
 
             (((ushort)coralTownMapId, (ushort)5), NpcPoint.Xy(762f, 1500f)),

@@ -22,5 +22,4 @@ public sealed class Packet01D0Tbd
         w.WriteByte(0);
         return w.ToArray();
     }
-
 }

@@ -41,7 +41,6 @@ public sealed class GameCharDataPacket
         buf[0x10] = Slot;
         Array.Copy(nameBytes, 0, buf, 0x11, nameBytes.Length);
 
-
         WriteUInt16Le(buf, 0x25, Species);
         WriteUInt16Le(buf, 0x27, Species);
         if (FTypeIndex is { } typeIndex) buf[0x28] = typeIndex;

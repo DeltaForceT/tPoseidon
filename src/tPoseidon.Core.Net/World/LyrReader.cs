@@ -27,5 +27,4 @@ public sealed class LyrReader
             return null;
         }
     }
-
 }

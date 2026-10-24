@@ -15,5 +15,4 @@ public sealed class ChannelHandoffPreambelPacket
         buf[0] = Tag;
         return buf;
     }
-
 }

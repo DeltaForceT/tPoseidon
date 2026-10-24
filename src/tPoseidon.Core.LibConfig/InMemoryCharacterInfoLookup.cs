@@ -10,8 +10,6 @@ public sealed class InMemoryCharacterInfoLookup : ICharacterInfoLookup
         _byId = new Dictionary<int, CharacterInfoEntry>();
         foreach (var entry in entries)
         {
-
-
             _byId[entry.Id] = entry;
         }
     }

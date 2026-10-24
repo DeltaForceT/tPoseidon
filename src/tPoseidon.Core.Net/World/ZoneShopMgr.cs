@@ -34,5 +34,4 @@ public sealed class ZoneShopMgr
         }
         IsCreated = true;
     }
-
 }

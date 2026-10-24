@@ -84,15 +84,10 @@ var host = new S2ServerHost
     },
     OnSessionAccepted = (ctx, sessionCt) =>
     {
-
-
-
-
         uint? sessionAccountId = null;
         string? sessionUsername = null;
         var heartbeat = new ClientHeartbeat(heartbeatAnswerTimeout);
         _ = RunHeartbeatAsync(ctx, heartbeat, sessionCt);
-
 
         ctx.Dispatcher.Register(Opcode.C2S_HEARTBEAT_INIT, async (_, payload, innerCt) =>
         {
@@ -163,13 +158,6 @@ var host = new S2ServerHost
             sessionUsername = account.Username;
             ctx.Guard.LoginSucceeded(intro.Username);
 
-
-
-
-
-
-
-
             var characters = accountStore.GetCharactersForAccount(account.AccountId);
             var charListPayload = CharacterListBuilder.Build(characters, itemStore).EncodePayload();
             await SendFrameAsync(ctx, Opcode.CHAR_LIST, randKey: 0xB3, charListPayload, innerCt);
@@ -183,83 +171,22 @@ var host = new S2ServerHost
             return Task.CompletedTask;
         });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         ctx.Dispatcher.Register((ushort)Kr2014Opcode.C2S_KR_CHARCREATE_QUERY_07F6, async (_, _, innerCt) =>
         {
-
-
-
-
-
-
-
-
-
-
-
-
             await SendRawFrameAsync(ctx, (ushort)Kr2014Opcode.S2C_KR_CHARSELECT_WAIT_CLEAR,
                 randKey: 0x12, new byte[] { 0x00, 0x00 }, innerCt);
             Console.WriteLine($"{LogTag} {ctx.Remote} 0x07F6 received → sent 0x0818 [00 00] (clears CharSelect wait flag, skips 30-60s watchdog)");
         });
         ctx.Dispatcher.Register((ushort)Kr2014Opcode.C2S_KR_CHARCREATE_QUERY_0817, async (_, _, innerCt) =>
         {
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             var payload = new byte[] { 0xFF, 0x00, 0x00, 0x00 };
             Console.WriteLine($"{LogTag} {ctx.Remote} 0x0817 → 0x07F8 testing [FF 00 00 00] (slot-enable bitmask hypothesis)");
             await SendRawFrameAsync(ctx, (ushort)Kr2014Opcode.S2C_KR_CHARSLOT_COUPON_COUNT, randKey: 0x4D,
                 payload, innerCt);
         });
 
-
-
-
-
-
         ctx.Dispatcher.Register(Opcode.C2S_CHAR_CREATE_REQUEST, async (_, payload, innerCt) =>
         {
-
-
-
-
-
-
-
-
-
-
             async Task SendCreateFailAsync(uint errorCode, string reason)
             {
                 Console.Error.WriteLine($"{LogTag} {ctx.Remote} CharCreate failed (0x{errorCode:X3}): {reason}");
@@ -286,11 +213,6 @@ var host = new S2ServerHost
 
             Console.WriteLine($"{LogTag} {ctx.Remote} CharCreateRequest name='{req.Name}' species={req.SpeciesEnum} ftype={req.FType} stats=[{req.StatA},{req.StatB},{req.StatC},{req.StatD}] hair={req.Hair}");
 
-
-
-
-
-
             const int MaxNameChars = CharCreatedReplyPacket.MaxCharacterNameChars;
             if (string.IsNullOrEmpty(req.Name) || req.Name.Length > MaxNameChars)
             {
@@ -304,10 +226,6 @@ var host = new S2ServerHost
                 await SendCreateFailAsync(0x3FB, $"validator: {validation}");
                 return;
             }
-
-
-
-
 
             if (sessionAccountId is null)
             {
@@ -325,28 +243,7 @@ var host = new S2ServerHost
                 return;
             }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             var freshCharId = 0x10000001ul + ((ulong)sessionAccountId.Value << 3) + freshSlot;
-
-
-
-
-
 
             var creationRequest = new tPoseidon.Core.Game.Characters.CharacterCreationRequest
             {
@@ -355,10 +252,6 @@ var host = new S2ServerHost
                 Slot = freshSlot,
                 Name = req.Name,
                 Species = req.SpeciesEnum,
-
-
-
-
 
                 FType = (FType)(req.FType + 1),
                 Hair = req.Hair,
@@ -384,10 +277,6 @@ var host = new S2ServerHost
             var character = creationOutcome.Snapshot.Character;
             Console.WriteLine($"{LogTag} {ctx.Remote} created char {character.Name} (uid=0x{character.CharacterId:X16}, slot={character.Slot})");
 
-
-
-
-
             byte[] replyBytes;
             try
             {
@@ -396,8 +285,6 @@ var host = new S2ServerHost
             }
             catch (InvalidOperationException ex)
             {
-
-
                 accountStore.DeleteCharacter(character.CharacterId, character.OwnerAccountId);
                 await SendCreateFailAsync(0x3FE, $"reply encode failed: {ex.Message}");
                 return;
@@ -406,24 +293,12 @@ var host = new S2ServerHost
             await SendFrameAsync(ctx, Opcode.CHAR_CREATED, randKey: 0x4D, replyBytes, innerCt);
             Console.WriteLine($"{LogTag} {ctx.Remote} sent CHAR_CREATED uid=0x{character.CharacterId:X16} slot={character.Slot} (now {existingChars.Count + 1} characters on account)");
 
-
-
             var hex = string.Join(" ", replyBytes[..16].Select(b => $"{b:X2}"));
             Console.WriteLine($"{LogTag}   CHAR_CREATED [0..15]: {hex}");
         });
 
-
-
-
         ctx.Dispatcher.Register(Opcode.C2S_HEARTBEAT_CHAR_SELECT, async (_, payload, innerCt) =>
         {
-
-
-
-
-
-
-
             if (payload.Length < 8)
             {
                 Console.Error.WriteLine($"{LogTag} {ctx.Remote} ChannelSelect payload too short ({payload.Length}B); dropping");
@@ -441,9 +316,6 @@ var host = new S2ServerHost
                 return;
             }
 
-
-
-
             var character = accountStore.GetCharacterById(selectedCharUid);
             if (character is null || character.OwnerAccountId != sessionAccountId.Value)
             {
@@ -451,16 +323,9 @@ var host = new S2ServerHost
                 return;
             }
 
-
-
-
-
             var clientIp = ctx.Remote?.Address ?? System.Net.IPAddress.None;
             accountStore.TransitionToWorldSelected(sessionAccountId.Value, clientIp, world: 1, island: ChannelLogin.Island, selectedCharUid: selectedCharUid);
             handedOff[ctx] = 0;
-
-
-
 
             var sessionToken = accountStore.IssueSessionToken(sessionAccountId.Value, TimeSpan.FromMinutes(5));
 
@@ -496,25 +361,6 @@ var host = new S2ServerHost
 
             Console.WriteLine($"{LogTag} {ctx.Remote} sent 3-frame handoff bundle (uid=0x{selectedCharUid:X16}, GameServer={LocalHostIp}:{GameServerPort}, account={sessionAccountId.Value} state=4 token=0x{sessionToken.Value:X8})");
         });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
         ctx.Dispatcher.Register(Opcode.C2S_CHAR_DELETE, async (_, payload, innerCt) =>
         {
@@ -560,25 +406,8 @@ var host = new S2ServerHost
             await SendFrameAsync(ctx, Opcode.CHAR_DELETE_OK, randKey: 0x4D, Array.Empty<byte>(), innerCt);
         });
 
-
-
-
-
-
-
-
-
-
-
-
-
         ctx.Dispatcher.Register(Opcode.C2S_CHANNEL_CRASH_REPORT, (_, payload, _) =>
         {
-
-
-
-
-
             var bytes = payload.ToArray();
             string text;
             try
@@ -587,8 +416,6 @@ var host = new S2ServerHost
             }
             catch (System.ArgumentException)
             {
-
-
                 var sb = new System.Text.StringBuilder(bytes.Length);
                 foreach (var b in bytes)
                 {

@@ -45,7 +45,6 @@ public sealed class OpcodeDispatcher
         {
             await _unknownHandler(opcode, payload, cancellationToken).ConfigureAwait(false);
         }
-
     }
 
         public int HandlerCount => _handlers.Count;

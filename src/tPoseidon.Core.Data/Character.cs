@@ -61,14 +61,6 @@ public sealed class Character
 
     public long CurrentMp { get; init; }
 
-
-
-
-
-
-
-
-
         public ulong Exp { get; init; }
 
         public ulong TmExpPower { get; init; }
@@ -82,8 +74,6 @@ public sealed class Character
     public DateTimeOffset LogoutTime { get; init; } = DateTimeOffset.UtcNow;
 
         public uint TotalConnectedSeconds { get; init; }
-
-
 
     public ushort ApPoints { get; init; }
     public ushort AcPoints { get; init; }
@@ -99,8 +89,6 @@ public sealed class Character
     public ushort MaxWtPoints { get; init; }
     public ushort AttrPoints { get; init; }
 
-
-
     public ushort TmLevelPower { get; init; }
     public ushort TmLevelMagic { get; init; }
     public ushort TmLevelSense { get; init; }
@@ -109,12 +97,9 @@ public sealed class Character
     public ushort TmLevel { get; init; }
     public long TmExp { get; init; }
 
-
-
     public ushort Type2 { get; init; }
     public byte Job2 { get; init; }
     public DateTimeOffset Job2ChangedAt { get; init; } = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
-
 
     public ushort Type3 { get; init; }
     public byte Job3 { get; init; }

@@ -41,5 +41,4 @@ public sealed class ProcessMeter
         _previous[processId] = (cpu, stamp);
         return new ProcessUsage(percent, workingSet / BytesPerMegabyte);
     }
-
 }

@@ -36,5 +36,4 @@ public sealed class BrokeredJoinRegistry
         join = default!;
         return false;
     }
-
 }

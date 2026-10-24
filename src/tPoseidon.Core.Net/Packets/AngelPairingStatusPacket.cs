@@ -20,5 +20,4 @@ public sealed class AngelPairingStatusPacket
         buf[2] = (byte)((PartnerEntityId >> 8) & 0xFF);
         return buf;
     }
-
 }

@@ -58,8 +58,6 @@ public sealed class ServerListPacket
         var serverCount = r.ReadUInt16();
         if (serverCount != 1)
         {
-
-
             throw new InvalidPacketException(
                 $"SERVER_LIST: only count=1 is currently understood, got {serverCount}.");
         }

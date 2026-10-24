@@ -9,13 +9,6 @@ namespace tPoseidon.Core.Common;
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1069")]
 public enum Opcode : ushort
 {
-
-
-
-
-
-
-
         ENTITY_MOVE             = 0x0018,
         S2C_NPC_STATE           = 0x0042,
     S2C_OP_01CF_TBD                = 0x01CF,
@@ -44,8 +37,6 @@ public enum Opcode : ushort
         PLAYER_SPAWN_LOGIN      = 0x0007,
         NPC_SPAWN               = 0x0008,
 
-
-
     LOGIN_RESPONSE          = 0x0321,
         CHAR_LIST               = 0x07D2,
     HEARTBEAT_A             = 0x076C,
@@ -65,26 +56,6 @@ public enum Opcode : ushort
     SERVER_PATCH            = 0x15DB,
     SERVER_BROADCAST        = 0xFDEB,
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         CHAR_SELECT             = 0x2C43,
         CHAR_DATA               = 0x2C44,
         HANDSHAKE_STEP_1        = 0x1771,
@@ -92,12 +63,6 @@ public enum Opcode : ushort
     HANDSHAKE_STEP_4        = 0x2AF9,
     HANDSHAKE_STEP_5        = 0x2B5E,
     HANDSHAKE_FINAL         = 0x2E7D,
-
-
-
-
-
-
 
         CHANNEL_PRE_HANDOFF     = 0x0003,
         GAME_INIT               = 0x0004,
@@ -796,9 +761,6 @@ public enum Opcode : ushort
         GAME_BATCH_CONST_376    = 0x0376,
         GAME_BATCH_CONST_377    = 0x0377,
 
-
-
-
         C2S_REST_ACTION         = 0x0040,
         C2S_TARGET_SELECT       = 0x006F,
         C2S_NPC_DIALOG_OPEN     = 0x0072,
@@ -818,7 +780,6 @@ public enum Opcode : ushort
     C2S_OP_034A_TBD             = 0x034A,
     C2S_OP_034D_CLIENT_LOCAL_PING = 0x034D,
 
-
         C2S_SYSTEM_GUIDE_UPDATE = 0x04A3,
         C2S_OP_04A4_TBD         = 0x04A4,
         C2S_UNK_4A5             = 0x04A5,
@@ -826,8 +787,6 @@ public enum Opcode : ushort
 
         C2S_HEARTBEAT_INIT      = 0x07D0,
         C2S_CHAR_CREATE_REQUEST = 0x07D6,
-
-
 
         CHAR_CREATE_FAIL        = 0x07D7,
         CHAR_CREATED            = 0x07D8,
@@ -840,23 +799,11 @@ public enum Opcode : ushort
 
     C2S_CHANNEL_ANTIDEBUG_TELEMETRY = 0x080E,
 
-
-
-
-
-
-
-
         LOGIN_REQUEST           = 0x2CED,
         LOGIN_RESULT            = 0x2CEE,
         SELECT_SERVER           = 0x2CF1,
         CHANNEL_HANDOFF         = 0x2CF2,
         SERVER_LIST             = 0x2D51,
-
-
-
-
-
 
     S2C_OP_011B_TBD        = 0x011B,
     C2S_OP_00EE_TBD         = 0x00EE,
@@ -866,8 +813,6 @@ public enum Opcode : ushort
         C2S_UID_ACTION          = 0x0057,
     C2S_STAT_ALLOCATE       = 0x006C,
 
-
-
     S2C_OP_1773_TBD       = 0x1773,
     S2C_OP_1774_TBD          = 0x1774,
     S2C_OP_1777_TBD            = 0x1777,
@@ -875,8 +820,6 @@ public enum Opcode : ushort
     S2C_OP_177D_TBD          = 0x177D,
     S2C_OP_17A9_TBD       = 0x17A9,
     S2C_OP_17AC_TBD  = 0x17AC,
-
-
 
     CHAR_INFO                  = 0x1B5A,
     S2C_OP_1B5B_TBD          = 0x1B5B,
@@ -932,8 +875,6 @@ public enum Opcode : ushort
     S2C_OP_1BAB_TBD         = 0x1BAB,
     S2C_OP_1BAC_TBD         = 0x1BAC,
 
-
-
     S2C_OP_1C85_TBD         = 0x1C85,
     S2C_OP_1C87_TBD          = 0x1C87,
     S2C_OP_1C8A_TBD          = 0x1C8A,
@@ -948,8 +889,6 @@ public enum Opcode : ushort
     S2C_OP_1C9E_TBD          = 0x1C9E,
     S2C_OP_1C9F_TBD         = 0x1C9F,
 
-
-
     S2C_OP_1D4C_TBD         = 0x1D4C,
     S2C_OP_1D4D_TBD              = 0x1D4D,
     S2C_OP_1D50_TBD             = 0x1D50,
@@ -962,8 +901,6 @@ public enum Opcode : ushort
     S2C_OP_1D5E_TBD        = 0x1D5E,
     S2C_OP_1D5F_TBD      = 0x1D5F,
     S2C_OP_1D62_TBD           = 0x1D62,
-
-
 
     C2S_OP_1F41_TBD         = 0x1F41,
     S2C_OP_1F43_TBD      = 0x1F43,
@@ -1014,8 +951,6 @@ public enum Opcode : ushort
     S2C_OP_1F72_TBD      = 0x1F72,
     S2C_OP_1F73_TBD   = 0x1F73,
     C2S_OP_1F75_TBD         = 0x1F75,
-
-
 
     C2S_OP_213A_TBD           = 0x213A,
     S2C_OP_213D_TBD         = 0x213D,
@@ -1081,8 +1016,6 @@ public enum Opcode : ushort
     C2S_OP_218A_TBD   = 0x218A,
     S2C_OP_218B_TBD            = 0x218B,
 
-
-
     S2C_OP_2711_TBD              = 0x2711,
     S2C_OP_2712_TBD             = 0x2712,
     C2S_OP_2713_TBD          = 0x2713,
@@ -1107,12 +1040,8 @@ public enum Opcode : ushort
     S2C_OP_2726_TBD         = 0x2726,
     S2C_OP_2729_TBD         = 0x2729,
 
-
-
     S2C_OP_2905_TBD                = 0x2905,
     S2C_OP_2906_TBD                = 0x2906,
-
-
 
     S2C_OP_2AFA_TBD             = 0x2AFA,
     S2C_OP_2AFC_TBD    = 0x2AFC,
@@ -1124,8 +1053,6 @@ public enum Opcode : ushort
     C2S_OP_2B02_TBD        = 0x2B02,
     C2S_OP_2B03_TBD        = 0x2B03,
     C2S_OP_2B04_TBD        = 0x2B04,
-
-
 
     S2C_GUILD_NAME_TAG          = 0x0245,
     C2S_GUILD_CREATE            = 0x2B67,
@@ -1176,8 +1103,6 @@ public enum Opcode : ushort
     S2C_OP_2C98_TBD   = 0x2C98,
     S2C_OP_2CAD_TBD          = 0x2CAD,
 
-
-
     S2C_OP_2E19_TBD          = 0x2E19,
     C2S_OP_2E1B_TBD     = 0x2E1B,
     S2C_OP_2E1C_TBD    = 0x2E1C,
@@ -1195,8 +1120,6 @@ public enum Opcode : ushort
     S2C_OP_2E2A_TBD         = 0x2E2A,
     C2S_OP_2E2C_TBD            = 0x2E2C,
     C2S_OP_2E2D_TBD            = 0x2E2D,
-
-
 
     S2C_OP_2E82_TBD            = 0x2E82,
     S2C_OP_2E83_TBD           = 0x2E83,

@@ -12,11 +12,7 @@ public sealed class InMemoryNpcMsgLookup : INpcMsgLookup
         _rowCountByTable = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var entry in entries)
         {
-
-
-
             _byKey[(entry.TableName, entry.No)] = entry;
-
 
             _rowCountByTable[entry.TableName] =
                 _rowCountByTable.TryGetValue(entry.TableName, out var c) ? c + 1 : 1;

@@ -16,5 +16,4 @@ public sealed class PathFinder
         ArgumentNullException.ThrowIfNull(map);
         GroundAttribute = map;
     }
-
 }

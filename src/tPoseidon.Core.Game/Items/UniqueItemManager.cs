@@ -13,5 +13,4 @@ public sealed class UniqueItemManager
     }
 
     public int LegendItemCount => _legendItemIds.Count;
-
 }

@@ -34,5 +34,4 @@ public sealed class ZoneSkillShopMgr
         }
         IsCreated = true;
     }
-
 }

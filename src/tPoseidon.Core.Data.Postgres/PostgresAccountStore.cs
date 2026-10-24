@@ -30,8 +30,6 @@ public sealed class PostgresAccountStore : IAccountStore
         return Environment.GetEnvironmentVariable("MT_DB_CONNECTION") ?? DefaultConnectionString;
     }
 
-
-
     public Account? GetAccountByUsername(string username)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();
@@ -75,7 +73,6 @@ public sealed class PostgresAccountStore : IAccountStore
         var account = GetAccountByUsername(username);
         if (account is null) return null;
 
-
         return CryptographicOperations.FixedTimeEquals(
             System.Text.Encoding.UTF8.GetBytes(account.PasswordPlaceholder),
             System.Text.Encoding.UTF8.GetBytes(passwordPlaceholder))
@@ -100,8 +97,6 @@ public sealed class PostgresAccountStore : IAccountStore
         cmd.ExecuteNonQuery();
     }
 
-
-
     public IReadOnlyList<Character> GetCharactersForAccount(uint accountId) =>
         _chars.GetCharactersForAccount(accountId);
 
@@ -125,8 +120,6 @@ public sealed class PostgresAccountStore : IAccountStore
 
     public bool DeleteCharacter(ulong characterId, uint ownerAccountId) =>
         _chars.DeleteCharacter(characterId, ownerAccountId);
-
-
 
     public SessionToken IssueSessionToken(uint accountId, TimeSpan ttl) =>
         SeedSessionToken(NextTokenValue(), accountId, ttl);
@@ -186,17 +179,11 @@ public sealed class PostgresAccountStore : IAccountStore
         return token.IsExpired(now) ? null : token;
     }
 
-
-
     private static Account ReadAccount(NpgsqlDataReader reader) => new()
     {
         AccountId = unchecked((uint)reader.GetInt64(0)),
         Username = reader.GetString(1),
         PasswordPlaceholder = reader.GetString(2),
-
-
-
-
 
         CharacterIds = Array.Empty<ulong>(),
     };

@@ -84,8 +84,6 @@ public sealed class NpcManager
             point = NpcPoint.Origin();
         }
 
-
-
         ushort entityId;
         if (_pinnedEntityIds is not null
             && _pinnedEntityIds.TryGetValue((mapId, (ushort)row.PosId), out var pinned))

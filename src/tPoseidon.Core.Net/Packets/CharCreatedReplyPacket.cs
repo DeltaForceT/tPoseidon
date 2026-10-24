@@ -8,35 +8,8 @@ public sealed class CharCreatedReplyPacket
 {
         public const int PayloadSize = 156;
 
-
-
-
-
     private const int CharUidOffset = 0x00;
     private const int SlotOffset = 0x08;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     private const int NameRegionOffset = 0x09;
     private const int NameSlotShortBytes = 7;
@@ -47,15 +20,6 @@ public sealed class CharCreatedReplyPacket
     private const int HairOffset = 0x25;
     private const int MoneyOffset = 0x27;
     private const int LevelOffset = 0x2B;
-
-
-
-
-
-
-
-
-
 
     private const int EarItemOffset = 0x41;
     private const int TailItemOffset = 0x45;
@@ -91,11 +55,6 @@ public sealed class CharCreatedReplyPacket
             CharUid = ReadUInt64Le(payload, CharUidOffset),
             Slot = payload[SlotOffset],
 
-
-
-
-
-
             CharacterName = ReadFixedAscii(payload, NameRegionOffset, NameSlotShortBytes),
             Species = (Species)payload[SpeciesMirrorOffset],
             FType = payload[FTypeOffset],
@@ -105,8 +64,6 @@ public sealed class CharCreatedReplyPacket
             JobTier = payload[JobTierOffset],
             EarItemIndex = ReadUInt32Le(payload, EarItemOffset),
             TailItemIndex = ReadUInt32Le(payload, TailItemOffset),
-
-
 
             RawBytes = payload.ToArray(),
         };

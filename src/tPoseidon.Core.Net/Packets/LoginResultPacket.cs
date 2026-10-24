@@ -61,11 +61,8 @@ public sealed class LoginResultPacket
 
     private static void WriteFixedAscii(byte[] dest, int offset, int fieldBytes, string value)
     {
-
-
         var encoded = Encoding.ASCII.GetBytes(value);
         var copyLen = Math.Min(encoded.Length, fieldBytes);
-
 
         Array.Clear(dest, offset, fieldBytes);
         if (copyLen > 0)
