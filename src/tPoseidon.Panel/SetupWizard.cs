@@ -38,6 +38,8 @@ public sealed class SetupState
     public string Account { get; set; } = "admin";
 
     public string Password { get; set; } = "";
+
+    public string PlayWith { get; set; } = "";
 }
 
 public static class OsHint
@@ -655,12 +657,20 @@ public sealed class AccountPage : WizardPage
     private readonly TextBox _name;
     private readonly TextBox _password = Box("", "Password", true);
     private readonly TextBox _confirm = Box("", "Repeat the password", true);
+    private readonly TextBox _other = Box("");
+    private readonly ChoiceCard _playCreated = new("The account I'm creating", "Play starts the game client logged in with this account.");
+    private readonly ChoiceCard _playOther = new("Another account", "One that already exists in the database.");
+    private readonly Control _otherBox;
     private readonly Banner _result = new();
+    private bool _playsOther;
 
     public AccountPage(SetupState state)
     {
         _state = state;
         _name = Box(state.Account);
+        _otherBox = Labeled("Existing account name", _other);
+        _other.Text = state.PlayWith;
+        _playsOther = state.PlayWith.Length > 0;
         Children.Add(Labeled("Account name", _name));
         var passwords = new Grid { ColumnDefinitions = new ColumnDefinitions("*,12,*") };
         var a = Labeled("Password", _password);
@@ -670,8 +680,15 @@ public sealed class AccountPage : WizardPage
         passwords.Children.Add(b);
         Children.Add(passwords);
         Children.Add(Note("To make one of its characters the GM character, create the character in game first, then run: tposeidon gm register --character <name>"));
+        Children.Add(new TextBlock { Text = "Play logs in with", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 0) });
+        _playCreated.Chosen += () => SelectPlay(false);
+        _playOther.Chosen += () => SelectPlay(true);
+        Children.Add(_playCreated);
+        Children.Add(_playOther);
+        Children.Add(_otherBox);
+        SelectPlay(_playsOther);
         Children.Add(_result);
-        foreach (var box in new[] { _name, _password, _confirm })
+        foreach (var box in new[] { _name, _password, _confirm, _other })
         {
             box.TextChanged += (_, _) => { _result.Hide(); Mark(box, false); };
         }
@@ -683,10 +700,27 @@ public sealed class AccountPage : WizardPage
 
     public override string StepName => "Account";
 
+    public void SelectPlay(bool other)
+    {
+        _playsOther = other;
+        _playCreated.Selected = !other;
+        _playOther.Selected = other;
+        _otherBox.IsVisible = other;
+        _result.Hide();
+    }
+
     public bool Validate()
     {
         var name = _name.Text?.Trim() ?? "";
         var password = _password.Text ?? "";
+        var playWith = _playsOther ? _other.Text?.Trim() ?? "" : "";
+        if (_playsOther && playWith.Length == 0)
+        {
+            Mark(_other, true);
+            _result.Show(BannerKind.Error, "Type the name of the account Play should use.", "Or choose the account you are creating.");
+            return false;
+        }
+
         if (name.Length == 0)
         {
             Mark(_name, true);
@@ -710,6 +744,7 @@ public sealed class AccountPage : WizardPage
 
         _state.Account = name;
         _state.Password = password;
+        _state.PlayWith = playWith;
         return true;
     }
 
@@ -904,6 +939,9 @@ public sealed class DataPage : WizardPage
             var account = await Task.Run(() => DatabaseAdmin.EnsureAccount(settings.Database, _state.Account, _state.Password)).ConfigureAwait(true);
             MoveTo(_migrate, _migratePercent, AccountShare);
             AccountOutcome = account.Created ? $"Created account '{_state.Account}'." : $"Account '{_state.Account}' already exists; kept its password.";
+            var wanted = _state.PlayWith.Length == 0 ? _state.Account : _state.PlayWith;
+            var playAccount = await Task.Run(() => PlayAccount.Choose(settings, new DatabaseAccountDirectory(settings.Database), wanted)).ConfigureAwait(true);
+            AccountOutcome += $" Play logs in with '{playAccount}'.";
             settings.Save(paths);
 
             MoveTo(_migrate, _migratePercent, 100);

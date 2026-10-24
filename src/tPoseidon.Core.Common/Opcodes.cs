@@ -814,7 +814,7 @@ public enum Opcode : ushort
     BANK_CLOSE                   = 0x00C5,
     C2S_COMPOUND_RECIPE          = 0x00DD,
         C2S_REQUEST_MOVE        = 0x01D4,
-        C2S_DISCONNECT          = 0x0194,
+        C2S_PURCHASE_STORAGE_LEAVE = 0x0194,
     C2S_OP_034A_TBD             = 0x034A,
     C2S_OP_034D_CLIENT_LOCAL_PING = 0x034D,
 

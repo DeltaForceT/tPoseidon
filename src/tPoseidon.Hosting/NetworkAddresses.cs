@@ -8,6 +8,16 @@ public static class NetworkAddresses
 {
     public const string Loopback = "127.0.0.1";
 
+    public static IReadOnlyList<IPAddress> OfThisComputer() =>
+        NetworkInterface.GetAllNetworkInterfaces()
+            .Where(nic => nic.OperationalStatus == OperationalStatus.Up)
+            .SelectMany(nic => nic.GetIPProperties().UnicastAddresses)
+            .Select(unicast => unicast.Address)
+            .Where(address => address.AddressFamily == AddressFamily.InterNetwork)
+            .Append(IPAddress.Loopback)
+            .Distinct()
+            .ToList();
+
     public static string DefaultLan(HostSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);

@@ -31,6 +31,7 @@ public sealed class MainWindow : Window
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly Banner _toast = new() { Margin = new Thickness(12), VerticalAlignment = VerticalAlignment.Bottom, MaxWidth = 560 };
     private readonly Button _client = Tokens.ToolbarButton(Glyph.Client, "Client", "Launch the game client");
+    private readonly Button _playAccount = new() { Height = 26, MinHeight = 0, Padding = new Thickness(6, 0), Margin = new Thickness(-4, 0, 0, 0), VerticalContentAlignment = VerticalAlignment.Center, IsVisible = false };
     private readonly MenuItem _reduce = new() { Header = "Reduce animations", ToggleType = MenuItemToggleType.CheckBox };
     private IDisposable? _toastTimer;
     private bool _held;
@@ -73,6 +74,8 @@ public sealed class MainWindow : Window
         Content = root;
 
         _host.ServicesRebuilt += RebuildRows;
+        _host.ServicesRebuilt += ShowPlayAccount;
+        _host.PlayAccountChanged += ShowPlayAccount;
         _host.ServiceChanged += OnServiceChanged;
         _host.Notice += ShowToast;
         LogHub.Added += _ => RefreshActivity();
@@ -175,6 +178,10 @@ public sealed class MainWindow : Window
         var gameMaster = Tokens.ToolbarButton(Glyph.Admin, "GM", "Game master tools: players, spawns, events, guilds and GM accounts");
         gameMaster.Click += (_, _) => GmWindow.Toggle(_host.Paths);
         _client.Click += (_, _) => _host.LaunchClient();
+        _playAccount.Classes.Add("flat");
+        ToolTip.SetTip(_playAccount, "The account Play logs in with. Click to pick another one.");
+        _playAccount.Click += async (_, _) => await PickPlayAccountAsync().ConfigureAwait(true);
+        ShowPlayAccount();
 
         var menu = Tokens.IconButton(Glyph.More, "Settings, setup and theme");
         _reduce.IsChecked = _motion.Reduced;
@@ -220,6 +227,7 @@ public sealed class MainWindow : Window
         right.Children.Add(restartAll);
         right.Children.Add(new Border { Width = 1, Height = 16, Margin = new Thickness(4, 0), Background = Tokens.BorderSubtle });
         right.Children.Add(_client);
+        right.Children.Add(_playAccount);
         right.Children.Add(logs);
         right.Children.Add(security);
         right.Children.Add(gameMaster);
@@ -329,6 +337,44 @@ public sealed class MainWindow : Window
             Padding = new Thickness(12, 0),
             Child = dock,
         };
+    }
+
+    private void ShowPlayAccount()
+    {
+        var name = _host.PlayAccountName;
+        _playAccount.IsVisible = _host.IsSetUp;
+        _playAccount.Content = new TextBlock
+        {
+            Text = name.Length == 0 ? "no account" : $"as {name}",
+            FontSize = Tokens.FontSizeCaption,
+            Foreground = name.Length == 0 ? Tokens.Warning : Tokens.TextSecondary,
+            MaxWidth = 140,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+    }
+
+    private async Task PickPlayAccountAsync()
+    {
+        var names = await _host.ListAccountsAsync().ConfigureAwait(true);
+        if (names.Count == 0)
+        {
+            return;
+        }
+
+        var menu = new ContextMenu();
+        foreach (var name in names)
+        {
+            var item = new MenuItem
+            {
+                Header = name,
+                Icon = string.Equals(name, _host.PlayAccountName, StringComparison.Ordinal) ? Tokens.Glyphs(Glyph.Check, 12, Tokens.Accent) : null,
+            };
+            item.Click += async (_, _) => await _host.ChoosePlayAccountAsync(name).ConfigureAwait(true);
+            menu.Items.Add(item);
+        }
+
+        menu.Open(_playAccount);
     }
 
     private void RebuildRows()

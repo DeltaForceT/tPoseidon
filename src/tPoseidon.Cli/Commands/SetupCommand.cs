@@ -27,7 +27,7 @@ internal sealed class SetupCommand
         _commandLine.RejectUnknown(
             "client", "audience", "public-ip",
             "db-host", "db-port", "db-name", "db-admin-user", "db-admin-password", "db-user", "db-password",
-            "admin-user", "admin-password", "cash", "cash-start");
+            "admin-user", "admin-password", "play-account", "cash", "cash-start");
         var settings = HostSettings.Load(_paths) ?? new HostSettings();
 
         Console.WriteLine($"tPoseidon {VersionCommand.Current} setup");
@@ -223,27 +223,51 @@ internal sealed class SetupCommand
             throw new CliException("The account name cannot be empty.");
         }
 
-        var password = _commandLine.Option("admin-password");
-        if (password is null && _prompt.Interactive)
-        {
-            while (true)
-            {
-                password = _prompt.AskSecret("   Password (leave empty to keep an existing account's password)");
-                if (password.Length == 0 || _prompt.AskSecret("   Same password again") == password)
-                {
-                    break;
-                }
-
-                Console.WriteLine("   The passwords did not match. Try again.");
-            }
-        }
+        var password = _commandLine.Option("admin-password")
+            ?? (_prompt.Interactive ? AskNewPassword("   Password (leave empty to keep an existing account's password)") : null);
 
         var result = DatabaseAdmin.EnsureAccount(settings.Database, username, string.IsNullOrEmpty(password) ? null : password);
         Console.WriteLine(result.Created
             ? $"   Created account '{username}'."
             : $"   Account '{username}' already exists; kept its password.");
+        ChoosePlayAccount(settings, username);
         Console.WriteLine("   To make one of its characters the GM character, create the character in game, then run:");
         Console.WriteLine("   tposeidon gm --character <name>");
+    }
+
+    private void ChoosePlayAccount(HostSettings settings, string created)
+    {
+        Console.WriteLine();
+        Console.WriteLine("   Play logs in with this account when you start the game client.");
+        var wanted = (_commandLine.Option("play-account") ?? _prompt.Ask("   Play logs in with", created)).Trim();
+        var directory = new DatabaseAccountDirectory(settings.Database);
+        if (directory.Find(wanted) is null)
+        {
+            if (!_prompt.Interactive || !_prompt.Confirm($"   There is no account named '{wanted}'. Create it now?", defaultValue: true))
+            {
+                throw new CliException($"There is no account named '{wanted}'. Create it first, or pick one that exists.");
+            }
+
+            DatabaseAdmin.EnsureAccount(settings.Database, wanted, AskNewPassword($"   Password for '{wanted}'"));
+            Console.WriteLine($"   Created account '{wanted}'.");
+        }
+
+        var chosen = PlayAccount.Choose(settings, directory, wanted);
+        Console.WriteLine($"   Play logs in with '{chosen}'. Change it later with: tposeidon play --account <name>");
+    }
+
+    private string AskNewPassword(string question)
+    {
+        while (true)
+        {
+            var password = _prompt.AskSecret(question);
+            if (password.Length == 0 || _prompt.AskSecret("   Same password again") == password)
+            {
+                return password;
+            }
+
+            Console.WriteLine("   The passwords did not match. Try again.");
+        }
     }
 
     private static int ParsePort(string value) =>

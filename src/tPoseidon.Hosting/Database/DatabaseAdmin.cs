@@ -163,6 +163,21 @@ public static class DatabaseAdmin
         }
     }
 
+    public static string? FindAccountName(DatabaseSettings settings, string username) =>
+        WithDataSource(settings, dataSource => new PostgresAccountStore(dataSource).GetAccountByUsername(username)?.Username);
+
+    public static void IssueLaunchTicket(DatabaseSettings settings, string username, IReadOnlyCollection<System.Net.IPAddress> clientIps) =>
+        WithDataSource(settings, dataSource =>
+        {
+            var account = new PostgresAccountStore(dataSource).GetAccountByUsername(username)
+                ?? throw new HostingException($"There is no account named '{username}'.", "Create it first with tposeidon setup, or pick an account that exists.", null);
+            new PostgresLaunchTicketStore(dataSource).Issue(account.AccountId, clientIps, LaunchTicket.Lifetime);
+            return true;
+        });
+
+    public static IReadOnlyList<string> ListAccountNames(DatabaseSettings settings) =>
+        WithDataSource(settings, dataSource => new PostgresAccountStore(dataSource).ListUsernames());
+
     public static GmCharacterRegistration? RegisterGmCharacter(DatabaseSettings settings, string characterName, string permittedIp) =>
         WithDataSource(settings, dataSource => new PostgresGmAuthorityStore(dataSource).RegisterGmCharacter(characterName, permittedIp));
 

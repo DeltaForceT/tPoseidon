@@ -44,6 +44,20 @@ public sealed class PostgresAccountStore : IAccountStore
         return ReadAccount(reader);
     }
 
+    public IReadOnlyList<string> ListUsernames()
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand("SELECT username FROM accounts ORDER BY LOWER(username)", conn);
+        using var reader = cmd.ExecuteReader();
+        var names = new List<string>();
+        while (reader.Read())
+        {
+            names.Add(reader.GetString(0));
+        }
+
+        return names;
+    }
+
     public Account? GetAccountById(uint accountId)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();

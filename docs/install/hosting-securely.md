@@ -98,6 +98,10 @@ A ban refuses new connections from that address on every server and closes its c
 
 The shop is a web page, so it gets its own limits: 120 requests at once and 20 per second per address (`requestBurst`, `requestsPerSecond`), and request bodies up to 1 MB (`maxRequestBodyBytes`). It shares bans and the allow list with the game servers.
 
+### Play logins from other computers
+
+`tposeidon play --server <address>` sends the player's account name and password to the item shop's web port (`/play-ticket`). On success the server leaves a one-time login pass for that player's address, which the lobby accepts for about a minute. Wrong passwords are throttled and locked out like lobby logins. Because the password travels over that connection, serve the web port over HTTPS when the server is public: give the item shop an `https` address in `MT_WEBSHOP_URLS` together with a certificate (the standard ASP.NET Core settings `ASPNETCORE_Kestrel__Certificates__Default__Path` and `...__Password`), and have players pass `--web-url https://your.domain:9990`. Over plain HTTP anyone on the path can read the password. The pass is tied to the address the web port sees, so a proxy that hides the player's real address will make the lobby refuse the pass.
+
 ### Logs
 
 Each incident gets one short line in that server's log, at most once per address and kind every 30 seconds and 20 lines every 10 seconds (`incidentLogIntervalSeconds`, `incidentLogLinesPerTenSeconds`), so an attack can't fill your disk. When lines are skipped, a summary says how many.

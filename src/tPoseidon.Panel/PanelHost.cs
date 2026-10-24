@@ -81,6 +81,8 @@ public sealed class PanelHost
 
     public event Action<PanelNotice>? Notice;
 
+    public event Action? PlayAccountChanged;
+
     public InstallPaths Paths { get; }
 
     public HostSettings? Settings { get; private set; }
@@ -332,6 +334,50 @@ public sealed class PanelHost
         {
             var target = GameClientLauncher.Launch(settings);
             LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Started the game client, connecting to {target}.");
+        }
+        catch (HostingException ex)
+        {
+            Fail(LogHub.PanelSource, ex);
+        }
+    }
+
+    public string PlayAccountName => Settings?.Launch.Account ?? "";
+
+    public async Task<IReadOnlyList<string>> ListAccountsAsync()
+    {
+        if (Settings is not { } settings)
+        {
+            return [];
+        }
+
+        try
+        {
+            return await Task.Run(() => new DatabaseAccountDirectory(settings.Database).Names()).ConfigureAwait(true);
+        }
+        catch (HostingException ex)
+        {
+            Fail(LogHub.PanelSource, ex);
+            return [];
+        }
+    }
+
+    public async Task ChoosePlayAccountAsync(string username)
+    {
+        if (Settings is not { } settings)
+        {
+            return;
+        }
+
+        try
+        {
+            var chosen = await Task.Run(() =>
+            {
+                var name = PlayAccount.Choose(settings, new DatabaseAccountDirectory(settings.Database), username);
+                settings.Save(Paths);
+                return name;
+            }).ConfigureAwait(true);
+            LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Play now logs in with '{chosen}'.");
+            PlayAccountChanged?.Invoke();
         }
         catch (HostingException ex)
         {

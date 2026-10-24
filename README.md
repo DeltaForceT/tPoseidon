@@ -57,7 +57,7 @@ Most of our testing happens on Windows. The Linux and macOS builds come from the
 1. Install PostgreSQL if you don't have it yet. Note the admin login and its password.
 2. Download the package for your system from the [Releases](https://github.com/DeltaForceT/tPoseidon/releases) page and unpack it somewhere you can write to, like your home folder.
 3. Run setup in a terminal in that folder: `tposeidon setup` (`./tposeidon setup` on Linux and macOS).
-4. Setup asks where your client is, who is going to play (this PC, your LAN or the internet), how to reach PostgreSQL, and a name and password for your game account. It then reads the game data it needs from your client and creates the database tables. The PostgreSQL admin password is only used for that and isn't saved.
+4. Setup asks where your client is, who is going to play (this PC, your LAN or the internet), how to reach PostgreSQL, a name and password for your game account, and which account Play logs in with (the one you just made, unless you pick another that already exists). It then reads the game data it needs from your client and creates the database tables. The PostgreSQL admin password is only used for that and isn't saved.
 5. Start the servers:
 
    ```
@@ -65,7 +65,13 @@ Most of our testing happens on Windows. The Linux and macOS builds come from the
    tposeidon status
    ```
 
-6. Run `tposeidon play` to start your client pointed at your server, and log in with the account you made.
+6. Run `tposeidon play` to start your client pointed at your server. It logs in by itself with your Play account. The control panel shows that account next to the Client button, and you can pick another one there, or run `tposeidon play --account <name>`.
+
+### How Play logs in
+
+The original game logged you in through the publisher's website, and the client never knew your password. tPoseidon does the same job itself. When you press Play (or run `tposeidon play`) on the server's computer, it leaves a one-time pass for your Play account in the database and then starts the client. The client logs in with a built-in placeholder password, and the lobby accepts that only if a pass is waiting for that account from that address. A pass works once and runs out after about a minute. Everyone else still needs the real password.
+
+Friends who play from other computers run `tposeidon play --server <your address> --account <their account> --client <their client folder>`. It asks for their password, checks it with your server's web port (the same one as the item shop, 9990 by default), and starts their client pointed at your server. The server must run the item shop for this. Their password travels to your server, so put the web port behind HTTPS (see [Hosting securely](docs/install/hosting-securely.md)) when your server is public and pass the secure address with `--web-url https://play.example.org:9990`.
 
 `tposeidon stop` shuts the servers down. Your settings are in `tposeidon.json` next to the program, and you can run `tposeidon setup` again whenever you want to change them.
 

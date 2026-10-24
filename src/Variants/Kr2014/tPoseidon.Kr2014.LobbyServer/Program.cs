@@ -21,6 +21,7 @@ Console.WriteLine($"{LogTag} SERVER_LIST encoder ready ({serverListPlaintext.Len
 
 var pg = await PostgresStoreBootstrap.InitializeAsync();
 var accountStore = pg.Store;
+var launchTickets = new PostgresLaunchTicketStore(pg.DataSource);
 Console.WriteLine($"{LogTag} account store ready (Postgres-backed); use mt-account-create to register operators");
 
 System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
@@ -71,7 +72,7 @@ var host = new S2ServerHost
                 return;
             }
 
-            if (!accountStore.VerifyPassword(pkt.Username, pkt.Password))
+            if (!LaunchTicket.VerifyLogin(accountStore, launchTickets, pkt.Username, pkt.Password, ctx.Remote?.Address ?? System.Net.IPAddress.None))
             {
                 Console.Error.WriteLine($"{LogTag} {ctx.Remote} auth failed for '{pkt.Username}' -- sending 0x{LobbyLogin.RefusalOpcode:X4} [{(uint)LobbyLoginRefusal.WrongIdOrPassword}]");
                 await Task.Delay(ctx.Guard.LoginFailed(pkt.Username), innerCt).ConfigureAwait(false);

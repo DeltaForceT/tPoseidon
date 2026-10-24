@@ -60,6 +60,11 @@ app.MapMethods("/BuyItem.aspx", [HttpMethods.Get, HttpMethods.Post], (Delegate)s
 app.MapMethods("/GiftItem.aspx", [HttpMethods.Get, HttpMethods.Post], (Delegate)shop.GiftItemPageAsync);
 app.MapMethods("/mypoint.aspx", [HttpMethods.Get, HttpMethods.Post], (Delegate)shop.MyPointAsync);
 app.MapMethods("/chargepoint.aspx", [HttpMethods.Get, HttpMethods.Post], (Delegate)shop.ChargePointPageAsync);
+var playTickets = new PlayTicketEndpoint(
+    bootstrap.Store,
+    new PostgresLaunchTicketStore(bootstrap.DataSource),
+    guard.Settings.Enabled ? guard.Logins : null);
+app.MapPost("/play-ticket", (Delegate)playTickets.HandleAsync);
 Console.WriteLine($"{LogTag} cash: {options.Cash.Mode.ToString().ToLowerInvariant()}{(options.Cash.Mode == tPoseidon.Core.Data.CashMode.Balance ? $", accounts start with {options.Cash.StartingBalance}" : "")}");
 
 Console.WriteLine($"{LogTag} listening");

@@ -21,7 +21,7 @@ internal static class HelpCommand
         Console.WriteLine("  cash      show or change an account's item shop cash (balance mode)");
         Console.WriteLine("  scripts   check or reload the NPC scripts (check, reload, folder)");
         Console.WriteLine("  security  connection guard: status, ban, unban, allow (run 'tposeidon security --help')");
-        Console.WriteLine("  play      start the game client pointed at this server");
+        Console.WriteLine("  play      start the game client pointed at this server, logged in with your play account");
         Console.WriteLine("  version   print the version");
         Console.WriteLine();
         Console.WriteLine("Setup options (all optional; setup asks for anything not given):");
@@ -32,7 +32,14 @@ internal static class HelpCommand
         Console.WriteLine("  --db-admin-user <login> --db-admin-password <secret>   create the database and its login");
         Console.WriteLine("  --db-user <login> --db-password <secret>               or use a login you already made");
         Console.WriteLine("  --admin-user <name> --admin-password <secret>          your game account");
+        Console.WriteLine("  --play-account <name>          the account Play logs in with (default: the one you create)");
         Console.WriteLine("  --cash free|balance|disabled --cash-start <amount>     item shop cash");
+        Console.WriteLine();
+        Console.WriteLine("play options:");
+        Console.WriteLine("  --account <name>      log in with another existing account; remembered for next time");
+        Console.WriteLine("  --server <address> --account <name> [--client <folder>] [--web-url <url>]");
+        Console.WriteLine("                        play on someone else's server: asks for your password, logs in over the");
+        Console.WriteLine("                        server's web port, then starts your client pointed at it");
         Console.WriteLine();
         Console.WriteLine("cash options:");
         Console.WriteLine("  --account <name> [--grant <amount>]   add (or with a minus sign, take) cash");

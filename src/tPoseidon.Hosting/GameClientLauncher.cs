@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using tPoseidon.Hosting.Database;
 using tPoseidon.Hosting.Processes;
 
 namespace tPoseidon.Hosting;
@@ -19,6 +20,28 @@ public static class GameClientLauncher
     public static string Launch(HostSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        RequireAccount(settings);
+        DatabaseAdmin.IssueLaunchTicket(settings.Database, settings.Launch.Account, NetworkAddresses.OfThisComputer());
+        return Start(settings);
+    }
+
+    public static string LaunchWithTicket(HostSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        RequireAccount(settings);
+        return Start(settings);
+    }
+
+    private static void RequireAccount(HostSettings settings)
+    {
+        if (string.IsNullOrWhiteSpace(settings.Launch.Account))
+        {
+            throw new HostingException("No game account is set for Play yet. Run tposeidon setup (or the panel's setup) to create your account.");
+        }
+    }
+
+    private static string Start(HostSettings settings)
+    {
         var check = ClientFolder.Check(settings.ClientFolder);
         if (!check.Ok)
         {

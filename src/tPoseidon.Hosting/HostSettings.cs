@@ -147,7 +147,7 @@ public sealed class ClientLaunchSettings
 {
     public string ServiceName { get; set; } = "gsp";
 
-    public string Account { get; set; } = "dev";
+    public string Account { get; set; } = "";
 
     public string ServerDescription { get; set; } = "desc";
 

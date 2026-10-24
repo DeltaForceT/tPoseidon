@@ -82,6 +82,24 @@ public sealed class PanelTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void AccountPagePlaysWithTheCreatedAccountUnlessAnotherIsChosen()
+    {
+        var state = new SetupState(new InstallPaths(_root), new HostSettings());
+        var page = new AccountPage(state);
+        Box(page, 0).Text = "Alice";
+        Box(page, 1).Text = "secret";
+        Box(page, 2).Text = "secret";
+        Assert.True(page.Validate());
+        Assert.Equal("", state.PlayWith);
+
+        page.SelectPlay(true);
+        Assert.False(page.Validate());
+        Box(page, 3).Text = "Bob";
+        Assert.True(page.Validate());
+        Assert.Equal("Bob", state.PlayWith);
+    }
+
+    [AvaloniaFact]
     public void PortsPageRejectsDuplicates()
     {
         var state = new SetupState(new InstallPaths(_root), new HostSettings());

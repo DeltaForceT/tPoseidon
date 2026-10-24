@@ -1338,6 +1338,7 @@ var playerShops = new PlayerShopController(
     clientTextEncoding,
     LogTag);
 
+var sessionReleases = new System.Collections.Concurrent.ConcurrentDictionary<S2SessionContext, Func<Task>>();
 Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt) =>
     {
         systemLink.Register(ctx);
@@ -2476,7 +2477,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         
 
-        ctx.Dispatcher.Register(Opcode.C2S_DISCONNECT, (_, _, _) =>
+        Task ReleaseSessionAsync()
         {
             FlushStatsToDb("disconnect");
             npcScript.SaveHunt();
@@ -2527,7 +2528,8 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 leaving.Add(RemovePetAsync(leftPet));
             }
             return Task.WhenAll(leaving);
-        });
+        }
+        sessionReleases[ctx] = ReleaseSessionAsync;
 
         
 
@@ -3076,41 +3078,20 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         
 
-        ctx.Dispatcher.Register(Opcode.C2S_MYSHOP_OPEN, async (_, _, shopCt) =>
-        {
-            byte shopKey;
-            lock (moveRng) shopKey = (byte)moveRng.Next(1, 256);
-            Console.WriteLine($"{LogTag} {ctx.Remote} [myshop] open request; answering 0x01AD");
-            await ctx.SendFrameAsync(Opcode.S2C_MYSHOP_OPENED, Array.Empty<byte>(), randKey: shopKey, shopCt).ConfigureAwait(false);
-        });
         Task SendShopFrameAsync(Opcode opcode, byte[] payload, CancellationToken shopCt)
         {
             byte shopKey;
             lock (moveRng) shopKey = (byte)moveRng.Next(1, 256);
             return ctx.SendFrameAsync(opcode, payload, randKey: shopKey, shopCt);
         }
-        ctx.Dispatcher.Register(Opcode.C2S_PURCHASE_STORAGE_MODE, (_, _, _) =>
-        {
-            Console.WriteLine($"{LogTag} {ctx.Remote} [myshop] purchase storage mode");
-            return Task.CompletedTask;
-        });
-        ctx.Dispatcher.Register(Opcode.C2S_MYSHOP_ID_LIST, (_, _, shopCt) =>
-            SendShopFrameAsync(Opcode.S2C_MYSHOP_ID_LIST, tPoseidon.Core.Net.World.MyShopFrames.EmptyList(), shopCt));
-        ctx.Dispatcher.Register(Opcode.C2S_BOUGHT_LIST, (_, _, shopCt) =>
-            SendShopFrameAsync(Opcode.S2C_BOUGHT_LIST, tPoseidon.Core.Net.World.MyShopFrames.EmptyList(), shopCt));
-        ctx.Dispatcher.Register(Opcode.C2S_BOUGHT_LIST_CAMP, (_, _, shopCt) =>
-            SendShopFrameAsync(Opcode.S2C_BOUGHT_LIST_CAMP, tPoseidon.Core.Net.World.MyShopFrames.EmptyList(), shopCt));
-        ctx.Dispatcher.Register(Opcode.C2S_MYSHOP_ENTER, (_, _, shopCt) =>
-            SendShopFrameAsync(Opcode.S2C_MYSHOP_ENTERED, tPoseidon.Core.Net.World.MyShopFrames.Entered(string.Empty, clientTextEncoding), shopCt));
-        ctx.Dispatcher.Register(Opcode.C2S_MYSHOP_CLOSE, (_, _, shopCt) =>
-        {
-            if (!liveSessions.TryGetValue(ctx, out var shopper)) return Task.CompletedTask;
-            Console.WriteLine($"{LogTag} {ctx.Remote} [myshop] close; back to map {shopper.MapId} ({shopper.PlayerX},{shopper.PlayerY})");
-            return SendShopFrameAsync(Opcode.S2C_MYSHOP_LEAVE,
-                tPoseidon.Core.Net.World.MyShopFrames.Leave(shopper.MapId, shopper.PlayerX, shopper.PlayerY), shopCt);
-        });
-        ctx.Dispatcher.Register(Opcode.C2S_MYSHOP_LEFT, (_, _, shopCt) =>
-            SendShopFrameAsync(Opcode.S2C_MYSHOP_LEFT, Array.Empty<byte>(), shopCt));
+        tPoseidon.Core.Net.World.MyShopHandlers.Register(
+            ctx.Dispatcher,
+            SendShopFrameAsync,
+            () => liveSessions.TryGetValue(ctx, out var shopper)
+                ? new tPoseidon.Core.Net.World.MyShopReturn(shopper.MapId, shopper.PlayerX, shopper.PlayerY)
+                : null,
+            clientTextEncoding,
+            line => Console.WriteLine($"{LogTag} {ctx.Remote} {line}"));
         ctx.Dispatcher.Register(Opcode.C2S_CASH_BOX_TAKE, (_, payload, _) =>
             liveSessions.TryGetValue(ctx, out var cashTakeSt) ? cashBox.TakeAsync(cashTakeSt, payload) : Task.CompletedTask);
         ctx.Dispatcher.Register(Opcode.C2S_CASH_BOX_REFRESH, (_, _, _) =>
@@ -5618,7 +5599,11 @@ var primaryHost = new S2ServerHost
     KeyTablePath = S2ServerHost.DefaultKeyTablePath(),
     SessionsLogIn = true,
     OnSessionAccepted = sessionHandler,
-    OnSessionClosed = closedCtx => systemLink.ClosedAsync(closedCtx, CancellationToken.None),
+    OnSessionClosed = async closedCtx =>
+    {
+        if (sessionReleases.TryRemove(closedCtx, out var release)) await release().ConfigureAwait(false);
+        await systemLink.ClosedAsync(closedCtx, CancellationToken.None).ConfigureAwait(false);
+    },
 };
 
 using var stopSignal = S2ServerHost.WireCtrlC();

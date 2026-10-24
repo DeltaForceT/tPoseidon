@@ -37,7 +37,7 @@ try
         "stop" => StopCommand.Run(paths, commandLine),
         "status" => StatusCommand.Run(paths, commandLine),
         "backup" => BackupCommand.Run(paths, commandLine),
-        "play" => PlayCommand.Run(paths, commandLine),
+        "play" => await PlayCommand.RunAsync(paths, commandLine, prompt, cancellation.Token).ConfigureAwait(false),
         "gm" => GmCommand.Run(paths, commandLine, prompt),
         "cash" => CashCommand.Run(paths, commandLine),
         "scripts" => ScriptsCommand.Run(paths, commandLine),
