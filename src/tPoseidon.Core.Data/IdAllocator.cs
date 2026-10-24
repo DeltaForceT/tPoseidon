@@ -56,7 +56,7 @@ public sealed class IdAllocator
         {
             if (id < _firstId || id > _lastId)
             {
-                return;  
+                return;
             }
             if (!_freeList.Contains(id))
             {

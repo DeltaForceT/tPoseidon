@@ -60,8 +60,6 @@ public sealed class ScriptLibrary
     public (CompiledCommand Command, string File)? FindCommand(string name) =>
         _commands.TryGetValue(name, out var command) ? command : null;
 
-    public IEnumerable<string> CommandNames => _commands.Keys;
-
     public Routine? FindOverride(int sprite, int map, int x, int y)
     {
         Routine? best = null;

@@ -257,11 +257,6 @@ public sealed class EquipmentService
         Console.WriteLine($"{_logTag} {_ctx.Remote}   expired item {target.Item.ItemIndex} (0x{itemUid:X}) released from slot {target.Slot}");
     }
 
-    public int WornCount(ulong characterId) => EquipmentRules.WornBy(_items, _catalog, characterId).Count;
-
-    public int FreeBagSlots(ulong characterId) =>
-        tPoseidon.Core.Game.Monsters.PickupRules.BagCapacity - _items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory).Count;
-
     public async Task<int> ReleaseAllAsync(CancellationToken ct)
     {
         if (_player.Character() is not { } character) return 0;

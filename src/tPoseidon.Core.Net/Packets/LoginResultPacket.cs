@@ -62,28 +62,16 @@ public sealed class LoginResultPacket
     private static void WriteFixedAscii(byte[] dest, int offset, int fieldBytes, string value)
     {
 
-        
+
         var encoded = Encoding.ASCII.GetBytes(value);
         var copyLen = Math.Min(encoded.Length, fieldBytes);
 
-        
+
         Array.Clear(dest, offset, fieldBytes);
         if (copyLen > 0)
         {
             Array.Copy(encoded, 0, dest, offset, copyLen);
         }
-    }
-
-        public string ServerName => DecodeFixedString(ServerNameOffset);
-
-        public string ChannelName => DecodeFixedString(ChannelNameOffset);
-
-    private string DecodeFixedString(int offset)
-    {
-        if (Bytes.Length < offset + NameFieldBytes) return string.Empty;
-        var nul = Array.IndexOf(Bytes, (byte)0, offset, NameFieldBytes);
-        var len = (nul < 0 ? offset + NameFieldBytes : nul) - offset;
-        return Encoding.ASCII.GetString(Bytes, offset, len);
     }
 
     public byte[] EncodePayload()

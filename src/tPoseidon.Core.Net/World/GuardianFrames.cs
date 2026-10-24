@@ -41,10 +41,7 @@ public static class GuardianFrames
     public const int SpecialsOffset = 0x193;
     public const int OrderOffset = 0x1C0;
 
-    public const uint OrderNotACard = 0;
-    public const uint OrderAlreadyListed = 1;
     public const uint OrderNotListed = 2;
-    public const uint OrderBusy = 3;
 
     public static byte[] Record(GuardianState? state, Encoding encoding)
     {

@@ -30,8 +30,6 @@ public sealed class GroundItemField
 
     private readonly ConcurrentDictionary<ushort, FieldItem> _items = new();
 
-    public int Count => _items.Count;
-
     public void Add(FieldItem item)
     {
         ArgumentNullException.ThrowIfNull(item);

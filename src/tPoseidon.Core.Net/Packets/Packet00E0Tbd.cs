@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Net.Packets;
 
@@ -27,19 +26,4 @@ public sealed class Packet00E0Tbd
         return buf;
     }
 
-    public static Packet00E0Tbd DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"Packet00E0Tbd payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new Packet00E0Tbd
-        {
-            PlayerEntityId = BinaryPrimitives.ReadUInt16LittleEndian(payload[0..2]),
-            TargetEntityId = BinaryPrimitives.ReadUInt16LittleEndian(payload[2..4]),
-            RendererFactoryId = BinaryPrimitives.ReadUInt16LittleEndian(payload[6..8]),
-            SkillId = BinaryPrimitives.ReadUInt16LittleEndian(payload[10..12]),
-        };
-    }
 }

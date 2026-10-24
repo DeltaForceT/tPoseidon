@@ -1,6 +1,3 @@
-using tPoseidon.Core.Data;
-using Xunit;
-
 namespace tPoseidon.Core.Data.Tests;
 
 public class CashShopRulesTests

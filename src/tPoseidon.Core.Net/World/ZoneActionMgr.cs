@@ -13,9 +13,6 @@ public sealed class ZoneActionMgr
         _global = global ?? throw new ArgumentNullException(nameof(global));
     }
 
-    public Zone Zone => _zone;
-    public ActionManager Global => _global;
-
     public bool IsInitialized { get; private set; }
 
     public void Init()

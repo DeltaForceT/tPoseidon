@@ -62,7 +62,6 @@ public sealed class StatManager
     public event Action<ExpChangedEvent>? ExpChanged;
     public event Action<TmExpChangedEvent>? TmExpChanged;
     public event Action<HealthChangedEvent>? HealthChanged;
-    public event Action<ManaChangedEvent>? ManaChanged;
     public event Action<LevelChangedEvent>? LevelUp;
     public event Action<TmLevelChangedEvent>? TmLevelUp;
 
@@ -327,17 +326,6 @@ public sealed class StatManager
         }
     }
 
-    public void SetMp(long newMp)
-    {
-        newMp = Math.Max(0L, newMp);
-        lock (_lock)
-        {
-            if (newMp == _mp) return;
-            _mp = newMp;
-        }
-        ManaChanged?.Invoke(new ManaChangedEvent { CharacterId = CharacterId, NewMp = newMp });
-    }
-
     public void ApplyQuestRewards(long gelder, long exp, long tmxp)
     {
         if (gelder > 0) GrantMoney(gelder, StatChangeSource.Quest);
@@ -439,12 +427,6 @@ public sealed record HealthChangedEvent
 {
     public required ulong CharacterId { get; init; }
     public required long NewHp { get; init; }
-}
-
-public sealed record ManaChangedEvent
-{
-    public required ulong CharacterId { get; init; }
-    public required long NewMp { get; init; }
 }
 
 public sealed record LevelChangedEvent

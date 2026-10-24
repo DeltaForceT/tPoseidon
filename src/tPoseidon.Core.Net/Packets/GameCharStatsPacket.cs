@@ -10,11 +10,8 @@ public sealed class GameCharStatsPacket
     public const int EquipSlotCount = 23;
     public const int EquipSlotBytes = 8;
     public const int EquipBlockOffset = 0x00;
-    public const int EquipBlockSize = EquipSlotCount * EquipSlotBytes;
 
     public const int AccPtsBlockOffset = 0xB8;
-    public const int Block1TrailerOffset = 0xD0;
-    public const int Block2Offset = 0xD9;
 
     public EquipSlot[] EquipSlots { get; init; } = new EquipSlot[EquipSlotCount];
 

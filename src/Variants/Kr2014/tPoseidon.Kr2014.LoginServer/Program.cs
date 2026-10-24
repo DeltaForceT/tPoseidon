@@ -1,6 +1,5 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Crypto.S2;
-using tPoseidon.Core.Data;
 using tPoseidon.Core.Data.Postgres;
 using tPoseidon.Core.Net;
 using tPoseidon.Core.Net.Packets;
@@ -38,20 +37,20 @@ var host = new S2ServerHost
 
             Console.WriteLine($"{LogTag} {ctx.Remote} {result.Message}");
 
-            
 
-            
 
-            
 
-            
+
+
+
+
 
             var loginPeerIp = ctx.Remote?.Address ?? System.Net.IPAddress.None;
             accountStore.RefreshLatestIp(result.AccountId, loginPeerIp);
 
-            
 
-            
+
+
 
             await SendFrameAsync(ctx, Opcode.SESSION_OPEN, randKey: 0x5A,
                 SessionOpenPacket.EncodePayload(), innerCt);
@@ -76,9 +75,9 @@ var host = new S2ServerHost
             }
         });
 
-        
 
-        
+
+
 
         RegisterHandshakeStub(ctx.Dispatcher, Opcode.HANDSHAKE_STEP_1, "STEP_1");
         RegisterHandshakeStub(ctx.Dispatcher, Opcode.HANDSHAKE_STEP_2, "STEP_2");
@@ -86,14 +85,14 @@ var host = new S2ServerHost
         RegisterHandshakeStub(ctx.Dispatcher, Opcode.HANDSHAKE_STEP_5, "STEP_5");
         RegisterHandshakeStub(ctx.Dispatcher, Opcode.HANDSHAKE_FINAL, "FINAL");
 
-        
+
         RegisterHandshakeStub(ctx.Dispatcher, Opcode.S2C_OP_2712_TBD, "STEP_3 (alias DRILL_START)");
 
-        
 
-        
 
-        
+
+
+
         RegisterHandshakeStub(ctx.Dispatcher, Opcode.SESSION_PARAM_3, "SESSION_PARAM_3 (kr post-warp)");
 
         ctx.Dispatcher.Register(Opcode.CHAR_SELECT, (_, payload, _) =>

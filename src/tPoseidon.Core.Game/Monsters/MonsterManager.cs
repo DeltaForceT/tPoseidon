@@ -16,7 +16,6 @@ public sealed class MonsterManager : IMonsterEntityProvider
     private readonly ConcurrentDictionary<ushort, IMonsterStrategy> _strategyByEntityId = new();
     private readonly ConcurrentDictionary<ushort, GroundItem> _groundItems = new();
     private readonly Random _rng;
-    private readonly object _rngLock = new();
 
     public MonsterManager(
         IMonsterParamLookup catalog,
@@ -164,23 +163,6 @@ public sealed class MonsterManager : IMonsterEntityProvider
         return Math.Max(0, def.MaxMpLv);
     }
 
-        public IReadOnlyList<GroundItem> RollDrops(MonsterEntity mob)
-    {
-        ArgumentNullException.ThrowIfNull(mob);
-        if (_dropCatalog is null) return Array.Empty<GroundItem>();
-
-        var def = _catalog.GetById(mob.MonsterParamId);
-        if (def is null || def.ItemDropIdx <= 0) return Array.Empty<GroundItem>();
-
-        var dropped = new List<GroundItem>();
-        var visited = new HashSet<int>();
-        lock (_rngLock)
-        {
-            RollDropTableRecursive(mob, def.ItemDropIdx, dropped, visited, depth: 0);
-        }
-        return dropped;
-    }
-
     private const int MaxDropCascadeDepth = 4;
 
     private void RollDropTableRecursive(MonsterEntity mob, int dropTableId, List<GroundItem> dropped, HashSet<int> visited, int depth)
@@ -217,18 +199,6 @@ public sealed class MonsterManager : IMonsterEntityProvider
         }
     }
 
-        public GroundItem? GetGroundItem(ushort entityId) =>
-        _groundItems.TryGetValue(entityId, out var g) ? g : null;
-
-        public bool ConsumeGroundItem(ushort entityId)
-    {
-        if (!_groundItems.TryRemove(entityId, out _)) return false;
-        _idAllocator.Release(entityId);
-        return true;
-    }
-
-    public IReadOnlyCollection<GroundItem> GroundItemsOnMap(ushort mapId) =>
-        _groundItems.Values.Where(g => g.MapId == mapId).ToArray();
 }
 
 public enum DamageResult

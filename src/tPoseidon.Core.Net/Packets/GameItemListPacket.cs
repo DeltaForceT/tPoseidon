@@ -22,7 +22,7 @@ public sealed class GameItemListPacket
 
     public sealed class ItemRecord
     {
-        public required byte Class { get; init; } 
+        public required byte Class { get; init; }
         public required uint ItemIndex { get; init; }
         public required uint ItemUid { get; init; }
         public uint FieldA { get; init; } = 1;
@@ -80,7 +80,7 @@ public sealed class GameItemListPacket
                 w.WriteByte((byte)r.Options.Count);
                 foreach (var option in r.Options) WriteOption(w, option);
             }
-            else 
+            else
             {
                 w.WriteUInt16(r.StackCount);
             }

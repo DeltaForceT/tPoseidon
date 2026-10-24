@@ -1,6 +1,5 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Crypto.S2;
-using Xunit;
 
 namespace tPoseidon.Core.Crypto.Tests.S2;
 

@@ -7,7 +7,7 @@ namespace tPoseidon.Core.Net.Packets;
 public sealed class CharCreateRequestPacket
 {
     public const int FixedTailBytes = 9;
-    public const int MaxNameBytes = 16; 
+    public const int MaxNameBytes = 16;
 
     public string Name { get; init; } = string.Empty;
     public ushort SpeciesSelect { get; init; }
@@ -34,7 +34,7 @@ public sealed class CharCreateRequestPacket
         var totalSize = nameBytes.Length + 1 + FixedTailBytes;
         var w = new PacketWriter(totalSize);
         w.WriteBytes(nameBytes);
-        w.WriteByte(0); 
+        w.WriteByte(0);
         w.WriteUInt16(SpeciesSelect);
         w.WriteByte(Hair);
         w.WriteByte(SpeciesDerived);

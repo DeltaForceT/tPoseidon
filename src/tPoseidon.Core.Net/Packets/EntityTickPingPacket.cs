@@ -19,17 +19,4 @@ public sealed class EntityTickPingPacket
         return w.ToArray();
     }
 
-    public static EntityTickPingPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"EntityTickPing payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        var r = new PacketReader(payload);
-        return new EntityTickPingPacket
-        {
-            EntityId = r.ReadUInt16(),
-        };
-    }
 }

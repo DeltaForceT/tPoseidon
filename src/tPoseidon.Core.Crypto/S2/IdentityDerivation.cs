@@ -18,7 +18,6 @@ public sealed class IdentityDerivation : IS2CipherDerivation
 
     public void DecryptPayload(Span<byte> payload, ushort opcode, byte randKey, KeyTable table)
     {
-
     }
 
     public void EncryptHeader(
@@ -41,23 +40,20 @@ public sealed class IdentityDerivation : IS2CipherDerivation
 
     public void EncryptPayload(Span<byte> payload, ushort opcode, byte randKey, KeyTable table)
     {
-
     }
 
     public void DecryptTrailingChecksum(Span<byte> trailer, int payloadLength, ushort opcode, byte randKey, KeyTable table)
     {
-
     }
 
     public void EncryptTrailingChecksum(Span<byte> trailer, int payloadLength, ushort opcode, byte randKey, KeyTable table)
     {
-
     }
 
     public byte UpdateSessionKey(byte oldSessionKey, ushort plaintextChecksum, KeyTable table)
     {
 
-        
+
         var k = oldSessionKey;
         k ^= (byte)(plaintextChecksum & 0xFF);
         k ^= (byte)((plaintextChecksum >> 8) & 0xFF);

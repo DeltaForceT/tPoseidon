@@ -1,4 +1,3 @@
-using tPoseidon.Core.Data;
 using Npgsql;
 
 namespace tPoseidon.Core.Data.Postgres;
@@ -122,11 +121,11 @@ public sealed class PostgresQuestHistoryStore : IQuestHistoryStore
     public bool CompletedToday(ulong characterId, byte questType, int questId, int monsterId, DateTime referenceUtc)
     {
 
-        
 
-        
 
-        
+
+
+
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var cmd = new NpgsqlCommand(
             """
@@ -151,7 +150,7 @@ public sealed class PostgresQuestHistoryStore : IQuestHistoryStore
     public bool HasCompletedAtLeast(ulong characterId, byte questType, int questId, int monsterId, byte threshold)
     {
 
-        
+
         if (threshold == 0) return true;
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var cmd = new NpgsqlCommand(

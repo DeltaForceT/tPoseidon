@@ -13,7 +13,6 @@ public static class GunAttack
     public const double MonsterDefenseWeight = 30.0;
     public const int LuckOffset = 0x50;
     public const int Percent = 100;
-    public const byte CriticalChargeFlag = 1;
 
     public static (long Damage, int Kind) Shot(
         long attackerAc, long attackerLk, long power, float criticalMultiplier, bool critical, SkillTarget target, bool targetIsPlayer, Func<int, int> randomBelow)

@@ -13,11 +13,6 @@ public static class NpcGreeting
     public const int QuestDone = 1;
     public const int QuestActive = 2;
     public const int ItemHeld = 3;
-    public const int Job = 4;
-    public const int LevelTable = 5;
     public const int ScenarioQuestDone = 6;
     public const int ScenarioQuestActive = 7;
-    public const int SkillTable = 8;
-    public const int ConditionTable = 9;
-    public const int TableValue = 10;
 }

@@ -63,18 +63,7 @@ public static class ServerEndpointConfig
 
     public static IPAddress InterServerBindAddress => _interServerBindAddress.Value;
 
-    public static string? PublicIpOverride => _publicIpOverride.Value;
-
     public static string PublicIp => _publicIpOverride.Value ?? DefaultPublicIp;
-
-    public static string ResolveHandoffIp(IPEndPoint? sessionLocalEndpoint)
-    {
-        if (sessionLocalEndpoint?.Address is { } local && IPAddress.IsLoopback(local))
-        {
-            return "127.0.0.1";
-        }
-        return PublicIp;
-    }
 
     public static ushort LobbyPort   => _lobbyPort.Value;
     public static ushort ChannelPort => _channelPort.Value;

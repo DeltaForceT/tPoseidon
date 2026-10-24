@@ -64,11 +64,11 @@ public sealed class S2PacketCipher
         var checksumOff = HeaderSize + plaintextPayload.Length;
         BinaryPrimitives.WriteUInt16LittleEndian(frame.AsSpan(checksumOff, 2), checksum);
 
-        
 
-        
 
-        
+
+
+
         if ((flags & PackingFlags.PayloadEncrypted) != 0)
         {
             _derivation.EncryptPayload(
@@ -79,9 +79,9 @@ public sealed class S2PacketCipher
                 plaintextPayload.Length, opcode, randKey, _table);
         }
 
-        
 
-        
+
+
         lock (session.Lock)
         {
             _derivation.EncryptHeader(
@@ -114,11 +114,11 @@ public sealed class S2PacketCipher
                 $"Frame too short: {frame.Length} bytes; needs at least {MinimumFrameSize}.");
         }
 
-        
 
-        
 
-        
+
+
+
 
         byte packingFlagsByte;
         try
@@ -128,7 +128,7 @@ public sealed class S2PacketCipher
         catch (InvalidPacketException) when (!session.IsStrict && !session.IsFirstPacket)
         {
 
-            
+
 
             packingFlagsByte = frame[OffsetPackingFlags];
         }
@@ -136,7 +136,7 @@ public sealed class S2PacketCipher
 
         var randKey = frame[OffsetRandKey];
 
-        
+
         var length = _derivation.RecoverLength(frame, session.RecvKey, _table);
         var opcode = _derivation.RecoverOpcode(frame, session.RecvKey, _table);
         var sequence = _derivation.RecoverSequence(frame, session.RecvKey, _table);
@@ -180,7 +180,7 @@ public sealed class S2PacketCipher
             computedChecksum = (ushort)(computedChecksum + b);
         }
 
-        
+
         var trailerBytes = new byte[PayloadChecksumSize];
         frame.Slice(payloadEnd, PayloadChecksumSize).CopyTo(trailerBytes);
         if ((flags & PackingFlags.PayloadEncrypted) != 0)

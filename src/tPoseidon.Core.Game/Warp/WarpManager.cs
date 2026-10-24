@@ -14,12 +14,6 @@ public sealed class WarpManager
         _ttl = ttl ?? TimeSpan.FromSeconds(30);
     }
 
-    public uint Begin(PendingWarp warp)
-    {
-        TryBegin(warp, out var token);
-        return token;
-    }
-
     public bool TryBegin(PendingWarp warp, out uint token)
     {
         foreach (var kv in _byToken)
@@ -35,13 +29,6 @@ public sealed class WarpManager
         token = (uint)Interlocked.Increment(ref _nextToken);
         _byToken[token] = new PendingWarpEntry(warp, DateTime.UtcNow + _ttl);
         return true;
-    }
-
-    public PendingWarp? ConsumeByToken(uint token)
-    {
-        if (token == 0) return null;
-        if (!_byToken.TryRemove(token, out var entry)) return null;
-        return entry.Expires < DateTime.UtcNow ? null : entry.Warp;
     }
 
     public PendingWarp? ConsumeByCharId(ulong characterId)
@@ -77,23 +64,6 @@ public sealed class WarpManager
 
     public void ReleaseLandingClaim(ulong characterId) =>
         _landingClaims.TryRemove(characterId, out _);
-
-    public int Sweep()
-    {
-        var now = DateTime.UtcNow;
-        var dropped = 0;
-        foreach (var kv in _byToken)
-        {
-            if (kv.Value.Expires < now && _byToken.TryRemove(kv.Key, out _)) dropped++;
-        }
-        foreach (var kv in _landingClaims)
-        {
-            if (kv.Value < now && _landingClaims.TryRemove(kv.Key, out _)) dropped++;
-        }
-        return dropped;
-    }
-
-    public int PendingCount => _byToken.Count;
 
     private readonly record struct PendingWarpEntry(PendingWarp Warp, DateTime Expires);
 }

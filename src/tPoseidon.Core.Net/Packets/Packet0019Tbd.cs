@@ -8,7 +8,6 @@ public sealed class Packet0019Tbd
     public const int PayloadSize = 7;
 
     public const byte StateFlagHalt = 0x01;
-    public const byte StateFlagCombatStance = 0x02;
 
     public required ushort EntityId { get; init; }
     public required ushort WorldX { get; init; }

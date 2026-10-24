@@ -14,12 +14,6 @@ public sealed class InMemoryNpcActionScriptLookup : INpcActionScriptLookup
         }
     }
 
-    public static InMemoryNpcActionScriptLookup LoadFromXml(string xmlPath)
-    {
-        var reader = new LibConfigXmlReader(xmlPath);
-        return new InMemoryNpcActionScriptLookup(reader.LoadNpcActionScript());
-    }
-
     public NpcActionScriptEntry? GetByType(int type)
         => _byType.TryGetValue(type, out var entry) ? entry : null;
 

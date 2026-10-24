@@ -137,7 +137,7 @@ public sealed class TcpClientSession : IAsyncDisposable
 
             if (bytesRead == 0) yield break;
 
-            
+
             yield return new ReadOnlyMemory<byte>(buffer, 0, bytesRead).ToArray();
         }
     }

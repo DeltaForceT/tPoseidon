@@ -1,5 +1,3 @@
-using tPoseidon.Core.Common;
-
 namespace tPoseidon.Core.Net.Packets;
 
 public sealed class GameBatchHeaderPacket
@@ -23,64 +21,12 @@ public sealed class GameBatchHeaderPacket
         return buf;
     }
 
-    public static GameBatchHeaderPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"GameBatchHeader payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new GameBatchHeaderPacket
-        {
-            Field0Tbd = ReadU16(payload, 0),
-            Field2Tbd = ReadU16(payload, 2),
-            EntityIdMirror = ReadU16(payload, 4),
-            SpawnXTbd = ReadU16(payload, 6),
-            SpawnYTbd = ReadU16(payload, 8),
-        };
-    }
-
     private static void WriteU16(byte[] buf, int o, ushort v)
     {
         buf[o] = (byte)(v & 0xFF);
         buf[o + 1] = (byte)((v >> 8) & 0xFF);
     }
 
-    private static ushort ReadU16(ReadOnlySpan<byte> buf, int o) =>
-        (ushort)(buf[o] | (buf[o + 1] << 8));
-}
-
-public sealed class GameItemExpiryPacket
-{
-    public const int PayloadSize = 10;
-
-    public ulong Timestamp { get; init; } = 0x01DCD4C66012E880UL;
-    public ushort Trailer { get; init; }
-
-    public byte[] EncodePayload()
-    {
-        var buf = new byte[PayloadSize];
-        for (var i = 0; i < 8; i++) buf[i] = (byte)((Timestamp >> (i * 8)) & 0xFF);
-        buf[8] = (byte)(Trailer & 0xFF);
-        buf[9] = (byte)((Trailer >> 8) & 0xFF);
-        return buf;
-    }
-
-    public static GameItemExpiryPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"GameItemExpiry payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        ulong ts = 0;
-        for (var i = 0; i < 8; i++) ts |= (ulong)payload[i] << (i * 8);
-        return new GameItemExpiryPacket
-        {
-            Timestamp = ts,
-            Trailer = (ushort)(payload[8] | (payload[9] << 8)),
-        };
-    }
 }
 
 public sealed class GameBatchFloatArrayPacket
@@ -126,23 +72,6 @@ public sealed class GameBatchFloatArrayPacket
         return buf;
     }
 
-    public static GameBatchFloatArrayPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != FloatCount2010 * 4 && payload.Length != FloatCount2014 * 4)
-        {
-            throw new InvalidPacketException(
-                $"GameBatchFloatArray payload must be {FloatCount2010 * 4} or {FloatCount2014 * 4} bytes, got {payload.Length}.");
-        }
-        var count = payload.Length / 4;
-        var floats = new float[count];
-        for (var i = 0; i < count; i++)
-        {
-            var off = i * 4;
-            uint bits = (uint)(payload[off] | (payload[off + 1] << 8) | (payload[off + 2] << 16) | (payload[off + 3] << 24));
-            floats[i] = BitConverter.UInt32BitsToSingle(bits);
-        }
-        return new GameBatchFloatArrayPacket { Floats = floats };
-    }
 }
 
 public sealed class SlotCountPacket
@@ -161,18 +90,6 @@ public sealed class SlotCountPacket
         return buf;
     }
 
-    public static SlotCountPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"SlotCount payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new SlotCountPacket
-        {
-            Count = (uint)(payload[0] | (payload[1] << 8) | (payload[2] << 16) | (payload[3] << 24)),
-        };
-    }
 }
 
 public sealed class HeadingVectorPacket
@@ -198,37 +115,15 @@ public sealed class HeadingVectorPacket
         return buf;
     }
 
-    public static HeadingVectorPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"HeadingVector payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new HeadingVectorPacket
-        {
-            Heading = ReadU16(payload, 0),
-            Pitch = ReadU16(payload, 2),
-            Roll = ReadU16(payload, 4),
-            Reserved6 = ReadU16(payload, 6),
-            Reserved8 = ReadU16(payload, 8),
-            Reserved10 = ReadU16(payload, 10),
-        };
-    }
-
     private static void WriteU16(byte[] buf, int o, ushort v)
     {
         buf[o] = (byte)(v & 0xFF);
         buf[o + 1] = (byte)((v >> 8) & 0xFF);
     }
-    private static ushort ReadU16(ReadOnlySpan<byte> buf, int o) =>
-        (ushort)(buf[o] | (buf[o + 1] << 8));
 }
 
 public sealed class ColorOrFlagPacket0325
 {
-    public const int PayloadSize = 4;
-
     public byte ByteR { get; init; } = 0x3E;
     public byte ByteG { get; init; } = 0xBA;
     public byte ByteB { get; init; } = 0xFF;
@@ -236,21 +131,6 @@ public sealed class ColorOrFlagPacket0325
 
     public byte[] EncodePayload() => new[] { ByteR, ByteG, ByteB, ByteATbd };
 
-    public static ColorOrFlagPacket0325 DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"ColorOrFlag0325 payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new ColorOrFlagPacket0325
-        {
-            ByteR = payload[0],
-            ByteG = payload[1],
-            ByteB = payload[2],
-            ByteATbd = payload[3],
-        };
-    }
 }
 
 public sealed class TimestampedSparsePacket0477
@@ -269,18 +149,6 @@ public sealed class TimestampedSparsePacket0477
         return buf;
     }
 
-    public static TimestampedSparsePacket0477 DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"TimestampedSparse0477 payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new TimestampedSparsePacket0477
-        {
-            TimestampLow = (uint)(payload[12] | (payload[13] << 8) | (payload[14] << 16) | (payload[15] << 24)),
-        };
-    }
 }
 
 public sealed class MapHandoffAckPacket
@@ -299,16 +167,4 @@ public sealed class MapHandoffAckPacket
         return buf;
     }
 
-    public static MapHandoffAckPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"MapHandoffAck payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new MapHandoffAckPacket
-        {
-            Status = (uint)(payload[0] | (payload[1] << 8) | (payload[2] << 16) | (payload[3] << 24)),
-        };
-    }
 }

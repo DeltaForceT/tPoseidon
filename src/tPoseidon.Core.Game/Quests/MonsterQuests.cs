@@ -9,7 +9,6 @@ public readonly record struct MonsterQuestGrade(int Monster, int Count, int Minu
 
 public static class MonsterQuests
 {
-    public const int GradeColumns = 5;
     public const int DefaultMaxCount = 25;
     public const int MillisecondsPerMinute = 60_000;
     public const int TimerStepMs = 1_000;

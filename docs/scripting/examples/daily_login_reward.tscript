@@ -1,7 +1,3 @@
-// Gives every character one reward per calendar day, on the first login of that day.
-// today() returns the date as a number such as 20261022, so comparing it with
-// a stored value tells us whether the reward was already given.
-
 function reward_item() {
     return 1001;
 }

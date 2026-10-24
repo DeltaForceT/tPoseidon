@@ -33,7 +33,6 @@ public static class MonsterSkills
     public const int EarthDivide = 1230;
     public const int MagicStormHeaderSkill = 2009;
     public const int EarthDivideVictims = 7;
-    public const int EarthDividePowerPerBonus = 3;
     public const int StunCancelSkill = 1110;
     public const int Charging = 1292;
     public const int ChargingDo = 1293;

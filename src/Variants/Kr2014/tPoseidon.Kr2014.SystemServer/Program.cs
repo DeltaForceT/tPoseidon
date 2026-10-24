@@ -1,7 +1,5 @@
-using System.Net;
 using tPoseidon.Core.Common;
 using tPoseidon.Core.InterServer;
-using tPoseidon.Core.Net;
 using tPoseidon.Core.Net.S2;
 using tPoseidon.Core.Net.Social;
 

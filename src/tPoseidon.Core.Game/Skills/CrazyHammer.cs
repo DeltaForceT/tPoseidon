@@ -1,4 +1,3 @@
-using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Combat;
 using tPoseidon.Core.LibConfig;
 
@@ -55,7 +54,6 @@ public sealed class CrazyHammerGauge
 public static class CrazyHammer
 {
     public const int CrazyHammerSkill = 4801;
-    public const int DoubleCrazySkill = 4804;
     public const int TripleCrazySkill = 4806;
     public const int QuadrupleCrazySkill = 4908;
     public const int QuintupleCrazySkill = 4910;

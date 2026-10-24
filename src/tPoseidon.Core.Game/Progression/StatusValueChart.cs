@@ -62,8 +62,6 @@ public sealed class StatusValueChart
             ForPoints(points[Hp], Hp), ForPoints(points[Dp], Dp), ForPoints(points[Hv], Hv));
     }
 
-    public EffectiveStats Compute(Character character) => Compute(PointsOf(character));
-
     public static StatusValueChart Load(string path) => Parse(File.ReadAllText(path));
 
     public static StatusValueChart Parse(string text)

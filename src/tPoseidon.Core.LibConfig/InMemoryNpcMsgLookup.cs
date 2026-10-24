@@ -13,11 +13,11 @@ public sealed class InMemoryNpcMsgLookup : INpcMsgLookup
         foreach (var entry in entries)
         {
 
-            
+
 
             _byKey[(entry.TableName, entry.No)] = entry;
 
-            
+
             _rowCountByTable[entry.TableName] =
                 _rowCountByTable.TryGetValue(entry.TableName, out var c) ? c + 1 : 1;
         }

@@ -22,8 +22,6 @@ public sealed class SessionParam1Packet
         0x32, 0x07, 0x00, 0x00,
     };
 
-    public static SessionParam1Packet SnapshotDefault => DecodePayload(SnapshotBytes);
-
     public ulong SelectedCharUid { get; init; }
     public string IpAddress { get; init; } = string.Empty;
     public uint LoginPort { get; init; }
@@ -46,7 +44,7 @@ public sealed class SessionParam1Packet
         var output = new byte[PayloadSize];
         Array.Copy(BaseBytes, output, PayloadSize);
 
-        
+
 
         for (var i = 0; i < 8; i++)
         {

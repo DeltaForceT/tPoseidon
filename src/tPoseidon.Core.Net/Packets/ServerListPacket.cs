@@ -10,8 +10,7 @@ public sealed class ServerListPacket
     public const int UrlFieldBytes = 32;
     public const int ReservedRegionOffset = 0x22;
     public const int OccupiedEntryOffset = 0x402;
-    public const int ReservedRegionBytes = OccupiedEntryOffset - ReservedRegionOffset; 
-    public const int ServerEntryBytes = PayloadSize - OccupiedEntryOffset; 
+    public const int ReservedRegionBytes = OccupiedEntryOffset - ReservedRegionOffset;
 
         public string PublisherUrl { get; init; } = string.Empty;
 
@@ -60,7 +59,7 @@ public sealed class ServerListPacket
         if (serverCount != 1)
         {
 
-            
+
             throw new InvalidPacketException(
                 $"SERVER_LIST: only count=1 is currently understood, got {serverCount}.");
         }

@@ -8,13 +8,13 @@ public sealed class InMemoryQuestInfoLookup : IQuestInfoLookup
     {
         ArgumentNullException.ThrowIfNull(entries);
 
-        
 
-        
 
-        
 
-        
+
+
+
+
 
         _byId = new Dictionary<int, QuestInfoEntry>();
         foreach (var entry in entries)

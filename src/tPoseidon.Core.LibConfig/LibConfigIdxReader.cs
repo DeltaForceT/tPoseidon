@@ -21,11 +21,6 @@ public sealed class LibConfigIdxReader
 
     public int Count => _byTable.Count;
 
-    public IdxEntry? GetByTable(string tableName)
-        => _byTable.TryGetValue(tableName, out var v) ? v : null;
-
-    public IReadOnlyCollection<IdxEntry> All => _byTable.Values;
-
     public static bool TryLoad(string idxPath, out LibConfigIdxReader? reader)
     {
         reader = null;

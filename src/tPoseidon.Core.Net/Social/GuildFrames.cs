@@ -57,7 +57,6 @@ public static class GuildFrames
     public const ushort OwnInfoResult = (ushort)Opcode.CHAR_DATA;
     public const ushort State = (ushort)Opcode.S2C_GUILD_STATE;
     public const ushort Detail = (ushort)Opcode.S2C_GUILD_DETAIL;
-    public const ushort NameTag = (ushort)Opcode.S2C_GUILD_NAME_TAG;
 
     public const int RequestHeaderLength = 12;
     public const int OwnInfoRequestLength = 8;
@@ -83,10 +82,8 @@ public static class GuildFrames
     public const int VolunteerHeaderLength = 4;
     public const int ForceOutResultHeaderLength = 0x0E;
     public const int AnswerApplyResultLength = 0x14;
-    public const int DissolveResultLength = 2;
     public const int DetailLength = 0x110;
     public const int NameOrderLength = 0x2E;
-    public const int BlockLength = 0x80;
     public const int GradeCount = 7;
     public const int GradeRightsStride = 8;
     public const int GradeTableLength = 0x6C;
@@ -109,7 +106,6 @@ public static class GuildFrames
     public const byte Failed = 1;
     public const byte InGuildFlag = 1;
 
-    public const byte OwnInfoQueryFail = 0;
     public const byte OwnInfoNotMyCharacter = 1;
     public const byte OwnInfoApplying = 3;
 
@@ -137,12 +133,9 @@ public static class GuildFrames
 
     public const uint MemberListNotMember = 0;
 
-    public const byte VolunteerQueryFail = 1;
     public const byte VolunteerNoPermission = 2;
 
     public const byte ForceOutInvalidGuild = 1;
-    public const byte ForceOutOnlyMaster = 2;
-    public const byte ForceOutPreviousRequest = 3;
     public const byte ForceOutNoPermission = 4;
     public const uint ForceOutRemoved = 0;
     public const uint ForceOutSkipped = 1;
@@ -150,7 +143,6 @@ public static class GuildFrames
     public const uint AnswerInvalidGuild = 0;
     public const uint AnswerAlreadyMember = 1;
     public const uint AnswerInvalidVolunteer = 2;
-    public const uint AnswerOnlyForMaster = 3;
     public const uint AnswerMemberFull = 4;
     public const uint AnswerQueryFail = 5;
     public const uint AnswerNoRight = 6;

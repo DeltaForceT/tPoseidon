@@ -51,7 +51,6 @@ public static class PartyCodes
     public const byte NoPendingInvite = 6;
     public const byte NotMaster = 8;
     public const byte PartyFull = 9;
-    public const byte InviterPartyGone = 10;
     public const byte NotAMember = 0x0B;
     public const byte LevelTooLow = 0x0C;
     public const byte PartyQuestRunning = 0x1B;
@@ -717,21 +716,6 @@ public sealed class PartyService
             outbox.Add(new(characterId, PartyFrames.Info, PartyFrames.InfoFor(
                 party.Id, party.Name, AverageLevel(party), (byte)TypeOf(party), (byte)party.Size,
                 party.DivisionType, party.ItemShare, _text)));
-        }
-        return outbox;
-    }
-
-    public PartyOutbox LevelChanged(ulong characterId, ushort level)
-    {
-        var outbox = new PartyOutbox();
-        lock (_gate)
-        {
-            if (!_online.TryGetValue(characterId, out var member)) return outbox;
-            member.Level = level;
-            if (member.Party is not { } party) return outbox;
-            Recompute(outbox, party);
-            RecomputeShare(outbox, party);
-            Broadcast(outbox, party, PartyFrames.LevelChanged, PartyFrames.LevelChangedFor(member.MemberId, level), except: null);
         }
         return outbox;
     }

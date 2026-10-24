@@ -52,11 +52,6 @@ public sealed class IniFile
         return fallback;
     }
 
-    public IReadOnlyList<string> GetAll(string key, string section = DefaultSection) =>
-        _sections.TryGetValue(section, out var s)
-            ? s.GetAll(key)
-            : Array.Empty<string>();
-
     public static IniFile LoadFromFile(string path)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
@@ -126,9 +121,6 @@ public sealed class IniSection
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
     }
-
-    public IReadOnlyDictionary<string, IReadOnlyList<string>> Values =>
-        _values.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value, StringComparer.OrdinalIgnoreCase);
 
     public void Add(string key, string value)
     {

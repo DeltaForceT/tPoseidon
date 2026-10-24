@@ -67,7 +67,6 @@ public static class CardBattleRules
     public const byte StealFlag = 1;
     public const int PerfectWins = 3;
     public const ushort FirstPlayCount = 1;
-    public static readonly TimeSpan ChoiceTime = TimeSpan.FromMilliseconds(40000);
 
     public const byte CodeOk = 0;
     public const byte CodeNoBattle = 1;

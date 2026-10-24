@@ -24,17 +24,17 @@ public static class PostgresMigrations
                 $"Migrations directory not found: {migrationsDirectory}");
         }
 
-        
 
-        
+
+
         var files = Directory.GetFiles(migrationsDirectory, "*.sql")
             .Where(p => MigrationFiles.IsNumbered(Path.GetFileName(p)))
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToArray();
 
-        
 
-        
+
+
 
         if (!string.IsNullOrWhiteSpace(schema))
         {
@@ -56,13 +56,13 @@ public static class PostgresMigrations
             var sql = await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
             await using var connection = await dataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
 
-            
 
-            
 
-            
 
-            
+
+
+
+
 
             if (!string.IsNullOrWhiteSpace(schema))
             {

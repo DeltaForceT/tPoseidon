@@ -3,7 +3,6 @@ using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.CardBattle;
 using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.LibConfig;
-using tPoseidon.Core.Net.Dialogs;
 using tPoseidon.Core.Net.Social;
 using tPoseidon.Core.Net.World;
 

@@ -1,4 +1,3 @@
-using tPoseidon.Core.Data;
 using Npgsql;
 
 namespace tPoseidon.Core.Data.Postgres;
@@ -23,7 +22,7 @@ public sealed class PostgresItemStore : IItemStore
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var tx = conn.BeginTransaction();
 
-        
+
         if (slotKind == SlotKind.Equipment)
         {
             using var checkCmd = new NpgsqlCommand(
@@ -147,7 +146,7 @@ public sealed class PostgresItemStore : IItemStore
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var tx = conn.BeginTransaction();
 
-        
+
         long charUid;
         using (var lookupCmd = new NpgsqlCommand(
             "SELECT char_uid FROM item_char WHERE item_uid = @item_uid",

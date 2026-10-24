@@ -4,8 +4,6 @@ public readonly record struct RandomStatRange(int Min, int Max, string Curve);
 
 public sealed record RandomStatRow
 {
-    public const int StatCount = 13;
-
     public required int ItemId { get; init; }
     public IReadOnlyList<RandomStatRange?> Stats { get; init; } = Array.Empty<RandomStatRange?>();
     public RandomStatRange? MixSlot { get; init; }

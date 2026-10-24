@@ -19,7 +19,7 @@ public sealed class MasterRoutedQuestStore : IQuestStore
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(fallback);
         ArgumentNullException.ThrowIfNull(log);
-        _call = new MasterRoutedQuestCall(client, selfIndex, log, timeout);
+        _call = new MasterRoutedQuestCall(client, selfIndex, timeout);
         _fallback = fallback;
         _log = log;
     }
@@ -172,7 +172,7 @@ public sealed class MasterRoutedQuestHistoryStore : IQuestHistoryStore
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(fallback);
         ArgumentNullException.ThrowIfNull(log);
-        _call = new MasterRoutedQuestCall(client, selfIndex, log, timeout);
+        _call = new MasterRoutedQuestCall(client, selfIndex, timeout);
         _fallback = fallback;
         _log = log;
     }
@@ -338,14 +338,12 @@ internal sealed class MasterRoutedQuestCall
 
     private readonly MasterServerClient _client;
     private readonly ushort _selfIndex;
-    private readonly Action<string> _log;
     private readonly TimeSpan _timeout;
 
-    public MasterRoutedQuestCall(MasterServerClient client, ushort selfIndex, Action<string> log, TimeSpan? timeout)
+    public MasterRoutedQuestCall(MasterServerClient client, ushort selfIndex, TimeSpan? timeout)
     {
         _client = client;
         _selfIndex = selfIndex;
-        _log = log;
         _timeout = timeout ?? TimeSpan.FromSeconds(2);
     }
 

@@ -8,7 +8,6 @@ using tPoseidon.Core.Net.World;
 
 internal sealed class EquipReformController
 {
-    public const int ReformWindow = 0;
     public const int ResetWindow = 1;
 
     private readonly MasterEquipStatusUpgrade _master;

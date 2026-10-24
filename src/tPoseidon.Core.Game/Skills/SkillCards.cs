@@ -4,7 +4,6 @@ namespace tPoseidon.Core.Game.Skills;
 
 public static class SkillCardRules
 {
-    public const int CardType = 28;
     public const int CardSubType = 55;
     public const int NoJob = 0;
 

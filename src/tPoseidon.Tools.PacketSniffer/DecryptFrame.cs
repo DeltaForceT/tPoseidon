@@ -35,9 +35,9 @@ internal static class DecryptFrame
         var bytes = File.ReadAllBytes(framePath);
         Console.WriteLine($"Loaded {bytes.Length}-byte file from {framePath}");
 
-        
 
-        
+
+
         SessionInfo? session = null;
         byte initialKey = 0;
         S2DecryptedPacket? firstFrame = null;
@@ -54,7 +54,6 @@ internal static class DecryptFrame
             }
             catch (InvalidPacketException)
             {
-
             }
         }
 
@@ -67,9 +66,9 @@ internal static class DecryptFrame
         Console.WriteLine();
         Console.WriteLine($"=== INITIAL KEY: 0x{initialKey:X2} ===");
 
-        
 
-        
+
+
         session = new SessionInfo(initialKey) { IsStrict = false };
         var frames = new List<S2DecryptedPacket>();
         var offset = 0;
@@ -77,11 +76,11 @@ internal static class DecryptFrame
         while (offset < bytes.Length)
         {
 
-            
 
-            
 
-            
+
+
+
 
             var remaining = new ReadOnlySpan<byte>(bytes, offset, bytes.Length - offset);
             S2DecryptedPacket pkt;
@@ -105,7 +104,7 @@ internal static class DecryptFrame
         Console.WriteLine();
         Console.WriteLine($"=== DECODED {frames.Count} FRAME(S) ===");
 
-        
+
 
         if (frames.Count == 1)
         {

@@ -6,7 +6,6 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using tPoseidon.Hosting;
-using tPoseidon.Panel;
 
 [assembly: AvaloniaTestApplication(typeof(tPoseidon.Panel.Tests.TestApp))]
 

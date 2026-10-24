@@ -47,7 +47,6 @@ public static class ObjectEffects
     public const string SpeedDownColumn = "SpeedDown";
     public const string DamagePerSecColumn = "DamagePerSec";
     public const string PoisonRatioColumn = "PosionRatio";
-    public const string KillNumColumn = "KillNum";
 
     public const int ElectricFieldVictims = 5;
     public const int ElectricFieldPeriodMs = 2000;

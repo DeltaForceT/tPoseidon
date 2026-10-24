@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Net.Packets;
 
@@ -7,9 +6,7 @@ public sealed class Packet002ATbd
 {
     public const int PayloadSize = 26;
 
-    public const ushort MagicSoulAnimSubOp = 0x001E;
     public const ushort HitFlagNormal = 0x0003;
-    public const ushort HitFlagCrit = 0x0083;
     public const byte HitMarkerA = 0x80;
     public const byte HitMarkerB = 0x80;
 
@@ -32,21 +29,4 @@ public sealed class Packet002ATbd
         return buf;
     }
 
-    public static Packet002ATbd DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"Packet002ATbd payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new Packet002ATbd
-        {
-            VictimEntityId = BinaryPrimitives.ReadUInt16LittleEndian(payload[0..2]),
-            AnimSubOp = BinaryPrimitives.ReadUInt16LittleEndian(payload[2..4]),
-            HitFlag = BinaryPrimitives.ReadUInt16LittleEndian(payload[6..8]),
-            MarkerAt10 = payload[10],
-            MarkerAt14 = payload[14],
-            HitKind = BinaryPrimitives.ReadUInt32LittleEndian(payload[22..26]),
-        };
-    }
 }

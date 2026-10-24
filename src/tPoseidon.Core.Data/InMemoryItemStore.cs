@@ -19,9 +19,9 @@ public sealed class InMemoryItemStore : IItemStore
         lock (_gate)
         {
 
-            
 
-            
+
+
             if (slotKind == SlotKind.Equipment && SlotIsOccupied(characterId, slotKind, slotPosition))
             {
                 throw new InvalidOperationException(
@@ -163,9 +163,9 @@ public sealed class InMemoryItemStore : IItemStore
                 return 0;
             }
 
-            
 
-            
+
+
             var newStack = (long)item.Stack + delta;
             if (newStack <= 0)
             {

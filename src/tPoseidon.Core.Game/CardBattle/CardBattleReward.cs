@@ -39,8 +39,6 @@ public sealed record CardBattleRewardBlock(
     uint SecondWonCardItemId,
     uint SecondLostCardItemId)
 {
-    public const int Size = 0x25;
-
     public static CardBattleRewardBlock None { get; } = new(0, false, 0, 0, 0, 0, 0, 0, 0, 0);
 }
 

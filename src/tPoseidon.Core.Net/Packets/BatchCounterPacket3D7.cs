@@ -22,22 +22,6 @@ public sealed class BatchCounterPacket3D7
         return buf;
     }
 
-    public static BatchCounterPacket3D7 DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"BatchCounter3D7 payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new BatchCounterPacket3D7
-        {
-            CounterValue = ReadU32(payload, 0),
-            MagicConstant = ReadU32(payload, 4),
-            UnknownU32At8 = ReadU32(payload, 8),
-            Timestamp = ReadU64(payload, 21),
-        };
-    }
-
     private static void WriteU32(byte[] buf, int o, uint v)
     {
         buf[o] = (byte)(v & 0xFF);
@@ -48,13 +32,5 @@ public sealed class BatchCounterPacket3D7
     private static void WriteU64(byte[] buf, int o, ulong v)
     {
         for (var i = 0; i < 8; i++) buf[o + i] = (byte)((v >> (i * 8)) & 0xFF);
-    }
-    private static uint ReadU32(ReadOnlySpan<byte> buf, int o) =>
-        (uint)(buf[o] | (buf[o + 1] << 8) | (buf[o + 2] << 16) | (buf[o + 3] << 24));
-    private static ulong ReadU64(ReadOnlySpan<byte> buf, int o)
-    {
-        ulong v = 0;
-        for (var i = 0; i < 8; i++) v |= (ulong)buf[o + i] << (i * 8);
-        return v;
     }
 }

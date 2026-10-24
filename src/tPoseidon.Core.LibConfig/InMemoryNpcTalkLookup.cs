@@ -16,9 +16,9 @@ public sealed class InMemoryNpcTalkLookup : INpcTalkLookup
         {
             _byTypeAndMap[(entry.Type, entry.MapName)] = entry;
 
-            
 
-            
+
+
             if (!_firstByType.ContainsKey(entry.Type))
             {
                 _firstByType[entry.Type] = entry;
@@ -32,7 +32,7 @@ public sealed class InMemoryNpcTalkLookup : INpcTalkLookup
             list.Add(entry);
         }
 
-        
+
         foreach (var list in _byMap.Values)
         {
             list.Sort((a, b) => a.PosId.CompareTo(b.PosId));
@@ -65,5 +65,4 @@ public sealed class InMemoryNpcTalkLookup : INpcTalkLookup
 
     public int Count => _byTypeAndMap.Count;
 
-        public IEnumerable<NpcTalkEntry> AllRows() => _byTypeAndMap.Values;
 }

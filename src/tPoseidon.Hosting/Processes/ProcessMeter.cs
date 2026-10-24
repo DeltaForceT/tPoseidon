@@ -42,5 +42,4 @@ public sealed class ProcessMeter
         return new ProcessUsage(percent, workingSet / BytesPerMegabyte);
     }
 
-    public void Forget(int processId) => _previous.Remove(processId);
 }

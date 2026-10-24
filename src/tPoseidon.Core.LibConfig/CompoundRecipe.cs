@@ -6,7 +6,6 @@ public sealed record CompoundRecipe
 {
     public const int PotionType = 0;
     public const int RareType = 1;
-    public const int ThrowType = 2;
     public const int ResultColumns = 3;
     public const int RequirementColumns = 5;
 

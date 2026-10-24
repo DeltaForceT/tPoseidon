@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Net.Packets;
 
@@ -23,19 +22,4 @@ public sealed class HaltPacket
         return buf;
     }
 
-    public static HaltPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"Halt payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new HaltPacket
-        {
-            EntityId = BinaryPrimitives.ReadUInt16LittleEndian(payload[..2]),
-            X = BinaryPrimitives.ReadUInt16LittleEndian(payload[2..4]),
-            Y = BinaryPrimitives.ReadUInt16LittleEndian(payload[4..6]),
-            Flag = payload[6],
-        };
-    }
 }

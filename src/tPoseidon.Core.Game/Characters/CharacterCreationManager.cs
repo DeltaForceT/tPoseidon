@@ -1,4 +1,3 @@
-using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 
 namespace tPoseidon.Core.Game.Characters;
@@ -11,14 +10,12 @@ public sealed class CharacterCreationManager
     private readonly IItemStore _itemStore;
     private readonly ISkillStore? _skillStore;
     private readonly IMyCampStore? _myCampStore;
-    private readonly ICoupleStore? _coupleStore;
 
     public CharacterCreationManager(
         IAccountStore accountStore,
         IItemStore itemStore,
         ISkillStore? skillStore = null,
-        IMyCampStore? myCampStore = null,
-        ICoupleStore? coupleStore = null)
+        IMyCampStore? myCampStore = null)
     {
         ArgumentNullException.ThrowIfNull(accountStore);
         ArgumentNullException.ThrowIfNull(itemStore);
@@ -26,7 +23,6 @@ public sealed class CharacterCreationManager
         _itemStore = itemStore;
         _skillStore = skillStore;
         _myCampStore = myCampStore;
-        _coupleStore = coupleStore;
     }
 
     public CharCreationOutcome CreateCharacter(CharacterCreationRequest request)
@@ -249,15 +245,4 @@ public sealed record CharacterCreationRequest
     public required FType FType { get; init; }
     public ushort Hair { get; init; }
     public (byte PtsP, byte PtsM, byte PtsS, byte PtsC)? GrowthGraph { get; init; }
-}
-
-public sealed record CharacterCreationResult
-{
-    public required Character Character { get; init; }
-    public required Item EarItem { get; init; }
-    public required Item TailItem { get; init; }
-    public required Item HpPotion { get; init; }
-    public required Item MpPotion { get; init; }
-    public required ushort StarterSkillId { get; init; }
-    public MyCampSlot? MyCampSlot { get; init; }
 }

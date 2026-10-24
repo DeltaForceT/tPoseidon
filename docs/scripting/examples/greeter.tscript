@@ -1,7 +1,3 @@
-// A new NPC that greets players by name and offers a small menu.
-// Replace the sprite id with the type id of an NPC model your client has,
-// and the map and position with a spot on the map where you want it.
-
 npc "Welcome Guide" sprite 1301 map 1 at 120, 340 face south {
     char.visits += 1;
 

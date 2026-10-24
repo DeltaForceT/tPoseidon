@@ -18,7 +18,7 @@ public sealed class GuideHistoryHandler : IInterServerHandler
         var charUid = frame.Header.CharUid;
         if (charUid == 0)
         {
-            await ReplyCancelAsync(session, frame, frame.Opcode, ctx, ct).ConfigureAwait(false);
+            await ReplyCancelAsync(session, frame, frame.Opcode, ct).ConfigureAwait(false);
             ctx.Log($"guide-history {frame.Opcode}: invalid chruid=0 from idx={frame.Header.SourceServerIndex}; replied CANCEL");
             return;
         }
@@ -50,7 +50,7 @@ public sealed class GuideHistoryHandler : IInterServerHandler
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             ctx.Log($"guide-history Load char 0x{charUid:X16}: store threw {ex.GetType().Name}: {ex.Message}; replying CANCEL");
-            await ReplyCancelAsync(session, frame, InterServerOpcode.TpGuideHistoryLoadAckCancel, ctx, ct).ConfigureAwait(false);
+            await ReplyCancelAsync(session, frame, InterServerOpcode.TpGuideHistoryLoadAckCancel, ct).ConfigureAwait(false);
             return;
         }
 
@@ -73,7 +73,7 @@ public sealed class GuideHistoryHandler : IInterServerHandler
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             ctx.Log($"guide-history UpsertSystem char 0x{charUid:X16}: bad body ({ex.Message}); replying CANCEL");
-            await ReplyCancelAsync(session, frame, InterServerOpcode.TpGuideHistoryUpsertSystemAckCancel, ctx, ct).ConfigureAwait(false);
+            await ReplyCancelAsync(session, frame, InterServerOpcode.TpGuideHistoryUpsertSystemAckCancel, ct).ConfigureAwait(false);
             return;
         }
 
@@ -84,7 +84,7 @@ public sealed class GuideHistoryHandler : IInterServerHandler
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             ctx.Log($"guide-history UpsertSystem char 0x{charUid:X16}: store threw {ex.GetType().Name}: {ex.Message}; replying CANCEL");
-            await ReplyCancelAsync(session, frame, InterServerOpcode.TpGuideHistoryUpsertSystemAckCancel, ctx, ct).ConfigureAwait(false);
+            await ReplyCancelAsync(session, frame, InterServerOpcode.TpGuideHistoryUpsertSystemAckCancel, ct).ConfigureAwait(false);
             return;
         }
 
@@ -102,7 +102,7 @@ public sealed class GuideHistoryHandler : IInterServerHandler
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             ctx.Log($"guide-history UpsertTutorial char 0x{charUid:X16}: bad body ({ex.Message}); replying CANCEL");
-            await ReplyCancelAsync(session, frame, InterServerOpcode.TpGuideHistoryUpsertTutorialAckCancel, ctx, ct).ConfigureAwait(false);
+            await ReplyCancelAsync(session, frame, InterServerOpcode.TpGuideHistoryUpsertTutorialAckCancel, ct).ConfigureAwait(false);
             return;
         }
 
@@ -113,7 +113,7 @@ public sealed class GuideHistoryHandler : IInterServerHandler
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             ctx.Log($"guide-history UpsertTutorial char 0x{charUid:X16}: store threw {ex.GetType().Name}: {ex.Message}; replying CANCEL");
-            await ReplyCancelAsync(session, frame, InterServerOpcode.TpGuideHistoryUpsertTutorialAckCancel, ctx, ct).ConfigureAwait(false);
+            await ReplyCancelAsync(session, frame, InterServerOpcode.TpGuideHistoryUpsertTutorialAckCancel, ct).ConfigureAwait(false);
             return;
         }
 
@@ -138,7 +138,7 @@ public sealed class GuideHistoryHandler : IInterServerHandler
         return session.SendAsync(reply, ct);
     }
 
-    private static Task ReplyCancelAsync(MasterServerSession session, InterServerFrame request, InterServerOpcode opcode, MasterContext ctx, CancellationToken ct)
+    private static Task ReplyCancelAsync(MasterServerSession session, InterServerFrame request, InterServerOpcode opcode, CancellationToken ct)
     {
         var cancelOpcode = opcode switch
         {

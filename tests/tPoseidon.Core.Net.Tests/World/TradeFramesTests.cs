@@ -1,9 +1,7 @@
 using System.Text;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.InterServer;
-using tPoseidon.Core.Net;
 using tPoseidon.Core.Net.World;
-using Xunit;
 
 namespace tPoseidon.Core.Net.Tests.World;
 

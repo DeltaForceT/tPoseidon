@@ -11,7 +11,6 @@ public enum MissionPhase
 
 public static class MissionRules
 {
-    public const int MissionCheckFunction = 271;
     public const byte CannotProceed = 1;
     public const byte Succeeded = 1;
     public const byte Failed = 0;

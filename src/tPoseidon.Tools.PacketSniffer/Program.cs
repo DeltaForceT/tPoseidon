@@ -1,10 +1,10 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using tPoseidon.Tools.PacketSniffer;
 using PacketDotNet;
 using SharpPcap;
 using SharpPcap.LibPcap;
+using tPoseidon.Tools.PacketSniffer;
 
 static int ParsePortFlag(string[] args, int defaultPort)
 {
@@ -232,7 +232,7 @@ device.OnPacketArrival += (_, e) =>
     var dstIp = ipPkt?.DestinationAddress?.ToString() ?? "?";
     var direction = remotePort == 0
 
-        
+
         ? (dstIp == targetIp.ToString() ? "C->S" : "S->C")
         : (tcp.DestinationPort == remotePort ? "C->S" : "S->C");
     var len = tcp.PayloadData?.Length ?? 0;

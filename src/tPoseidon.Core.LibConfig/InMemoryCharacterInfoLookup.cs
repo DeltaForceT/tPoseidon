@@ -11,7 +11,7 @@ public sealed class InMemoryCharacterInfoLookup : ICharacterInfoLookup
         foreach (var entry in entries)
         {
 
-            
+
             _byId[entry.Id] = entry;
         }
     }

@@ -1,6 +1,5 @@
 using System.Net;
 using Npgsql;
-using tPoseidon.Core.Data;
 
 namespace tPoseidon.Core.Data.Postgres;
 

@@ -11,7 +11,6 @@ public static class FriendFrames
     public const ushort Logout = 0x2136;
     public const ushort AddRequest = 0x2137;
     public const ushort Delete = 0x2138;
-    public const ushort DeleteOffline = 0x2139;
     public const ushort Accept = 0x213A;
     public const ushort Refuse = 0x213B;
     public const ushort CancelRequest = 0x2147;
@@ -48,7 +47,6 @@ public static class FriendFrames
     public const ushort RequestedSelf = 0x214D;
     public const ushort RemovedByOwner = 0x2153;
     public const ushort RemovedFriend = 0x2154;
-    public const ushort RemovedOffline = 0x2155;
     public const ushort ListWithoutFriends = 0x2159;
     public const ushort GroupChanged = 0x215B;
     public const ushort GroupChangeRefused = 0x215C;
@@ -129,14 +127,6 @@ public static class FriendFrames
     public static byte[] CharacterAndName(ulong characterId, string name, Encoding text)
     {
         var w = new PacketWriter(32);
-        w.WriteUInt64(characterId);
-        w.WriteNulTerminated(name, text);
-        return w.ToArray();
-    }
-
-    public static byte[] RemovedOfflineResult(ulong characterId, string name, Encoding text)
-    {
-        var w = new PacketWriter(40);
         w.WriteUInt64(characterId);
         w.WriteNulTerminated(name, text);
         return w.ToArray();

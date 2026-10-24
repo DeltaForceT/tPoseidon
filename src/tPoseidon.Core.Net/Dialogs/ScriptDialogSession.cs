@@ -45,8 +45,6 @@ public sealed class ScriptDialogSession
 
     public bool IsEngaged => _npc is not null;
 
-    public ushort EngagedEntityId => _entityId;
-
     public Routine? FindTalk(NpcEntity npc)
     {
         ArgumentNullException.ThrowIfNull(npc);

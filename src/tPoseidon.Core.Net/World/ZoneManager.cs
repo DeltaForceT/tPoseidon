@@ -26,8 +26,6 @@ public sealed class ZoneManager
         _log = log;
     }
 
-    public Zone? Get(ushort mapId) => _zones.TryGetValue(mapId, out var z) ? z : null;
-
     public IReadOnlyCollection<Zone> All => _zones.Values;
 
     public int Count => _zones.Count;
@@ -164,61 +162,4 @@ public sealed class ZoneManager
         return total;
     }
 
-    public int LoadAllSpawnDefinitions()
-    {
-        var totalDefs = 0;
-        foreach (var zone in _zones.Values)
-        {
-            foreach (var creator in _entityCreators)
-            {
-                if (creator is not MonsterCreator mc) continue;
-                try { totalDefs += mc.LoadDefinitions(zone); }
-                catch (Exception ex)
-                {
-                    _log?.Invoke($"LoadAllSpawnDefinitions: failed for map {zone.MapId}: {ex.GetType().Name}: {ex.Message}");
-                }
-            }
-        }
-        _log?.Invoke($"LoadAllSpawnDefinitions: {totalDefs} mob spawn definitions across {_zones.Count} zones");
-        return totalDefs;
-    }
-
-    public int ActivateZone(Zone zone)
-    {
-        if (!zone.TryActivateOnce()) return 0;
-        var spawned = 0;
-
-        if (zone.MonsterMgr is not null)
-        {
-            try { spawned += zone.MonsterMgr.Activate(); }
-            catch (Exception ex)
-            {
-                _log?.Invoke($"ActivateZone({zone.MapId}): MonsterMgr.Activate failed: {ex.GetType().Name}: {ex.Message}");
-            }
-        }
-        else
-        {
-            foreach (var creator in _entityCreators)
-            {
-                if (creator is not MonsterCreator mc) continue;
-                try { spawned += mc.ActivateFromDefinitions(zone); }
-                catch (Exception ex)
-                {
-                    _log?.Invoke($"ActivateZone({zone.MapId}): failed: {ex.GetType().Name}: {ex.Message}");
-                }
-            }
-        }
-
-        if (spawned > 0)
-        {
-            _log?.Invoke($"ActivateZone({zone.MapId} {zone.Name}): {spawned} mobs spawned (lazy on first player enter)");
-        }
-        return spawned;
-    }
-
-    public int ActivateZone(ushort mapId)
-    {
-        var zone = Get(mapId);
-        return zone is null ? 0 : ActivateZone(zone);
-    }
 }

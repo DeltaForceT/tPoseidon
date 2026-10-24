@@ -1,6 +1,6 @@
-using tPoseidon.Core.Common;
 using System.Buffers.Binary;
 using System.Text;
+using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Net;
 

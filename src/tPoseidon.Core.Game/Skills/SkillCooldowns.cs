@@ -6,8 +6,6 @@ public sealed class SkillCooldowns
 
     private readonly Dictionary<int, (int Elapsed, int Total)> _running = new();
 
-    public int Count => _running.Count;
-
     public bool IsRunning(int skillId) => _running.ContainsKey(skillId);
 
     public void Start(int skillId, float coolTimeSeconds)
@@ -35,5 +33,4 @@ public sealed class SkillCooldowns
         foreach (var skillId in over) _running.Remove(skillId);
     }
 
-    public bool Remove(int skillId) => _running.Remove(skillId);
 }

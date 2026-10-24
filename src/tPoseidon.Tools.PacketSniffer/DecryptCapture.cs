@@ -35,7 +35,7 @@ internal static class DecryptCapture
             return;
         }
 
-        
+
 
         var totalSuccess = 0;
         var totalFailed = 0;
@@ -86,9 +86,9 @@ internal static class DecryptCapture
         var framer = new S2StreamFramer(table, derivation, bestKey);
         framer.Feed(streamBytes);
 
-        
 
-        
+
+
         var success = 0;
         var failed = 0;
         var totalFramesExtracted = 0;
@@ -118,9 +118,9 @@ internal static class DecryptCapture
         Console.WriteLine($"  frames extracted: {totalFramesExtracted} | leftover bytes: {leftover}");
         Console.WriteLine($"  pipeline: {success} decoded, {failed} failed, {keyUpdates} key-updates, final session key = 0x{session.Key:X2}");
 
-        
 
-        
+
+
         if (leftover > 0)
         {
             var desyncOff = consumed;

@@ -16,9 +16,6 @@ public sealed class InMemoryMonsterQuestResultLookup : IMonsterQuestResultTables
         }
     }
 
-    public static InMemoryMonsterQuestResultLookup LoadFromXml(string xmlPath) =>
-        new(new LibConfigXmlReader(xmlPath).LoadMonsterQuestResultTables());
-
     public IReadOnlyList<MonsterQuestResultEntry?> RowsOf(string tableName) =>
         _byTable.TryGetValue(tableName, out var rows) ? rows : Array.Empty<MonsterQuestResultEntry?>();
 

@@ -27,7 +27,6 @@ public static class HarconRules
 
     public static int ShopPrice(int coins, int count) => coins * count;
 
-    public const byte InvalidPlayerState = 1;
     public const byte CreateInvalidPlayerState = 2;
     public const byte CreateInvalidStage = 3;
     public const byte CreateNotCleared = 4;
@@ -45,7 +44,6 @@ public static class HarconRules
     public const byte BanNoStage = 18;
     public const byte BanNotMaster = 19;
     public const byte BanNoPlayer = 20;
-    public const byte StartInvalidPlayerState = 22;
     public const byte StartNoStage = 23;
     public const byte StartStageState = 24;
     public const byte StartNotMaster = 25;

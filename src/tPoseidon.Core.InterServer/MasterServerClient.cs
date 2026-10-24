@@ -27,8 +27,6 @@ public sealed class MasterServerClient : IAsyncDisposable
         _log = log;
     }
 
-    public ServerIdentity Self => _self;
-
     public Func<InterServerFrame, CancellationToken, Task>? OnFrame { get; set; }
 
     public bool IsConnected => _session is not null;

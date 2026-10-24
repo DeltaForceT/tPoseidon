@@ -95,5 +95,4 @@ public sealed class PlayerMeleeTicker
         return strikes;
     }
 
-    public void Forget(ushort attackerEntityId) => _armedByAttacker.Remove(attackerEntityId);
 }

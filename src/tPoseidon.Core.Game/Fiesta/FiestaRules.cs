@@ -64,12 +64,6 @@ public static class FiestaRules
     public static bool PortalOpens(FiestaWindow window) =>
         window.Row.PortalIndex != NoPortal && window.Elapsed >= TimeSpan.FromMinutes(window.Row.PortalOpenMinute);
 
-    public static bool IsFiestaZone(IEnumerable<FiestaSlotEntry> rows, int zoneId)
-    {
-        ArgumentNullException.ThrowIfNull(rows);
-        return rows.Any(row => row.ZoneId == zoneId);
-    }
-
     public static FiestaEntryRecord Today(FiestaEntryRecord record, DateTime now) =>
         record.Slot is { } slot && slot.Date == now.Date ? record : new FiestaEntryRecord(0, record.Slot);
 

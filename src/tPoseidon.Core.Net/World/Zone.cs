@@ -1,4 +1,3 @@
-using tPoseidon.Core.Data;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Net.World;

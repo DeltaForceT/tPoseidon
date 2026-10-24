@@ -7,7 +7,6 @@ public readonly record struct WhisperRequest(ushort RoomId, bool ByName, ushort 
 public static class WhisperFrames
 {
     public const ushort EnterLobby = 0x1771;
-    public const ushort LobbyRefused = 0x1772;
     public const ushort LobbyEntered = 0x1773;
     public const ushort Whisper = 0x1777;
     public const ushort WhisperTargetMissing = 0x1778;

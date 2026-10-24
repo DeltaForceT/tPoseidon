@@ -4,8 +4,6 @@ public sealed class Character
 {
         public required ulong CharacterId { get; init; }
 
-        public uint CharacterIdLow => (uint)(CharacterId & 0xFFFFFFFFu);
-
     public required uint OwnerAccountId { get; init; }
 
         public required byte Slot { get; init; }
@@ -63,13 +61,13 @@ public sealed class Character
 
     public long CurrentMp { get; init; }
 
-    
 
-    
 
-    
 
-    
+
+
+
+
 
         public ulong Exp { get; init; }
 
@@ -85,7 +83,7 @@ public sealed class Character
 
         public uint TotalConnectedSeconds { get; init; }
 
-    
+
 
     public ushort ApPoints { get; init; }
     public ushort AcPoints { get; init; }
@@ -101,7 +99,7 @@ public sealed class Character
     public ushort MaxWtPoints { get; init; }
     public ushort AttrPoints { get; init; }
 
-    
+
 
     public ushort TmLevelPower { get; init; }
     public ushort TmLevelMagic { get; init; }
@@ -111,13 +109,13 @@ public sealed class Character
     public ushort TmLevel { get; init; }
     public long TmExp { get; init; }
 
-    
+
 
     public ushort Type2 { get; init; }
     public byte Job2 { get; init; }
     public DateTimeOffset Job2ChangedAt { get; init; } = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
-    
+
     public ushort Type3 { get; init; }
     public byte Job3 { get; init; }
     public DateTimeOffset Job3ChangedAt { get; init; } = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);

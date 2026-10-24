@@ -6,7 +6,6 @@ public static class GuildGameRules
 {
     public const byte TeamMatch = 0;
     public const byte DeathMatch = 1;
-    public const byte MonsterMatch = 2;
     public const int Teams = 2;
     public const byte WinnerDraw = 1;
     public const byte WinnerTeam0 = 2;

@@ -6,7 +6,6 @@ public static class ItemGiveFrames
 {
     public const int MaxRecipients = 0x137;
     public static readonly ushort[] OxMaps = [0x2F, 0xDA];
-    public const byte RefusedGiverBusy = 1;
     public const byte RefusedReceiverBusy = 2;
     public const byte RefusedReceiverGone = 3;
     public const byte RefusedNoRoom = 7;

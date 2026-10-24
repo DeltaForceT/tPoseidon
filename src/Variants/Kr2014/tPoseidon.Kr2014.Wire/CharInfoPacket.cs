@@ -12,7 +12,6 @@ public sealed class CharInfoPacket
     public const int EquipSlotBytes = 8;
     public const int StatBlockOffset = EquipSlotCount * EquipSlotBytes;
     public const int StateRecordOffset = StatBlockOffset + CharacterStatBlock.Size;
-    public const int StateRecordSize = 61;
 
     public const ushort StateRecordLead = 1;
     public const byte FirstHairSlot = 1;
@@ -41,19 +40,6 @@ public sealed class CharInfoPacket
     public readonly record struct EquipSlot(uint ItemUid, uint Flags);
 
     public readonly record struct Placement(ushort MapId, int X, int Y);
-
-    public static Placement ReadPlacement(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException($"The char info payload is {PayloadSize} bytes, got {payload.Length}.");
-        }
-        var record = payload[(StateRecordOffset + sizeof(ushort))..];
-        return new Placement(
-            System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(record),
-            System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(record[sizeof(ushort)..]),
-            System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(record[(sizeof(ushort) + sizeof(int))..]));
-    }
 
     public static CharInfoPacket DecodePayload(ReadOnlySpan<byte> payload)
     {

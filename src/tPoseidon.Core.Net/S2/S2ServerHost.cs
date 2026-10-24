@@ -31,12 +31,6 @@ public sealed class S2ServerHost
 
     private readonly TaskCompletionSource<IPEndPoint> _listening = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    public void Resume(Action<string>? log = null)
-    {
-        PauseAcceptedSessions = false;
-        log?.Invoke($"{LogTag} Server resume");
-    }
-
     public async Task RunAsync(CancellationToken cancellationToken = default)
     {
         Console.WriteLine($"{LogTag} tPoseidon {BuildIdentity.Current}");
@@ -167,8 +161,6 @@ public sealed class S2SessionContext
     public IPEndPoint? Remote => Session.RemoteEndpoint;
 
     public SessionGuard Guard => Session.Guard;
-
-    public IPEndPoint? Local => Session.LocalEndpoint;
 
     public bool IsConnected => Session.IsConnected;
 }

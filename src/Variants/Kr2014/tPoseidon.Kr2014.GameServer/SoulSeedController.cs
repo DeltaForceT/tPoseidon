@@ -11,7 +11,6 @@ internal sealed class SoulSeedController
     private readonly MasterSoulSeeds _master;
     private readonly MasterGuardian _guardians;
     private readonly IItemStore _items;
-    private readonly IItemParamLookup _catalog;
     private readonly Func<SoulSeedTables> _tables;
     private readonly Func<InGameSessionState, CancellationToken, Task> _showGuardians;
     private readonly string _logTag;
@@ -22,7 +21,6 @@ internal sealed class SoulSeedController
         MasterSoulSeeds master,
         MasterGuardian guardians,
         IItemStore items,
-        IItemParamLookup catalog,
         Func<SoulSeedTables> tables,
         Func<InGameSessionState, CancellationToken, Task> showGuardians,
         string logTag)
@@ -30,7 +28,6 @@ internal sealed class SoulSeedController
         _master = master ?? throw new ArgumentNullException(nameof(master));
         _guardians = guardians ?? throw new ArgumentNullException(nameof(guardians));
         _items = items ?? throw new ArgumentNullException(nameof(items));
-        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _tables = tables ?? throw new ArgumentNullException(nameof(tables));
         _showGuardians = showGuardians ?? throw new ArgumentNullException(nameof(showGuardians));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));

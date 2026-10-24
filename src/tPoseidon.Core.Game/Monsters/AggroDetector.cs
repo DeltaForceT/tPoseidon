@@ -5,8 +5,6 @@ namespace tPoseidon.Core.Game.Monsters;
 
 public sealed class AggroDetector
 {
-    public const int ScanIntervalMs = 500;
-
     public event Action<MonsterEntity, ushort>? TargetAcquired;
 
     public void Tick(MonsterEntity mob, IMonsterStrategy strategy, IZoneAggroScanner scanner, DateTimeOffset now)

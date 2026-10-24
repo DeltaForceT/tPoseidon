@@ -61,8 +61,6 @@ public static class EquipmentSlot
 
         public const byte FirstCostume = 10;
 
-        public const byte LastCostume = 17;
-
         public const byte Shoes = 18;
 
         public const byte Socks = 19;
@@ -80,6 +78,5 @@ public static class SlotKind
 {
     public const byte Equipment = 0;
     public const byte Inventory = 1;
-    public const byte Card = 2;
     public const byte Warehouse = 3;
 }

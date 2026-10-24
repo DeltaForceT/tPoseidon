@@ -152,11 +152,3 @@ public sealed record GuildStateEntry
     public string StateNote { get; init; } = "";
     public DateTimeOffset RegAt { get; init; }
 }
-
-public static class GuildStateFlags
-{
-    public const short None = 0;
-    public const short Member = 1;
-    public const short Master = 2;
-    public const short Pending = 4;
-}

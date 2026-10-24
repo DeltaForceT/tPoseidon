@@ -928,13 +928,6 @@ public sealed class LibConfigXmlReader
             .Where(reward => reward.Item1 != 0 && reward.Item2 > 0)
             .ToArray();
 
-    public MonsterMatchTables LoadMonsterMatchTables()
-    {
-        var rows = new Dictionary<int, MonsterMatchEntry>();
-        LoadTable(MonsterMatchTables.Table, row => rows.TryAdd(ReadInt(row, "TriggerId"), new MonsterMatchEntry(ReadInt(row, "TriggerId"), ReadInt(row, "MonsterID"), ReadInt(row, "Point"))));
-        return new MonsterMatchTables(rows);
-    }
-
     public GuildGameTypeTables LoadGuildGameTypeTables()
     {
         var rows = new Dictionary<int, GuildGameTypeEntry>();
@@ -1220,17 +1213,6 @@ public sealed class LibConfigXmlReader
         return tables.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<MonsterPoolRow>)pair.Value, StringComparer.Ordinal);
     }
 
-    public IReadOnlyList<MapFileEntry> LoadMapFiles()
-    {
-        var entries = new List<MapFileEntry>(700);
-        LoadTable("MapInfoEx", row =>
-        {
-            var id = ReadInt(row, "ID");
-            entries.Add(new MapFileEntry(id, Translate("MapInfoEx", id, "Name", ReadString(row, "Name")), ReadString(row, "FileName").Trim()));
-        });
-        return entries;
-    }
-
     public IReadOnlyList<RebirthItemEntry> LoadRebirthItems()
     {
         var entries = new List<RebirthItemEntry>(16);
@@ -1329,17 +1311,6 @@ public sealed class LibConfigXmlReader
         var rows = new List<(int Level, int NextTmExp)>(601);
         LoadTable("TM_LEVEL2", row => rows.Add((ReadInt(row, "Level"), ReadInt(row, "NextTmxp"))));
         return rows;
-    }
-
-    public IReadOnlyDictionary<string, string> LoadStringTable()
-    {
-        var strings = new Dictionary<string, string>(StringComparer.Ordinal);
-        LoadTable("StringTable", row =>
-        {
-            var name = ReadString(row, "Name").Trim();
-            if (name.Length > 0) strings.TryAdd(name, Translate("StringTable", name, "String", ReadString(row, "String")));
-        });
-        return strings;
     }
 
     public IReadOnlyDictionary<string, string> LoadNameValueTable(string tableName)
@@ -1997,19 +1968,6 @@ public sealed class LibConfigXmlReader
         return entries;
     }
 
-    public IReadOnlyList<MonsterTacticsExEntry> LoadMonsterTacticsExtended()
-    {
-        var entries = new List<MonsterTacticsExEntry>(2000);
-        LoadTable("Monster_TacticsEX", row => entries.Add(new MonsterTacticsExEntry
-        {
-            Id = ReadInt(row, "ID"),
-            MonsterId = ReadInt(row, "MonsterID"),
-            TacticsId = ReadInt(row, "TacticsID"),
-            ExtraData = ReadString(row, "ExtraData"),
-        }));
-        return entries;
-    }
-
     public IReadOnlyList<ShopZoneEntry> LoadAllShopZoneTables()
     {
         var entries = new List<ShopZoneEntry>(200);
@@ -2522,62 +2480,6 @@ public sealed class LibConfigXmlReader
         return entries;
     }
 
-    public IReadOnlyList<CompoundRecipeEntry> LoadAllCompoundTables()
-    {
-        var entries = new List<CompoundRecipeEntry>(200);
-        LoadTablesWithPrefix("Compound_", (tableName, row) =>
-        {
-            if (!tableName.StartsWith("Compound_", StringComparison.Ordinal)) return;
-            if (tableName.StartsWith("CompoundUI", StringComparison.Ordinal)) return;
-            if (tableName.StartsWith("CompoundStrings", StringComparison.Ordinal)) return;
-            if (tableName.StartsWith("CompoundWindow", StringComparison.Ordinal)) return;
-            var resIds = new List<int>(3);
-            for (var i = 1; i <= 3; i++)
-            {
-                var v = ReadInt(row, $"ResID{i}");
-                if (v != 0) resIds.Add(v);
-            }
-            var reqs = new List<(int, int)>(5);
-            for (var i = 1; i <= 5; i++)
-            {
-                var id = ReadInt(row, $"ReqID{i}");
-                var num = ReadInt(row, $"ReqNum{i}");
-                if (id != 0) reqs.Add((id, num));
-            }
-            entries.Add(new CompoundRecipeEntry
-            {
-                TableName = tableName,
-                CompoundId = ReadInt(row, "CompoundID"),
-                Name = ReadString(row, "Name"),
-                ResLevel = ReadInt(row, "ResLv"),
-                ResIds = resIds,
-                Requirements = reqs,
-                Probability = ReadInt(row, "Probability"),
-                Fee = ReadInt(row, "Fee"),
-                WasteItem = ReadInt(row, "WasteItem"),
-            });
-        });
-        return entries;
-    }
-
-    public IReadOnlyList<CompounderShopEntry> LoadAllCompounderShopTables()
-    {
-        var entries = new List<CompounderShopEntry>(80);
-        LoadTablesWithPrefix("Compounder_", (tableName, row) =>
-        {
-            if (!tableName.StartsWith("Compounder_", StringComparison.Ordinal)) return;
-            var mapName = tableName["Compounder_".Length..];
-            entries.Add(new CompounderShopEntry
-            {
-                MapName = mapName,
-                CompoundId = ReadInt(row, "CompoundID"),
-                Probability = ReadInt(row, "Probability"),
-                Hidden = ReadInt(row, "Hidden"),
-            });
-        });
-        return entries;
-    }
-
     public IReadOnlyList<UniqueItemCountEntry> LoadUniqueItemCountTable()
     {
         var entries = new List<UniqueItemCountEntry>(20);
@@ -2626,27 +2528,6 @@ public sealed class LibConfigXmlReader
                 Ratio1 = ReadInt(row, "Ratio1"),
                 Ratio2 = ReadInt(row, "Ratio2"),
                 ApplyRatio = ReadFloat(row, "ApplyRatio"),
-            });
-        });
-        return entries;
-    }
-
-    public IReadOnlyList<EsaiiEntry> LoadAllEsaiiTables()
-    {
-        var entries = new List<EsaiiEntry>(2000);
-        LoadTablesWithPrefix("ESAII_", (tableName, row) =>
-        {
-            if (!tableName.StartsWith("ESAII_", StringComparison.Ordinal)) return;
-            var skillName = tableName["ESAII_".Length..];
-            entries.Add(new EsaiiEntry
-            {
-                SkillName = skillName,
-                Level = ReadInt(row, "Level"),
-                MpCon = ReadInt(row, "MpCon"),
-                Delay = ReadFloat(row, "Delay"),
-                Range = ReadInt(row, "Range"),
-                CoolTime = ReadFloat(row, "CoolTime"),
-                MonDelay = ReadFloat(row, "MonDelay"),
             });
         });
         return entries;
@@ -2820,5 +2701,27 @@ public sealed class LibConfigXmlReader
         if (s.Equals("true", StringComparison.OrdinalIgnoreCase)) return true;
         if (s.Equals("false", StringComparison.OrdinalIgnoreCase)) return false;
         return s != "0" && !string.IsNullOrEmpty(s);
+    }
+
+    public IReadOnlyList<MapFileEntry> LoadMapFiles()
+    {
+        var entries = new List<MapFileEntry>(700);
+        LoadTable("MapInfoEx", row =>
+        {
+            var id = ReadInt(row, "ID");
+            entries.Add(new MapFileEntry(id, Translate("MapInfoEx", id, "Name", ReadString(row, "Name")), ReadString(row, "FileName").Trim()));
+        });
+        return entries;
+    }
+
+    public IReadOnlyDictionary<string, string> LoadStringTable()
+    {
+        var strings = new Dictionary<string, string>(StringComparer.Ordinal);
+        LoadTable("StringTable", row =>
+        {
+            var name = ReadString(row, "Name").Trim();
+            if (name.Length > 0) strings.TryAdd(name, Translate("StringTable", name, "String", ReadString(row, "String")));
+        });
+        return strings;
     }
 }

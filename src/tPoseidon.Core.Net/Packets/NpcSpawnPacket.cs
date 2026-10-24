@@ -55,25 +55,25 @@ public sealed class NpcSpawnPacket
 
         var nameBytes = Encoding.UTF8.GetBytes(Name);
 
-        
+
         var trailer = Trailer.Span;
         var total = 22 + nameBytes.Length + 1 + trailer.Length;
 
         var w = new PacketWriter(total);
-        w.WriteUInt16(EntityId);              
-        w.WriteByte((byte)Kind);              
-        w.WriteByte(ReservedByte3);           
-        w.WriteUInt16(TemplateId);            
-        w.WriteUInt16(UnknownField6);         
-        w.WriteUInt16(UnknownField8);         
-        w.WriteUInt32(Reserved10);            
-        w.WriteUInt16(SpawnX);                
-        w.WriteUInt16(SpawnY);                
-        w.WriteUInt16(CurrentX);              
-        w.WriteUInt16(CurrentY);              
-        w.WriteBytes(nameBytes);              
-        w.WriteByte(0);                       
-        w.WriteBytes(trailer);                
+        w.WriteUInt16(EntityId);
+        w.WriteByte((byte)Kind);
+        w.WriteByte(ReservedByte3);
+        w.WriteUInt16(TemplateId);
+        w.WriteUInt16(UnknownField6);
+        w.WriteUInt16(UnknownField8);
+        w.WriteUInt32(Reserved10);
+        w.WriteUInt16(SpawnX);
+        w.WriteUInt16(SpawnY);
+        w.WriteUInt16(CurrentX);
+        w.WriteUInt16(CurrentY);
+        w.WriteBytes(nameBytes);
+        w.WriteByte(0);
+        w.WriteBytes(trailer);
 
         return w.ToArray();
     }

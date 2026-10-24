@@ -8,60 +8,55 @@ public sealed class CharCreatedReplyPacket
 {
         public const int PayloadSize = 156;
 
-    
 
-    
+
+
 
     private const int CharUidOffset = 0x00;
     private const int SlotOffset = 0x08;
 
-    
 
-    
 
-    
 
-    
 
-    
 
-    
 
-    
 
-    
 
-    
 
-    
 
-    
 
-    
+
+
+
+
+
+
+
+
+
+
+
+
     private const int NameRegionOffset = 0x09;
-    private const int NameRegionBytes = 0x21 - 0x09; 
-    private const int NameSlotShortBytes = 7;        
+    private const int NameSlotShortBytes = 7;
 
-        public const int MaxCharacterNameChars = 17;
-    private const int FirstJobSpeciesOffset = 0x1D;
-    private const int SecondJobClassOffset = 0x1F;
     private const int FTypeOffset = 0x21;
     private const int SpeciesMirrorOffset = 0x22;
-    private const int SecondJobMirrorOffset = 0x23;
     private const int JobTierOffset = 0x24;
     private const int HairOffset = 0x25;
     private const int MoneyOffset = 0x27;
     private const int LevelOffset = 0x2B;
 
-    
 
-    
 
-    
 
-    
 
-    
+
+
+
+
+
     private const int EarItemOffset = 0x41;
     private const int TailItemOffset = 0x45;
 
@@ -83,120 +78,6 @@ public sealed class CharCreatedReplyPacket
 
         public byte[]? RawBytes { get; init; }
 
-        public static CharCreatedReplyPacket FromNewCharacter(Character character, string accountLogin)
-    {
-        ArgumentNullException.ThrowIfNull(character);
-        ArgumentNullException.ThrowIfNull(accountLogin);
-        _ = accountLogin;  
-
-        return new CharCreatedReplyPacket
-        {
-            CharUid = character.CharacterId,
-            Slot = character.Slot,
-            CharacterName = character.Name,
-            Species = character.Species,
-            FType = (byte)((byte)character.FType - 1), 
-            Hair = character.Hair,
-            Money = WireLimits.Int32FieldUnsigned(character.Money),
-            Level = character.Level,
-            JobTier = character.JobTier,
-            EarItemIndex = character.StarterEarItemIndex,
-            TailItemIndex = character.StarterTailItemIndex,
-        };
-    }
-
-    public byte[] EncodePayload()
-    {
-
-        
-
-        
-
-        
-
-        
-
-        
-
-        
-        byte[] buf;
-        if (RawBytes is not null)
-        {
-            if (RawBytes.Length != PayloadSize)
-            {
-                throw new InvalidOperationException(
-                    $"RawBytes must be {PayloadSize} bytes when set, got {RawBytes.Length}.");
-            }
-            buf = new byte[PayloadSize];
-            Array.Copy(RawBytes, buf, PayloadSize);
-        }
-        else
-        {
-            buf = new byte[PayloadSize];
-        }
-
-        WriteUInt64Le(buf, CharUidOffset, CharUid);
-
-        buf[SlotOffset] = Slot;
-
-        
-        var nameBytes = Encoding.ASCII.GetBytes(CharacterName ?? string.Empty);
-        if (nameBytes.Length > MaxCharacterNameChars)
-        {
-            throw new InvalidOperationException(
-                $"CharacterName '{CharacterName}' is {nameBytes.Length} bytes; max is {MaxCharacterNameChars} (column is varchar(17)).");
-        }
-        if (nameBytes.Length <= NameSlotShortBytes)
-        {
-
-            
-
-            WriteNameField(buf, NameRegionOffset, NameSlotShortBytes, CharacterName ?? string.Empty);
-        }
-        else
-        {
-
-            
-
-            
-
-            
-
-            
-            Array.Clear(buf, NameRegionOffset, NameRegionBytes);
-            Array.Copy(nameBytes, 0, buf, NameRegionOffset, nameBytes.Length);
-
-            
-
-            
-
-        }
-
-        WriteUInt16Le(buf, FirstJobSpeciesOffset, (ushort)Species);
-
-        WriteUInt16Le(buf, SecondJobClassOffset, 0);
-
-        buf[FTypeOffset] = FType;
-
-        buf[SpeciesMirrorOffset] = (byte)Species;
-
-        buf[SecondJobMirrorOffset] = 0;
-
-        buf[JobTierOffset] = JobTier;
-
-        WriteUInt16Le(buf, HairOffset, Hair);
-
-        WriteUInt32Le(buf, MoneyOffset, Money);
-
-        WriteUInt16Le(buf, LevelOffset, Level);
-
-        WriteUInt32Le(buf, EarItemOffset, EarItemIndex);
-
-        WriteUInt32Le(buf, TailItemOffset, TailItemIndex);
-
-        return buf;
-    }
-
     public static CharCreatedReplyPacket DecodePayload(ReadOnlySpan<byte> payload)
     {
         if (payload.Length != PayloadSize)
@@ -210,11 +91,11 @@ public sealed class CharCreatedReplyPacket
             CharUid = ReadUInt64Le(payload, CharUidOffset),
             Slot = payload[SlotOffset],
 
-            
 
-            
 
-            
+
+
+
             CharacterName = ReadFixedAscii(payload, NameRegionOffset, NameSlotShortBytes),
             Species = (Species)payload[SpeciesMirrorOffset],
             FType = payload[FTypeOffset],
@@ -225,22 +106,10 @@ public sealed class CharCreatedReplyPacket
             EarItemIndex = ReadUInt32Le(payload, EarItemOffset),
             TailItemIndex = ReadUInt32Le(payload, TailItemOffset),
 
-            
+
 
             RawBytes = payload.ToArray(),
         };
-    }
-
-        private static void WriteNameField(byte[] buf, int offset, int fieldBytes, string value)
-    {
-        var bytes = Encoding.ASCII.GetBytes(value);
-        if (bytes.Length > fieldBytes)
-        {
-            throw new InvalidOperationException(
-                $"CharacterName '{value}' is {bytes.Length} bytes; max is {fieldBytes} (no internal NUL required).");
-        }
-        Array.Clear(buf, offset, fieldBytes);
-        Array.Copy(bytes, 0, buf, offset, bytes.Length);
     }
 
     private static string ReadFixedAscii(ReadOnlySpan<byte> buf, int offset, int fieldBytes)
@@ -249,28 +118,6 @@ public sealed class CharCreatedReplyPacket
         var nul = slice.IndexOf((byte)0);
         var len = nul < 0 ? fieldBytes : nul;
         return Encoding.ASCII.GetString(slice[..len]);
-    }
-
-    private static void WriteUInt16Le(byte[] buf, int offset, ushort value)
-    {
-        buf[offset] = (byte)(value & 0xFF);
-        buf[offset + 1] = (byte)((value >> 8) & 0xFF);
-    }
-
-    private static void WriteUInt32Le(byte[] buf, int offset, uint value)
-    {
-        buf[offset] = (byte)(value & 0xFF);
-        buf[offset + 1] = (byte)((value >> 8) & 0xFF);
-        buf[offset + 2] = (byte)((value >> 16) & 0xFF);
-        buf[offset + 3] = (byte)((value >> 24) & 0xFF);
-    }
-
-    private static void WriteUInt64Le(byte[] buf, int offset, ulong value)
-    {
-        for (var i = 0; i < 8; i++)
-        {
-            buf[offset + i] = (byte)((value >> (i * 8)) & 0xFF);
-        }
     }
 
     private static uint ReadUInt32Le(ReadOnlySpan<byte> buf, int offset) =>

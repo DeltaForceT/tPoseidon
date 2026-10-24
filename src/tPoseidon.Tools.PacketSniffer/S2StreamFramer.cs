@@ -31,14 +31,6 @@ internal sealed class S2StreamFramer
         _length += incoming.Length;
     }
 
-        public void Discard(int n)
-    {
-        if (n <= 0) return;
-        if (n >= _length) { _start = 0; _length = 0; return; }
-        _start += n;
-        _length -= n;
-    }
-
         public List<byte[]> DrainFrames()
     {
         var frames = new List<byte[]>();

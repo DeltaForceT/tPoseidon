@@ -21,17 +21,4 @@ public sealed class AngelPairingStatusPacket
         return buf;
     }
 
-    public static AngelPairingStatusPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"AngelPairingStatus payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new AngelPairingStatusPacket
-        {
-            PairedFlag = payload[0],
-            PartnerEntityId = (ushort)(payload[1] | (payload[2] << 8)),
-        };
-    }
 }

@@ -37,8 +37,6 @@ public sealed class SessionGuard
 
     public bool IsGuarded => _owner is not null && !IsTrusted;
 
-    public bool IsPending => Volatile.Read(ref _pending) == 1;
-
     public bool IsAuthenticated => Volatile.Read(ref _authenticated) == 1;
 
     public bool HasSentFrame => Volatile.Read(ref _sawFrame) == 1;

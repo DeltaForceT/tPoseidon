@@ -16,10 +16,4 @@ public sealed class ChannelHandoffPreambelPacket
         return buf;
     }
 
-    public static ChannelHandoffPreambelPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-            throw new InvalidPacketException($"ChannelHandoffPreambel must be {PayloadSize} bytes, got {payload.Length}.");
-        return new ChannelHandoffPreambelPacket { Tag = payload[0] };
-    }
 }

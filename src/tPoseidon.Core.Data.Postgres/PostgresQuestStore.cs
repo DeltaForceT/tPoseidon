@@ -1,4 +1,3 @@
-using tPoseidon.Core.Data;
 using Npgsql;
 
 namespace tPoseidon.Core.Data.Postgres;
@@ -39,7 +38,7 @@ public sealed class PostgresQuestStore : IQuestStore
         {
             cmd.ExecuteNonQuery();
         }
-        catch (PostgresException ex) when (ex.SqlState == "23505")  
+        catch (PostgresException ex) when (ex.SqlState == "23505")
         {
             throw new InvalidOperationException(
                 $"Quest already active for character {quest.CharacterId}: " +

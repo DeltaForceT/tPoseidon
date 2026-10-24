@@ -22,7 +22,6 @@ public static class DrillRules
     public const int LuckBonus = 10;
     public const int PercentRoll = 100;
     public const int TmLevelCap = 500;
-    public const int InvincibleDrillAbility = 6;
     public const int InvincibleDrillSkill = 3001;
 
     public static int Wear(int life, int presses, int drillNature, int cellNature)

@@ -1,5 +1,4 @@
 using tPoseidon.Core.Game.PvP;
-using tPoseidon.Core.Game.Stats;
 
 namespace tPoseidon.Core.Game.Tests.PvP;
 

@@ -84,7 +84,7 @@ public sealed class InMemoryAccountStore : IAccountStore
         var account = GetAccountByUsername(username);
         if (account is null) return null;
 
-        
+
 
         return CryptographicOperations.FixedTimeEquals(
             System.Text.Encoding.UTF8.GetBytes(account.PasswordPlaceholder),
@@ -116,7 +116,7 @@ public sealed class InMemoryAccountStore : IAccountStore
         if (token.IsExpired(_clock.GetUtcNow()))
         {
 
-            
+
 
             return null;
         }
@@ -128,11 +128,11 @@ public sealed class InMemoryAccountStore : IAccountStore
         var account = GetAccountById(accountId);
         if (account is null) return Array.Empty<Character>();
 
-        
 
-        
 
-        
+
+
+
         return _charactersById.Values
             .Where(c => c.OwnerAccountId == accountId)
             .OrderBy(c => c.Slot)

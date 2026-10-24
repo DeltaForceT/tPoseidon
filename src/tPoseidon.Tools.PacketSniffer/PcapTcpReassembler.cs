@@ -31,25 +31,25 @@ internal static class PcapTcpReassembler
 
         if (pcap.Length < 24) return new List<FlowStream>();
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
+
+
+
+
+
+
+
         var linkType = (int)BinaryPrimitives.ReadUInt32LittleEndian(pcap.AsSpan(20, 4));
         var linkHeaderBytes = linkType switch
         {
-            1 => 14,  
-            0 => 4,   
-            _ => 4,   
+            1 => 14,
+            0 => 4,
+            _ => 4,
         };
 
         var offset = 24;
@@ -70,9 +70,9 @@ internal static class PcapTcpReassembler
                 if (ethertype != 0x0800) continue;
             }
 
-            
 
-            
+
+
 
             var ip = pkt.Slice(linkHeaderBytes);
 
@@ -87,7 +87,7 @@ internal static class PcapTcpReassembler
             var srcPort = BinaryPrimitives.ReadUInt16BigEndian(tcp.Slice(0, 2));
             var dstPort = BinaryPrimitives.ReadUInt16BigEndian(tcp.Slice(2, 2));
 
-            
+
             if (dir == Direction.ServerToClient && srcPort != serverPort) continue;
             if (dir == Direction.ClientToServer && dstPort != serverPort) continue;
 
@@ -110,12 +110,12 @@ internal static class PcapTcpReassembler
         foreach (var (flow, segs) in perFlow)
         {
 
-            
+
 
             var origin = segs[0].Seq;
             segs.Sort((a, b) => ((int)(a.Seq - origin)).CompareTo((int)(b.Seq - origin)));
 
-            
+
 
             using var ms = new MemoryStream();
             var expected = segs[0].Seq;

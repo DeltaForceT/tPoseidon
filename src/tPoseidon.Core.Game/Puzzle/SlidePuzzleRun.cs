@@ -102,7 +102,6 @@ public sealed class SlidePuzzleRun
     public SlidePuzzleEntry Puzzle { get; }
     public ushort MapId { get; }
     public (int X, int Y) Origin { get; }
-    public IReadOnlyList<int> Grid => _grid;
     public int HoleIndex { get; private set; }
     public DateTimeOffset StartedAt { get; }
     public DateTimeOffset Deadline { get; }

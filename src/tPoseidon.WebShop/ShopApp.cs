@@ -1,7 +1,5 @@
 using System.Globalization;
 using System.Net;
-using System.Text;
-using Microsoft.AspNetCore.Http;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.LibConfig;
 

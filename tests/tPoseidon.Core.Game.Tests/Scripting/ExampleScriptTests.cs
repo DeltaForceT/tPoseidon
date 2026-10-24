@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using tPoseidon.Core.Game.Scripting;
 using tPoseidon.Core.Game.Scripting.Compile;
 using tPoseidon.Core.Game.Scripting.Lang;
 using tPoseidon.Core.Game.Scripting.Library;

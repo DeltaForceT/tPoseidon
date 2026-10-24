@@ -21,9 +21,7 @@ public static class LobbyLogin
     public const short BlockedAccess = 1;
     public const short WithdrawnAccess = 2;
     public const short BlockedGameAccess = 1;
-    public const short LobbyState = 2;
     public const short ServerSelectedState = 3;
-    public const short InGameState = 4;
     public const int PenaltyNameBytes = 256;
     public const int BlockNoticeBytes = PenaltyNameBytes + 8 * sizeof(ushort);
     public static readonly TimeSpan StaleServerSelect = TimeSpan.FromSeconds(30);

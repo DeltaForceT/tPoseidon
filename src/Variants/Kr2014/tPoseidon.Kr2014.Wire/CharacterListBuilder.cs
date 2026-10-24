@@ -6,7 +6,7 @@ namespace tPoseidon.Kr2014.Wire;
 
 public static class CharacterListBuilder
 {
-    public const int EntryWidth = CharacterListPacket.EntryWidth; 
+    public const int EntryWidth = CharacterListPacket.EntryWidth;
 
     internal const int CharIdOffset = 0x00;
     internal const int SlotOffset = 0x08;
@@ -120,7 +120,7 @@ public static class CharacterListBuilder
         WriteUInt32Le(entry, EarItemOffset, character.StarterEarItemIndex);
         WriteUInt32Le(entry, TailItemOffset, character.StarterTailItemIndex);
 
-        
+
 
         return entry;
     }

@@ -41,15 +41,15 @@ public sealed class GameCharDataPacket
         buf[0x10] = Slot;
         Array.Copy(nameBytes, 0, buf, 0x11, nameBytes.Length);
 
-        
-        WriteUInt16Le(buf, 0x25, Species);     
-        WriteUInt16Le(buf, 0x27, Species);     
+
+        WriteUInt16Le(buf, 0x25, Species);
+        WriteUInt16Le(buf, 0x27, Species);
         if (FTypeIndex is { } typeIndex) buf[0x28] = typeIndex;
         buf[0x29] = StatA;
         buf[0x2A] = StatB;
         buf[0x2B] = StatC;
         buf[0x2C] = StatD;
-        WriteUInt64Le(buf, 0x2D, Timestamp);   
+        WriteUInt64Le(buf, 0x2D, Timestamp);
 
         return buf;
     }

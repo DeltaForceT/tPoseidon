@@ -236,7 +236,7 @@ public sealed class Parser
         var start = Advance();
         TimerKind kind;
         var interval = TimeSpan.Zero;
-        var spec = string.Empty;
+        string spec;
         switch (start.Text)
         {
             case "every":

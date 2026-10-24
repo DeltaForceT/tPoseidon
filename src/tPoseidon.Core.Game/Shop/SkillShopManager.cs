@@ -31,8 +31,6 @@ public sealed class SkillShopManager
 
     public int Count => _byEntityId.Count;
 
-    public IReadOnlyCollection<SkillShopEntity> All => _byEntityId.Values.ToArray();
-
     public SkillShopEntity? Get(ushort entityId) =>
         _byEntityId.TryGetValue(entityId, out var s) ? s : null;
 

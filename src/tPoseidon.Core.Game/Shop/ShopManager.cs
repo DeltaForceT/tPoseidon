@@ -31,8 +31,6 @@ public sealed class ShopManager
 
     public int Count => _byEntityId.Count;
 
-    public IReadOnlyCollection<ShopEntity> All => _byEntityId.Values.ToArray();
-
     public ShopEntity? Get(ushort entityId) =>
         _byEntityId.TryGetValue(entityId, out var s) ? s : null;
 

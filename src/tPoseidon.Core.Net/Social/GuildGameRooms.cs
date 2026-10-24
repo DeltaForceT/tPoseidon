@@ -160,7 +160,6 @@ public sealed class GuildGameRooms
     public const byte RoomListClosed = 0x0C;
     public const byte NewRoomGameMasterFlag = 1;
     public const byte RoomListOpen = 1;
-    public const int RoomLists = 3;
     public const byte WaitingState = 0;
     public const byte StartedState = 3;
 
@@ -224,11 +223,6 @@ public sealed class GuildGameRooms
         lock (_gate) _detailOnly[(room.GameType, room.RoomId)] = room;
     }
 
-    public bool Remove(byte gameType, uint roomId)
-    {
-        lock (_gate) return _detailOnly.Remove((gameType, roomId)) | (_rooms.TryGetValue(roomId, out var room) && room.GameType == gameType && _rooms.Remove(roomId));
-    }
-
     public GuildRoomEntry? Close(uint roomKey)
     {
         lock (_gate) return _rooms.Remove(roomKey, out var room) ? room : null;
@@ -242,11 +236,6 @@ public sealed class GuildGameRooms
     public GuildRoomEntry? RoomOf(ulong characterId)
     {
         lock (_gate) return _rooms.Values.FirstOrDefault(room => room.SideOf(characterId) is not null);
-    }
-
-    public bool InRoom(uint guildCode)
-    {
-        lock (_gate) return InRoomLocked(guildCode);
     }
 
     public static GuildRoomMake? ReadMake(ReadOnlySpan<byte> payload, Encoding text)

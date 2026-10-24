@@ -674,11 +674,11 @@ public static class SkillEffectKinds
             StrikeElement = SkillActions.FireElement, StrikeMagicLoss = FieldMagicLoss, GrantsTm = false, HeaderClass = 0, HeaderState = 1,
             StrikeAddsElement = true,
         },
-        ElementArea(WaterArea, SkillActions.ElectricElement),
-        ElementArea(ThunderArea, SkillActions.FireElement),
-        ElementArea(FireArea, SkillActions.EarthElement),
-        ElementArea(EarthArea, SkillActions.WindElement),
-        ElementArea(WindArea, SkillActions.WaterElement),
+        ElementArea(WaterArea),
+        ElementArea(ThunderArea),
+        ElementArea(FireArea),
+        ElementArea(EarthArea),
+        ElementArea(WindArea),
         ElementAreaDo(WaterArea + 1, SkillActions.ElectricElement),
         ElementAreaDo(ThunderArea + 1, SkillActions.FireElement),
         ElementAreaDo(FireArea + 1, SkillActions.EarthElement),
@@ -1029,7 +1029,7 @@ public static class SkillEffectKinds
         },
     }.Concat(CoupleHeartKinds()).Concat(HarconKinds()).ToDictionary(kind => kind.ActionId);
 
-    private static SkillEffectKind ElementArea(int actionId, int element) =>
+    private static SkillEffectKind ElementArea(int actionId) =>
         new(actionId, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeRadiusPoint, RadiusColumn, OnTarget: false)
         {
             Periodic = SkillPeriodicHit.FieldScan, PeriodMs = FieldScanMs, FieldChild = actionId + 1,

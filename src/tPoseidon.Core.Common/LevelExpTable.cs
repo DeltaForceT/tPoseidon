@@ -1,6 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
 namespace tPoseidon.Core.Common;
 
 public sealed class LevelExpTable
@@ -31,28 +28,6 @@ public sealed class LevelExpTable
         return _tmxpToNext.TryGetValue(currentTmLevel, out var v) ? v : null;
     }
 
-    public static LevelExpTable LoadFromFile(string path)
-    {
-        var json = File.ReadAllText(path);
-        var root = JsonSerializer.Deserialize<RootDoc>(json, JsonOpts)
-            ?? throw new InvalidDataException($"Failed to deserialize {path}");
-        if (root.Levels is null)
-        {
-            throw new InvalidDataException($"{path} missing 'Levels' array");
-        }
-
-        var exp = new Dictionary<int, ulong>();
-        var tm = new Dictionary<int, ulong>();
-        foreach (var row in root.Levels)
-        {
-            if (row.Exp is { } e and > 0) exp[row.Level] = (ulong)e;
-            if (row.TmXp is { } t and > 0) tm[row.Level] = (ulong)t;
-        }
-        return new LevelExpTable(exp, tm);
-    }
-
-    public static LevelExpTable Empty() => new(new(), new());
-
     public static LevelExpTable FromInlineThresholds(
         IReadOnlyDictionary<int, ulong> expToNext,
         IReadOnlyDictionary<int, ulong>? tmxpToNext = null)
@@ -62,21 +37,4 @@ public sealed class LevelExpTable
             tmxpToNext is null ? new() : new Dictionary<int, ulong>(tmxpToNext));
     }
 
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-
-    private sealed class RootDoc
-    {
-        [JsonPropertyName("Levels")]
-        public List<LevelRow>? Levels { get; set; }
-    }
-
-    private sealed class LevelRow
-    {
-        public int Level { get; set; }
-        public long? Exp { get; set; }
-        public long? TmXp { get; set; }
-    }
 }

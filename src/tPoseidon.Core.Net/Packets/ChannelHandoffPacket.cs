@@ -6,21 +6,12 @@ namespace tPoseidon.Core.Net.Packets;
 [WireOpcode((ushort)Opcode.CHANNEL_HANDOFF)]
 public sealed class ChannelHandoffPacket
 {
-        public static readonly byte[] SnapshotBytes =
-    {
-        0x31, 0x39, 0x32, 0x2E, 0x31, 0x36, 0x38, 0x2E,
-        0x35, 0x36, 0x2E, 0x31, 0x30, 0x32, 0x00,
-        0x37, 0x16, 0x27,
-    };
-
     public const int IpFieldWidth = 15;
     public const int PayloadWidth = IpFieldWidth + 1 + 2;
 
     public string IpAddress { get; init; } = string.Empty;
     public byte ReservedByte { get; init; } = 0x37;
     public ushort ChannelPort { get; init; } = 10006;
-
-    public static ChannelHandoffPacket FromSnapshot() => DecodePayload(SnapshotBytes);
 
     public byte[] EncodePayload()
     {

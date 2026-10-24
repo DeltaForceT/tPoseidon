@@ -24,7 +24,6 @@ public sealed record ScriptPage(PageKind Kind, IReadOnlyList<string> Lines, IRea
 
 public sealed record RunResult(RunState State, ScriptPage? Page)
 {
-    public bool IsFinished => State is RunState.Closed or RunState.Ended or RunState.Fallback;
 }
 
 public sealed class ScriptMachine

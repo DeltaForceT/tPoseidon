@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Text;
-using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.LibConfig.Tests;
 

@@ -95,7 +95,7 @@ public sealed class WorldHeartbeat : IAsyncDisposable
         _cts.Cancel();
         if (_loop is not null)
         {
-            try { await _loop.ConfigureAwait(false); } catch { }
+            await _loop.ConfigureAwait(false);
         }
         _cts.Dispose();
     }

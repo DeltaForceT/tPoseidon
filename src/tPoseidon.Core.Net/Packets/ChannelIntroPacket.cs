@@ -7,8 +7,8 @@ public sealed class ChannelIntroPacket
 {
     public const int NonceFieldBytes = 4;
     public const int TokenFieldBytes = 12;
-    public const int FixedTrailerBytes = NonceFieldBytes + TokenFieldBytes; 
-    public const int FixedTrailerBytesKr2014 = FixedTrailerBytes + 1;       
+    public const int FixedTrailerBytes = NonceFieldBytes + TokenFieldBytes;
+    public const int FixedTrailerBytesKr2014 = FixedTrailerBytes + 1;
 
     public string Username { get; init; } = string.Empty;
     public string Password { get; init; } = string.Empty;

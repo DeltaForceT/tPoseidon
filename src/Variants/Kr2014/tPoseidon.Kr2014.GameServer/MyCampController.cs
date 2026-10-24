@@ -9,8 +9,6 @@ using tPoseidon.Core.Net.World;
 
 internal sealed class MyCampController : IDisposable
 {
-    public const string DefaultSlotName = "mycamp 1";
-
     private readonly IMyCampStore _store;
     private readonly Func<ushort, int> _zoneType;
     private readonly IReadOnlyDictionary<ushort, ZoneGeometry> _geometry;

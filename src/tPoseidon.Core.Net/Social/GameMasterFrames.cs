@@ -128,8 +128,6 @@ public static class GameMasterFrames
     public const ushort GuildRoomFlag = 0x14EA;
     public const ushort SetGuildRoomFlag = 0x14EB;
     public const ushort GuildRoomFlagReply = 0x14EC;
-    public const ushort FirstOpcode = 0x1451;
-    public const ushort LastOpcode = 0x152E;
 
     public const ushort OrderSuperRun = 0x5B;
     public const ushort OrderCharInfo = 0x64;

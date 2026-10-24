@@ -31,8 +31,6 @@ public sealed class ScriptEngine
         _scheduler = new ScriptScheduler(_library.Timers, DateTimeOffset.Now);
     }
 
-    public string Directory => _directory;
-
     public int InstructionBudget { get; }
 
     public ScriptLibrary Library

@@ -1,5 +1,3 @@
-using tPoseidon.Core.Data;
-
 namespace tPoseidon.Core.Data.Tests;
 
 public class InMemoryItemStoreTests
@@ -9,7 +7,6 @@ public class InMemoryItemStoreTests
 
     private const int RookieSwordIndex = 3030;
     private const int RookieHatIndex = 4030;
-    private const int RookieShieldIndex = 6530;
     private const int DragonHornsIndex = 6903;
     private const int DragonTailIndex = 6953;
     private const int CarrotItemIndex = 11908;

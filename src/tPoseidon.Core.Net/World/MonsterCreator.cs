@@ -15,7 +15,6 @@ public sealed class MonsterCreator : IZoneEntityCreator
     private readonly ZonePoolOverridesProvider _zoneOverrides;
     private readonly SpawnPointOverridesProvider _pointOverrides;
     private readonly Func<int> _densityMultiplierAccessor;
-    private readonly Random _rng;
 
     public MonsterCreator(
         MonsterManager monsterManager,
@@ -23,8 +22,7 @@ public sealed class MonsterCreator : IZoneEntityCreator
         IZoneMonsterPoolLookup zonePools,
         ZonePoolOverridesProvider zoneOverrides,
         SpawnPointOverridesProvider pointOverrides,
-        Func<int> densityMultiplierAccessor,
-        int rngSeed = 42)
+        Func<int> densityMultiplierAccessor)
     {
         _monsterManager = monsterManager ?? throw new ArgumentNullException(nameof(monsterManager));
         _spawnProvider = spawnProvider ?? throw new ArgumentNullException(nameof(spawnProvider));
@@ -32,7 +30,6 @@ public sealed class MonsterCreator : IZoneEntityCreator
         _zoneOverrides = zoneOverrides ?? throw new ArgumentNullException(nameof(zoneOverrides));
         _pointOverrides = pointOverrides ?? throw new ArgumentNullException(nameof(pointOverrides));
         _densityMultiplierAccessor = densityMultiplierAccessor ?? throw new ArgumentNullException(nameof(densityMultiplierAccessor));
-        _rng = new Random(rngSeed);
     }
 
     public int Spawn(Zone zone)
@@ -42,30 +39,6 @@ public sealed class MonsterCreator : IZoneEntityCreator
         foreach (var d in defs)
         {
             if (_monsterManager.Spawn(d.MonsterParamId, zone.MapId, d.X, d.Y, (ushort?)d.SpawnPointId) is not null)
-            {
-                spawned++;
-            }
-        }
-        zone.MonsterSpawnCount = spawned;
-        return spawned;
-    }
-
-    public int LoadDefinitions(Zone zone)
-    {
-        zone.MonsterSpawnDefinitions.Clear();
-        foreach (var d in ComputeSpawnDefinitions(zone))
-        {
-            zone.MonsterSpawnDefinitions.Add(d);
-        }
-        return zone.MonsterSpawnDefinitions.Count;
-    }
-
-    public int ActivateFromDefinitions(Zone zone)
-    {
-        var spawned = 0;
-        foreach (var d in zone.MonsterSpawnDefinitions)
-        {
-            if (_monsterManager.Spawn(d.MonsterParamId, zone.MapId, d.X, d.Y, d.SpawnPointId) is not null)
             {
                 spawned++;
             }

@@ -24,7 +24,6 @@ public static class TradeFrames
     public const ushort CodeNotExchangeable = 7;
     public const ushort CodeMoneyInvalid = 8;
     public const ushort CodeOppositeMoneyOver = 9;
-    public const ushort CodeBadCount = 10;
     private const int OfferHeaderSize = 7;
 
     public static bool TryReadInvite(ReadOnlySpan<byte> body, out ushort targetEntityId)

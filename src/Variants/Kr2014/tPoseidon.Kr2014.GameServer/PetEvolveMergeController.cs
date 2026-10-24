@@ -1,7 +1,6 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Items;
-using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.Game.Pets;
 using tPoseidon.Core.InterServer;
 using tPoseidon.Core.LibConfig;

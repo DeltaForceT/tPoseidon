@@ -1,5 +1,3 @@
-using tPoseidon.Core.Common;
-
 namespace tPoseidon.Core.Net.Packets;
 
 public sealed class Packet01CFTbd
@@ -24,20 +22,4 @@ public sealed class Packet01CFTbd
         return w.ToArray();
     }
 
-    public static Packet01CFTbd DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"Packet01CFTbd payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        var r = new PacketReader(payload);
-        return new Packet01CFTbd
-        {
-            EntityId = r.ReadUInt16(),
-            Action = r.ReadByte(),
-            AniTimeSeconds = r.ReadUInt16(),
-            Loop = r.ReadByte(),
-        };
-    }
 }

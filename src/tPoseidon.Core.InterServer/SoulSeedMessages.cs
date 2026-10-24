@@ -34,8 +34,6 @@ public static class SoulSeedMessages
         return w.ToArray();
     }
 
-    public static ulong DecodeUid(ReadOnlySpan<byte> body) => new PacketReader(body).ReadUInt64();
-
     public static byte[] EncodeCode(uint code)
     {
         var w = new PacketWriter(sizeof(uint));

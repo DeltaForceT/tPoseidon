@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
-using Microsoft.AspNetCore.Http;
 using tPoseidon.Core.Data;
 
 namespace tPoseidon.WebShop;

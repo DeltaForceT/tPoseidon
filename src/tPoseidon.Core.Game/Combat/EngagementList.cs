@@ -62,17 +62,6 @@ public sealed class EngagementList
         }
     }
 
-    public bool Remove(ushort targetEntityId)
-    {
-        lock (_gate)
-        {
-            var at = IndexOf(targetEntityId);
-            if (at < 0) return false;
-            _entries.RemoveAt(at);
-            return true;
-        }
-    }
-
     public IReadOnlyList<ushort> TakeAll()
     {
         lock (_gate)

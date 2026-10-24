@@ -114,7 +114,7 @@ public static class GmPlayersPage
                 kit.Tool("Lift the sanction", "account-block", checks => ["off", Who(checks)],
                     arguments => new GmConfirm($"Lift the sanction of {arguments[1]}'s account?", "The account becomes a normal account again.", "Lift")))));
 
-        page.Children.Add(MoveSection(kit, name, Who));
+        page.Children.Add(MoveSection(kit, Who));
 
         var item = GmPickers.Item(model);
         var count = GmKit.Box("Count", 80, "1");
@@ -223,7 +223,7 @@ public static class GmPlayersPage
                 kit.Tool("Look up", "char-info", checks => [checks.Text(name, "The character name")], primary: true)));
     }
 
-    private static Border MoveSection(GmKit kit, TextBox name, Func<GmChecks, string> who)
+    private static Border MoveSection(GmKit kit, Func<GmChecks, string> who)
     {
         var model = kit.Model;
         var map = GmPickers.Map(model);

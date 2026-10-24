@@ -3,7 +3,6 @@ namespace tPoseidon.Core.Net.Social;
 public static class GameMasterChatBlocks
 {
     public const int ReleaseValue = 0;
-    public const int PermanentValue = -1;
     public const uint MinutesPerDay = 24 * 60;
     public const uint PermanentDays = 15;
     public const uint PermanentMinutes = PermanentDays * MinutesPerDay;

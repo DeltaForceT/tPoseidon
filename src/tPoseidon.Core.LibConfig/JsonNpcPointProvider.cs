@@ -46,7 +46,7 @@ public sealed class JsonNpcPointProvider : INpcPointProvider
         {
             if (!ushort.TryParse(mapKey, out var mapId))
             {
-                continue;  
+                continue;
             }
             var perMapPoints = new Dictionary<ushort, NpcPoint>();
             foreach (var (posKey, rec) in perMap)

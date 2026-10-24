@@ -227,7 +227,7 @@ public sealed class MonsterBattleCycleTests
 
         var outOfReach = PlayerAt(550, 400);
         var cooldownEnds = TickMs + SwingDelayMs;
-        IReadOnlyList<MonsterBattleEvent> events = Array.Empty<MonsterBattleEvent>();
+        IReadOnlyList<MonsterBattleEvent> events;
         for (var elapsed = TickMs; elapsed < 4000; elapsed += TickMs)
         {
             events = cycle.Tick(MapId, geometry: null, new[] { monster }, outOfReach, At(cooldownEnds + elapsed));

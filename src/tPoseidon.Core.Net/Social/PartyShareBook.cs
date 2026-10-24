@@ -16,8 +16,6 @@ public sealed class PartyShareBook
         link.OrderReceived += ApplyAsync;
     }
 
-    public bool IsBound(ulong characterId) => _bound.ContainsKey(characterId);
-
     public IReadOnlyList<(ulong CharacterId, int Gain)>? SplitExp(ulong earner, int amount) =>
         Split(earner, amount, e => e.ExpPercent, e => e.ExpBonus);
 

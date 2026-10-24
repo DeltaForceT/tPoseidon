@@ -89,13 +89,13 @@ public sealed class S2SessionAdapter
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
 
-                    
 
-                    
 
-                    
 
-                    
+
+
+
+
                     var payloadHex = Convert.ToHexString(
                         decoded.Payload, 0, Math.Min(decoded.Payload.Length, 32));
                     Console.Error.WriteLine(
@@ -119,6 +119,4 @@ public sealed class S2SessionAdapter
         guard.Reject(GuardIncident.MalformedFrame, $"a frame header did not check out ({framer.Buffered} B buffered), closed");
     }
 
-        public Task SendFrameAsync(ReadOnlyMemory<byte> encryptedFrame, CancellationToken cancellationToken = default) =>
-        _session.SendAsync(encryptedFrame, cancellationToken);
 }

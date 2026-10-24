@@ -1,5 +1,3 @@
-using tPoseidon.Core.Common;
-using tPoseidon.Core.Data;
 using tPoseidon.Core.Net.Packets;
 
 namespace tPoseidon.Core.Net.Tests.Packets;

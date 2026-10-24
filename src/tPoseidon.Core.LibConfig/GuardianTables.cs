@@ -15,7 +15,6 @@ public sealed record GuardianTables(
     IReadOnlyDictionary<int, GuardianBasicStatEntry> BasicStats,
     IReadOnlyDictionary<int, float> ExpRatios)
 {
-    public const int StatCount = 12;
     public const int RuneSlotCount = 4;
 
     public static readonly string[] GrowthColumns =

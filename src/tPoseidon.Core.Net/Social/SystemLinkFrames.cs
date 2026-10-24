@@ -39,8 +39,6 @@ public sealed record PartyQuestCancel(ulong CharacterId, uint QuestId, ushort De
 public static class SystemLinkFrames
 {
     public const ushort SystemHello = 0x157D;
-    public const ushort CreateAgency = 0x1588;
-    public const ushort DestroyAgency = 0x1589;
     public const ushort Order = 0x158A;
     public const ushort Report = 0x158B;
     public const ushort EnterZone = 0x158D;
@@ -58,7 +56,6 @@ public static class SystemLinkFrames
     public const ushort CancelPartyQuest = 0x15D5;
 
     public const ushort OrderCancel = 2;
-    public const ushort OrderObserveAndNotify = 0x0B;
     public const ushort OrderShareExp = 0x0C;
     public const ushort OrderTypeBonus = 0x0D;
     public const ushort OrderNotifyPartyPlayer = 0x10;

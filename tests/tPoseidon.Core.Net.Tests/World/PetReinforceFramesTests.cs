@@ -1,6 +1,5 @@
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Net.World;
-using Xunit;
 
 namespace tPoseidon.Core.Net.Tests.World;
 

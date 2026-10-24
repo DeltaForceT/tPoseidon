@@ -5,7 +5,6 @@ using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.World;
-using Xunit;
 
 namespace tPoseidon.Core.Net.Tests.World;
 

@@ -5,7 +5,6 @@ using tPoseidon.Core.Crypto.S2;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Net.Packets;
 using tPoseidon.Core.Net.S2;
-using Xunit;
 
 namespace tPoseidon.Core.Net.Tests.S2;
 

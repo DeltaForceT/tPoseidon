@@ -13,9 +13,6 @@ public sealed class ZoneNpcMgr
         _global = global ?? throw new ArgumentNullException(nameof(global));
     }
 
-    public Zone Zone => _zone;
-    public NpcManager Global => _global;
-
     public int CreatedCount { get; private set; }
 
     public bool IsInitialized { get; private set; }

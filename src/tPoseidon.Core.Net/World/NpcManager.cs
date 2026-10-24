@@ -37,8 +37,8 @@ public sealed class NpcManager
         public static IReadOnlyDictionary<(ushort MapId, ushort PosId), ushort> CoralTownPinnedIds()
         => new Dictionary<(ushort, ushort), ushort>
         {
-            { ((ushort)148, (ushort)2), (ushort)0x0153 },  
-            { ((ushort)148, (ushort)3), (ushort)0x014C },  
+            { ((ushort)148, (ushort)2), (ushort)0x0153 },
+            { ((ushort)148, (ushort)3), (ushort)0x014C },
         };
 
         public IReadOnlyList<NpcEntity> PreloadMap(ushort mapId, string libconfigMapName)
@@ -84,7 +84,7 @@ public sealed class NpcManager
             point = NpcPoint.Origin();
         }
 
-        
+
 
         ushort entityId;
         if (_pinnedEntityIds is not null

@@ -1,5 +1,4 @@
 using tPoseidon.Core.Common;
-using tPoseidon.Core.Crypto.S2;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Data.Postgres;
 using tPoseidon.Core.Game.Monsters;
@@ -363,7 +362,7 @@ try
 
         var uniqueCounts = reader.LoadUniqueItemCountTable();
         var legendItems = reader.LoadLegendItemList();
-        uniqueItemManager = new tPoseidon.Core.Game.Items.UniqueItemManager(uniqueCounts, legendItems);
+        uniqueItemManager = new tPoseidon.Core.Game.Items.UniqueItemManager(legendItems);
         uniqueItemPool = new tPoseidon.Core.Game.Items.UniqueItemPool(reader.LoadLegendItemGroups());
         Console.WriteLine($"{LogTag} loaded {uniqueItemPool.GroupCount} legend monster groups (LegendItemGroup)");
         Console.WriteLine($"{LogTag} loaded UniqueItem ({uniqueCounts.Count} count rows, {uniqueItemManager.LegendItemCount} legend items)");
@@ -385,7 +384,7 @@ try
         mapItemZoneLookup = new InMemoryMapItemZoneLookup(Array.Empty<MapItemZoneEntry>());
         esActionLookup = new InMemoryEsActionLookup(Array.Empty<EsActionEntry>());
         itemStatRollLookup = new InMemoryItemStatRollLookup(Array.Empty<RandomStatValueEntry>());
-        uniqueItemManager = new tPoseidon.Core.Game.Items.UniqueItemManager(Array.Empty<UniqueItemCountEntry>(), Array.Empty<LegendItemListEntry>());
+        uniqueItemManager = new tPoseidon.Core.Game.Items.UniqueItemManager(Array.Empty<LegendItemListEntry>());
     }
 }
 catch (Exception ex)
@@ -405,7 +404,7 @@ catch (Exception ex)
     mapItemZoneLookup = new InMemoryMapItemZoneLookup(Array.Empty<MapItemZoneEntry>());
     esActionLookup = new InMemoryEsActionLookup(Array.Empty<EsActionEntry>());
     itemStatRollLookup = new InMemoryItemStatRollLookup(Array.Empty<RandomStatValueEntry>());
-    uniqueItemManager = new tPoseidon.Core.Game.Items.UniqueItemManager(Array.Empty<UniqueItemCountEntry>(), Array.Empty<LegendItemListEntry>());
+    uniqueItemManager = new tPoseidon.Core.Game.Items.UniqueItemManager(Array.Empty<LegendItemListEntry>());
 }
 
 INpcActionScriptLookup npcMotionCatalog;
@@ -693,10 +692,6 @@ var monsterManager = new tPoseidon.Core.Game.Monsters.MonsterManager(monsterCata
 var groundItems = new GroundItemField();
 var globalActionManager = new tPoseidon.Core.Game.Combat.ActionManager();
 
-var damageCalculator = new tPoseidon.Core.Game.Combat.DamageCalculator(() => serverRatesProvider.Current);
-var cadenceCalculator = new tPoseidon.Core.Game.Combat.CadenceCalculator(() => serverRatesProvider.Current);
-var playerAttackTicker = new tPoseidon.Core.Game.Combat.PlayerAttackTicker(monsterManager, monsterCatalog, cadenceCalculator, damageCalculator, globalActionManager);
-
 IPortalLookup? portalLookup = null;
 var portalsJsonPath = RepoRoot.Data("portals.json");
 try
@@ -781,8 +776,7 @@ var zoneInitializer = new tPoseidon.Core.Net.World.ZoneInitializer(
     globalActionManager,
     regions: regionInfoLookup,
     zonePool: monZoneLookup,
-    mapDirectory: Directory.Exists(variantMapDir) ? variantMapDir : null,
-    log: msg => Console.WriteLine($"{LogTag} [zone-init] {msg}"));
+    mapDirectory: Directory.Exists(variantMapDir) ? variantMapDir : null);
 
 var zoneManager = new ZoneManager(
     mapInfoLookup,
@@ -1094,7 +1088,6 @@ var soulSeeds = new SoulSeedController(
     new tPoseidon.Core.InterServer.MasterSoulSeeds(() => masterClient, selfIdentity.ServerIndex, msg => Console.WriteLine($"{LogTag} {msg}")),
     masterGuardian,
     itemStore,
-    itemCatalog,
     () => soulSeedTables,
     (viewer, _) => ShowGuardiansAsync(viewer),
     LogTag);
@@ -1343,13 +1336,13 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
     {
         systemLink.Register(ctx);
 
-        
 
-        
 
-        
 
-        
+
+
+
+
         var actionState = (byte)0x00;
 
         Character? currentChar = null;
@@ -1935,11 +1928,11 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         ctx.Dispatcher.Register(Opcode.GAME_INIT, async (_, payload, innerCt) =>
         {
 
-            
 
-            
 
-            
+
+
+
 
             var peerIp = ctx.Remote?.Address ?? System.Net.IPAddress.None;
             var pending = accountStore.FindPendingGameJoin(peerIp, TimeSpan.FromSeconds(30));
@@ -1995,7 +1988,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             EnsureStatManagerWired();
             npcScript.LoadForCharacter(character.CharacterId);
 
-            
+
 
             try
             {
@@ -2017,11 +2010,11 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 Console.WriteLine($"{LogTag} {ctx.Remote} GAME_INIT account={pending.AccountId} safety-lock active (lock_flag=0x{lockFlag:X2}); client-side dialog flow expected (no server-side gating yet)");
             }
 
-            
 
-            
 
-            
+
+
+
             var entityId = moveEntityId;
 
             Console.WriteLine($"{LogTag} {ctx.Remote} GAME_INIT — char='{character.Name}' " +
@@ -2089,24 +2082,24 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             await soulSeeds.LoadAsync(sessionState, character.CharacterId, innerCt).ConfigureAwait(false);
         });
 
-        
 
-        
+
+
         ctx.Dispatcher.Register(Opcode.GAME_PHASE_2, (_, _, _) =>
         {
             Console.WriteLine($"{LogTag} {ctx.Remote} GAME_PHASE_2 received (informational; batch already sent)");
             return Task.CompletedTask;
         });
 
-        
 
-        
 
-        
 
-        
 
-        
+
+
+
+
+
 
         async Task EmitMobSpawnsForCurrentMapAsync(string trigger)
         {
@@ -2230,22 +2223,22 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         ctx.Dispatcher.Register(Opcode.C2S_OP_034D_CLIENT_LOCAL_PING, (_, _, _) => Task.CompletedTask);
 
-        
 
-        
+
+
 
         ctx.Dispatcher.Register(Opcode.C2S_OP_04AF_CLIENT_LOCAL_PING, (_, _, _) => Task.CompletedTask);
 
-        
 
-        
 
-        
 
-        
 
-        
-        var sessionMovType = (byte)0x02; 
+
+
+
+
+
+        var sessionMovType = (byte)0x02;
         int playerLastX = currentChar?.PositionX ?? 0;
         int playerLastY = currentChar?.PositionY ?? 0;
         int playerPrevX = playerLastX;
@@ -2361,29 +2354,29 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 Flag = move.Flag,
             };
 
-            
 
-            
+
+
             byte randKey;
             lock (moveRng) randKey = (byte)moveRng.Next(1, 256);
             await ctx.SendFrameAsync(Opcode.ENTITY_MOVE, echo.EncodePayload(), randKey: randKey, moveCt)
                 .ConfigureAwait(false);
             if (moveSt is not null) await SendToOthersOnMapAsync(moveSt, Opcode.ENTITY_MOVE, echo.EncodePayload()).ConfigureAwait(false);
 
-            
 
-            
 
-            
+
+
+
         });
 
-        
 
-        
 
-        
 
-        
+
+
+
+
 
         ctx.Dispatcher.Register(Opcode.C2S_REST_ACTION, async (_, payload, actionCt) =>
         {
@@ -2400,9 +2393,9 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 deadActionSt.RecoveryAmounts = postureAmounts;
             }
 
-            
 
-            
+
+
             var broadcast = new byte[3]
             {
                 (byte)(moveEntityId & 0xFF),
@@ -2424,11 +2417,11 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             };
             Console.WriteLine($"{LogTag} {ctx.Remote} action: {label} → echoed S2C 0x0040 broadcast");
 
-            
 
-            
 
-            
+
+
+
 
             if (newState == 0x02 || newState == 0x0D)
             {
@@ -2463,19 +2456,19 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         ctx.Dispatcher.Register(Opcode.C2S_MEMORY_PORT_DELETE, (_, payload, portCt) =>
             liveSessions.TryGetValue(ctx, out var deletePortSt) ? memoryPorts.DeleteAsync(deletePortSt, payload, portCt) : Task.CompletedTask);
 
-        
 
-        
 
-        
 
-        
+
+
+
+
 
         ushort targetedNpcEntityId = 0;
 
-        
 
-        
+
+
 
         Task ReleaseSessionAsync()
         {
@@ -2531,13 +2524,13 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         }
         sessionReleases[ctx] = ReleaseSessionAsync;
 
-        
 
-        
 
-        
 
-        
+
+
+
+
 
         ushort ResolveAttackSpeedStat(Character c) => c.DxPoints;
 
@@ -2565,22 +2558,8 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                     await ctx.SendFrameAsync(Opcode.S2C_HEALTH_STATUS,
                         pkt.EncodePayload(), randKey: rk, default).ConfigureAwait(false);
                 }
-                catch (ObjectDisposedException) {  }
-                catch (System.IO.IOException) {  }
-            };
-            statManager.ManaChanged += async ev =>
-            {
-                if (sessionCt.IsCancellationRequested) return;
-                try
-                {
-                    var pkt = tPoseidon.Core.Net.Packets.ManaStatusPacket.Of(ev.NewMp);
-                    byte rk;
-                    lock (moveRng) rk = (byte)moveRng.Next(1, 256);
-                    await ctx.SendFrameAsync(Opcode.S2C_MANA_STATUS,
-                        pkt.EncodePayload(), randKey: rk, default).ConfigureAwait(false);
-                }
-                catch (ObjectDisposedException) {  }
-                catch (System.IO.IOException) {  }
+                catch (ObjectDisposedException) { }
+                catch (System.IO.IOException) { }
             };
 
             ctx.Dispatcher.Register(Opcode.C2S_STAT_ALLOCATE, async (_, payload, allocCt) =>
@@ -2617,7 +2596,17 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                     ProgressFrames.StatPoints((ushort)bonusPointsLeft, partyBonuses.WithBonus(currentChar.CharacterId, statPoints)), randKey: allocRk, allocCt).ConfigureAwait(false);
             });
 
-            statManager.MoneyChanged += _ => { try { FlushStatsToDb("money-change"); } catch {  } };
+            statManager.MoneyChanged += _ =>
+            {
+                try
+                {
+                    FlushStatsToDb("money-change");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"{LogTag} {ctx.Remote} stats flush (money-change) failed: {ex.GetType().Name}: {ex.Message}");
+                }
+            };
         }
 
         tPoseidon.Core.Game.Characters.EffectiveStats StatsWithEquipment(Character character, IReadOnlyList<short>? points = null)
@@ -3062,21 +3051,21 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
 
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
+
+
+
+
+
+
+
+
 
         Task SendShopFrameAsync(Opcode opcode, byte[] payload, CancellationToken shopCt)
         {
@@ -3985,11 +3974,11 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 return;
             }
 
-            
 
-            
 
-            
+
+
+
 
             currentChar = accountStore.GetCharacterById(req.CharId);
             if (currentChar is null)
@@ -4061,9 +4050,9 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
             warpManager.ReleaseLandingClaim(currentChar.CharacterId);
 
-            
 
-            
+
+
             var warpedState = liveSessions.GetOrAdd(ctx, _ => new InGameSessionState
             {
                 SendFrameAsync = (op, payload, rk, ct) => ctx.SendFrameAsync(op, payload, rk, ct),
@@ -4159,7 +4148,10 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 }.EncodePayload();
                 await ctx.SendFrameAsync(Opcode.S2C_MOB_TARGET_INFO, mobInfo, randKey: rkEngaged, default).ConfigureAwait(false);
             }
-            catch {  }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"{LogTag} {ctx.Remote} mob target info failed: {ex.GetType().Name}: {ex.Message}");
+            }
         });
 
         ctx.Dispatcher.Register(Opcode.C2S_LOOK_CHANGE, (_, payload, lookCt) => ChangeLookAsync(payload, lookCt));
@@ -4795,9 +4787,9 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         RegisterCombatTracer(Opcode.C2S_OP_1B69_TBD,    "C2S_CHAR_ACTION_69");
         RegisterCombatTracer(Opcode.S2C_OP_1BA3_TBD,            "0x1BA3 (table: C2S_CHAR_ACTION_A3)");
 
-        
 
-        
+
+
         async Task RefuseSkillAsync(ushort code, CancellationToken refuseCt)
         {
             byte rkRefuse;
@@ -5282,9 +5274,9 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             pickSt.PickupAt = requestedAt;
         });
 
-        
 
-        
+
+
 
         ctx.Dispatcher.Register(Opcode.C2S_TARGET_SELECT, async (_, payload, targetCt) =>
         {
@@ -5299,19 +5291,19 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             targetedNpcEntityId = (ushort)(bytes[0] | (bytes[1] << 8));
             Console.WriteLine($"{LogTag} {ctx.Remote} target-select entity 0x{targetedNpcEntityId:X4}");
 
-            
 
-            
 
-            
 
-            
 
-            
 
-            
 
-            
+
+
+
+
+
+
+
             var npcEntityForOpen = worldEntities.Get(targetedNpcEntityId);
             if (npcEntityForOpen is null)
             {
@@ -5333,19 +5325,19 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }
         });
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
+
+
+
+
+
+
+
 
         ctx.Dispatcher.Register(Opcode.C2S_QUEST_CANCEL, async (_, payload, cancelCt) =>
         {
@@ -5373,9 +5365,9 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             await npcScript.ShowMessageAsync(entityId, page, advanceCt).ConfigureAwait(false);
         });
 
-        
 
-        
+
+
 
         void TrackReturnMap(bool atLogin)
         {
@@ -11033,7 +11025,7 @@ var npcLoopTask = Task.Run(async () =>
             Console.WriteLine($"{LogTag} [skill] 0x{player.PlayerEntityId:X4} is already transformed: skill {morph.SkillId} ends");
             return !player.Effects.Remove(morph) || await EndSkillEffectAsync(morph, sessions).ConfigureAwait(false);
         }
-        morph.FixedDeltas = FormSkills.MorphDeltas(morph.Kind.Morph, morphRow, player.PlayerAp, player.PlayerDx, player.PlayerLk, player.PlayerDp, player.PlayerHv);
+        morph.FixedDeltas = FormSkills.MorphDeltas(morph.Kind.Morph, morphRow, player.PlayerAp, player.PlayerLk, player.PlayerDp, player.PlayerHv);
         ApplyEffectDeltas(player);
         Console.WriteLine($"{LogTag} [skill] 0x{player.PlayerEntityId:X4} transforms ({morph.Kind.Morph}): {string.Join(" ", morph.FixedDeltas.Select(entry => $"{entry.Stat}:{entry.Delta:+#;-#;0}"))}");
         return await SendMorphStatsAsync(owner, morph.FixedDeltas).ConfigureAwait(false);

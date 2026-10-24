@@ -10,7 +10,7 @@ public enum Species : byte
     Lion = 6,
     Cat = 7,
     Raccoon = 8,
-    PolarBear = 9,  
+    PolarBear = 9,
 }
 
 public enum FType : byte
@@ -76,22 +76,6 @@ public static class SpeciesDefaults
 
         public static ushort SecondJobClassIdForFirstJob(Species species) =>
         (ushort)((byte)species + 8);
-
-        public static FType DefaultFTypeForSpecies(Species species) => species switch
-    {
-        Species.Bunny => FType.Power,    
-        Species.Buffalo => FType.Power,  
-        Species.Sheep => FType.Magic,    
-        Species.Dragon => FType.Magic,   
-        Species.Fox => FType.Sense,      
-        Species.Lion => FType.Sense,     
-        Species.Cat => FType.Charm,      
-        Species.Raccoon => FType.Charm,  
-        Species.PolarBear => FType.Power, 
-
-                                          
-        _ => throw new ArgumentOutOfRangeException(nameof(species), species, "Unknown species"),
-    };
 
     public static (byte PtsP, byte PtsM, byte PtsS, byte PtsC) GrowthGraphForFType(FType ftype) => ftype switch
     {

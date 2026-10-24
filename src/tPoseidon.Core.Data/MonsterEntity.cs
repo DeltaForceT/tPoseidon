@@ -51,11 +51,6 @@ public sealed class MonsterEntity
     public bool IsBoss { get; init; }
     public MonsterAType Atype { get; init; } = MonsterAType.HarconMonster;
     public int AiViewRange { get; init; }
-    public DateTimeOffset SpawnedAt { get; init; } = DateTimeOffset.UtcNow;
-
-        public DateTimeOffset NextMoveAt { get; set; } = DateTimeOffset.UtcNow;
-
-    public DateTimeOffset NextStrikeAt { get; set; }
 
     private DateTimeOffset _heldUntil;
     private float _slowRatio;
@@ -154,33 +149,11 @@ public sealed class MonsterEntity
         }
     }
 
-    public bool TryAnnounceFirst001E(ushort attackerEntityId)
-    {
-        if (attackerEntityId == 0) return false;
-        lock (_attackerLock)
-        {
-            return _announcedEngagements.Add(attackerEntityId);
-        }
-    }
-
     private ushort _moveFromX;
     private ushort _moveFromY;
     private DateTimeOffset _moveStartedAt;
     private DateTimeOffset _moveEndsAt;
     private (int X, int Y)[] _movePoints = [];
-    private bool _pathCompleteAnnounced = true;
-
-    public bool TryAnnouncePathComplete(DateTimeOffset now)
-    {
-        lock (_lock)
-        {
-            if (_pathCompleteAnnounced) return false;
-            if (_moveEndsAt <= _moveStartedAt) return false;
-            if (now < _moveEndsAt) return false;
-            _pathCompleteAnnounced = true;
-            return true;
-        }
-    }
 
     public ushort CurrentX
     {
@@ -273,7 +246,6 @@ public sealed class MonsterEntity
             _movePoints = points.ToArray();
             _moveStartedAt = now;
             _moveEndsAt = now.AddMilliseconds(durationMs);
-            _pathCompleteAnnounced = false;
             _curX = (ushort)Math.Clamp(toX, 0, ushort.MaxValue);
             _curY = (ushort)Math.Clamp(toY, 0, ushort.MaxValue);
             return (fromX, fromY);

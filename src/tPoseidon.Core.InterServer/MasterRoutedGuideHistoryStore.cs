@@ -9,16 +9,6 @@ public sealed class MasterRoutedGuideHistoryStore : IGuideHistoryStore
         InterServerOpcode.TpGuideHistoryLoadAckOk,
         InterServerOpcode.TpGuideHistoryLoadAckCancel,
     };
-    private static readonly HashSet<InterServerOpcode> UpsertSystemAckOpcodes = new()
-    {
-        InterServerOpcode.TpGuideHistoryUpsertSystemAckOk,
-        InterServerOpcode.TpGuideHistoryUpsertSystemAckCancel,
-    };
-    private static readonly HashSet<InterServerOpcode> UpsertTutorialAckOpcodes = new()
-    {
-        InterServerOpcode.TpGuideHistoryUpsertTutorialAckOk,
-        InterServerOpcode.TpGuideHistoryUpsertTutorialAckCancel,
-    };
 
     private readonly MasterServerClient _client;
     private readonly IGuideHistoryStore _fallback;

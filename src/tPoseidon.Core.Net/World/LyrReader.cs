@@ -4,12 +4,6 @@ public sealed class LyrReader
 {
     public sealed record GroundAttributeMap(int Width, int Height, byte[] Tiles)
     {
-        public bool IsWalkable(int tx, int ty)
-        {
-            if (tx < 0 || tx >= Width) return false;
-            if (ty < 0 || ty >= Height) return false;
-            return (Tiles[ty * Width + tx] & 0x01) != 0;
-        }
     }
 
     public static GroundAttributeMap? TryLoad(string lyrPath)
@@ -34,10 +28,4 @@ public sealed class LyrReader
         }
     }
 
-    public static GroundAttributeMap Synthetic(int width, int height, bool walkable = true)
-    {
-        var tiles = new byte[width * height];
-        if (walkable) Array.Fill(tiles, (byte)0x01);
-        return new GroundAttributeMap(width, height, tiles);
-    }
 }

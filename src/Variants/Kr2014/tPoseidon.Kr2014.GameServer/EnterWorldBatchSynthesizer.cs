@@ -3,7 +3,6 @@ using tPoseidon.Core.Crypto.S2;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Shop;
 using tPoseidon.Core.LibConfig;
-using tPoseidon.Core.Net;
 using tPoseidon.Core.Net.Dialogs;
 using tPoseidon.Core.Net.Packets;
 using tPoseidon.Core.Net.S2;
@@ -16,10 +15,6 @@ public sealed record LoginTitleFrames(byte[] HonorTitleList, byte[] ProfileTitle
 public static class EnterWorldBatchSynthesizer
 {
     private const uint EquippedSlotFlag = 1;
-
-    private static readonly HashSet<ushort> NpcEmissionSafeMaps = new() { SpeciesDefaults.CoralTownMapId };
-
-    public static bool IsNpcEmissionSafeForMap(ushort mapId) => NpcEmissionSafeMaps.Contains(mapId);
 
     private static bool EverywhereInView(int x, int y) => true;
 

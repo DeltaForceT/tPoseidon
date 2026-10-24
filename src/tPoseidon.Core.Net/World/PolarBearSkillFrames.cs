@@ -5,12 +5,7 @@ public readonly record struct PolarBearHit(long Damage, int Kind);
 public static class PolarBearSkillFrames
 {
     public const int DoubleHammer = 1523;
-    public const int QuakeHammer = 1530;
-    public const int CrazyHammer = 1532;
-    public const int CrazyHammerActive = 1533;
     public const int OverSwing = 1535;
-    public const int FlyHammer = 1539;
-    public const int HighSpeedDrop = 1546;
     public const int HammerAp = 1551;
 
     public const int DoubleHammerHits = 2;
@@ -19,9 +14,6 @@ public static class PolarBearSkillFrames
     public const int TargetTailSize = 2;
     public const int GaugeTailSize = 8;
     public const int GaugeChangedSize = 6;
-    public const int HitLandsAtMs = 319;
-    public const int SwingEndsAtMs = 699;
-    public const int FlightMs = 700;
 
     private const short UnreadEntryField = 0;
 

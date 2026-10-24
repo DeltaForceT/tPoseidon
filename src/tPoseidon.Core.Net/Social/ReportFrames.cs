@@ -28,8 +28,6 @@ public static class ReportFrames
     public const ushort Filed = 0x2724;
     public const ushort OnlineAnswer = 0x2729;
 
-    public const int NameLength = 0x20;
-    public const int ChatTextLength = 0x80;
     public const int LineBreakBelow = 0x7F;
     public const int ChattingPack = 0x707;
 

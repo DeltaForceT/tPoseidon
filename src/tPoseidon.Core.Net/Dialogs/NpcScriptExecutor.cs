@@ -142,7 +142,6 @@ public sealed partial class NpcScriptExecutor : IJobQuests
 {
     public const int MonsterQuestStateArgs = 3;
     public const int QuestStateArgs = 2;
-    public const int EquippedItemArgs = 5;
     public const int HistoryCap = 99;
     public const int WithEquippedItemCheck = 5;
 
@@ -264,8 +263,6 @@ public sealed partial class NpcScriptExecutor : IJobQuests
     }
 
     public event Func<ZoneChangeRequest, CancellationToken, Task>? ZoneChangeRequested;
-
-    public ushort EngagedEntityId => _npcEntityId;
 
     public async Task<bool> OpenAsync(NpcEntity npc, ushort entityId, CancellationToken ct)
     {
@@ -765,7 +762,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         if (!Fits(bag, required, rewards)) return 2;
         if (Arg(args, entry.CompletionCount < QuestRules.MaxCountOf(quest) ? 1 : 3) is not ushort message) return NpcScript.Refused;
 
-        var taken = TakeItems(characterId, bag, required);
+        var taken = TakeItems(bag, required);
         var operations = new List<BagOperation>();
         operations.AddRange(GrantRewards(characterId, rewards));
         operations.AddRange(taken);
@@ -1169,7 +1166,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         if (!Fits(bag, required, rewards)) return 2;
         if (Arg(args, entry.CompletionCount < QuestRules.MaxCountOf(quest) ? 1 : 3) is not ushort message) return NpcScript.Refused;
 
-        var taken = TakeItems(characterId, bag, required);
+        var taken = TakeItems(bag, required);
         var operations = new List<BagOperation>();
         operations.AddRange(GrantRewards(characterId, rewards));
         operations.AddRange(taken);
@@ -1509,7 +1506,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         var taken = new[] { new RequiredItem(_talk.TakeItemId, 1) };
         if (!QuestTurnIn.HoldsAll(bag, taken)) return 2;
         if (args.Count < 2) return NpcScript.Refused;
-        var operations = TakeItems(characterId, bag, taken);
+        var operations = TakeItems(bag, taken);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   NPC takes item {_talk.TakeItemId}");
         await SendAsync(Opcode.S2C_ITEM_ADDED, QuestResultFrames.ItemOperations(operations), ct).ConfigureAwait(false);
         await SendMessageAsync(args[0], QuestInSlot(0) ?? 0, ct).ConfigureAwait(false);
@@ -1696,7 +1693,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         return operations;
     }
 
-    private List<BagOperation> TakeItems(ulong characterId, IReadOnlyList<Item> bag, IReadOnlyList<RequiredItem> required)
+    private List<BagOperation> TakeItems(IReadOnlyList<Item> bag, IReadOnlyList<RequiredItem> required)
     {
         var operations = new List<BagOperation>(required.Count);
         foreach (var item in required)
@@ -1802,7 +1799,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         if (args.Count < 1) return NpcScript.Refused;
         var bag = _stores.Items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory);
         var required = NpcMoveRules.Required(row);
-        var operations = TakeItems(characterId, bag, required);
+        var operations = TakeItems(bag, required);
         await SendAsync(Opcode.S2C_MOVE_ITEMS_TAKEN,
             QuestResultFrames.ItemsTaken(operations, required.Select(item => ((uint)item.ItemId, (ushort)item.Count)).ToList()), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   NPC move {row.Id} to zone {row.Zone} point {row.DestId}, {operations.Count} items taken");

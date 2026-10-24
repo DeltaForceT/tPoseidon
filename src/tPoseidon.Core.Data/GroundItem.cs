@@ -9,5 +9,4 @@ public sealed class GroundItem
     public required int ItemIndex { get; init; }
     public required int Count { get; init; }
     public required ulong DroppedByMobEntityId { get; init; }
-    public DateTimeOffset DroppedAt { get; init; } = DateTimeOffset.UtcNow;
 }

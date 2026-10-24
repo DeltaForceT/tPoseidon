@@ -28,8 +28,6 @@ public static class AngelFrames
     public const ushort OrderNewbiePosition = 0xDC;
     public const ushort OrderAngelMove = 0xDD;
     public const ushort OrderAngelReward = 0xDE;
-    public const ushort WingStatus = 0x2E29;
-    public const ushort WingShown = 0x2E2A;
 
     public const int NameField = 24;
     public const int SpotSize = sizeof(ulong) + sizeof(uint) + 2 * sizeof(short);

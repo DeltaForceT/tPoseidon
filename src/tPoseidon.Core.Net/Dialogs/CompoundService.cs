@@ -1,7 +1,6 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Items;
-using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.Game.Quests;
 using tPoseidon.Core.Game.Stats;
 using tPoseidon.Core.LibConfig;

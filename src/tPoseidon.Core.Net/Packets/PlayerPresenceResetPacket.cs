@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Net.Packets;
 
@@ -18,16 +17,4 @@ public sealed class PlayerPresenceResetPacket
         return buf;
     }
 
-    public static PlayerPresenceResetPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"PlayerPresenceReset payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new PlayerPresenceResetPacket
-        {
-            Value = BinaryPrimitives.ReadUInt32LittleEndian(payload[0..4]),
-        };
-    }
 }

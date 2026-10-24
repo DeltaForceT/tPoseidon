@@ -59,7 +59,6 @@ public static class WeddingEnterResult
     public const uint RequesterGone = 3;
     public const uint TooManyMembers = 4;
     public const uint CreateFailed = 5;
-    public const uint MemberJoinFailed = 6;
 }
 
 public static class WeddingHallFrames

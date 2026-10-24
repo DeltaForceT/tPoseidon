@@ -15,11 +15,6 @@ public sealed class ZoneShopMgr
         _shopManager = shopManager;
     }
 
-    public Zone Zone => _zone;
-
-    public IReadOnlyList<ShopEntity> Shops => _shops;
-    public int ShopCount => _shops.Count;
-
     public bool IsInitialized { get; private set; }
     public bool IsCreated { get; private set; }
 
@@ -40,12 +35,4 @@ public sealed class ZoneShopMgr
         IsCreated = true;
     }
 
-    public void AddShop(ShopEntity shop)
-    {
-        ArgumentNullException.ThrowIfNull(shop);
-        _shops.Add(shop);
-    }
-
-    public ShopEntity? GetByEntityId(ushort entityId)
-        => _shops.FirstOrDefault(s => s.EntityId == entityId);
 }

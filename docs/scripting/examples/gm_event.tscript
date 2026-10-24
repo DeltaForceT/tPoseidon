@@ -1,8 +1,3 @@
-// An event NPC that only game masters can use, plus a chat command and a timer.
-// Players who talk to the NPC are turned away. A game master can start and stop an
-// event, which announces itself on a schedule while it runs.
-// Chat commands start with @ and are typed in normal chat, for example: @event start
-
 function start_event() {
     server.event_running = 1;
     announce("An event has started. Look for the event NPC!");

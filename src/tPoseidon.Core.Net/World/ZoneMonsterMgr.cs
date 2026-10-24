@@ -26,7 +26,6 @@ public sealed class ZoneMonsterMgr
         _rng = new Random(rngSeed);
     }
 
-    public Zone Zone => _zone;
     public MonsterManager Global => _global;
 
     public bool IsInitialized { get; private set; }
@@ -95,10 +94,4 @@ public sealed class ZoneMonsterMgr
         return spawned;
     }
 
-    public int Activate()
-    {
-        if (IsActivated) return 0;
-        IsActivated = true;
-        return SpawnAll();
-    }
 }

@@ -63,33 +63,6 @@ public sealed class MasterGuardian
         };
     }
 
-    public Task SaveStatusAsync(ulong charUid, GuardianStatusUpdate update, CancellationToken ct) =>
-        SendAsync(charUid, InterServerOpcode.CcmdGuardianStatus, GuardianMessages.EncodeStatus(update), ct);
-
-    public Task SaveStateAsync(ulong charUid, GuardianStateUpdate update, CancellationToken ct) =>
-        SendAsync(charUid, InterServerOpcode.CcmdGuardianState, GuardianMessages.EncodeStateUpdate(update), ct);
-
-    private async Task SendAsync(ulong charUid, InterServerOpcode opcode, byte[] body, CancellationToken ct)
-    {
-        if (_client() is not { IsConnected: true } client)
-        {
-            _log($"[guardian] Master not connected; 0x{(ushort)opcode:X4} for 0x{charUid:X} not sent");
-            return;
-        }
-        await client.SendAsync(new InterServerFrame
-        {
-            Opcode = opcode,
-            Header = new InterServerHeader
-            {
-                SourceServerIndex = _selfIndex,
-                DestServerIndex = 0,
-                CharUid = charUid,
-                RequestId = client.AllocateRequestId(),
-            },
-            Body = body,
-        }, ct).ConfigureAwait(false);
-    }
-
     private async Task<(bool Ok, byte[] Body)?> CallAsync(ulong charUid, InterServerOpcode request, InterServerOpcode ok, InterServerOpcode cancel, byte[] body, CancellationToken ct)
     {
         if (_client() is not { IsConnected: true } client)

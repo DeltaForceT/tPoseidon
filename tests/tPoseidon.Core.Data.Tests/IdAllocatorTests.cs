@@ -1,5 +1,3 @@
-using tPoseidon.Core.Data;
-
 namespace tPoseidon.Core.Data.Tests;
 
 public class IdAllocatorTests
@@ -65,9 +63,9 @@ public class IdAllocatorTests
     {
         var alloc = new IdAllocator(firstId: 1, lastId: 100);
         Assert.Equal(0, alloc.InFlightCount);
-        var a = alloc.NewId();
+        alloc.NewId();
         var b = alloc.NewId();
-        var c = alloc.NewId();
+        alloc.NewId();
         Assert.Equal(3, alloc.InFlightCount);
         alloc.Release(b);
         Assert.Equal(2, alloc.InFlightCount);

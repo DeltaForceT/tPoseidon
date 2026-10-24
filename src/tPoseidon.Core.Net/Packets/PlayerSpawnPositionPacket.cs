@@ -18,14 +18,6 @@ public sealed class PlayerSpawnPositionPacket
     public ulong? CharUid { get; init; }
     public CoupleData? Couple { get; init; }
 
-    public static PlayerSpawnPositionPacket Position(ushort entityId, ushort x, ushort y) =>
-        new()
-        {
-            EntityId = entityId,
-            PositionX = x,
-            PositionY = y,
-        };
-
     public static PlayerSpawnPositionPacket Identity(ushort entityId, ulong charUid, CoupleData? couple = null) =>
         new()
         {

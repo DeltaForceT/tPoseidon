@@ -133,12 +133,9 @@ public sealed class TcpAcceptor : IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
-
             }
             catch (Exception)
             {
-
-            
             }
         }
         finally
@@ -164,7 +161,6 @@ public sealed class TcpAcceptor : IAsyncDisposable
             }
             catch
             {
-
             }
         }
 

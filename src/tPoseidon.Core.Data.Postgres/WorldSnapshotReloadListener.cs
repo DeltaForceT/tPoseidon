@@ -79,7 +79,7 @@ public sealed class WorldSnapshotReloadListener : IAsyncDisposable
         await _cts.CancelAsync().ConfigureAwait(false);
         if (_loopTask is not null)
         {
-            try { await _loopTask.ConfigureAwait(false); } catch {  }
+            await _loopTask.ConfigureAwait(false);
         }
         _cts.Dispose();
     }

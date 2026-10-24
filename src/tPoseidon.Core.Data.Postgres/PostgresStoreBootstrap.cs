@@ -12,15 +12,15 @@ public static class PostgresStoreBootstrap
         var schema = PostgresAccountStore.ResolveSchema();
         var dataSource = NpgsqlDataSource.Create(connStr);
 
-        
 
-        
+
+
 
         ActiveSchemaProvider.Set(schema);
 
         var migrationsDir = PostgresMigrations.DefaultMigrationsDirectory();
 
-        
+
         await PostgresMigrations.ApplyAsync(dataSource, migrationsDir, schema, ct).ConfigureAwait(false);
 
         await ApplyOperatorRegistryConfigAsync(dataSource, ct).ConfigureAwait(false);
@@ -31,7 +31,7 @@ public static class PostgresStoreBootstrap
 
         Console.WriteLine($"[postgres] active schema: {ActiveSchemaProvider.Current} (per-client isolation; hot-switchable via NOTIFY mt_schema_switch)");
 
-        
+
 
         var listener = new SchemaSwitchListener(connStr);
         listener.Start();

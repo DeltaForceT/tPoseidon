@@ -7,12 +7,12 @@ namespace tPoseidon.Core.Net.S2;
 
 public static class CharacterListBuilder
 {
-    public const int EntryWidth = CharacterListPacket.EntryWidth; 
+    public const int EntryWidth = CharacterListPacket.EntryWidth;
 
     private const int CharIdOffset = 0x00;
     private const int SlotOffset = 0x08;
     private const int NameRegionOffset = 0x09;
-    private const int NameRegionBytes = 0x21 - 0x09; 
+    private const int NameRegionBytes = 0x21 - 0x09;
     private const int FirstJobSpeciesOffset = 0x1D;
     private const int SecondJobClassOffset = 0x1F;
     private const int FTypeOffset = 0x21;
@@ -23,21 +23,21 @@ public static class CharacterListBuilder
     private const int MoneyOffset = 0x27;
     private const int LevelOffset = 0x2B;
 
-    
 
-    
 
-    
 
-    
+
+
+
+
     private const int EarItemOffset = 0x41;
     private const int TailItemOffset = 0x45;
 
-    
 
-    
 
-    
+
+
+
 
     private const int EquipBlockOffset = 0x2D;
     private const int EquipBlockSlots = 5;
@@ -85,7 +85,7 @@ public static class CharacterListBuilder
 
         entry[SlotOffset] = character.Slot;
 
-        
+
 
         var nameBytes = Encoding.ASCII.GetBytes(character.Name);
         if (nameBytes.Length >= NameRegionBytes)
@@ -98,7 +98,7 @@ public static class CharacterListBuilder
         if (character.AccountLabel.Length > 0)
         {
             var labelBytes = Encoding.ASCII.GetBytes(character.AccountLabel);
-            var labelStart = NameRegionOffset + nameBytes.Length + 1; 
+            var labelStart = NameRegionOffset + nameBytes.Length + 1;
             var maxLabelBytes = NameRegionBytes - (nameBytes.Length + 1);
             if (labelBytes.Length >= maxLabelBytes)
             {
@@ -110,11 +110,11 @@ public static class CharacterListBuilder
 
         WriteUInt16Le(entry, FirstJobSpeciesOffset, (ushort)character.Species);
 
-        
 
-        
 
-        
+
+
+
 
         var secondJobClass = character.JobTier >= 2
             ? SpeciesDefaults.SecondJobClassIdForFirstJob(character.Species)
@@ -125,7 +125,7 @@ public static class CharacterListBuilder
 
         entry[SpeciesMirrorOffset] = (byte)character.Species;
 
-        
+
         entry[SecondJobMirrorOffset] = (byte)(secondJobClass & 0xFF);
 
         entry[JobTierOffset] = character.JobTier;
@@ -136,7 +136,7 @@ public static class CharacterListBuilder
 
         WriteUInt16Le(entry, LevelOffset, character.Level);
 
-        
+
         if (itemStore is not null)
         {
             var equipped = itemStore.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Equipment);

@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.Platform;
 using Avalonia.Threading;
 using SkiaSharp;
 
@@ -665,8 +664,6 @@ public sealed class SplashWindow : Window
         };
     }
 
-    public bool Boxed => _boxed;
-
     public void Bind(MainWindow main, bool hold = true)
     {
         _main = main;
@@ -698,14 +695,6 @@ public sealed class SplashWindow : Window
         _sea.Send(new SplashAim(target));
     }
 
-    public void PlaceOverMain(PixelPoint mainTopLeft)
-    {
-        var scale = RenderScaling;
-        var dx = (int)Math.Round((Width - SplashLayout.MainWidth) / 2 * scale);
-        var dy = (int)Math.Round((Height - SplashLayout.MainHeight) / 2 * scale);
-        Position = new PixelPoint(mainTopLeft.X - dx, mainTopLeft.Y - dy);
-    }
-
     public void PlaceOverScreenCenter()
     {
         var screen = Screens.Primary ?? Screens.All[0];
@@ -728,8 +717,6 @@ public sealed class SplashWindow : Window
         _sea.Send(new SplashBoxed(true));
         PlaceOverScreenCenter();
     }
-
-    public void Seek(double time) => _sea.Send(new SplashSeek(time));
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private IntPtr OnSubclass(IntPtr window, uint message, IntPtr wParam, IntPtr lParam, UIntPtr id, UIntPtr data)

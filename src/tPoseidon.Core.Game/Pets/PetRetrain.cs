@@ -14,7 +14,6 @@ public static class PetRetrainRules
 {
     public const ushort Ok = 0;
     public const ushort NotAPet = 1;
-    public const ushort BadMaterial = 2;
     public const ushort NotALockItem = 3;
     public const ushort NoPet = 4;
     public const ushort NoMaterial = 5;

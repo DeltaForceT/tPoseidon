@@ -85,7 +85,7 @@ public static class FormSkills
 
     public static bool IsTargeted(int actionId) => actionId is SummonSoldier or ChainOfKnives;
 
-    public static IReadOnlyList<(int Stat, int Delta)> MorphDeltas(MorphRule rule, SkillTableRow row, long ap, int dx, long lk, long dp, long hv)
+    public static IReadOnlyList<(int Stat, int Delta)> MorphDeltas(MorphRule rule, SkillTableRow row, long ap, long lk, long dp, long hv)
     {
         ArgumentNullException.ThrowIfNull(row);
         float Column(string name) => row.Value(name) ?? 0f;

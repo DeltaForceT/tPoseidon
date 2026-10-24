@@ -289,14 +289,6 @@ public static class PartyFrames
         return w.ToArray();
     }
 
-    public static byte[] LevelChangedFor(ushort memberId, uint level)
-    {
-        var w = new PacketWriter(6);
-        w.WriteUInt16(memberId);
-        w.WriteUInt32(level);
-        return w.ToArray();
-    }
-
     public static byte[] ZoneFor(ushort memberId, ushort zone) => MemberPair(memberId, zone);
 
     public static byte[] MemberStateFor(ushort memberId, byte kind, byte detail)

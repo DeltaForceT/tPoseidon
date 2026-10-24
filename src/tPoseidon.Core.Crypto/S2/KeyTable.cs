@@ -46,8 +46,6 @@ public sealed class KeyTable
         return inverse;
     }
 
-        public ReadOnlySpan<byte> AsReadOnlySpan() => _bytes;
-
         public static KeyTable Identity()
     {
         var bytes = new byte[RequiredLength];

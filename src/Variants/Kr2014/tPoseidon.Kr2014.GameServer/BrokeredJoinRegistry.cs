@@ -37,20 +37,4 @@ public sealed class BrokeredJoinRegistry
         return false;
     }
 
-    public BrokeredJoin? PeekMostRecent()
-    {
-        BrokeredJoin? best = null;
-        foreach (var j in _pending.Values)
-        {
-            if (DateTimeOffset.UtcNow - j.PreparedAtUtc > _ttl)
-            {
-                continue;
-            }
-            if (best is null || j.PreparedAtUtc > best.PreparedAtUtc)
-            {
-                best = j;
-            }
-        }
-        return best;
-    }
 }

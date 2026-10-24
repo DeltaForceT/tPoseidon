@@ -1,5 +1,3 @@
-using tPoseidon.Core.Common;
-
 namespace tPoseidon.Core.Net.Packets;
 
 public sealed class ListCountPacket
@@ -18,16 +16,4 @@ public sealed class ListCountPacket
         return buf;
     }
 
-    public static ListCountPacket DecodePayload(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != PayloadSize)
-        {
-            throw new InvalidPacketException(
-                $"ListCount payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
-        }
-        return new ListCountPacket
-        {
-            Count = (ushort)(payload[0] | (payload[1] << 8)),
-        };
-    }
 }

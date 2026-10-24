@@ -283,7 +283,6 @@ public class StatManagerTests
 
         var raised = 0;
         sm.HealthChanged += _ => raised++;
-        sm.ManaChanged += _ => raised++;
 
         sm.SetVitals(210, 80);
 

@@ -291,7 +291,6 @@ public static class SkillFrames
     }
 
     public const int TornadoTailSize = 40;
-    public const int TornadoHits = 3;
     public const uint TornadoResultFlag = 0x8000;
 
     public static IReadOnlyList<SwingFrame> EncodeTornado(

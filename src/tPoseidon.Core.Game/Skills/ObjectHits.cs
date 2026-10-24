@@ -23,7 +23,6 @@ public static class ObjectHits
     public const int CardThrow = 1150;
     public const int MultiGellder = 1165;
     public const int Kamikaze = 1479;
-    public const int KamikazeDo = 1480;
     public const int ElectroShock = 1183;
     public const int ElectroShockSkill = 2113;
 
@@ -62,7 +61,6 @@ public static class ObjectHits
     public const int FireBurnPeriodMs = 2000;
     public const int WeaponThrowLifeMs = 1000;
     public const int GellderLifeMs = 2000;
-    public const int SkyRayCasterHoldMs = 3000;
 
     public const int GellderCost = 100;
     public const int MultiGellderCost = 150;

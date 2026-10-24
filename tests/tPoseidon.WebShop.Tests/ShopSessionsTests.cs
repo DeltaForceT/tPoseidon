@@ -1,6 +1,5 @@
 using System.Net;
 using tPoseidon.Core.Data;
-using tPoseidon.WebShop;
 
 namespace tPoseidon.WebShop.Tests;
 

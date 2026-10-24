@@ -1,5 +1,3 @@
-using tPoseidon.Core.LibConfig;
-
 namespace tPoseidon.Core.LibConfig.Tests;
 
 public class RealLibConfigIntegrationTests

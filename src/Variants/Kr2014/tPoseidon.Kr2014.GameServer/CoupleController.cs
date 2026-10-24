@@ -1,12 +1,12 @@
 using System.Text;
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
-using tPoseidon.Core.Game.Warp;
-using tPoseidon.Core.Net.Dialogs;
 using tPoseidon.Core.Game.Characters;
 using tPoseidon.Core.Game.Quests;
+using tPoseidon.Core.Game.Warp;
 using tPoseidon.Core.Game.Wedding;
 using tPoseidon.Core.LibConfig;
+using tPoseidon.Core.Net.Dialogs;
 using tPoseidon.Core.Net.Social;
 using tPoseidon.Core.Net.World;
 
@@ -289,7 +289,7 @@ internal sealed class CoupleController
     {
         foreach (var hall in _halls.Halls)
         {
-            await DispatchAsync(hall, hall.Ceremony.Tick(now), now).ConfigureAwait(false);
+            await DispatchAsync(hall, hall.Ceremony.Tick(now)).ConfigureAwait(false);
         }
         List<(OfficerOrder Order, WeddingJoinOrder Join, DateTimeOffset Until)> due;
         lock (_gate)
@@ -422,7 +422,7 @@ internal sealed class CoupleController
         if (st.Character is not { } character || !hall.Join(character.CharacterId)) return;
         await SendAsync(st, Opcode.S2C_WEDDING_JOINED, CoupleFrames.Joined(hall.IsMember(character.CharacterId))).ConfigureAwait(false);
         Log(st, $"joins the wedding hall of couple {hall.CoupleCode} in zone {hall.Zone}");
-        await DispatchAsync(hall, hall.Ceremony.Open(DateTimeOffset.UtcNow), DateTimeOffset.UtcNow).ConfigureAwait(false);
+        await DispatchAsync(hall, hall.Ceremony.Open(DateTimeOffset.UtcNow)).ConfigureAwait(false);
     }
 
     private Task ReportEnterAsync(OfficerOrder order, uint result, uint zone, uint previousZone) =>
@@ -452,7 +452,7 @@ internal sealed class CoupleController
         return requestZoneChange(new ZoneChangeRequest(zone, TeleportArrival.ChangeZoneType, null, TimeSpan.Zero), default);
     }
 
-    private async Task DispatchAsync(WeddingHall hall, IReadOnlyList<WeddingEvent> events, DateTimeOffset now)
+    private async Task DispatchAsync(WeddingHall hall, IReadOnlyList<WeddingEvent> events)
     {
         foreach (var weddingEvent in events)
         {

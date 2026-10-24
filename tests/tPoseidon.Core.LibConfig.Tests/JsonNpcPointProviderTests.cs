@@ -1,5 +1,4 @@
 using tPoseidon.Core.Common;
-using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.LibConfig.Tests;
 

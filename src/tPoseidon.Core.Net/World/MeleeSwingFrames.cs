@@ -59,8 +59,6 @@ public static class MeleeSwingFrames
     public const byte SwingMotion = 2;
     public const ushort MeleeAttackKind = 1;
     public const ushort GunAttackKind = 2;
-    public const byte ResultHit = 0;
-    public const byte ResultFinishingFlag = 0x80;
     public const byte DeathTypeNormal = 0;
     public const int PlayerHitPresentation = 1;
 

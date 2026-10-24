@@ -16,7 +16,6 @@ public static class MyCampFrames
 {
     public const byte HouseKind = 0x0C;
     public const int SystemTimeSize = 16;
-    public const byte OwnerView = 0;
     public const byte GuestView = 1;
 
     public static byte[] OwnerEnter(MyCampShell shell, Encoding text)

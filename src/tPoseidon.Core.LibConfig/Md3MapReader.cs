@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.IO;
 
 namespace tPoseidon.Core.LibConfig;
 
@@ -46,15 +45,7 @@ public sealed class Md3Map
 
 public static class Md3MapReader
 {
-    private const int Md3Signature = 0x5F4E444D; 
-
-    public static Md3WalkableLayer? ReadWalkableLayer(string path)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(path);
-        if (tPoseidon.Core.Common.ClientFiles.Locate(path) is not { } found) return null;
-        var data = File.ReadAllBytes(found);
-        return ReadWalkableLayer(data);
-    }
+    private const int Md3Signature = 0x5F4E444D;
 
     public static Md3WalkableLayer? ReadWalkableLayer(ReadOnlySpan<byte> data)
     {
@@ -154,7 +145,7 @@ public static class Md3MapReader
             off += 24;
         }
 
-        
+
 
         return new Md3Map
         {

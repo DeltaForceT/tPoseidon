@@ -17,7 +17,6 @@ public sealed class ZoneInitializer
     private readonly IRegionInfoLookup? _regions;
     private readonly IMonZoneLookup? _zonePool;
     private readonly string? _mapDirectory;
-    private readonly Action<string>? _log;
 
     public ZoneInitializer(
         ItemManager itemMgr,
@@ -28,8 +27,7 @@ public sealed class ZoneInitializer
         SkillShopManager? skillShopMgr = null,
         IRegionInfoLookup? regions = null,
         IMonZoneLookup? zonePool = null,
-        string? mapDirectory = null,
-        Action<string>? log = null)
+        string? mapDirectory = null)
     {
         _itemMgr = itemMgr ?? throw new ArgumentNullException(nameof(itemMgr));
         _monsterMgr = monsterMgr ?? throw new ArgumentNullException(nameof(monsterMgr));
@@ -40,7 +38,6 @@ public sealed class ZoneInitializer
         _regions = regions;
         _zonePool = zonePool;
         _mapDirectory = mapDirectory;
-        _log = log;
     }
 
     public int LyrLoadCount { get; private set; }

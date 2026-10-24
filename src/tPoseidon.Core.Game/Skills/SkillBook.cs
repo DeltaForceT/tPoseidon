@@ -7,8 +7,6 @@ public sealed class SkillDefinition
     public const int PassiveType = 1;
     public const int NotUsableOption = 0x10;
     public const int CancelledByDamageOption = 0x4;
-    public const int NeedsHolderOption = 0x80;
-    public const int ForbiddenWhileFlaggedOption = 0x100;
     public const int NotInTownOption = 0x200;
     public const int LowestLevel = 1;
     public const int HighestLevel = 11;

@@ -13,26 +13,6 @@ public sealed class TimerNpcManager
         _log = log;
     }
 
-    public int Count => _byTimerId.Count;
-
-    public IReadOnlyCollection<TimerNpcEntry> All => _byTimerId.Values.ToArray();
-
-    public void Register(int timerId, NpcEntity npc, int startHour, int endHour)
-    {
-        if (timerId <= 0) return;
-        _byTimerId[timerId] = new TimerNpcEntry
-        {
-            TimerId = timerId,
-            Npc = npc,
-            StartHour = startHour,
-            EndHour = endHour,
-            IsActive = false,
-        };
-    }
-
-    public TimerNpcEntry? Get(int timerId) =>
-        _byTimerId.TryGetValue(timerId, out var v) ? v : null;
-
     public IReadOnlyList<TimerNpcEntry> EvaluateNow(DateTime now)
     {
         var hour = now.Hour;

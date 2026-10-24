@@ -23,9 +23,9 @@ internal static class InspectOpcodes
             ? PcapTcpReassembler.ReassembleClientToServer(pcap, serverPort)
             : PcapTcpReassembler.ReassembleServerToClient(pcap, serverPort);
 
-        
 
-        
+
+
         var byOpcode = new Dictionary<ushort, List<byte[]>>();
         var frameIdx = 0;
         foreach (var flow in flows)
@@ -40,7 +40,7 @@ internal static class InspectOpcodes
             var framer = new S2StreamFramer(table, derivation, key);
             framer.Feed(flow.Bytes);
 
-            
+
             while (framer.TryDrainOne(out var f))
             {
                 S2DecryptedPacket dec;
@@ -51,9 +51,9 @@ internal static class InspectOpcodes
                 if (ordered)
                 {
 
-                    
 
-                    
+
+
                     var head = dec.Payload.Length == 0
                         ? "<empty>"
                         : Convert.ToHexString(dec.Payload.AsSpan(0, Math.Min(16, dec.Payload.Length)));
@@ -77,7 +77,7 @@ internal static class InspectOpcodes
             return;
         }
 
-        
+
         foreach (var (op, payloads) in byOpcode.OrderBy(kv => kv.Key))
         {
             var byLen = payloads.GroupBy(p => p.Length).OrderByDescending(g => g.Count());
@@ -107,7 +107,7 @@ internal static class InspectOpcodes
                     for (var col = 0; col < len; col++)
                     {
 
-                        
+
 
                         var v = variance[col];
                         char c = v == 1 ? '.' : v <= 9 ? (char)('0' + v) : '+';

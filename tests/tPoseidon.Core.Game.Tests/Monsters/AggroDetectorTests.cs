@@ -1,7 +1,6 @@
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.Game.Monsters.Strategies;
-using Xunit;
 
 namespace tPoseidon.Core.Game.Tests.Monsters;
 

@@ -30,7 +30,6 @@ public static class ThrowSkills
     public const string MonNumColumn = "MonNum";
     public const string RadiusColumn = "Radius";
     public const string AngleColumn = "Angle";
-    public const string KillNumColumn = "KillNum";
 
     private const double LuckCardScale = 15.0;
     private const int AvoidStep = 8;

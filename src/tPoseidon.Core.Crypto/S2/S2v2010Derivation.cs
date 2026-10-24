@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Crypto.S2;
@@ -8,7 +7,7 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
     public byte ValidatePackingFlags(ReadOnlySpan<byte> frame, KeyTable table)
     {
 
-        
+
 
         var randKey = frame[S2PacketCipher.OffsetRandKey];
         var packing = frame[S2PacketCipher.OffsetPackingFlags];
@@ -25,9 +24,9 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
     public ushort RecoverLength(ReadOnlySpan<byte> frame, byte sessionKey, KeyTable table)
     {
 
-        
 
-        
+
+
         var h = frame;
         var hi = table.Lookup(((h[6] ^ h[7]) << 8) | h[1]);
         var lo = table.Lookup(((h[7] ^ sessionKey) << 8) | h[0]);
@@ -37,9 +36,9 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
     public ushort RecoverOpcode(ReadOnlySpan<byte> frame, byte sessionKey, KeyTable table)
     {
 
-        
 
-        
+
+
         var h = frame;
         var hi = table.Lookup(((h[1] ^ sessionKey) << 8) | h[3]);
         var lo = table.Lookup(((h[0] ^ h[6]) << 8) | h[2]);
@@ -49,9 +48,9 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
     public ushort RecoverSequence(ReadOnlySpan<byte> frame, byte sessionKey, KeyTable table)
     {
 
-        
 
-        
+
+
         var h = frame;
         var hi = table.Lookup(((h[3] ^ h[7]) << 8) | h[5]);
         var lo = table.Lookup(((h[2] ^ sessionKey) << 8) | h[4]);
@@ -61,17 +60,17 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
     public void DecryptPayload(Span<byte> payload, ushort opcode, byte randKey, KeyTable table)
     {
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
+
+
+
+
+
+
 
         var derivedKey = (opcode * randKey) & 0xFF;
         for (var i = 0; i < payload.Length; i++)
@@ -92,25 +91,25 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
         KeyTable table)
     {
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
 
-        
+
+
+
+
+
+
+
+
+
+
 
         var lenLo = (byte)(length & 0xFF);
         var lenHi = (byte)((length >> 8) & 0xFF);
@@ -128,11 +127,11 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
         frame[S2PacketCipher.OffsetRandKey] = randKey;
         frame[S2PacketCipher.OffsetPackingFlags] = (byte)flags;
 
-        
 
-        
 
-        
+
+
+
 
         var a = table.Lookup((frame[0] << 8) | frame[2]);
         var bl = table.Lookup((sessionKey << 8) | a);
@@ -140,13 +139,13 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
         var dl = table.Lookup((frame[6] << 8) | b);
         frame[S2PacketCipher.OffsetHeaderChecksum] = table.Lookup((bl << 8) | dl);
 
-        
 
-        
+
+
         var pack = table.InverseLookup(randKey, (byte)((byte)flags | 0x02));
         frame[S2PacketCipher.OffsetPackingFlags] = pack;
 
-        
+
 
         frame[1] = table.InverseLookup(randKey ^ pack, lenHi);
         frame[0] = table.InverseLookup(pack ^ sessionKey, lenLo);
@@ -161,7 +160,7 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
     public void EncryptPayload(Span<byte> payload, ushort opcode, byte randKey, KeyTable table)
     {
 
-        
+
 
         var derivedKey = (opcode * randKey) & 0xFF;
         for (var i = 0; i < payload.Length; i++)
@@ -174,9 +173,9 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
     public void DecryptTrailingChecksum(Span<byte> trailer, int payloadLength, ushort opcode, byte randKey, KeyTable table)
     {
 
-        
 
-        
+
+
         var derivedKey = (opcode * randKey) & 0xFF;
         for (var j = 0; j < trailer.Length; j++)
         {
@@ -200,7 +199,7 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
     public byte UpdateSessionKey(byte oldSessionKey, ushort plaintextChecksum, KeyTable table)
     {
 
-        
+
         var checksumLow = (byte)(plaintextChecksum & 0xFF);
         var lookup = table.Lookup((checksumLow << 8) | oldSessionKey);
         return (byte)(lookup + oldSessionKey);

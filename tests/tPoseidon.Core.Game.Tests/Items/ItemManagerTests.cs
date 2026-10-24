@@ -46,7 +46,7 @@ public class ItemManagerTests
     public void EquipFromInventory_OccupiedSlot_ReturnsSlotOccupied()
     {
         var im = Make(out var store);
-        var equipped = store.GrantToCharacter(CharId, 3030, itemClass: 2, slotKind: SlotKind.Equipment, slotPosition: EquipmentSlot.Weapon);
+        store.GrantToCharacter(CharId, 3030, itemClass: 2, slotKind: SlotKind.Equipment, slotPosition: EquipmentSlot.Weapon);
         var inv = store.GrantToCharacter(CharId, 3030, itemClass: 2, slotKind: SlotKind.Inventory, slotPosition: 0);
 
         var result = im.EquipFromInventory(CharId, inv.ItemUid, EquipmentSlot.Weapon);

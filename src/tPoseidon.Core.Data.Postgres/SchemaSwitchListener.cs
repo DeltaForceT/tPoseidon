@@ -40,7 +40,7 @@ public sealed class SchemaSwitchListener : IAsyncDisposable
                 }
                 _logger($"[postgres] schema-switch listener subscribed to channel '{ChannelName}'");
 
-                
+
 
                 while (!ct.IsCancellationRequested)
                 {
@@ -49,7 +49,7 @@ public sealed class SchemaSwitchListener : IAsyncDisposable
             }
             catch (OperationCanceledException)
             {
-                return;  
+                return;
             }
             catch (Exception ex)
             {
@@ -76,7 +76,7 @@ public sealed class SchemaSwitchListener : IAsyncDisposable
         await _cts.CancelAsync().ConfigureAwait(false);
         if (_loopTask is not null)
         {
-            try { await _loopTask.ConfigureAwait(false); } catch {  }
+            await _loopTask.ConfigureAwait(false);
         }
         _cts.Dispose();
     }

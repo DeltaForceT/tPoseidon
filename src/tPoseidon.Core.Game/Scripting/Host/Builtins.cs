@@ -14,8 +14,6 @@ public static class Builtins
         .Select((builtin, index) => (builtin.Name, index))
         .ToDictionary(pair => pair.Name, pair => pair.index, StringComparer.Ordinal);
 
-    public static IReadOnlyList<Builtin> Catalog => All;
-
     public static bool TryFind(string name, out int id) => IdByName.TryGetValue(name, out id);
 
     public static Builtin ById(int id) => All[id];

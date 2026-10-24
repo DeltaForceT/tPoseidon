@@ -16,7 +16,7 @@ public sealed class FormSkillsTests
     {
         var row = Row(new() { ["ApPRatio"] = "1.3", ["DxPValue"] = "1", ["DpMRatio"] = "0.2", ["HvMRatio"] = "0.2", ["LkMRatio"] = "0.3" });
 
-        var deltas = FormSkills.MorphDeltas(MorphRule.WildMutation, row, 500, 10, 40, 300, 100);
+        var deltas = FormSkills.MorphDeltas(MorphRule.WildMutation, row, 500, 40, 300, 100);
 
         Assert.Equal(new[] { SkillEffectKinds.StatAp, SkillEffectKinds.StatDx, SkillEffectKinds.StatDp, SkillEffectKinds.StatHv, SkillEffectKinds.StatLk }, deltas.Select(d => d.Stat));
         Assert.Equal(new[] { (int)(500 * (double)1.3f), -1, -(int)(300 * (double)0.2f), -(int)(100 * (double)0.2f), -(int)(40 * (double)0.3f) }, deltas.Select(d => d.Delta));
@@ -27,12 +27,12 @@ public sealed class FormSkillsTests
     {
         var row = Row(new() { ["AP_Ratio"] = "2.6", ["DX_Ratio"] = "1", ["DP_Ratio"] = "0.2", ["HV_Ratio"] = "0.2", ["LK_Ratio"] = "0.3" });
 
-        var deltas = FormSkills.MorphDeltas(MorphRule.Beast, row, 500, 10, 40, 300, 100).ToDictionary(d => d.Stat, d => d.Delta);
+        var deltas = FormSkills.MorphDeltas(MorphRule.Beast, row, 500, 40, 300, 100).ToDictionary(d => d.Stat, d => d.Delta);
 
         Assert.Equal((int)(300 * (double)0.2f) - 300, deltas[SkillEffectKinds.StatDp]);
         Assert.Equal(-1, deltas[SkillEffectKinds.StatDx]);
-        Assert.Equal(BeastOrder, FormSkills.MorphDeltas(MorphRule.Beast, row, 1, 1, 1, 1, 1).Select(d => d.Stat));
-        Assert.Equal(ChangeOrder, FormSkills.MorphDeltas(MorphRule.WildChange, row, 1, 1, 1, 1, 1).Select(d => d.Stat));
+        Assert.Equal(BeastOrder, FormSkills.MorphDeltas(MorphRule.Beast, row, 1, 1, 1, 1).Select(d => d.Stat));
+        Assert.Equal(ChangeOrder, FormSkills.MorphDeltas(MorphRule.WildChange, row, 1, 1, 1, 1).Select(d => d.Stat));
     }
 
     [Fact]

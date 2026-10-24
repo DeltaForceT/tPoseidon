@@ -108,9 +108,6 @@ public readonly record struct NpcScriptCall(NpcScriptOperation Operation, int Sl
 public static class NpcScript
 {
     public const int MaxFunctionId = 256;
-    public const int QuestSlots = 5;
-    public const int ActiveQuestSlots = 3;
-    public const int QuestStateSlots = 3;
 
     public const int Refused = -1;
     public const int Pending = -2;

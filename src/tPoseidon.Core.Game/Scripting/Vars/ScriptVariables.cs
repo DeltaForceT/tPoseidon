@@ -47,14 +47,6 @@ public sealed class ScriptVariables
         }
     }
 
-    public void Forget(VariableScope scope, ulong ownerId)
-    {
-        lock (_gate)
-        {
-            _cache.Remove((scope, ownerId));
-        }
-    }
-
     private Dictionary<string, ScriptValue> OwnerCache(VariableScope scope, ulong ownerId)
     {
         if (_cache.TryGetValue((scope, ownerId), out var existing)) return existing;

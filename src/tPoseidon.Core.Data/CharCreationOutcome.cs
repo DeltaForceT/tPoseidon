@@ -27,19 +27,6 @@ public sealed record CharCreationOutcome
         new() { Error = CharCreationError.Ok, Snapshot = snapshot };
 }
 
-public sealed record CharDeletionOutcome
-{
-    public required CharDeletionError Error { get; init; }
-
-    public bool IsSuccess => Error == CharDeletionError.Ok;
-
-    public static CharDeletionOutcome Fail(CharDeletionError error) =>
-        new() { Error = error };
-
-    public static CharDeletionOutcome Success() =>
-        new() { Error = CharDeletionError.Ok };
-}
-
 public enum CharDeletionError : ushort
 {
     Ok = 0,

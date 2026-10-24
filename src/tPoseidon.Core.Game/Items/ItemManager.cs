@@ -27,13 +27,6 @@ public sealed class ItemManager
     public event Action<ItemReleasedEvent>? ItemReleased;
     public event Action<ItemDeletedEvent>? ItemDeleted;
 
-    public bool HasItem(ulong characterId, int itemIndex, byte slotKind = SlotKind.Inventory)
-    {
-        if (itemIndex == 0) return false;
-        return _itemStore.GetForCharacterBySlotKind(characterId, slotKind)
-            .Any(i => i.ItemIndex == itemIndex);
-    }
-
     public Item GrantQuestItem(ulong characterId, int itemIndex, int questId)
     {
         const byte questItemClass = 4;

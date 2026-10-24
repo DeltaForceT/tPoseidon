@@ -103,21 +103,6 @@ public static class CardBattleFrames
         return w.ToArray();
     }
 
-    public static byte[] Stats(CardBattleStats stats)
-    {
-        ArgumentNullException.ThrowIfNull(stats);
-        var w = new PacketWriter(StatBlockSize);
-        WriteStats(w, stats);
-        return w.ToArray();
-    }
-
-    public static byte[] Player(BattleSide side, CardBattleStats stats, Encoding text)
-    {
-        var w = new PacketWriter(PlayerRecordSize);
-        WritePlayer(w, side, stats, text);
-        return w.ToArray();
-    }
-
     public static byte[] MasterStarted(CardBattleStats own, BattleSide opponent, CardBattleStats opponentStats, Encoding text)
     {
         var w = new PacketWriter(StatBlockSize + PlayerRecordSize);
@@ -305,13 +290,6 @@ public static class CardBattleFrames
         w.WriteUInt32(reward.PresentItemId);
         w.WriteUInt32(reward.SecondWonCardItemId);
         w.WriteUInt32(reward.SecondLostCardItemId);
-    }
-
-    public static byte[] Card(BattleCard card)
-    {
-        var w = new PacketWriter(BattleCard.Size);
-        WriteCard(w, card);
-        return w.ToArray();
     }
 
     public static bool TryReadDeck(ReadOnlySpan<byte> payload, out BattleCard[] deck)

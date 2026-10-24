@@ -30,7 +30,6 @@ public static class EquipMergeRules
     public const byte NotMergeable = 5;
     public const byte Failed = 7;
     public const byte BadSupport = 10;
-    public const byte BagFull = 11;
 
     public static readonly int[] MergeableTypes = [2, 3, 4, 7, 8, 0x18, 0x19, 0x22];
 
