@@ -113,4 +113,38 @@ public sealed class OpcodeDispatcherTests
         await dispatcher.DispatchAsync(Opcode.CHAR_INFO, Array.Empty<byte>(), cts.Token);
         Assert.Equal(cts.Token, receivedToken);
     }
+
+    [Fact]
+    public async Task Dispatch_GateReturningTrue_ConsumesThePacketBeforeItsHandler()
+    {
+        var dispatcher = new OpcodeDispatcher();
+        var handled = false;
+        dispatcher.Register(Opcode.ENTITY_MOVE, (_, _, _) =>
+        {
+            handled = true;
+            return Task.CompletedTask;
+        });
+        dispatcher.SetGate((_, _, _) => Task.FromResult(true));
+
+        await dispatcher.DispatchAsync(Opcode.ENTITY_MOVE, new byte[] { 0x01 });
+
+        Assert.False(handled);
+    }
+
+    [Fact]
+    public async Task Dispatch_GateReturningFalse_LetsTheHandlerRun()
+    {
+        var dispatcher = new OpcodeDispatcher();
+        var handled = false;
+        dispatcher.Register(Opcode.ENTITY_MOVE, (_, _, _) =>
+        {
+            handled = true;
+            return Task.CompletedTask;
+        });
+        dispatcher.SetGate((_, _, _) => Task.FromResult(false));
+
+        await dispatcher.DispatchAsync(Opcode.ENTITY_MOVE, new byte[] { 0x01 });
+
+        Assert.True(handled);
+    }
 }

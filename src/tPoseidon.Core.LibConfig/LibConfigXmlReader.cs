@@ -771,6 +771,39 @@ public sealed class LibConfigXmlReader
         return new EquipReformTables(materials, curves, min ?? 0, max, elixirs, accepted);
     }
 
+    public PetSpeechTables LoadPetSpeechTables()
+    {
+        var parameters = new Dictionary<int, PetSpeechParam>();
+        LoadTable(PetSpeechTables.ParamTable, row =>
+        {
+            var chrType = ReadInt(row, "ID");
+            if (chrType < PetSpeechTables.FirstChrType || chrType > PetSpeechTables.LastChrType) return;
+            parameters.TryAdd(chrType, new PetSpeechParam(ReadString(row, "Speech").Trim(), ReadInt(row, "Voice") != 0, ReadInt(row, "SpeechColor")));
+        });
+        var tables = new Dictionary<string, Dictionary<int, IReadOnlyList<PetSpeechLine>>>(StringComparer.Ordinal);
+        LoadTablesWithPrefix(PetSpeechTables.TablePrefix, (tableName, row) =>
+        {
+            if (!tables.TryGetValue(tableName, out var byType))
+            {
+                byType = new Dictionary<int, IReadOnlyList<PetSpeechLine>>();
+                tables[tableName] = byType;
+            }
+            var lines = new List<PetSpeechLine>(PetSpeechTables.LinesPerType);
+            var threshold = 0;
+            for (var slot = 0; slot < PetSpeechTables.LinesPerType; slot++)
+            {
+                var text = ReadString(row, "Speech" + slot);
+                if (string.IsNullOrWhiteSpace(text)) break;
+                threshold += (int)(ReadFloat(row, "Ratio" + slot) * PetSpeechTables.RatioScale);
+                lines.Add(new PetSpeechLine(text, ReadString(row, "Voice" + slot).Trim(), threshold));
+            }
+            byType.TryAdd(ReadInt(row, "Type"), lines);
+        });
+        return new PetSpeechTables(
+            parameters,
+            tables.ToDictionary(table => table.Key, table => (IReadOnlyDictionary<int, IReadOnlyList<PetSpeechLine>>)table.Value, StringComparer.Ordinal));
+    }
+
     public PetRetrainTables LoadPetRetrainTables()
     {
         var materials = new Dictionary<int, PetRetrainMaterialEntry>();

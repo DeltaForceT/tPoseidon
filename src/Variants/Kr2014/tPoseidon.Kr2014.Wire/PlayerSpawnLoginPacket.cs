@@ -49,6 +49,7 @@ public sealed class PlayerSpawnLoginPacket
     public uint UnknownB { get; init; } = 1;
     public uint ClassChainMirror { get; init; }
     public byte GmFlags { get; init; }
+    public byte PostureCode { get; init; }
 
     public IReadOnlyDictionary<byte, uint> LookItems { get; init; } = new Dictionary<byte, uint>();
 
@@ -66,7 +67,8 @@ public sealed class PlayerSpawnLoginPacket
         IItemStore? itemStore,
         (ushort X, ushort Y)? position,
         byte speedQuarter = 0,
-        byte gmFlags = 0)
+        byte gmFlags = 0,
+        byte postureCode = 0)
     {
         ArgumentNullException.ThrowIfNull(character);
         var speciesId = (byte)character.Species;
@@ -99,6 +101,7 @@ public sealed class PlayerSpawnLoginPacket
             SpeedQuarter = speedQuarter,
             ClassChainMirror = speciesId,
             GmFlags = gmFlags,
+            PostureCode = postureCode,
             LookItems = looks,
         };
     }
@@ -131,6 +134,7 @@ public sealed class PlayerSpawnLoginPacket
         Array.Copy(nameBytes, 0, buf, 0x16, nameBytes.Length);
 
         var f = HeaderBytes + nameBytes.Length + 1;
+        buf[f] = PostureCode;
         buf[f + 1] = EncodedYaw;
         buf[f + 2] = SpeedQuarter;
         WriteUInt32Le(buf, f + 7, UnknownB);
@@ -182,6 +186,7 @@ public sealed class PlayerSpawnLoginPacket
             RespawnX = ReadUInt16Le(payload, 0x12),
             RespawnY = ReadUInt16Le(payload, 0x14),
             Name = name,
+            PostureCode = payload[f],
             EncodedYaw = payload[f + 1],
             SpeedQuarter = payload[f + 2],
             UnknownB = ReadUInt32Le(payload, f + 7),

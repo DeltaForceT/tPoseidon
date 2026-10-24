@@ -8,6 +8,7 @@ public sealed class PetActor
     public required string Name { get; init; }
     public required ushort MapId { get; init; }
     public PetRecovery Recovery { get; init; }
+    public PetSpeechState Speech { get; } = new();
 
     public int FromX { get; private set; }
     public int FromY { get; private set; }

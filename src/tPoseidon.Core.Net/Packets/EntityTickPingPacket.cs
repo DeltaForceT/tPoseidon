@@ -2,7 +2,7 @@ using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Net.Packets;
 
-[WireOpcode((ushort)Opcode.S2C_OP_003F_TBD)]
+[WireOpcode((ushort)Opcode.ENTITY_EMOTE)]
 public sealed class EntityTickPingPacket
 {
     public const int PayloadSize = 3;

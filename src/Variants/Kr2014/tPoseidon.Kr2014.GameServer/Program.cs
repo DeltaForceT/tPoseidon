@@ -2,6 +2,8 @@ using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Data.Postgres;
 using tPoseidon.Core.Game.Monsters;
+using tPoseidon.Core.Game.Pets;
+using tPoseidon.Core.Game.Posture;
 using tPoseidon.Core.Game.Progression;
 using tPoseidon.Core.Game.Skills;
 using tPoseidon.Core.Game.SoulSeed;
@@ -436,6 +438,7 @@ var slotExtendTables = SlotExtendTables.Empty;
 var meltingTables = MeltingTables.Empty;
 var equipReformTables = EquipReformTables.Empty;
 var petRetrainTables = PetRetrainTables.Empty;
+var petSpeech = tPoseidon.Core.Game.Pets.PetSpeechBook.Empty;
 var petLevelUpTables = PetLevelUpTables.Empty;
 var petDigTables = PetDigTables.Empty;
 var characterPetReinforceTables = CharacterPetReinforceTables.Empty;
@@ -520,6 +523,9 @@ try
     meltingTables = reader.LoadMeltingTables();
     equipReformTables = reader.LoadEquipReformTables();
     petRetrainTables = reader.LoadPetRetrainTables();
+    var petSpeechTables = reader.LoadPetSpeechTables();
+    petSpeech = new tPoseidon.Core.Game.Pets.PetSpeechBook(petSpeechTables);
+    Console.WriteLine($"{LogTag} pet speech from libconfig: {petSpeechTables.Params.Count} pets ({PetSpeechTables.ParamTable}), {petSpeechTables.Tables.Count} line tables ({PetSpeechTables.TablePrefix}*)");
     petLevelUpTables = reader.LoadPetLevelUpTables();
     petDigTables = reader.LoadPetDigTables();
     Console.WriteLine($"{LogTag} pet collection from libconfig: {petDigTables.Pets.Count} pets ({PetDigTables.PetTable}), {petDigTables.Foods.Count} foods ({PetDigTables.FoodTable}), {petDigTables.ExItems.Count} EX rows ({PetDigTables.ExTable}), {petDigTables.Areas.Count} areas ({PetDigTables.AreaTable})");
@@ -1362,7 +1368,6 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
     {
         systemLink.Register(ctx);
 
-        var actionState = (byte)0x00;
 
         Character? currentChar = null;
         var returnMapId = tPoseidon.Core.Game.Warp.RestartArrival.FirstReturnMap;
@@ -2260,6 +2265,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }
             var move = C2SMovementPacket.DecodePayload(payload.Span);
             if (liveSessions.TryGetValue(ctx, out var deadMoveSt) && deadMoveSt.IsDead) return;
+            var moveFlag = liveSessions.TryGetValue(ctx, out var weighedSt) ? AllowedMoveTypeOf(weighedSt, move.Flag) : move.Flag;
 
             var moveNow = DateTimeOffset.UtcNow;
             var (serverX, serverY) = ((int)move.FromX, (int)move.FromY);
@@ -2281,10 +2287,10 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             {
                 moveSt.PlayerX = (ushort)goalX;
                 moveSt.PlayerY = (ushort)goalY;
-                moveSt.PlayerMoveType = move.Flag;
+                moveSt.PlayerMoveType = moveFlag;
                 moveSt.Walk = route is { } walkRoute
                     ? tPoseidon.Core.Game.Pets.OwnerWalk.Along(serverX, serverY, walkRoute,
-                        playerMoveSpeeds is { } walkSpeeds ? SpeedOfMoveType(walkSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(move.Flag), SpeedFactorOf(moveSt)) : 0f,
+                        playerMoveSpeeds is { } walkSpeeds ? SpeedOfMoveType(walkSpeeds, tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(moveFlag), SpeedFactorOf(moveSt)) : 0f,
                         moveNow)
                     : null;
                 moveSt.PickupItemEntityId = 0;
@@ -2323,7 +2329,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
             if (route is null)
             {
-                var stopped = GroundItemFrames.Stopped(moveEntityId, (ushort)serverX, (ushort)serverY, move.Flag);
+                var stopped = GroundItemFrames.Stopped(moveEntityId, (ushort)serverX, (ushort)serverY, moveFlag);
                 byte stopKey;
                 lock (moveRng) stopKey = (byte)moveRng.Next(1, 256);
                 await ctx.SendFrameAsync(Opcode.S2C_OP_0019_TBD, stopped, randKey: stopKey, moveCt).ConfigureAwait(false);
@@ -2331,11 +2337,11 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 return;
             }
 
-            var moveSpeedQuarter = ScaledSpeedQuarter(move.Flag == 0x02 ? EntitySpeedPacket.RunSpeedQuarter : EntitySpeedPacket.WalkSpeedQuarter, moveSt is null ? 1f : SpeedFactorOf(moveSt));
-            if ((move.Flag == 0x01 || move.Flag == 0x02)
-                && (move.Flag != sessionMovType || (moveSt is not null && moveSt.AnnouncedSpeedQuarter != moveSpeedQuarter)))
+            var moveSpeedQuarter = ScaledSpeedQuarter(moveFlag == 0x02 ? EntitySpeedPacket.RunSpeedQuarter : EntitySpeedPacket.WalkSpeedQuarter, moveSt is null ? 1f : SpeedFactorOf(moveSt));
+            if ((moveFlag == 0x01 || moveFlag == 0x02)
+                && (moveFlag != sessionMovType || (moveSt is not null && moveSt.AnnouncedSpeedQuarter != moveSpeedQuarter)))
             {
-                sessionMovType = move.Flag;
+                sessionMovType = moveFlag;
                 var speedFrame = new EntitySpeedPacket
                 {
                     EntityId = moveEntityId,
@@ -2347,7 +2353,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                     randKey: speedRandKey, moveCt).ConfigureAwait(false);
                 if (moveSt is not null) await SendToOthersOnMapAsync(moveSt, Opcode.S2C_ENTITY_SPEED, speedFrame.EncodePayload()).ConfigureAwait(false);
                 if (liveSessions.TryGetValue(ctx, out var speedSt)) speedSt.AnnouncedSpeedQuarter = speedFrame.SpeedQuarter;
-                Console.WriteLine($"{LogTag} {ctx.Remote} R-toggle: movType=0x{move.Flag:X2} → 0x01D8 speed=0x{speedFrame.SpeedQuarter:X2}");
+                Console.WriteLine($"{LogTag} {ctx.Remote} R-toggle: movType=0x{moveFlag:X2} → 0x01D8 speed=0x{speedFrame.SpeedQuarter:X2}");
             }
 
             var echo = new EntityMovementPacket
@@ -2357,7 +2363,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 FromY = (ushort)serverY,
                 ToX = (ushort)goalX,
                 ToY = (ushort)goalY,
-                Flag = move.Flag,
+                Flag = moveFlag,
             };
 
             byte randKey;
@@ -2367,6 +2373,21 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             if (moveSt is not null) await SendToOthersOnMapAsync(moveSt, Opcode.ENTITY_MOVE, echo.EncodePayload()).ConfigureAwait(false);
         });
 
+        ctx.Dispatcher.SetGate(async (gatedOpcode, _, gateCt) =>
+        {
+            if (!liveSessions.TryGetValue(ctx, out var gatedSt) || gatedSt.Posture.SkillRefusal is not { } refusal) return false;
+            if (PostureInput.IsSwallowed(gatedOpcode))
+            {
+                Console.WriteLine($"{LogTag} {ctx.Remote} {gatedOpcode} (0x{(ushort)gatedOpcode:X4}) swallowed while {gatedSt.Posture.State}");
+                return true;
+            }
+            if (!PostureInput.IsSkillRequest(gatedOpcode)) return false;
+            byte rkRefused;
+            lock (moveRng) rkRefused = (byte)moveRng.Next(1, 256);
+            await ctx.SendFrameAsync(Opcode.S2C_SKILL_REFUSED, SkillFrames.Refused(refusal), randKey: rkRefused, gateCt).ConfigureAwait(false);
+            return true;
+        });
+
         ctx.Dispatcher.Register(Opcode.C2S_REST_ACTION, async (_, payload, actionCt) =>
         {
             if (payload.Length != 1)
@@ -2374,47 +2395,43 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 Console.Error.WriteLine($"{LogTag} {ctx.Remote} C2S 0x0040 expected 1B payload, got {payload.Length} — drop");
                 return;
             }
-            var newState = payload.Span[0];
-            if (liveSessions.TryGetValue(ctx, out var deadActionSt) && deadActionSt.IsDead) return;
-            actionState = newState;
-            if (deadActionSt is not null && NaturalRecovery.AmountsFor(deadActionSt.RecoveryType, newState) is { } postureAmounts)
+            if (!liveSessions.TryGetValue(ctx, out var postureSt) || postureSt.IsDead) return;
+            var code = payload.Span[0];
+            var walking = postureSt.Walk is { } postureWalk && DateTimeOffset.UtcNow < postureWalk.ArrivesAt;
+            var postureOutcome = postureSt.Posture.Request(code, walking, postureSt.CurrentTargetEntityId != 0, disguises.FormOf(postureSt));
+            if (postureOutcome.Notice is { } postureNotice)
             {
-                deadActionSt.RecoveryAmounts = postureAmounts;
+                await ctx.SendFrameAsync(Opcode.S2C_SKILL_NOTICE, SkillFrames.Notice(postureNotice, 0, 0),
+                    randKey: (byte)Random.Shared.Next(1, 256), actionCt).ConfigureAwait(false);
             }
-
-            var broadcast = new byte[3]
+            if (!postureOutcome.Echo) return;
+            if (postureSt.Pet is { } sittingPet && PetSpeechState.EventForPosture(code) is { } petEvent) sittingPet.Speech.Raise(petEvent);
+            if (NaturalRecovery.AmountsFor(postureSt.RecoveryType, postureSt.Posture.Code) is { } postureAmounts)
             {
-                (byte)(moveEntityId & 0xFF),
-                (byte)((moveEntityId >> 8) & 0xFF),
-                newState,
-            };
-            byte randKey;
-            lock (moveRng) randKey = (byte)moveRng.Next(1, 256);
-            await ctx.SendFrameAsync(Opcode.C2S_REST_ACTION, broadcast,
-                randKey: randKey, actionCt).ConfigureAwait(false);
-            if (deadActionSt is not null) await SendToOthersOnMapAsync(deadActionSt, Opcode.C2S_REST_ACTION, broadcast).ConfigureAwait(false);
-
-            var label = newState switch
-            {
-                0x00 => "standing",
-                0x02 => "sit",
-                0x0D => "lie down",
-                _    => $"unknown(0x{newState:X2})",
-            };
-            Console.WriteLine($"{LogTag} {ctx.Remote} action: {label} → echoed S2C 0x0040 broadcast");
-
-            if (newState == 0x02 || newState == 0x0D)
-            {
-                if (liveSessions.TryGetValue(ctx, out var actSt))
-                {
-                    if (actSt.CurrentTargetEntityId != 0)
-                    {
-                        var prev = monsterManager.Get(actSt.CurrentTargetEntityId);
-                        if (prev is not null) prev.RemoveAttacker(actSt.PlayerEntityId);
-                    }
-                    actSt.CurrentTargetEntityId = 0;
-                }
+                postureSt.RecoveryAmounts = postureAmounts;
             }
+            await BroadcastFromPlayerAsync(ctx, postureSt, Opcode.C2S_REST_ACTION,
+                EntityMotionFrames.Posture(postureSt.PlayerEntityId, code), actionCt).ConfigureAwait(false);
+            Console.WriteLine($"{LogTag} {ctx.Remote} action: code 0x{code:X2} → posture {postureSt.Posture.State}");
+        });
+
+        ctx.Dispatcher.Register(Opcode.ENTITY_EMOTE, async (_, payload, emoteCt) =>
+        {
+            if (payload.Length != 1)
+            {
+                Console.Error.WriteLine($"{LogTag} {ctx.Remote} C2S 0x003F expected 1B payload, got {payload.Length} — drop");
+                return;
+            }
+            if (!liveSessions.TryGetValue(ctx, out var emoteSt)) return;
+            var emoteCode = payload.Span[0];
+            if (PlayerPosture.EmoteRefusal(emoteCode, disguises.FormOf(emoteSt)) is { } emoteNotice)
+            {
+                await ctx.SendFrameAsync(Opcode.S2C_SKILL_NOTICE, SkillFrames.Notice(emoteNotice, 0, 0),
+                    randKey: (byte)Random.Shared.Next(1, 256), emoteCt).ConfigureAwait(false);
+                return;
+            }
+            await BroadcastFromPlayerAsync(ctx, emoteSt, Opcode.ENTITY_EMOTE,
+                EntityMotionFrames.Emote(emoteSt.PlayerEntityId, emoteCode), emoteCt).ConfigureAwait(false);
         });
 
         ctx.Dispatcher.Register(Opcode.C2S_UID_ACTION, (_, payload, useCt) => itemUse.UseAsync(payload, useCt));
@@ -4704,7 +4721,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             gunSt.PickupWalkEnd = null;
             gunSt.NextSwingAt = default;
             gunSt.CurrentTargetEntityId = shotTarget.EntityId;
-            gunSt.GunShot = new GunOrder(shotTarget.EntityId, shot.BulletsPerShot, shot.Charged, shot.MoveType);
+            gunSt.GunShot = new GunOrder(shotTarget.EntityId, shot.BulletsPerShot, shot.Charged, AllowedMoveTypeOf(gunSt, shot.MoveType));
             if (gunSt.Engagements.Refresh(shotTarget.EntityId, DateTimeOffset.UtcNow) is { } gunCrowdedOut)
             {
                 await ReleaseMonsterOwnerAsync(gunSt.MapId, gunCrowdedOut, gunSt.PlayerEntityId).ConfigureAwait(false);
@@ -4729,7 +4746,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 }
                 if (bytes.Length > AttackRequestMoveTypeOffset)
                 {
-                    atkSt.AttackMoveType = bytes[AttackRequestMoveTypeOffset];
+                    atkSt.AttackMoveType = AllowedMoveTypeOf(atkSt, bytes[AttackRequestMoveTypeOffset]);
                 }
             }
             if (atkSt.CurrentTargetEntityId == 0) return;
@@ -6128,6 +6145,12 @@ async Task SendPartyShareFramesAsync(
     }
 }
 
+async Task BroadcastFromPlayerAsync(S2SessionContext self, InGameSessionState player, Opcode opcode, byte[] payload, CancellationToken ct)
+{
+    await self.SendFrameAsync(opcode, payload, randKey: (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+    await SendToOthersOnMapAsync(player, opcode, payload).ConfigureAwait(false);
+}
+
 async Task SendToOthersOnMapAsync(InGameSessionState self, Opcode opcode, byte[] payload)
 {
     if (self.GameMasterInvisible) return;
@@ -6145,10 +6168,23 @@ async Task SendToOthersOnMapAsync(InGameSessionState self, Opcode opcode, byte[]
     }
 }
 
+byte AllowedMoveTypeOf(InGameSessionState mover, byte requested) =>
+    requested == tPoseidon.Core.Game.Combat.MeleeApproach.RunMoveType
+        ? tPoseidon.Core.Game.Characters.RunRules.Allowed(requested, CarriedWeightOf(mover), mover.PlayerMaxWt)
+        : requested;
+
+int CarriedWeightOf(InGameSessionState carrier) =>
+    carrier.Character is { } carrierCharacter
+        ? Math.Min(
+            itemStore.GetForCharacterBySlotKind(carrierCharacter.CharacterId, SlotKind.Inventory)
+                .Sum(held => (itemCatalog.GetById(held.ItemIndex)?.Weight ?? 0) * held.WeightUnits),
+            carrier.PlayerMaxWt)
+        : 0;
+
 byte[] PlayerSpawnOf(InGameSessionState player) =>
     tPoseidon.Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(
         player.Character!, player.PlayerEntityId, itemStore, (player.PlayerX, player.PlayerY), player.AnnouncedSpeedQuarter,
-        GameMasterController.SpawnFlagsOf(player)).EncodePayload();
+        GameMasterController.SpawnFlagsOf(player), player.Posture.Code).EncodePayload();
 
 tPoseidon.Core.Game.Monsters.SectorGrid? SectorGridOf(ushort mapId) =>
     sectorGrids.GetOrAdd(mapId, id => zoneGeometryByMap.TryGetValue(id, out var sectorGeometry) && sectorGeometry is not null
@@ -8570,14 +8606,6 @@ var npcLoopTask = Task.Run(async () =>
                 return true;
         }
     }
-
-    int CarriedWeightOf(InGameSessionState carrier) =>
-        carrier.Character is { } carrierCharacter
-            ? Math.Min(
-                itemStore.GetForCharacterBySlotKind(carrierCharacter.CharacterId, SlotKind.Inventory)
-                    .Sum(held => (itemCatalog.GetById(held.ItemIndex)?.Weight ?? 0) * held.WeightUnits),
-                carrier.PlayerMaxWt)
-            : 0;
 
     IReadOnlyList<(Opcode Opcode, byte[] Payload)> FlatTm(InGameSessionState caster, SkillDefinition castSkill) =>
         caster.GainSkillTmExp is { } gainTm ? gainTm(castSkill.Row.SkillExp) : Array.Empty<(Opcode Opcode, byte[] Payload)>();
@@ -14480,13 +14508,23 @@ var npcLoopTask = Task.Run(async () =>
                 }
                 else if (!followingPet.IsMoving(now) && now >= followingPet.NextEmoteAt)
                 {
-                    petFrames.Add((Opcode.S2C_OP_003F_TBD, PetFrames.Emote(followingPet.EntityId, tPoseidon.Core.Game.Pets.PetRules.IdleEmote)));
+                    petFrames.Add((Opcode.ENTITY_EMOTE, EntityMotionFrames.Emote(followingPet.EntityId, tPoseidon.Core.Game.Pets.PetRules.IdleEmote)));
                     followingPet.NextEmoteAt = now + tPoseidon.Core.Game.Pets.PetRules.NextIdleEmote(npcLoopRng);
                 }
                 foreach (var (petOpcode, petPayload) in petFrames)
                 {
                     if (!await SendFromLoopAsync(sessions, petOpcode, petPayload, MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false)) return;
                 }
+            }
+
+            foreach (var session in sessions)
+            {
+                var petOwner = session.Value;
+                if (petOwner.IsDead || petOwner.Pet is not { } speakingPet || speakingPet.MapId != mapId) continue;
+                if (speakingPet.Speech.Tick(now, petSpeech, speakingPet.CharacterType, npcLoopRng.Next) is not { } utterance) continue;
+                if (!await SendFromLoopAsync(sessions, Opcode.S2C_PET_SPEECH,
+                    PetSpeechFrames.Speech(speakingPet.EntityId, utterance, clientTextEncoding),
+                    MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false)) return;
             }
 
             await UpdateSectorViewsAsync(mapId, sessions.Select(session => session.Value).ToList(), now).ConfigureAwait(false);
@@ -14498,6 +14536,15 @@ var npcLoopTask = Task.Run(async () =>
                 var sinceLastRecovery = resting.RecoveryTickedAt == default ? TimeSpan.Zero : now - resting.RecoveryTickedAt;
                 if (sinceLastRecovery > longestRecoveryTick) sinceLastRecovery = longestRecoveryTick;
                 resting.RecoveryTickedAt = now;
+                var restingMoving = resting.Walk is { } restingWalk && now < restingWalk.ArrivesAt;
+                if (resting.Posture.IdleEmoteDue((int)sinceLastRecovery.TotalMilliseconds, restingStats.Level, restingMoving, npcLoopRng.Next)
+                    && !resting.GameMasterInvisible
+                    && !await SendFromLoopAsync(sessions, Opcode.ENTITY_EMOTE,
+                        EntityMotionFrames.Emote(resting.PlayerEntityId, PlayerPosture.IdleEmoteCode),
+                        MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false))
+                {
+                    return;
+                }
                 var hpBefore = restingStats.CurrentHp;
                 var mpBefore = restingStats.CurrentMp;
                 var recovered = resting.Recovery.Tick(
@@ -14835,10 +14882,27 @@ internal sealed class InGameSessionState
     public GunOrder? GunShot { get; set; }
     public Func<tPoseidon.Core.Net.Dialogs.ZoneChangeRequest, CancellationToken, Task>? RequestZoneChange { get; set; }
     public tPoseidon.Core.Game.Stats.StatManager? Stats { get; set; }
-    public bool IsDead { get; set; }
+    public bool IsDead
+    {
+        get => _isDead;
+        set
+        {
+            _isDead = value;
+            if (value) StandUp();
+        }
+    }
+
+    private bool _isDead;
+    public PlayerPosture Posture { get; } = new();
     public long PlayerMaxHp { get; set; }
     public tPoseidon.Core.Game.Combat.EngagementList Engagements { get; } = new();
     public NaturalRecovery Recovery { get; } = new();
+
+    private void StandUp()
+    {
+        Posture.StandUp();
+        if (NaturalRecovery.AmountsFor(RecoveryType, Posture.Code) is { } standing) RecoveryAmounts = standing;
+    }
 
     public Func<Task>? RefreshPartyBonus { get; set; }
     public tPoseidon.Core.Game.Items.TimedItemWatch TimedItems { get; } = new();

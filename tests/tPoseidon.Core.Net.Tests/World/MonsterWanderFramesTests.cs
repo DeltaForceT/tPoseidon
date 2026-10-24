@@ -31,7 +31,7 @@ public sealed class MonsterWanderFramesTests
     {
         var frame = MonsterWanderFrames.Encode(new MonsterArrived(0x0201));
 
-        Assert.Equal(Opcode.S2C_OP_003F_TBD, frame.Opcode);
+        Assert.Equal(Opcode.ENTITY_EMOTE, frame.Opcode);
         Assert.Equal(new byte[] { 0x01, 0x02, 0x00 }, frame.Payload);
     }
 }

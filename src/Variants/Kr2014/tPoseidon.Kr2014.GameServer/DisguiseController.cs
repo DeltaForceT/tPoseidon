@@ -1,5 +1,6 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Characters;
+using tPoseidon.Core.Game.Posture;
 using tPoseidon.Core.Net.World;
 
 internal sealed class DisguiseController
@@ -21,6 +22,12 @@ internal sealed class DisguiseController
         _otherForm = otherForm ?? throw new ArgumentNullException(nameof(otherForm));
         _sendToArea = sendToArea ?? throw new ArgumentNullException(nameof(sendToArea));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
+    }
+
+    public BodyForm FormOf(InGameSessionState player)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        return player.Disguise.Disguised ? BodyForm.Disguised : _otherForm(player) ? BodyForm.Other : BodyForm.Normal;
     }
 
     public byte? DigRefusal(InGameSessionState player)

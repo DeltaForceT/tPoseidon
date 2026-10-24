@@ -36,7 +36,7 @@ public static class MonsterWanderFrames
                 return (Opcode.S2C_ENTITY_SPEED, ProgressFrames.Speed(changed.EntityId, changed.Speed));
 
             case MonsterArrived arrived:
-                return (Opcode.S2C_OP_003F_TBD, new EntityTickPingPacket
+                return (Opcode.ENTITY_EMOTE, new EntityTickPingPacket
                 {
                     EntityId = arrived.EntityId,
                 }.EncodePayload());

@@ -13,7 +13,6 @@ internal static class PetFrames
     private const byte DefaultDirection = 0x80;
     private const int RemovalSize = 3;
     private const int TeleportSize = 6;
-    private const int EmoteSize = 3;
 
     public static byte[] Spawn(PetActor pet, ushort ownerEntityId, int x, int y)
     {
@@ -53,14 +52,6 @@ internal static class PetFrames
         w.WriteUInt16(petEntityId);
         w.WriteUInt16((ushort)x);
         w.WriteUInt16((ushort)y);
-        return w.ToArray();
-    }
-
-    public static byte[] Emote(ushort petEntityId, byte emote)
-    {
-        var w = new PacketWriter(EmoteSize);
-        w.WriteUInt16(petEntityId);
-        w.WriteByte(emote);
         return w.ToArray();
     }
 }
