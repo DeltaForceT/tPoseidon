@@ -1,6 +1,6 @@
 # tPoseidon beta: system status
 
-Last updated: 2026-10-24
+Last updated: 2026-10-25
 
 This is where we say what works and what doesn't. The target is the KR 2014 "Original" variant: the aim is to behave like the original server, not to invent new rules.
 
@@ -79,6 +79,8 @@ A short "try" hint is given where one is obvious.
 - Skill level-up from the skill window, and learning a skill from a skill card
 - Critical hit effect, sound and screen shake
 - Player vs player: PK zones, skirmish and peace toggle, PK score and kill counts - try with two characters in a PK zone
+- 1-on-1 duel: challenge another player on the same map from the player menu, they accept or refuse, the challenger starts it, 5 seconds of preparation, then up to 10 minutes of battle; the game ends when one player is defeated (the loser rises again with 30% HP and the duel ladder moves by the Elo-style table of the original servers, 15 points between equal ratings), when a player leaves the map or disconnects (the other wins, the leaver gets a disconnect on the record), or when the 10 minutes pass (the challenger loses); a result window shows the new record, the ladder points, the time and the outcome; no exp is lost in a duel and nothing is rewarded (the original servers pay nothing); try with two clients, including a refusal, a cancel before the start, a defeat, leaving mid-fight and waiting out the clock
+- 1-on-1 duel, additions of ours (**inferred**): a duel can only be started after the other player accepted, a player already in a duel answers "busy" to new challenges, a duelist can only hurt the opponent and nobody else can hurt a duelist, and after the duel a player gets back the PvP mode they had before it (the original servers set mode 0)
 - Restart in place with a rebirth item, and rebirth item on another player
 
 ### Items and economy
@@ -151,6 +153,7 @@ A short "try" hint is given where one is obvious.
 - Guild game rooms in the 2014 window (**reconstructed**: the original servers have no code for this window): make a room (friendly, league or event match, team size, map, password), join it with the password, invite guild members from the lobby (they can accept or refuse the invitation), remove participants, leave the room; the host starts the match when both guilds have at least 3 participants; only league matches change the ladder score
 - Guild league window: the ranking of the top 20 guilds by ladder score (matches, wins, losses, points); the playoff bracket says there is no league match
 - Guild game results are saved: battles, wins, losses, draws and disconnects, the guild ladder score (both guilds start at 1000; the winner gains and the loser loses points by the ladder formula of the original servers; after six matches between the same two guilds in one day the score no longer changes) and guild points for the winner; the result window shows each guild's record after the match, the ladder points won or lost (game score) and the new ladder score (league points)
+- Guild game, during Team Match and Team Deathmatch (**partly inferred**): the score board opens when the battle starts, every defeat shows the kill notice to both teams and updates the kill and defeat counts, in Team Match a defeated player rises with 30% HP at the next 30-second mark of the remaining time (3 to 5 seconds later when the mark is less than 3 seconds away, as the respawn message of the client shows), and in Team Deathmatch a defeated player stays down; try with two guilds of three players and check the counts, the respawn countdown message and the end of the match
 - Angel system: call, accept, warp, graduation at level 31
 - Couple and wedding: couple making, closeness points, divorce, wedding hall, wedding board, the lover's position and moving to the lover (married couples, also across game servers; refused while the lover is on a map the original servers close to it)
 - Report a player to the GMs
@@ -212,6 +215,10 @@ A short "try" hint is given where one is obvious.
 ---
 
 ## 3. Not built yet / partial
+
+### Combat and skills
+- 1-on-1 duel: the pet is not put away during the fight and the loser is revived where they fell (the original also moves the loser through a zone re-entry); the duel packet 0x02C5 (the original has a sender but no caller of it was found) and the original's loading of the duel record when a player enters a duel-arena zone are not built (the record is read when a challenge is made)
+- Guild game, during the match: Monster Match has no live scoring yet (no summons, no kill notice, no score board); in Team Match and Team Deathmatch the revived player stays where they fell instead of going back to their team's start point, and defeated Team Deathmatch players are not switched to spectator view
 
 ### NPC services
 - The Leviathan quest NPC skill (function 258) only shows its effect: the original servers have no code for it, so the rule that lets the buffed player hurt the quest monster is not known (monsters are hurtable by anyone here)

@@ -46,6 +46,10 @@ public sealed record GuildMatchClosing : GuildMatchEvent;
 
 public sealed record GuildMatchInvalid : GuildMatchEvent;
 
+public sealed record GuildMatchRespawn(IReadOnlyList<ulong> CharacterIds) : GuildMatchEvent;
+
+public sealed record GuildMatchKill(ulong KillerId, ulong VictimId, byte RespawnFlag);
+
 public sealed class GuildMatch
 {
     public const int ReadyHoldMs = 500;
@@ -54,10 +58,15 @@ public sealed class GuildMatch
     public const int SecondMs = 1000;
     public const int SecondsPerMinute = 60;
     public const byte TeamPvpModeBase = 3;
+    public const float RespawnHpRatio = 0.30f;
+    public const int RespawnWaveSeconds = 30;
+    public const int RespawnWaveGraceSeconds = 2;
+    public const int RespawnMinimumSeconds = 3;
 
     private readonly List<GuildMatchSide> _sides = new();
     private readonly Dictionary<ulong, MatchFighter> _fighters = new();
     private readonly HashSet<ulong> _down = new();
+    private readonly List<(ulong CharacterId, int DueSecondsLeft)> _respawns = new();
     private int _readyHeldMs;
     private int _secondCarryMs;
 
@@ -110,6 +119,8 @@ public sealed class GuildMatch
 
     public MatchFighter? FighterOf(ulong characterId) => _fighters.GetValueOrDefault(characterId);
 
+    public bool IsDown(ulong characterId) => _down.Contains(characterId);
+
     public GuildMatchEvent? ToggleReady(ulong characterId, bool isGm)
     {
         if (State != GuildMatchState.Room) return null;
@@ -131,29 +142,38 @@ public sealed class GuildMatch
         if (!_fighters.Remove(characterId, out var fighter)) return false;
         if (State == GuildMatchState.Battle) _sides[fighter.Team].BadQuits++;
         _down.Remove(characterId);
+        _respawns.RemoveAll(pending => pending.CharacterId == characterId);
         return true;
     }
 
     public bool Leave(ulong characterId)
     {
         _down.Remove(characterId);
+        _respawns.RemoveAll(pending => pending.CharacterId == characterId);
         return _fighters.Remove(characterId);
     }
 
-    public void PlayerKilled(ulong victimId, ulong killerId)
+    public GuildMatchKill? PlayerKilled(ulong victimId, ulong killerId)
     {
-        if (State != GuildMatchState.Battle) return;
-        if (_fighters.TryGetValue(victimId, out var victim))
-        {
-            victim.Deaths++;
-            TeamDeaths[victim.Team]++;
-            if (GameType == GuildGameRules.DeathMatch) _down.Add(victimId);
-        }
-        if (killerId != victimId && _fighters.TryGetValue(killerId, out var killer) && victim is not null)
+        if (State != GuildMatchState.Battle || !_fighters.TryGetValue(victimId, out var victim)) return null;
+        victim.Deaths++;
+        TeamDeaths[victim.Team]++;
+        if (killerId != victimId && _fighters.TryGetValue(killerId, out var killer))
         {
             killer.Kills++;
             TeamKills[killer.Team]++;
         }
+        if (GameType == GuildGameRules.DeathMatch)
+        {
+            _down.Add(victimId);
+            return new GuildMatchKill(killerId, victimId, 0);
+        }
+        var phase = SecondsLeft % RespawnWaveSeconds;
+        var nearWave = phase <= RespawnWaveGraceSeconds;
+        var delay = nearWave ? phase + RespawnMinimumSeconds : phase;
+        _respawns.RemoveAll(pending => pending.CharacterId == victimId);
+        _respawns.Add((victimId, SecondsLeft - delay));
+        return new GuildMatchKill(killerId, victimId, nearWave ? (byte)1 : (byte)0);
     }
 
     public IReadOnlyList<GuildMatchEvent> Tick(int elapsedMs)
@@ -205,7 +225,11 @@ public sealed class GuildMatch
                 foreach (var _ in Seconds(elapsedMs))
                 {
                     SecondsLeft--;
-                    if (SecondsLeft > 0) continue;
+                    if (SecondsLeft > 0)
+                    {
+                        if (DueRespawns() is { Length: > 0 } due) events.Add(new GuildMatchRespawn(due));
+                        continue;
+                    }
                     Finish(TimeUp(), events);
                     break;
                 }
@@ -247,6 +271,13 @@ public sealed class GuildMatch
         ResultLeft = ResultSeconds;
         _secondCarryMs = 0;
         events.Add(new GuildMatchEnded(end));
+    }
+
+    private ulong[] DueRespawns()
+    {
+        var due = _respawns.Where(pending => pending.DueSecondsLeft >= SecondsLeft).Select(pending => pending.CharacterId).ToArray();
+        _respawns.RemoveAll(pending => pending.DueSecondsLeft >= SecondsLeft);
+        return due;
     }
 
     private int Standing(int team) => _fighters.Values.Count(fighter => fighter.Team == team && !_down.Contains(fighter.CharacterId));

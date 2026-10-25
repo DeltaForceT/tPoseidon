@@ -1283,6 +1283,14 @@ var guildGames = new GuildGameController(
     () => guildGameTypes,
     () => liveSessions.Values.ToArray(),
     SendToMapAsync,
+    fallen => RiseAfterArenaFightAsync(fallen, tPoseidon.Core.Game.Guild.GuildMatch.RespawnHpRatio),
+    clientTextEncoding,
+    LogTag);
+
+using var pvpDuels = new PvpDuelController(
+    pvpStore,
+    () => liveSessions.Values.ToArray(),
+    loser => RiseAfterArenaFightAsync(loser, tPoseidon.Core.Game.PvP.PvpDuel.ReviveHpRatio),
     clientTextEncoding,
     LogTag);
 
@@ -2486,6 +2494,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             _ = missions.LeftAsync(goneSt);
             _ = harcon.LeftAsync(goneSt);
             _ = guildGames.LeftAsync(goneSt);
+            _ = pvpDuels.LeftAsync(goneSt);
             _ = myCamps.LeftAsync(goneSt);
             _ = puzzles.LeftAsync(goneSt);
             if (goneSt.CurrentTargetEntityId != 0)
@@ -4123,6 +4132,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             await gameMasters.EnteredZoneAsync(warpedState).ConfigureAwait(false);
             _ = RunScriptEventAsync(tPoseidon.Core.Game.Scripting.Lang.EventKind.MapEnter, destMapId, null);
             await guildGames.EnteredZoneAsync(warpedState).ConfigureAwait(false);
+            await pvpDuels.EnteredZoneAsync(warpedState).ConfigureAwait(false);
             await ShowMapPetsAsync().ConfigureAwait(false);
             await SyncPetAsync(withEffect: false).ConfigureAwait(false);
             await SyncGuardianAsync(sessionCt).ConfigureAwait(false);
@@ -4389,6 +4399,12 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         ctx.Dispatcher.Register(Opcode.C2S_PK_TOGGLE, (_, payload, _) =>
             liveSessions.TryGetValue(ctx, out var pkSt) ? pk.ToggleAsync(pkSt, payload) : Task.CompletedTask);
+        ctx.Dispatcher.Register(Opcode.PVP_DUEL_REQUEST, (_, payload, _) =>
+            liveSessions.TryGetValue(ctx, out var duelRequestSt) ? pvpDuels.RequestAsync(duelRequestSt, payload) : Task.CompletedTask);
+        ctx.Dispatcher.Register(Opcode.PVP_DUEL_ANSWER, (_, payload, _) =>
+            liveSessions.TryGetValue(ctx, out var duelAnswerSt) ? pvpDuels.AnswerAsync(duelAnswerSt, payload) : Task.CompletedTask);
+        ctx.Dispatcher.Register(Opcode.PVP_DUEL_CONTROL, (_, payload, _) =>
+            liveSessions.TryGetValue(ctx, out var duelControlSt) ? pvpDuels.ControlAsync(duelControlSt, payload) : Task.CompletedTask);
         ctx.Dispatcher.Register(Opcode.C2S_GUILD_GAME_READY, (_, _, _) =>
             liveSessions.TryGetValue(ctx, out var guildReadySt) ? guildGames.ReadyAsync(guildReadySt) : Task.CompletedTask);
         ctx.Dispatcher.Register(Opcode.C2S_GUILD_GAME_BAD_QUIT, (_, _, _) =>
@@ -5631,6 +5647,7 @@ var partyQuestTimerTask = Task.Run(async () =>
                 await fiesta.TickAsync().ConfigureAwait(false);
                 await harcon.TickAsync(soulNow).ConfigureAwait(false);
                 await guildGames.TickAsync(soulNow).ConfigureAwait(false);
+                await pvpDuels.TickAsync(soulNow).ConfigureAwait(false);
                 await puzzles.TickAsync(soulNow).ConfigureAwait(false);
                 foreach (var missionRunner in liveSessions.Values.Where(st => st.Mission is not null).ToArray())
                 {
@@ -6202,7 +6219,7 @@ bool InViewOn(ushort mapId, int viewerX, int viewerY, int x, int y) =>
 InGameSessionState? PvpTargetOf(InGameSessionState attacker, IEnumerable<InGameSessionState> players) =>
     tPoseidon.Core.Game.PvP.PvpHitRules.CanAttackPlayer(attacker.PvpMode)
         ? players.FirstOrDefault(player => player != attacker && player.PlayerEntityId == attacker.CurrentTargetEntityId
-            && player.MapId == attacker.MapId && !player.IsDead && player.Stats is { CurrentHp: > 0 })
+            && player.MapId == attacker.MapId && !player.IsDead && player.Stats is { CurrentHp: > 0 } && pvpDuels.MayStrike(attacker, player))
         : null;
 
 byte[] DespawnOf(ushort entityId)
@@ -6697,6 +6714,18 @@ async Task<bool> ReviveWithItemAsync(S2SessionContext reviverCtx, InGameSessionS
         ProgressFrames.TmTotal((byte)StatGrowth.TypeIndexOf(targetChar.FType), targetStats.TmExp), randKey: NextReviveKey(), ct).ConfigureAwait(false);
     await SendToMapAsync(targetSt.MapId, Opcode.S2C_RESURRECTED, PlayerRevivalFrames.Resurrected(targetId, reviverSt.PlayerEntityId)).ConfigureAwait(false);
     return true;
+}
+
+async Task RiseAfterArenaFightAsync(InGameSessionState loser, float hpRatio)
+{
+    if (loser.Stats is not { } loserStats || loser.Character is not { } loserCharacter || !loser.IsDead || loser.ResurrectionCompletesAt != default) return;
+    loserStats.Resurrect(loser.PlayerMaxHp, loser.PlayerMaxMp, hpRatio, 0f, 0f);
+    loser.ResurrectionCompletesAt = DateTimeOffset.UtcNow + PlayerRevivalFrames.CompletionDelay;
+    Console.WriteLine($"{LogTag} [pvp duel] player 0x{loser.PlayerEntityId:X4} rises after the duel: HP {loserStats.CurrentHp}");
+    await loser.SendFrameAsync(Opcode.S2C_EXP_VALUE, PlayerDeathFrames.ExpValue(loserStats.Exp), NextReviveKey(), default).ConfigureAwait(false);
+    await loser.SendFrameAsync(Opcode.S2C_OP_011D_TBD,
+        ProgressFrames.TmTotal((byte)StatGrowth.TypeIndexOf(loserCharacter.FType), loserStats.TmExp), NextReviveKey(), default).ConfigureAwait(false);
+    await SendToMapAsync(loser.MapId, Opcode.S2C_RESURRECTED, PlayerRevivalFrames.Resurrected(loser.PlayerEntityId, PlayerRevivalFrames.NoReviver)).ConfigureAwait(false);
 }
 
 byte NextReviveKey()
@@ -11686,6 +11715,7 @@ var npcLoopTask = Task.Run(async () =>
         var forOthers = PlayerDeathFrames.ForOthers(victim.PlayerEntityId, victim.PlayerX, victim.PlayerY, victim.PlayerMoveType, wasAttacking);
         Console.WriteLine($"{LogTag} [combat] player 0x{victim.PlayerEntityId:X4} died to monster 0x{monster.EntityId:X4}'s skill: exp {expAfter}");
         if (victim.Character is { } deadCharacter) await systemLink.DiedAsync(deadCharacter.CharacterId, npcLoopCt).ConfigureAwait(false);
+        await pvpDuels.PlayerDiedAsync(victim).ConfigureAwait(false);
         foreach (var watcher in sessions)
         {
             foreach (var (opcode, payload) in watcher.Value == victim ? forVictim : forOthers)
@@ -11989,6 +12019,7 @@ var npcLoopTask = Task.Run(async () =>
         if (victim.Character is { } deadCharacter) await systemLink.DiedAsync(deadCharacter.CharacterId, npcLoopCt).ConfigureAwait(false);
         await pk.KillCreditAsync(victim, attacker).ConfigureAwait(false);
         await guildGames.PlayerKilledAsync(victim, attacker).ConfigureAwait(false);
+        await pvpDuels.PlayerDiedAsync(victim).ConfigureAwait(false);
         return true;
     }
 
@@ -14708,6 +14739,7 @@ var npcLoopTask = Task.Run(async () =>
                         if (victim.Character is { } deadCharacter)
                         {
                             await systemLink.DiedAsync(deadCharacter.CharacterId, npcLoopCt).ConfigureAwait(false);
+                            await pvpDuels.PlayerDiedAsync(victim).ConfigureAwait(false);
                         }
                     }
                 }

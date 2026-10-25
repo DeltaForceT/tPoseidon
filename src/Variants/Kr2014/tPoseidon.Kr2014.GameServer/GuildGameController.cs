@@ -16,6 +16,7 @@ internal sealed class GuildGameController : IDisposable
     private readonly Func<GuildGameTypeTables> _types;
     private readonly Func<IReadOnlyCollection<InGameSessionState>> _sessions;
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
+    private readonly Func<InGameSessionState, Task> _revive;
     private readonly Encoding _text;
     private readonly string _logTag;
     private readonly Dictionary<uint, GuildMatch> _matches = new();
@@ -27,12 +28,13 @@ internal sealed class GuildGameController : IDisposable
 
     public GuildGameController(
         SystemServerLink link, Func<GuildGameTypeTables> types, Func<IReadOnlyCollection<InGameSessionState>> sessions,
-        Func<ushort, Opcode, byte[], Task> sendToMap, Encoding text, string logTag)
+        Func<ushort, Opcode, byte[], Task> sendToMap, Func<InGameSessionState, Task> revive, Encoding text, string logTag)
     {
         _link = link ?? throw new ArgumentNullException(nameof(link));
         _types = types ?? throw new ArgumentNullException(nameof(types));
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _sendToMap = sendToMap ?? throw new ArgumentNullException(nameof(sendToMap));
+        _revive = revive ?? throw new ArgumentNullException(nameof(revive));
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
         _link.OrderReceived += OrderAsync;
@@ -124,12 +126,15 @@ internal sealed class GuildGameController : IDisposable
         await WarpAsync(st, GuildGameOrders.LobbyZone).ConfigureAwait(false);
     });
 
-    public Task PlayerKilledAsync(InGameSessionState victim, InGameSessionState killer) => Locked(() =>
+    public Task PlayerKilledAsync(InGameSessionState victim, InGameSessionState killer) => Locked(async () =>
     {
-        if (victim.Character is not { } dead || killer.Character is not { } winner || MatchOf(dead.CharacterId) is not { } match) return Task.CompletedTask;
-        match.PlayerKilled(dead.CharacterId, winner.CharacterId);
+        if (victim.Character is not { } dead || killer.Character is not { } winner || MatchOf(dead.CharacterId) is not { } match) return;
+        if (match.PlayerKilled(dead.CharacterId, winner.CharacterId) is not { } kill) return;
+        if (match.GameType <= GuildGameRules.DeathMatch)
+        {
+            await SendMatchAsync(match, Opcode.S2C_GUILD_GAME_KILL, GuildGameFrames.Kill(match.GameType, kill.KillerId, kill.VictimId, kill.RespawnFlag)).ConfigureAwait(false);
+        }
         Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: kills {match.TeamKills[0]}/{match.TeamKills[1]}, deaths {match.TeamDeaths[0]}/{match.TeamDeaths[1]}");
-        return Task.CompletedTask;
     });
 
     public Task EnteredZoneAsync(InGameSessionState st) => Locked(() =>
@@ -171,7 +176,14 @@ internal sealed class GuildGameController : IDisposable
                     modes.Add(new GuildGameFighterMode(session.PlayerEntityId, session.PvpMode));
                 }
                 await SendMatchAsync(match, Opcode.S2C_GUILD_GAME_START, GuildGameFrames.BattleStart(modes)).ConfigureAwait(false);
+                if (match.GameType <= GuildGameRules.DeathMatch) await SendScoreBoardAsync(match).ConfigureAwait(false);
                 Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: battle on map {match.MapId}, {modes.Count} fighters, {match.SecondsLeft} s");
+                break;
+            case GuildMatchRespawn respawn:
+                foreach (var characterId in respawn.CharacterIds)
+                {
+                    if (Session(characterId) is { IsDead: true } fallen) await _revive(fallen).ConfigureAwait(false);
+                }
                 break;
             case GuildMatchEnded ended:
                 var end = ended.End;
@@ -219,6 +231,22 @@ internal sealed class GuildGameController : IDisposable
         if (!_matches.TryGetValue(change.RoomKey, out var match) || !_awaitingLadder.Remove(change.RoomKey, out var end)) return;
         await SendResultAsync(match, end, change.Team0, change.Team1).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: ladder {change.Team0.GetLadder:+0;-0;0} -> {change.Team0.TotalLadder} / {change.Team1.GetLadder:+0;-0;0} -> {change.Team1.TotalLadder}");
+    }
+
+    private async Task SendScoreBoardAsync(GuildMatch match)
+    {
+        var sides = match.Sides.Select(side => new GuildScoreSide(side.GuildCode, side.GuildName)).ToArray();
+        var entries = new List<GuildScoreEntry>();
+        foreach (var fighter in match.Fighters)
+        {
+            if (Session(fighter.CharacterId) is not { Character: { } character } session) continue;
+            entries.Add(new GuildScoreEntry(
+                (byte)fighter.Team, (ushort)session.PlayerCharacterType, (ushort)(session.Stats?.Level ?? character.Level), character.Name,
+                fighter.CharacterId, 0, (ushort)Math.Clamp(fighter.Kills, 0, ushort.MaxValue), (ushort)Math.Clamp(fighter.Deaths, 0, ushort.MaxValue),
+                match.IsDown(fighter.CharacterId)));
+        }
+        var payload = GuildGameFrames.ScoreBoard(match.RoomKey, match.GameType, sides, (uint)Math.Max(match.SecondsLeft, 0), entries, _text);
+        await SendMatchAsync(match, Opcode.S2C_GUILD_GAME_SCORE, payload).ConfigureAwait(false);
     }
 
     private Task SendResultAsync(GuildMatch match, MatchEnd end, GuildResultSide team0, GuildResultSide team1) =>
