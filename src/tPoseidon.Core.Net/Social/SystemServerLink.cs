@@ -163,6 +163,7 @@ public sealed class SystemServerLink
             case SystemLinkFrames.OrderRecoverQuest:
             case SystemLinkFrames.OrderTypeBonus:
             case SystemLinkFrames.OrderGuildName:
+            case PartyBoardFrames.OrderHeadNotice:
             case AngelFrames.OrderNewbiePosition:
             case AngelFrames.OrderAngelMove:
             case AngelFrames.OrderAngelReward:

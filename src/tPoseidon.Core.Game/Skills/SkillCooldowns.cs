@@ -8,9 +8,10 @@ public sealed class SkillCooldowns
 
     public bool IsRunning(int skillId) => _running.ContainsKey(skillId);
 
-    public void Start(int skillId, float coolTimeSeconds)
+    public void Start(int skillId, float coolTimeSeconds) => Begin(skillId, coolTimeSeconds - StartedEarlierBy);
+
+    public void Begin(int skillId, float seconds)
     {
-        var seconds = coolTimeSeconds - StartedEarlierBy;
         if (seconds <= 0f || _running.ContainsKey(skillId)) return;
         _running[skillId] = (0, (int)((double)seconds * 1000.0));
     }

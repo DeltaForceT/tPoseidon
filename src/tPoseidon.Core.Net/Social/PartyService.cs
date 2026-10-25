@@ -104,6 +104,7 @@ public sealed class PartyService
     private readonly Encoding _text;
     private readonly PartyRules _rules;
     private readonly TimeProvider _time;
+    private readonly PartyBoard _board;
     private ushort _lastPartyId;
     private ushort _lastMemberId;
 
@@ -112,9 +113,14 @@ public sealed class PartyService
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _rules = rules ?? throw new ArgumentNullException(nameof(rules));
         _time = time ?? throw new ArgumentNullException(nameof(time));
+        _board = new PartyBoard(text);
     }
 
     public int PartyCount { get { lock (_gate) return _parties.Count; } }
+
+    public int BoardPartyPosts { get { lock (_gate) return _board.PartyCount; } }
+
+    public int BoardSeekerPosts { get { lock (_gate) return _board.SeekerCount; } }
 
     public IReadOnlyList<ulong> PartyMembers(ulong characterId)
     {
@@ -160,6 +166,7 @@ public sealed class PartyService
         {
             if (!_online.Remove(characterId, out var member)) return outbox;
             ClearInviteState(member);
+            DropSeekerPost(outbox, characterId);
             if (member.Party is not { } party) return outbox;
             var wasMaster = party.MasterMemberId == member.MemberId;
             if (!wasMaster || party.Online.Count > 1)
@@ -173,12 +180,14 @@ public sealed class PartyService
             {
                 party.MasterMemberId = party.Online[0].MemberId;
                 Broadcast(outbox, party, PartyFrames.MasterChanged, PartyFrames.MasterChangedFor(party.MasterMemberId, party.LevelFlag), except: null);
+                HandOverBoardNotice(outbox, party);
             }
             Broadcast(outbox, party, PartyFrames.MemberOffline, PartyFrames.MemberPair(member.MemberId, party.MasterMemberId), except: null);
             outbox.Order(new PartyOrder(member.CharacterId, SystemLinkFrames.OrderNotifyPartyPlayer, 0, null));
             RefreshMirrors(outbox, party);
             RecomputeShare(outbox, party);
-            ForgetIfAbandoned(party);
+            RefreshPartyPost(outbox, party);
+            ForgetIfAbandoned(outbox, party);
         }
         return outbox;
     }
@@ -195,7 +204,8 @@ public sealed class PartyService
                 if (!_parties.TryGetValue(entry.PartyId, out var party)) continue;
                 party.Offline.RemoveAll(m => m.CharacterId == characterId);
                 Broadcast(outbox, party, PartyFrames.OfflineMemberExpired, PartyFrames.Character(characterId), except: null);
-                ForgetIfAbandoned(party);
+                RefreshPartyPost(outbox, party);
+                ForgetIfAbandoned(outbox, party);
             }
         }
         return outbox;
@@ -337,6 +347,7 @@ public sealed class PartyService
             if (party.Size < 2 && inviter is not null)
             {
                 outbox.Add(new(inviter.CharacterId, PartyFrames.Formed, PartyFrames.PartyFormed(party.Id, party.Name, invite.MemberId, _text)));
+                DropSeekerPost(outbox, inviter.CharacterId);
             }
             Join(outbox, party, accepter);
             if (inviter is not null)
@@ -421,6 +432,7 @@ public sealed class PartyService
             {
                 RefreshMirrors(outbox, party);
                 RecomputeShare(outbox, party);
+                RefreshPartyPost(outbox, party);
                 outbox.Add(new(master.CharacterId, PartyFrames.KickDone, PartyFrames.Empty()));
             }
         }
@@ -439,6 +451,7 @@ public sealed class PartyService
                 _depot.Remove(offlineCharacterId);
                 Broadcast(outbox, party, PartyFrames.OfflineMemberRemoved, PartyFrames.Character(offlineCharacterId), except: null);
                 if (party.Size < 2) Break(outbox, party);
+                else RefreshPartyPost(outbox, party);
             }
             else
             {
@@ -468,6 +481,8 @@ public sealed class PartyService
             outbox.Add(new(master.CharacterId, PartyFrames.MasterChangeDone, PartyFrames.Empty()));
             Broadcast(outbox, party, PartyFrames.MasterChanged, PartyFrames.MasterChangedFor(memberId, party.LevelFlag), except: null);
             RefreshMirrors(outbox, party);
+            HandOverBoardNotice(outbox, party);
+            RefreshPartyPost(outbox, party);
         }
         return outbox;
     }
@@ -522,6 +537,7 @@ public sealed class PartyService
             outbox.Add(new(master.CharacterId, PartyFrames.DivisionChanged, PartyFrames.Empty()));
             Broadcast(outbox, party, PartyFrames.Division, PartyFrames.DivisionFor(party.DivisionType, party.Shares), except: null);
             RecomputeShare(outbox, party);
+            RefreshPartyPost(outbox, party);
         }
         return outbox;
     }
@@ -720,6 +736,157 @@ public sealed class PartyService
         return outbox;
     }
 
+    public PartyOutbox BoardListParties(ulong characterId, PartyBoardList request) =>
+        BoardReply(characterId, PartyBoardFrames.PartyList, board => board.ListParties(request));
+
+    public PartyOutbox BoardListSeekers(ulong characterId, PartyBoardList request) =>
+        BoardReply(characterId, PartyBoardFrames.SeekerList, board => board.ListSeekers(request));
+
+    public PartyOutbox BoardSearchParties(ulong characterId, PartyBoardSearch request) =>
+        BoardReply(characterId, PartyBoardFrames.PartyList, board => board.SearchParties(request));
+
+    public PartyOutbox BoardSearchSeekers(ulong characterId, PartyBoardSearch request) =>
+        BoardReply(characterId, PartyBoardFrames.SeekerList, board => board.SearchSeekers(request));
+
+    public PartyOutbox PostPartyRecruit(ulong characterId, string comment)
+    {
+        ArgumentNullException.ThrowIfNull(comment);
+        var outbox = new PartyOutbox();
+        lock (_gate)
+        {
+            if (!_online.TryGetValue(characterId, out var poster)) return outbox;
+            if (poster.Party is not { } party)
+            {
+                BoardRefusal(outbox, characterId, PartyBoardFrames.NotInParty);
+                return outbox;
+            }
+            if (party.Size >= PartyRules.MostMembers)
+            {
+                BoardRefusal(outbox, characterId, PartyBoardFrames.PartyFull);
+                return outbox;
+            }
+            if (_board.Party(party.Id) is not null)
+            {
+                BoardRefusal(outbox, characterId, PartyBoardFrames.AlreadyPosted);
+                return outbox;
+            }
+            if (_board.PartyCount >= PartyBoardFrames.PartyCapacity)
+            {
+                BoardRefusal(outbox, characterId, PartyBoardFrames.BoardFull);
+                return outbox;
+            }
+            if (MasterOf(party) is not { } master)
+            {
+                BoardRefusal(outbox, characterId, PartyBoardFrames.NotInParty);
+                return outbox;
+            }
+            var post = _board.AddParty(BoardFields(party, master), comment);
+            post.NoticeOwner = master.CharacterId;
+            outbox.Order(HeadNoticeOrder(master.CharacterId, post.Comment, PartyBoardFrames.HeadNoticeForParty, active: true));
+            outbox.Add(new(characterId, PartyBoardFrames.PartyPosted, PartyFrames.Empty()));
+        }
+        return outbox;
+    }
+
+    public PartyOutbox PostSeeker(ulong characterId, string comment)
+    {
+        ArgumentNullException.ThrowIfNull(comment);
+        var outbox = new PartyOutbox();
+        lock (_gate)
+        {
+            if (!_online.TryGetValue(characterId, out var poster)) return outbox;
+            if (poster.Party is not null)
+            {
+                BoardRefusal(outbox, characterId, PartyBoardFrames.AlreadyInParty);
+                return outbox;
+            }
+            if (_board.Seeker(characterId) is not null)
+            {
+                BoardRefusal(outbox, characterId, PartyBoardFrames.AlreadyPosted);
+                return outbox;
+            }
+            if (_board.SeekerCount >= PartyBoardFrames.SeekerCapacity)
+            {
+                BoardRefusal(outbox, characterId, PartyBoardFrames.BoardFull);
+                return outbox;
+            }
+            var post = _board.AddSeeker(characterId, poster.Kind, poster.Level, poster.Name, comment);
+            outbox.Order(HeadNoticeOrder(characterId, post.Comment, PartyBoardFrames.HeadNoticeForSeeker, active: true));
+            outbox.Add(new(characterId, PartyBoardFrames.SeekerPosted, PartyFrames.Empty()));
+        }
+        return outbox;
+    }
+
+    public PartyOutbox RemovePartyRecruit(ulong characterId)
+    {
+        var outbox = new PartyOutbox();
+        lock (_gate)
+        {
+            if (!_online.TryGetValue(characterId, out var requester)) return outbox;
+            if (requester.Party is not { } party)
+            {
+                outbox.Add(new(characterId, PartyBoardFrames.PartyRemoveWithoutParty, PartyFrames.Empty()));
+                return outbox;
+            }
+            if (party.MasterMemberId != requester.MemberId)
+            {
+                BoardRefusal(outbox, characterId, PartyBoardFrames.MasterOnly);
+                return outbox;
+            }
+            if (_board.Party(party.Id) is null) return outbox;
+            DropPartyPost(outbox, party);
+            outbox.Add(new(characterId, PartyBoardFrames.PartyRemoved, PartyFrames.Empty()));
+        }
+        return outbox;
+    }
+
+    public PartyOutbox RemoveSeeker(ulong characterId)
+    {
+        var outbox = new PartyOutbox();
+        lock (_gate)
+        {
+            if (!_online.ContainsKey(characterId) || _board.Seeker(characterId) is null) return outbox;
+            DropSeekerPost(outbox, characterId);
+            outbox.Add(new(characterId, PartyBoardFrames.SeekerRemoved, PartyFrames.Empty()));
+        }
+        return outbox;
+    }
+
+    public PartyOutbox BoardPartyDetails(ulong characterId, ushort partyId)
+    {
+        var outbox = new PartyOutbox();
+        lock (_gate)
+        {
+            if (!_online.ContainsKey(characterId)) return outbox;
+            if (_board.Party(partyId) is not { } post
+                || !_parties.TryGetValue(partyId, out var party)
+                || MasterOf(party) is not { } master)
+            {
+                outbox.Add(new(characterId, PartyBoardFrames.PartyDetailsMissing, PartyFrames.Empty()));
+                return outbox;
+            }
+            outbox.Add(new(characterId, PartyBoardFrames.PartyDetails, PartyBoardFrames.PartyDetailsFor(
+                master.Name, master.Level, master.Zone, post.MemberCount, post.Division, post.ItemShare, post.Comment, _text)));
+        }
+        return outbox;
+    }
+
+    public PartyOutbox BoardSeekerDetails(ulong characterId, ulong seekerId)
+    {
+        var outbox = new PartyOutbox();
+        lock (_gate)
+        {
+            if (!_online.ContainsKey(characterId)) return outbox;
+            if (_board.Seeker(seekerId) is not { } post || !_online.TryGetValue(seekerId, out var seeker))
+            {
+                outbox.Add(new(characterId, PartyBoardFrames.SeekerDetailsMissing, PartyFrames.Empty()));
+                return outbox;
+            }
+            outbox.Add(new(characterId, PartyBoardFrames.SeekerDetails, PartyBoardFrames.SeekerDetailsFor(seeker.Name, seeker.Zone, post.Comment, _text)));
+        }
+        return outbox;
+    }
+
     public static PartyType TypeOf(IReadOnlyList<(ushort Kind, ushort Level)> members)
     {
         ArgumentNullException.ThrowIfNull(members);
@@ -884,6 +1051,7 @@ public sealed class PartyService
             if (member.Party is not { } party) return outbox;
             Broadcast(outbox, party, PartyFrames.MemberStateChanged, PartyFrames.MemberStateFor(member.MemberId, kind, job), except: null);
             RecomputeShare(outbox, party);
+            if (party.MasterMemberId == member.MemberId) RefreshPartyPost(outbox, party);
         }
         return outbox;
     }
@@ -898,6 +1066,7 @@ public sealed class PartyService
             member.Name = newName;
             if (member.Party is not { } party) return outbox;
             Broadcast(outbox, party, PartyFrames.MemberRenamed, PartyFrames.MemberNameFor(member.MemberId, newName, _text), except: null);
+            if (party.MasterMemberId == member.MemberId) RefreshPartyPost(outbox, party);
         }
         return outbox;
     }
@@ -1022,6 +1191,8 @@ public sealed class PartyService
         RefreshMirrors(outbox, party);
         Recompute(outbox, party);
         RecomputeShare(outbox, party);
+        DropSeekerPost(outbox, joiner.CharacterId);
+        RefreshPartyPost(outbox, party);
     }
 
     private static void Recompute(PartyOutbox outbox, Party party)
@@ -1041,9 +1212,11 @@ public sealed class PartyService
         var party = member.Party!;
         party.Online.Remove(member);
         member.Party = null;
+        var handedOver = false;
         if (party.MasterMemberId == member.MemberId && party.Online.Count > 0)
         {
             party.MasterMemberId = party.Online[0].MemberId;
+            handedOver = true;
         }
         Broadcast(outbox, party, PartyFrames.MemberLeft, PartyFrames.MemberPair(member.MemberId, party.MasterMemberId), except: null);
         outbox.Order(new PartyOrder(member.CharacterId, SystemLinkFrames.OrderNotifyPartyPlayer, 0, null));
@@ -1052,12 +1225,15 @@ public sealed class PartyService
         {
             RefreshMirrors(outbox, party);
             RecomputeShare(outbox, party);
+            if (handedOver) HandOverBoardNotice(outbox, party);
+            RefreshPartyPost(outbox, party);
         }
         outbox.Add(new(member.CharacterId, PartyFrames.LeaveDone, PartyFrames.Empty()));
     }
 
     private void Break(PartyOutbox outbox, Party party)
     {
+        DropPartyPost(outbox, party);
         Broadcast(outbox, party, PartyFrames.Broken, PartyFrames.Empty(), except: null);
         foreach (var owner in party.ShareOwners) outbox.Order(new PartyOrder(owner, SystemLinkFrames.OrderShareExp, 0, null));
         party.ShareOwners.Clear();
@@ -1075,17 +1251,77 @@ public sealed class PartyService
         _parties.Remove(party.Id);
     }
 
-    private void ForgetIfAbandoned(Party party)
+    private void ForgetIfAbandoned(PartyOutbox outbox, Party party)
     {
         if (party.Online.Count > 0) return;
         if (party.Offline.Any(m => _depot.TryGetValue(m.CharacterId, out var e) && e.PartyId == party.Id)) return;
+        DropPartyPost(outbox, party);
         foreach (var member in party.Offline) _depot.Remove(member.CharacterId);
         _parties.Remove(party.Id);
     }
 
-    private static void NotifyIfFull(PartyOutbox outbox, Party party)
+    private PartyOutbox BoardReply(ulong characterId, ushort opcode, Func<PartyBoard, byte[]?> build)
     {
-        if (party.IsFull && MasterOf(party) is { } master) outbox.Add(MasterResultTo(master, PartyCodes.PartyBecameFull));
+        var outbox = new PartyOutbox();
+        lock (_gate)
+        {
+            if (!_online.ContainsKey(characterId)) return outbox;
+            if (build(_board) is { } payload) outbox.Add(new(characterId, opcode, payload));
+        }
+        return outbox;
+    }
+
+    private static void BoardRefusal(PartyOutbox outbox, ulong characterId, uint code) =>
+        outbox.Add(new(characterId, PartyBoardFrames.Refused, PartyBoardFrames.RefusedFor(code)));
+
+    private PartyOrder HeadNoticeOrder(ulong characterId, string comment, byte kind, bool active) =>
+        new(characterId, PartyBoardFrames.OrderHeadNotice, 0, PartyBoardFrames.HeadNoticeOrderData(comment, kind, active, _text));
+
+    private static PartyBoard.PartyPostFields BoardFields(Party party, Member master)
+    {
+        var everyone = party.Online.Concat(party.Offline).ToArray();
+        var average = (ushort)Math.Round(everyone.Sum(m => (double)m.Level) / everyone.Length);
+        return new PartyBoard.PartyPostFields(
+            party.Id, master.Kind, master.Name, (uint)TypeOf(party), (byte)everyone.Length, average, party.DivisionType, party.ItemShare);
+    }
+
+    private void RefreshPartyPost(PartyOutbox outbox, Party party)
+    {
+        if (_board.Party(party.Id) is not { } post) return;
+        if (MasterOf(party) is not { } master)
+        {
+            DropPartyPost(outbox, party);
+            return;
+        }
+        post.Refresh(BoardFields(party, master));
+    }
+
+    private void DropPartyPost(PartyOutbox outbox, Party party)
+    {
+        if (_board.Party(party.Id) is not { } post) return;
+        _board.RemoveParty(party.Id);
+        outbox.Order(HeadNoticeOrder(post.NoticeOwner, string.Empty, PartyBoardFrames.HeadNoticeForParty, active: false));
+    }
+
+    private void HandOverBoardNotice(PartyOutbox outbox, Party party)
+    {
+        if (_board.Party(party.Id) is not { } post || MasterOf(party) is not { } master || master.CharacterId == post.NoticeOwner) return;
+        outbox.Order(HeadNoticeOrder(post.NoticeOwner, string.Empty, PartyBoardFrames.HeadNoticeForParty, active: false));
+        post.NoticeOwner = master.CharacterId;
+        outbox.Order(HeadNoticeOrder(master.CharacterId, post.Comment, PartyBoardFrames.HeadNoticeForParty, active: true));
+    }
+
+    private void DropSeekerPost(PartyOutbox outbox, ulong characterId)
+    {
+        if (!_board.RemoveSeeker(characterId)) return;
+        outbox.Order(HeadNoticeOrder(characterId, string.Empty, PartyBoardFrames.HeadNoticeForSeeker, active: false));
+    }
+
+    private void NotifyIfFull(PartyOutbox outbox, Party party)
+    {
+        if (!party.IsFull) return;
+        DropPartyPost(outbox, party);
+        if (MasterOf(party) is { } master) outbox.Add(MasterResultTo(master, PartyCodes.PartyBecameFull));
     }
 
     private static void SetInvite(Party party, Member inviter, Member target)

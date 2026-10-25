@@ -2,7 +2,7 @@ using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Game.Skills;
 
-public readonly record struct SkillAttacker(long Ap, long Ac, long Ma, long Lk, int Level, long Da = 0, long Hp = 0, long MaxHp = 0, long Hv = 0, long Dx = 0, long Dp = 0, long WeaponDa = 0, float DarkBonus = 0f, long Weight = 0, long ElementBonus = 0);
+public readonly record struct SkillAttacker(long Ap, long Ac, long Ma, long Lk, int Level, long Da = 0, long Hp = 0, long MaxHp = 0, long Hv = 0, long Dx = 0, long Dp = 0, long WeaponDa = 0, float DarkBonus = 0f, long Weight = 0, long ElementBonus = 0, bool AlwaysHits = false);
 
 public readonly record struct SkillTarget(long Dp, long Hv, long Md, long Lk, long Hp, int Level, int Resist, long MaxHp = 0, long BaseDp = 0);
 
@@ -42,7 +42,7 @@ public static class SkillDamage
     {
         ArgumentNullException.ThrowIfNull(rng);
         var chance = WireLimits.Saturate((attacker.Ac - target.Hv * PlayerHvWeight + PhysicalHitBase) * HitScale * applyRatio);
-        if (rng.Next(Percent) >= Math.Clamp(chance, LowestHitChance, HighestHitChance))
+        if (!attacker.AlwaysHits && rng.Next(Percent) >= Math.Clamp(chance, LowestHitChance, HighestHitChance))
         {
             return new SkillHit(0, PhysicalType, KindMiss, 0, 0);
         }

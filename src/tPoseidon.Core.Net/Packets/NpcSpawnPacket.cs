@@ -17,6 +17,8 @@ public sealed class NpcSpawnPacket
                 Shop = 0x05,
 
                 SkillShop = 0x0E,
+
+                Guardian = 0x10,
     }
 
         public ushort EntityId { get; init; }

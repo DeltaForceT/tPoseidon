@@ -1,4 +1,5 @@
 using System.Text;
+using tPoseidon.Core.Net.Social;
 using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Tests.World;
@@ -126,5 +127,38 @@ public sealed class PlayerSignTests
         Assert.Equal(0x03DF, PlayerSign.FortuneSignEndRequest);
         Assert.Equal(0x02C9, tPoseidon.Core.Net.Social.ChatFrames.GhostSay);
         Assert.Equal(0x02C8, tPoseidon.Core.Net.Social.ChatFrames.GhostSaid);
+    }
+
+    [Fact]
+    public void ARecruitNoticeFirstClearsTheHeadMessageAndTheCardBattleTitle()
+    {
+        var sign = new PlayerSign();
+        sign.ShowHeadMessage(Entity, "hi", Latin);
+
+        var frames = sign.ShowPartyBoardNotice(Entity, 1, "Join", Latin);
+
+        Assert.Collection(
+            frames,
+            cleared => Assert.Equal(PlayerSign.HeadMessageCleared, cleared.Opcode),
+            shown =>
+            {
+                Assert.Equal(PartyBoardFrames.HeadNoticeShown, shown.Opcode);
+                Assert.Equal(new byte[] { 0x02, 0x01, 0x01 }.Concat(Encoding.ASCII.GetBytes("Join")).Append((byte)0).ToArray(), shown.Payload);
+            });
+        Assert.Equal(SignKind.PartyBoardNotice, sign.Kind);
+    }
+
+    [Fact]
+    public void ClearingARecruitNoticeBroadcastsTheEntityOnlyWhenItIsHeld()
+    {
+        var sign = new PlayerSign();
+        Assert.Empty(sign.ClearPartyBoardNotice(Entity));
+        sign.ShowPartyBoardNotice(Entity, 2, "Join", Latin);
+
+        var frame = Assert.Single(sign.ClearPartyBoardNotice(Entity));
+
+        Assert.Equal(PartyBoardFrames.HeadNoticeCleared, frame.Opcode);
+        Assert.Equal(new byte[] { 0x02, 0x01 }, frame.Payload);
+        Assert.Equal(SignKind.None, sign.Kind);
     }
 }

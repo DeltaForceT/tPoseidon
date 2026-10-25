@@ -1,6 +1,7 @@
 using System.Text;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Guardian;
+using tPoseidon.Core.Net.Packets;
 
 namespace tPoseidon.Core.Net.World;
 
@@ -42,6 +43,11 @@ public static class GuardianFrames
     public const int OrderOffset = 0x1C0;
 
     public const uint OrderNotListed = 2;
+    public const int LockOnRequestSize = sizeof(ushort);
+    public const int SpawnCharacterPartSize = 12;
+    public const byte SpawnDefaultDirection = 0x80;
+    public const uint SpawnShardCap = 0;
+    public const int SpawnTrailerSize = SpawnCharacterPartSize + sizeof(ushort) + 1 + 3 * sizeof(uint) + 1;
 
     public static byte[] Record(GuardianState? state, Encoding encoding)
     {
@@ -200,6 +206,63 @@ public static class GuardianFrames
         var w = new PacketWriter(sizeof(uint));
         w.WriteUInt32(code);
         return w.ToArray();
+    }
+
+    public static bool TryReadLockOn(ReadOnlySpan<byte> payload, out ushort targetEntityId)
+    {
+        targetEntityId = 0;
+        if (payload.Length < LockOnRequestSize) return false;
+        targetEntityId = new PacketReader(payload).ReadUInt16();
+        return true;
+    }
+
+    public static byte[] Speech(ushort guardianEntityId, string text, Encoding encoding)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(encoding);
+        var w = new PacketWriter(sizeof(ushort) + text.Length + 1);
+        w.WriteUInt16(guardianEntityId);
+        w.WriteNulTerminated(text, encoding);
+        return w.ToArray();
+    }
+
+    public static byte[] Marks(IReadOnlyList<ushort> targets)
+    {
+        ArgumentNullException.ThrowIfNull(targets);
+        var count = Math.Min(targets.Count, byte.MaxValue);
+        var w = new PacketWriter(1 + count * sizeof(ushort));
+        w.WriteByte((byte)count);
+        for (var i = 0; i < count; i++) w.WriteUInt16(targets[i]);
+        return w.ToArray();
+    }
+
+    public static byte[] Spawn(GuardianActor guardian, GuardianState state, ushort ownerEntityId, int x, int y)
+    {
+        ArgumentNullException.ThrowIfNull(guardian);
+        ArgumentNullException.ThrowIfNull(state);
+        var w = new PacketWriter(SpawnTrailerSize);
+        w.WriteByte(0);
+        w.WriteByte(SpawnDefaultDirection);
+        w.WriteByte(guardian.SpeedQuarter);
+        w.WriteBytes(new byte[SpawnCharacterPartSize - 3]);
+        w.WriteUInt16(ownerEntityId);
+        w.WriteByte(state.FType);
+        w.WriteUInt32(SpawnShardCap);
+        w.WriteInt32(state.Gauge);
+        w.WriteInt32(state.Exp);
+        w.WriteByte(state.RareType);
+        return new NpcSpawnPacket
+        {
+            EntityId = guardian.EntityId,
+            Kind = NpcSpawnPacket.EntityKind.Guardian,
+            TemplateId = (ushort)state.GuardianType,
+            SpawnX = (ushort)x,
+            SpawnY = (ushort)y,
+            CurrentX = (ushort)x,
+            CurrentY = (ushort)y,
+            Name = state.Name,
+            Trailer = w.ToArray(),
+        }.EncodePayload();
     }
 
     public static byte[] Empty() => [];

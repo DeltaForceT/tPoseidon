@@ -157,6 +157,20 @@ catch (Exception ex)
     partyQuestResults = new InMemoryMonsterQuestResultLookup(Array.Empty<MonsterQuestResultEntry>());
 }
 
+tPoseidon.Core.LibConfig.GuardianTables guardianTables;
+try
+{
+    guardianTables = new LibConfigXmlReader(libconfigPath).LoadGuardianTables();
+    Console.WriteLine($"{LogTag} loaded {guardianTables.NextExpByLevel.Count} guardian levels, {guardianTables.Growth.Count} growth rows and {guardianTables.ExpRatios.Count} exp ratios from libconfig");
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"{LogTag} guardian tables load FAILED: {ex.GetType().Name}: {ex.Message}");
+    guardianTables = new tPoseidon.Core.LibConfig.GuardianTables(
+        new Dictionary<int, int>(), new Dictionary<int, tPoseidon.Core.LibConfig.GuardianParamEntry>(), new Dictionary<int, tPoseidon.Core.LibConfig.GuardianGrowthEntry>(),
+        new Dictionary<int, tPoseidon.Core.LibConfig.GuardianBasicStatEntry>(), new Dictionary<int, float>());
+}
+
 IQuestStore questStore = new PostgresQuestStore(pg.DataSource);
 
 IQuestHistoryStore questHistoryStore = new PostgresQuestHistoryStore(pg.DataSource);
@@ -1305,6 +1319,13 @@ using var instantChatSigns = new InstantChatSignController(
     (signSt, signOpcode, signPayload) => SendToViewersAsync(signSt.MapId, signSt.PlayerX, signSt.PlayerY, signOpcode, signPayload),
     LogTag);
 
+using var partyBoardNotices = new PartyBoardNoticeController(
+    systemLink,
+    characterId => liveSessions.Values.FirstOrDefault(noticeSt => noticeSt.Character?.CharacterId == characterId),
+    (noticeSt, noticeOpcode, noticePayload) => SendToViewersAsync(noticeSt.MapId, noticeSt.PlayerX, noticeSt.PlayerY, noticeOpcode, noticePayload),
+    clientTextEncoding,
+    LogTag);
+
 var angelLink = new AngelController(
     systemLink,
     characterId => liveSessions.Values.FirstOrDefault(angelSt => angelSt.Character?.CharacterId == characterId),
@@ -2200,8 +2221,8 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }
             await EmitMobSpawnsForCurrentMapAsync("0x04A5 post-batch").ConfigureAwait(false);
             await EmitGroundItemsForCurrentMapAsync().ConfigureAwait(false);
-            await ShowMapPetsAsync().ConfigureAwait(false);
-            await SyncPetAsync(withEffect: false).ConfigureAwait(false);
+            await ShowMapCompanionsAsync().ConfigureAwait(false);
+            await SyncCompanionsAsync(withEffect: false).ConfigureAwait(false);
             await SyncGuardianAsync(sessionCt).ConfigureAwait(false);
             await SendGuideHistoryAsync().ConfigureAwait(false);
         });
@@ -2519,6 +2540,11 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 goneSt.Pet = null;
                 leaving.Add(RemovePetAsync(leftPet));
             }
+            if (goneSt.Guardian is { } leftGuardian)
+            {
+                goneSt.Guardian = null;
+                leaving.Add(RemoveGuardianAsync(leftGuardian));
+            }
             return Task.WhenAll(leaving);
         }
         sessionReleases[ctx] = ReleaseSessionAsync;
@@ -2692,7 +2718,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             var uniquesBeforeJobChange = WornAbsoluteUniques();
             var released = await equipment.ReleaseAllAsync(changeCt).ConfigureAwait(false);
             await WithdrawReleasedUniquesAsync(uniquesBeforeJobChange, changeCt).ConfigureAwait(false);
-            await SyncPetAsync(withEffect: false).ConfigureAwait(false);
+            await SyncCompanionsAsync(withEffect: false).ConfigureAwait(false);
             if (accountStore.GetCharacterById(changer.CharacterId) is { } updated)
             {
                 currentChar = updated;
@@ -2725,7 +2751,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             var uniquesBeforeRelease = WornAbsoluteUniques();
             await equipment.ReleaseAllAsync(releaseCt).ConfigureAwait(false);
             await WithdrawReleasedUniquesAsync(uniquesBeforeRelease, releaseCt).ConfigureAwait(false);
-            await SyncPetAsync(withEffect: false).ConfigureAwait(false);
+            await SyncCompanionsAsync(withEffect: false).ConfigureAwait(false);
             ApplyEquipmentChange();
         }
 
@@ -2819,7 +2845,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 var uniquesBeforeLookChange = WornAbsoluteUniques();
                 var released = await equipment.ReleaseAllAsync(lookCt).ConfigureAwait(false);
                 await WithdrawReleasedUniquesAsync(uniquesBeforeLookChange, lookCt).ConfigureAwait(false);
-                await SyncPetAsync(withEffect: false).ConfigureAwait(false);
+                await SyncCompanionsAsync(withEffect: false).ConfigureAwait(false);
                 ApplyEquipmentChange();
                 statManager.GrantMoney(-tPoseidon.Core.Game.Characters.LookChangeRules.Fee, StatChangeSource.LookChange);
                 byte moneyRk;
@@ -3615,7 +3641,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             var uniquesBeforeEquip = WornAbsoluteUniques();
             await equipment.EquipAsync(payload, equipCt).ConfigureAwait(false);
             await WithdrawReleasedUniquesAsync(uniquesBeforeEquip, equipCt).ConfigureAwait(false);
-            await SyncPetAsync(withEffect: true).ConfigureAwait(false);
+            await SyncCompanionsAsync(withEffect: true).ConfigureAwait(false);
         });
 
         ctx.Dispatcher.Register(Opcode.CMD_RELEASE_ITEM, async (_, payload, releaseCt) =>
@@ -3623,7 +3649,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             var uniquesBeforeRelease = WornAbsoluteUniques();
             await equipment.ReleaseAsync(payload, releaseCt).ConfigureAwait(false);
             await WithdrawReleasedUniquesAsync(uniquesBeforeRelease, releaseCt).ConfigureAwait(false);
-            await SyncPetAsync(withEffect: true).ConfigureAwait(false);
+            await SyncCompanionsAsync(withEffect: true).ConfigureAwait(false);
         });
 
         ctx.Dispatcher.Register(Opcode.CMD_RELEASE_ITEM_ALL, async (_, payload, releaseAllCt) =>
@@ -3631,7 +3657,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             var uniquesBeforeReleaseAll = WornAbsoluteUniques();
             await equipment.ReleaseListAsync(payload, releaseAllCt).ConfigureAwait(false);
             await WithdrawReleasedUniquesAsync(uniquesBeforeReleaseAll, releaseAllCt).ConfigureAwait(false);
-            await SyncPetAsync(withEffect: true).ConfigureAwait(false);
+            await SyncCompanionsAsync(withEffect: true).ConfigureAwait(false);
         });
 
         ctx.Dispatcher.Register(Opcode.C2S_EQUIP_COMMON_ITEM, async (_, payload, commonCt) =>
@@ -3669,6 +3695,10 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         {
             if (currentChar is null || !liveSessions.TryGetValue(ctx, out var guardianSt)) return;
             guardianSt.Guardians ??= await masterGuardian.LoadAsync(currentChar.CharacterId, guardianCt).ConfigureAwait(false);
+            if (guardianSt.Guardians is { Equipped: { } loadedEquipped } loadedGuardians)
+            {
+                guardianSt.Guardians = loadedGuardians with { Equipped = tPoseidon.Core.Game.Guardian.GuardianLoginCheck.Validate(loadedEquipped, guardianTables.NextExpByLevel) };
+            }
             if (guardianSt.Guardians is not { Awakened: true } guardians)
             {
                 await soulSystem.SyncAsync(guardianSt, guardianCt).ConfigureAwait(false);
@@ -3676,7 +3706,14 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }
             await SendGuardianViewAsync(guardians, guardianCt).ConfigureAwait(false);
             await soulSystem.SyncAsync(guardianSt, guardianCt).ConfigureAwait(false);
+            await SyncGuardianEntityAsync(withEffect: false).ConfigureAwait(false);
             Console.WriteLine($"{LogTag} {ctx.Remote}   guardians: {guardians.Guardians.Count} of {guardians.SlotMaxCount}, equipped {guardians.Equipped?.GuardianUid.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "none"}");
+        }
+
+        async Task SyncCompanionsAsync(bool withEffect)
+        {
+            await SyncPetAsync(withEffect).ConfigureAwait(false);
+            await SyncGuardianEntityAsync(withEffect).ConfigureAwait(false);
         }
 
         async Task SyncPetAsync(bool withEffect)
@@ -3715,10 +3752,45 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             Console.WriteLine($"{LogTag} {ctx.Remote}   pet 0x{pet.EntityId:X4} ({pet.Name}, type {petType}) from item {petItem.ItemIndex} on map {pet.MapId}");
         }
 
-        async Task ShowMapPetsAsync()
+        async Task SyncGuardianEntityAsync(bool withEffect)
+        {
+            if (currentChar is null || !liveSessions.TryGetValue(ctx, out var entitySt) || !entitySt.ClientReady) return;
+            var equipped = entitySt.Guardians is { Awakened: true } owned ? owned.Equipped : null;
+            if (entitySt.Guardian is { } shownGuardian && (equipped is null || shownGuardian.GuardianUid != equipped.GuardianUid || shownGuardian.MapId != entitySt.MapId))
+            {
+                entitySt.Guardian = null;
+                await RemoveGuardianAsync(shownGuardian).ConfigureAwait(false);
+                Console.WriteLine($"{LogTag} {ctx.Remote}   guardian 0x{shownGuardian.EntityId:X4} removed from map {shownGuardian.MapId}");
+            }
+            if (entitySt.Guardian is not null || equipped is null) return;
+
+            var guardian = new tPoseidon.Core.Game.Guardian.GuardianActor
+            {
+                EntityId = idAllocator.NewId(),
+                GuardianUid = equipped.GuardianUid,
+                MapId = entitySt.MapId,
+                SpeedQuarter = entitySt.AnnouncedSpeedQuarter,
+            };
+            guardian.PlaceAt(entitySt.PlayerX, entitySt.PlayerY, DateTimeOffset.UtcNow);
+            await SendToViewersAsync(entitySt.MapId, entitySt.PlayerX, entitySt.PlayerY, withEffect ? Opcode.S2C_PLAYER_SPAWN_POST_WARP : Opcode.NPC_SPAWN,
+                GuardianFrames.Spawn(guardian, equipped, entitySt.PlayerEntityId, entitySt.PlayerX, entitySt.PlayerY)).ConfigureAwait(false);
+            entitySt.Guardian = guardian;
+            Console.WriteLine($"{LogTag} {ctx.Remote}   guardian 0x{guardian.EntityId:X4} ({equipped.Name}, type {equipped.GuardianType}) on map {guardian.MapId}");
+        }
+
+        async Task ShowMapCompanionsAsync()
         {
             if (!liveSessions.TryGetValue(ctx, out var viewerSt)) return;
             var shownAt = DateTimeOffset.UtcNow;
+            foreach (var other in liveSessions.ToArray())
+            {
+                if (other.Key == ctx || other.Value.Guardian is not { } otherGuardian || otherGuardian.MapId != viewerSt.MapId || other.Value.Guardians?.Equipped is not { } otherState) continue;
+                var (guardianX, guardianY) = otherGuardian.PositionAt(shownAt);
+                if (!InViewOn(viewerSt.MapId, viewerSt.PlayerX, viewerSt.PlayerY, guardianX, guardianY)) continue;
+                byte rkGuardian;
+                lock (moveRng) rkGuardian = (byte)moveRng.Next(1, 256);
+                await ctx.SendFrameAsync(Opcode.NPC_SPAWN, GuardianFrames.Spawn(otherGuardian, otherState, other.Value.PlayerEntityId, guardianX, guardianY), randKey: rkGuardian, default).ConfigureAwait(false);
+            }
             foreach (var other in liveSessions.ToArray())
             {
                 if (other.Key == ctx || other.Value.Pet is not { } otherPet || otherPet.MapId != viewerSt.MapId) continue;
@@ -4157,8 +4229,8 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             _ = RunScriptEventAsync(tPoseidon.Core.Game.Scripting.Lang.EventKind.MapEnter, destMapId, null);
             await guildGames.EnteredZoneAsync(warpedState).ConfigureAwait(false);
             await pvpDuels.EnteredZoneAsync(warpedState).ConfigureAwait(false);
-            await ShowMapPetsAsync().ConfigureAwait(false);
-            await SyncPetAsync(withEffect: false).ConfigureAwait(false);
+            await ShowMapCompanionsAsync().ConfigureAwait(false);
+            await SyncCompanionsAsync(withEffect: false).ConfigureAwait(false);
             await SyncGuardianAsync(sessionCt).ConfigureAwait(false);
         });
 
@@ -4587,6 +4659,20 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }
         });
 
+        ctx.Dispatcher.Register(Opcode.C2S_GUARDIAN_LOCK_ON, async (_, payload, lockCt) =>
+        {
+            if (!liveSessions.TryGetValue(ctx, out var lockSt) || lockSt.Guardian is not { } lockGuardian
+                || !tPoseidon.Core.Net.World.GuardianFrames.TryReadLockOn(payload.Span, out var lockTarget)
+                || monsterManager.Get(lockTarget) is not { IsDead: false } lockMonster
+                || lockMonster.MapId != lockGuardian.MapId
+                || !lockGuardian.Marks.Mark(lockTarget))
+            {
+                return;
+            }
+            await SendGuardianFrameAsync(Opcode.S2C_GUARDIAN_MARKS, tPoseidon.Core.Net.World.GuardianFrames.Marks(lockGuardian.Marks.Targets), lockCt).ConfigureAwait(false);
+            Console.WriteLine($"{LogTag} {ctx.Remote} [guardian] locks on monster 0x{lockTarget:X4}");
+        });
+
         ctx.Dispatcher.Register(Opcode.C2S_GUARDIAN_EQUIP, async (_, payload, equipCt) =>
         {
             if (currentChar is null || !liveSessions.TryGetValue(ctx, out var equipSt)) return;
@@ -4610,12 +4696,13 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 }
                 var updated = owned with
                 {
-                    Equipped = equipped,
+                    Equipped = tPoseidon.Core.Game.Guardian.GuardianLoginCheck.Validate(equipped, guardianTables.NextExpByLevel),
                     Guardians = owned.Guardians.Select(guardian => guardian with { Equipped = guardian.GuardianUid == guardianUid }).ToArray(),
                 };
                 equipSt.Guardians = updated;
                 await SendGuardianFrameAsync(Opcode.S2C_GUARDIAN_RELEASED, tPoseidon.Core.Net.World.GuardianFrames.Empty(), equipCt).ConfigureAwait(false);
                 await SendGuardianViewAsync(updated, equipCt).ConfigureAwait(false);
+                await SyncGuardianEntityAsync(withEffect: false).ConfigureAwait(false);
                 await soulSystem.GuardianChangedAsync(equipSt, previousGuardianUid, guardianUid).ConfigureAwait(false);
                 Console.WriteLine($"{LogTag} {ctx.Remote} [guardian] equipped {guardianUid} ({equipped.Name})");
             }
@@ -6188,6 +6275,101 @@ void DropMonsterEffects(ushort monsterEntityId)
     foreach (var dropped in book.Clear()) idAllocator.Release(dropped.ObjectId);
 }
 
+List<(Opcode Opcode, byte[] Payload)> GuardianFollowFrames(InGameSessionState owner, tPoseidon.Core.Game.Guardian.GuardianActor guardian, DateTimeOffset now)
+{
+    var frames = new List<(Opcode Opcode, byte[] Payload)>();
+    var (guardianX, guardianY) = guardian.PositionAt(now);
+    var (ownerX, ownerY) = owner.Walk is { } ownerWalk && ownerWalk.ToX == owner.PlayerX && ownerWalk.ToY == owner.PlayerY
+        ? ownerWalk.PositionAt(now)
+        : (owner.PlayerX, owner.PlayerY);
+    if (!tPoseidon.Core.Game.Pets.PetRules.IsTooFar(guardian.ToX, guardian.ToY, ownerX, ownerY)) return frames;
+    zoneGeometryByMap.TryGetValue(guardian.MapId, out var geometry);
+    var (targetX, targetY) = tPoseidon.Core.Game.Pets.PetRules.FollowTarget(geometry, guardianX, guardianY, ownerX, ownerY);
+    var moveType = tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(owner.PlayerMoveType);
+    var speed = playerMoveSpeeds is { } speeds ? SpeedOfMoveType(speeds, moveType) : 0f;
+    (int X, int Y, double Length)? path = geometry is null
+        ? (targetX, targetY, Math.Sqrt(Math.Pow(targetX - guardianX, 2) + Math.Pow(targetY - guardianY, 2)))
+        : (WanderRoute.Find(geometry, guardianX, guardianY, targetX, targetY)
+            ?? WanderRoute.Find(geometry, guardianX, guardianY, ownerX, ownerY)) is { } route
+            ? (route.DestinationX, route.DestinationY, route.Length)
+            : null;
+    if (path is not { } walk || speed <= 0)
+    {
+        frames.Add((Opcode.S2C_ENTITY_TELEPORT, PetFrames.Teleported(guardian.EntityId, targetX, targetY)));
+        guardian.PlaceAt(targetX, targetY, now);
+        return frames;
+    }
+    var quarter = ProgressFrames.SpeedQuarter(speed);
+    if (quarter != guardian.SpeedQuarter)
+    {
+        guardian.SpeedQuarter = quarter;
+        frames.Add((Opcode.S2C_ENTITY_SPEED, ProgressFrames.Speed(guardian.EntityId, speed)));
+    }
+    frames.Add((Opcode.ENTITY_MOVE, new EntityMovementPacket
+    {
+        EntityId = guardian.EntityId,
+        FromX = (ushort)guardianX,
+        FromY = (ushort)guardianY,
+        ToX = (ushort)walk.X,
+        ToY = (ushort)walk.Y,
+        Flag = moveType,
+    }.EncodePayload()));
+    guardian.MoveTo(guardianX, guardianY, walk.X, walk.Y, now, TimeSpan.FromMilliseconds(Math.Ceiling(walk.Length / speed * 1000.0)));
+    return frames;
+}
+
+bool GuardianSummoned(InGameSessionState owner) =>
+    owner.Effects.Snapshot().Any(effect => effect.Kind.ActionId == FormSkills.SummonGuardian);
+
+IReadOnlyList<(Opcode Opcode, byte[] Payload, SwingAudience Audience)> GuardianHitExp(InGameSessionState owner, int ownerExp)
+{
+    if (!GuardianSummoned(owner) || owner.Guardian is not { } actor || owner.Guardians is not { Equipped: { } state } login || owner.Character is not { } character
+        || !guardianTables.ExpRatios.TryGetValue(tPoseidon.Core.Game.Guardian.GuardianGrowth.HitExpType, out var ratio))
+    {
+        return Array.Empty<(Opcode Opcode, byte[] Payload, SwingAudience Audience)>();
+    }
+    var gained = tPoseidon.Core.Game.Guardian.GuardianGrowth.Gain(ownerExp, ratio);
+    if (tPoseidon.Core.Game.Guardian.GuardianGrowth.AddExp(state, gained, guardianTables.NextExpByLevel) is not { } outcome)
+    {
+        return Array.Empty<(Opcode Opcode, byte[] Payload, SwingAudience Audience)>();
+    }
+    var grown = tPoseidon.Core.Game.Guardian.GuardianGrowth.Apply(state, outcome);
+    owner.Guardians = login with { Equipped = grown };
+    _ = SaveGuardianGrowthAsync(character.CharacterId, grown, outcome.LeveledUp);
+    if (!outcome.LeveledUp)
+    {
+        return new[] { (Opcode.S2C_GUARDIAN_EXP, GuardianFrames.ExpGained(actor.EntityId, outcome.Gained), SwingAudience.Attacker) };
+    }
+    Console.WriteLine($"{LogTag} [guardian] {grown.GuardianUid} reaches level {outcome.Level} (+{outcome.LevelsGained}), skill points {grown.SkillPoint}");
+    return new[]
+    {
+        (Opcode.S2C_GUARDIAN_LEVEL_UP, GuardianFrames.LevelUp(grown.Level, grown.Exp, grown.SkillPoint), SwingAudience.Attacker),
+        (Opcode.S2C_GUARDIAN_LEVEL_EFFECT, GuardianFrames.LevelUpEffect(actor.EntityId), SwingAudience.Everyone),
+    };
+}
+
+async Task SaveGuardianGrowthAsync(ulong characterId, GuardianState grown, bool leveledUp)
+{
+    try
+    {
+        await masterGuardian.SaveStateAsync(characterId, new tPoseidon.Core.InterServer.GuardianStateUpdate(grown.GuardianUid, grown.Exp, grown.Gauge), CancellationToken.None).ConfigureAwait(false);
+        if (leveledUp)
+        {
+            await masterGuardian.SaveStatusAsync(characterId, new tPoseidon.Core.InterServer.GuardianStatusUpdate(grown.GuardianUid, grown.Level, grown.SkillPoint, grown.StatPoints), CancellationToken.None).ConfigureAwait(false);
+        }
+    }
+    catch (Exception ex) when (ex is ObjectDisposedException or IOException or System.Net.Sockets.SocketException)
+    {
+        Console.WriteLine($"{LogTag} [guardian] growth of {grown.GuardianUid} not sent to the Master: {ex.Message}");
+    }
+}
+
+async Task RemoveGuardianAsync(tPoseidon.Core.Game.Guardian.GuardianActor guardian)
+{
+    await SendToMapAsync(guardian.MapId, Opcode.S2C_GROUND_ITEM_DESPAWN, PetFrames.Removed(guardian.EntityId)).ConfigureAwait(false);
+    idAllocator.Release(guardian.EntityId);
+}
+
 async Task RemovePetAsync(tPoseidon.Core.Game.Pets.PetActor pet)
 {
     await SendToMapAsync(pet.MapId, Opcode.S2C_GROUND_ITEM_DESPAWN, PetFrames.Removed(pet.EntityId)).ConfigureAwait(false);
@@ -6583,6 +6765,13 @@ List<SectorObject> SectorObjectsOn(ushort mapId, DateTimeOffset now)
         var (petX, petY) = pet.PositionAt(now);
         objects.Add(new SectorObject(pet.EntityId, petX, petY, true, Opcode.NPC_SPAWN,
             () => PetFrames.Spawn(pet, owner.PlayerEntityId, petX, petY)));
+    }
+    foreach (var owner in liveSessions.Values.ToArray())
+    {
+        if (owner.Guardian is not { } guardian || guardian.MapId != mapId || owner.Guardians?.Equipped is not { } guardianState) continue;
+        var (guardianX, guardianY) = guardian.PositionAt(now);
+        objects.Add(new SectorObject(guardian.EntityId, guardianX, guardianY, true, Opcode.NPC_SPAWN,
+            () => GuardianFrames.Spawn(guardian, guardianState, owner.PlayerEntityId, guardianX, guardianY)));
     }
     foreach (var house in myCamps.HousesOn(mapId))
     {
@@ -7009,6 +7198,241 @@ var npcLoopTask = Task.Run(async () =>
             }
         }
         return true;
+    }
+
+    async Task<bool> GuardianCombatAsync(
+        KeyValuePair<S2SessionContext, InGameSessionState> session,
+        List<KeyValuePair<S2SessionContext, InGameSessionState>> sessions,
+        ushort mapId,
+        ZoneGeometry? zoneGeometry,
+        DateTimeOffset now,
+        List<tPoseidon.Core.Game.Combat.MonsterBattleEvent> battleEvents)
+    {
+        var owner = session.Value;
+        if (owner.IsDead || owner.Guardian is not { } guardian || guardian.MapId != mapId
+            || owner.Guardians?.Equipped is not { } state || owner.Stats is not { } ownerStats)
+        {
+            return true;
+        }
+        var elapsedMs = guardian.TickedAt == default ? 0 : (int)(now - guardian.TickedAt).TotalMilliseconds;
+        guardian.TickedAt = now;
+        guardian.Cooldowns.Tick(elapsedMs);
+        if (!GuardianSummoned(owner) || !guardian.Clock.Due(elapsedMs) || now < guardian.BusyUntil) return true;
+
+        MonsterEntity? target = null;
+        if (guardian.Marks.First is { } marked)
+        {
+            target = monsterManager.Get(marked);
+            if (target is null)
+            {
+                guardian.Marks.Release(marked);
+                await session.Key.SendFrameAsync(Opcode.S2C_GUARDIAN_MARKS, GuardianFrames.Marks(guardian.Marks.Targets), (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
+            }
+        }
+        else if (owner.CurrentTargetEntityId != 0)
+        {
+            target = monsterManager.Get(owner.CurrentTargetEntityId);
+        }
+        if (target is not { IsDead: false } || target.MapId != mapId || target.CurrentHp < 1
+            || monsterCatalog.GetById(target.MonsterParamId) is not { } targetDefinition || !SkillActions.MayTarget(targetDefinition))
+        {
+            return true;
+        }
+
+        int RelationOf(int skillId) => skillBook.Find(skillId)?.Row.AffectionRel ?? 0;
+        var ownerHpRatio = owner.PlayerMaxHp == 0 ? 1f : ownerStats.CurrentHp / (float)owner.PlayerMaxHp;
+        IEnumerable<tPoseidon.Core.Game.Guardian.GuardianCastCandidate> candidates;
+        if (tPoseidon.Core.Game.Guardian.GuardianCastRules.HasOrder(state))
+        {
+            guardian.OrderCycle.Begin(target.EntityId, state.Skills.Where(skill => skill.Type == GuardianSkillType.Order).ToArray());
+            candidates = tPoseidon.Core.Game.Guardian.GuardianCastRules.OrderCandidates(state, guardian.OrderCycle, ownerHpRatio, RelationOf);
+        }
+        else
+        {
+            candidates = tPoseidon.Core.Game.Guardian.GuardianCastRules.CardCandidates(state, ownerHpRatio, RelationOf);
+        }
+
+        foreach (var candidate in candidates)
+        {
+            if (candidate.Target != tPoseidon.Core.Game.Guardian.GuardianCastTarget.Enemy
+                || skillBook.Find(candidate.Skill.SkillId) is not { } definition
+                || !tPoseidon.Core.Game.Guardian.GuardianCastRules.Supports(definition.ActionId)
+                || !definition.HasLevel(candidate.Skill.Level)
+                || definition.ActionAt(candidate.Skill.Level) is not { } action
+                || guardian.Cooldowns.IsRunning(definition.Id)
+                || !guardianTables.Params.TryGetValue(state.GuardianType, out var parameters)
+                || !guardianTables.Growth.TryGetValue(parameters.LevelGrowthId, out var growth))
+            {
+                continue;
+            }
+            var conditions = definition.ConditionsAt(candidate.Skill.Level);
+            guardian.Cooldowns.Begin(definition.Id, tPoseidon.Core.Game.Guardian.GuardianCastRules.CooldownSeconds(conditions?.Value(SkillDefinition.CoolTimeColumn)));
+            guardian.BusyUntil = now + TimeSpan.FromSeconds(conditions?.Value(SkillDefinition.DelayColumn) ?? 0f);
+            if (candidate.Skill.Type == GuardianSkillType.Order) guardian.OrderCycle.MarkUsed(candidate.Skill.Slot);
+            var attacker = tPoseidon.Core.Game.Guardian.GuardianStats.Attacker(
+                state.Level, tPoseidon.Core.Game.Guardian.GuardianStats.Compute(state.Level, state.StatPoints, growth));
+            var delivered = SkillAreaShapes.Find(definition.ActionId) is { } area
+                ? await GuardianAreaHitAsync(session, sessions, guardian, definition, action, area, attacker, target, mapId, zoneGeometry, now, battleEvents).ConfigureAwait(false)
+                : await GuardianSingleHitAsync(session, sessions, guardian, definition, action, attacker, target, targetDefinition, mapId, zoneGeometry, now, battleEvents).ConfigureAwait(false);
+            if (!delivered) return false;
+            Console.WriteLine($"{LogTag} [guardian] 0x{guardian.EntityId:X4} casts skill {definition.Id} level {candidate.Skill.Level} at 0x{target.EntityId:X4}");
+            await SendToMapAsync(mapId, Opcode.S2C_GUARDIAN_SPEECH, GuardianFrames.Speech(guardian.EntityId, definition.Row.Name, clientTextEncoding)).ConfigureAwait(false);
+            await SendToMapAsync(mapId, Opcode.ENTITY_EMOTE, EntityMotionFrames.Emote(guardian.EntityId, tPoseidon.Core.Game.Guardian.GuardianCastRules.CastEmote)).ConfigureAwait(false);
+            return true;
+        }
+        return true;
+    }
+
+    async Task<bool> GuardianSingleHitAsync(
+        KeyValuePair<S2SessionContext, InGameSessionState> session,
+        List<KeyValuePair<S2SessionContext, InGameSessionState>> sessions,
+        tPoseidon.Core.Game.Guardian.GuardianActor guardian,
+        SkillDefinition definition,
+        tPoseidon.Core.LibConfig.SkillTableRow action,
+        SkillAttacker attacker,
+        MonsterEntity target,
+        MonsterParamEntry targetDefinition,
+        ushort mapId,
+        ZoneGeometry? zoneGeometry,
+        DateTimeOffset now,
+        List<tPoseidon.Core.Game.Combat.MonsterBattleEvent> battleEvents)
+    {
+        var owner = session.Value;
+        var element = SkillActions.ElementOf(definition.ActionId);
+        var shape = SkillHitShapes.Find(definition.ActionId);
+        var victim = new SkillTarget(
+            targetDefinition.DpLv + target.StatDelta(MonsterStat.Dp),
+            targetDefinition.HvLv + target.StatDelta(MonsterStat.Hv),
+            targetDefinition.MdLv + target.StatDelta(MonsterStat.Md),
+            targetDefinition.LkLv + target.StatDelta(MonsterStat.Lk),
+            target.CurrentHp, target.Level, SkillActions.ResistOf(targetDefinition, element) - target.ResistLoss(element),
+            target.MaxHp, targetDefinition.DpLv);
+        SkillHit hit;
+        lock (npcLoopRng) hit = SkillActions.Resolve(definition.ActionId, action, attacker, victim, npcLoopRng, null);
+        var (guardianX, guardianY) = guardian.PositionAt(now);
+        var hpBefore = target.CurrentHp;
+        target.AddAttacker(owner.PlayerEntityId);
+        target.ApplyDamage(hit.Damage);
+        var strike = new tPoseidon.Core.Game.Combat.PlayerStrike(
+            AttackerEntityId: owner.PlayerEntityId,
+            TargetEntityId: target.EntityId,
+            AttackerX: (ushort)guardianX,
+            AttackerY: (ushort)guardianY,
+            TargetX: target.CurrentX,
+            TargetY: target.CurrentY,
+            Damage: hit.Damage,
+            MobHpAfter: target.CurrentHp,
+            HitFlags: 0,
+            HitKind: (uint)hit.Kind,
+            Killed: target.IsDead,
+            NextSwingAtUtc: now,
+            MonsterParamId: target.MonsterParamId,
+            MobMaxHp: target.MaxHp,
+            MobHpBefore: hpBefore);
+        var (additions, ownerEntityId) = await ResolveStrikeAsync(
+            strike, owner, mapId, sessions, zoneGeometry, now, battleEvents,
+            SkillActions.ExperienceDivisor, takesOwnerWithoutDamage: shape?.TakesOwner ?? true).ConfigureAwait(false);
+        if (strike.Killed && owner.CurrentTargetEntityId == target.EntityId) owner.CurrentTargetEntityId = 0;
+        var shownStrike = strike with { AttackerEntityId = guardian.EntityId };
+        var tail = shape?.Tail ?? SkillTail.Positions;
+        Console.WriteLine($"{LogTag} [guardian] skill {definition.Id} (action {definition.ActionId}) -> 0x{target.EntityId:X4} kind={hit.Kind} damage={hit.Damage} targetHp={target.CurrentHp}/{target.MaxHp}");
+        return await SendStrikeFramesAsync(
+            SkillFrames.EncodeHit(
+                shownStrike, definition, hit, commandBlockIds.Next(), additions, Array.Empty<(Opcode Opcode, byte[] Payload)>(),
+                casterTwice: shape is { TargetInHeader: false },
+                tail: tail == SkillTail.None ? null : SkillFrames.TailFor(tail, shownStrike, action.Amount(SkillHitShapes.CountColumn) ?? 0)),
+            owner.PlayerEntityId, strike.TargetEntityId, ownerEntityId, sessions).ConfigureAwait(false);
+    }
+
+    async Task<bool> GuardianAreaHitAsync(
+        KeyValuePair<S2SessionContext, InGameSessionState> session,
+        List<KeyValuePair<S2SessionContext, InGameSessionState>> sessions,
+        tPoseidon.Core.Game.Guardian.GuardianActor guardian,
+        SkillDefinition definition,
+        tPoseidon.Core.LibConfig.SkillTableRow action,
+        AreaShape shape,
+        SkillAttacker attacker,
+        MonsterEntity selected,
+        ushort mapId,
+        ZoneGeometry? zoneGeometry,
+        DateTimeOffset now,
+        List<tPoseidon.Core.Game.Combat.MonsterBattleEvent> battleEvents)
+    {
+        var owner = session.Value;
+        var (guardianX, guardianY) = guardian.PositionAt(now);
+        AreaCandidate CandidateOf(MonsterEntity monster)
+        {
+            var (x, y) = monster.GetInterpolatedPosition(now);
+            return new AreaCandidate(monster.EntityId, x, y, monster.IsDead, monsterCatalog.GetById(monster.MonsterParamId)?.Type ?? 0, monster.OwnerEntityId);
+        }
+        var selectedCandidate = CandidateOf(selected);
+        var victims = SkillAreaShapes.Collect(
+            shape, action, guardian.EntityId, (guardianX, guardianY), selectedCandidate, monsterManager.GetByMap(mapId).Select(CandidateOf));
+        var radius = action.Amount(SkillAreaShapes.RadiusColumn) ?? 0;
+        var centre = shape.Centre == AreaCentre.Target ? (selectedCandidate.X, selectedCandidate.Y) : (guardianX, guardianY);
+        var blockId = commandBlockIds.Next();
+        if (!await SendStrikeFramesAsync(
+            SkillFrames.EncodeAreaStart(guardian.EntityId, definition, blockId, SkillFrames.AreaTailBytes(shape.Tail, selected.EntityId, victims, radius)),
+            owner.PlayerEntityId, selected.EntityId, selected.OwnerEntityId, sessions).ConfigureAwait(false))
+        {
+            return false;
+        }
+        foreach (var victimId in victims)
+        {
+            if (monsterManager.Get(victimId) is not { IsDead: false } victim || monsterCatalog.GetById(victim.MonsterParamId) is not { } victimDefinition) continue;
+            var (victimX, victimY) = victim.GetInterpolatedPosition(now);
+            SkillHit hit;
+            lock (npcLoopRng)
+            {
+                hit = SkillAreaShapes.Hit(
+                    shape, action, attacker,
+                    new SkillTarget(
+                        victimDefinition.DpLv + victim.StatDelta(MonsterStat.Dp),
+                        victimDefinition.HvLv + victim.StatDelta(MonsterStat.Hv),
+                        victimDefinition.MdLv + victim.StatDelta(MonsterStat.Md),
+                        victimDefinition.LkLv + victim.StatDelta(MonsterStat.Lk),
+                        victim.CurrentHp, victim.Level, SkillActions.ResistOf(victimDefinition, shape.Element) - victim.ResistLoss(shape.Element),
+                        victim.MaxHp, victimDefinition.DpLv),
+                    npcLoopRng);
+            }
+            if (shape.Falloff)
+            {
+                hit = hit with { Damage = SkillAreaRules.WithFalloff(hit.Damage, SkillAreaRules.Distance(victimX, victimY, centre.Item1, centre.Item2), radius) };
+            }
+            var hpBefore = victim.CurrentHp;
+            victim.AddAttacker(owner.PlayerEntityId);
+            victim.ApplyDamage(hit.Damage);
+            var strike = new tPoseidon.Core.Game.Combat.PlayerStrike(
+                AttackerEntityId: owner.PlayerEntityId,
+                TargetEntityId: victim.EntityId,
+                AttackerX: (ushort)guardianX,
+                AttackerY: (ushort)guardianY,
+                TargetX: victimX,
+                TargetY: victimY,
+                Damage: hit.Damage,
+                MobHpAfter: victim.CurrentHp,
+                HitFlags: 0,
+                HitKind: (uint)hit.Kind,
+                Killed: victim.IsDead,
+                NextSwingAtUtc: now,
+                MonsterParamId: victim.MonsterParamId,
+                MobMaxHp: victim.MaxHp,
+                MobHpBefore: hpBefore);
+            if (strike.Killed && owner.CurrentTargetEntityId == victim.EntityId) owner.CurrentTargetEntityId = 0;
+            var (additions, ownerEntityId) = await ResolveStrikeAsync(
+                strike, owner, mapId, sessions, zoneGeometry, now, battleEvents,
+                SkillActions.ExperienceDivisor, takesOwnerWithoutDamage: false).ConfigureAwait(false);
+            Console.WriteLine($"{LogTag} [guardian] skill {definition.Id} hits 0x{victim.EntityId:X4}: kind={hit.Kind} damage={hit.Damage} hp={victim.CurrentHp}/{victim.MaxHp}");
+            if (!await SendStrikeFramesAsync(
+                SkillFrames.EncodeAreaVictim(strike with { AttackerEntityId = guardian.EntityId }, hit, blockId, additions),
+                owner.PlayerEntityId, strike.TargetEntityId, ownerEntityId, sessions).ConfigureAwait(false))
+            {
+                return false;
+            }
+        }
+        return await SendStrikeFramesAsync(
+            SkillFrames.EncodeAreaEnd(blockId, Array.Empty<(Opcode Opcode, byte[] Payload)>()),
+            owner.PlayerEntityId, selected.EntityId, selected.OwnerEntityId, sessions).ConfigureAwait(false);
     }
 
     async Task<bool> AreaSkillAsync(
@@ -13464,6 +13888,7 @@ var npcLoopTask = Task.Run(async () =>
                 attackerRewards = ownExp;
                 Console.WriteLine($"{LogTag} [party] exp {hitExp} shared: {string.Join(", ", expSplit.Select(g => $"0x{g.CharacterId:X}={g.Gain}"))}");
             }
+            if (striker is not null) attackerRewards = attackerRewards.Concat(GuardianHitExp(striker, hitExp)).ToList();
             Console.WriteLine($"{LogTag} [progress] 0x{strike.AttackerEntityId:X4} gets {hitExp} exp for this hit (share {share}, divisor {experienceDivisor})");
         }
 
@@ -13537,6 +13962,11 @@ var npcLoopTask = Task.Run(async () =>
         if (strike.Killed)
         {
             corpses.Add((strike.TargetEntityId, mapId, now + corpseRemovalDelay));
+            foreach (var marker in sessions)
+            {
+                if (marker.Value.Guardian is not { } markingGuardian || !markingGuardian.Marks.Release(strike.TargetEntityId)) continue;
+                await marker.Value.SendFrameAsync(Opcode.S2C_GUARDIAN_MARKS, GuardianFrames.Marks(markingGuardian.Marks.Targets), (byte)Random.Shared.Next(1, 256), default).ConfigureAwait(false);
+            }
             monsterBattleCycle.Forget(strike.TargetEntityId);
             if (struckMonster is not null)
             {
@@ -14608,6 +15038,22 @@ var npcLoopTask = Task.Run(async () =>
 
             foreach (var session in sessions)
             {
+                var guardianOwner = session.Value;
+                if (guardianOwner.IsDead || guardianOwner.Guardian is not { } followingGuardian || followingGuardian.MapId != mapId || now < followingGuardian.NextFollowAt) continue;
+                followingGuardian.NextFollowAt = now + tPoseidon.Core.Game.Pets.PetRules.FollowPeriod;
+                foreach (var (guardianOpcode, guardianPayload) in GuardianFollowFrames(guardianOwner, followingGuardian, now))
+                {
+                    if (!await SendFromLoopAsync(sessions, guardianOpcode, guardianPayload, MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false)) return;
+                }
+            }
+
+            foreach (var session in sessions)
+            {
+                if (!await GuardianCombatAsync(session, sessions, mapId, zoneGeometry, now, battleEvents).ConfigureAwait(false)) return;
+            }
+
+            foreach (var session in sessions)
+            {
                 var petOwner = session.Value;
                 if (petOwner.Pet is not { } speakingPet || speakingPet.MapId != mapId) continue;
                 if (speakingPet.Speech.Tick(now, petSpeech, speakingPet.CharacterType, npcLoopRng.Next) is not { } utterance) continue;
@@ -15050,6 +15496,7 @@ internal sealed class InGameSessionState
     public Func<tPoseidon.Core.Game.Scripting.Lang.EventKind, long?, string?, Task>? RunScriptEvent { get; set; }
     public DateTimeOffset HuntTickedAt { get; set; }
     public tPoseidon.Core.Game.Pets.PetActor? Pet { get; set; }
+    public tPoseidon.Core.Game.Guardian.GuardianActor? Guardian { get; set; }
     public tPoseidon.Core.Game.Skills.Effects.SkillEffectBook Effects { get; } = new(tPoseidon.Core.Game.Skills.Effects.SkillEffectBook.PlayerCapacities);
     public tPoseidon.Core.Game.Characters.EffectiveStats CombatBase { get; set; }
     public tPoseidon.Core.Game.Skills.CrazyHammerGauge CrazyGauge { get; } = new();

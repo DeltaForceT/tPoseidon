@@ -86,6 +86,20 @@ public sealed class PartyServer
         On(dispatcher, ctx, PartyFrames.InfoRequest, (id, p) => _parties.Info(id, new PacketReader(p).ReadNulTerminated(_text)));
         On(dispatcher, ctx, PartyFrames.CancelInvite, (id, _) => _parties.CancelInvite(id));
         On(dispatcher, ctx, PartyFrames.RemovePartyQuest, (id, _) => _parties.TearDownQuest(id));
+        On(dispatcher, ctx, PartyBoardFrames.ListParties, (id, p) =>
+            PartyBoardFrames.TryReadList(p, withLevelFilter: true, out var list) ? _parties.BoardListParties(id, list) : new PartyOutbox());
+        On(dispatcher, ctx, PartyBoardFrames.ListSeekers, (id, p) =>
+            PartyBoardFrames.TryReadList(p, withLevelFilter: false, out var list) ? _parties.BoardListSeekers(id, list) : new PartyOutbox());
+        On(dispatcher, ctx, PartyBoardFrames.SearchParties, (id, p) =>
+            PartyBoardFrames.TryReadSearch(p, _text, out var search) ? _parties.BoardSearchParties(id, search) : new PartyOutbox());
+        On(dispatcher, ctx, PartyBoardFrames.SearchSeekers, (id, p) =>
+            PartyBoardFrames.TryReadSearch(p, _text, out var search) ? _parties.BoardSearchSeekers(id, search) : new PartyOutbox());
+        On(dispatcher, ctx, PartyBoardFrames.PostParty, (id, p) => _parties.PostPartyRecruit(id, new PacketReader(p).ReadNulTerminated(_text)));
+        On(dispatcher, ctx, PartyBoardFrames.PostSeeker, (id, p) => _parties.PostSeeker(id, new PacketReader(p).ReadNulTerminated(_text)));
+        On(dispatcher, ctx, PartyBoardFrames.RemoveParty, (id, _) => _parties.RemovePartyRecruit(id));
+        On(dispatcher, ctx, PartyBoardFrames.RemoveSeeker, (id, _) => _parties.RemoveSeeker(id));
+        On(dispatcher, ctx, PartyBoardFrames.PartyDetailsRequest, (id, p) => _parties.BoardPartyDetails(id, new PacketReader(p).ReadUInt16()));
+        On(dispatcher, ctx, PartyBoardFrames.SeekerDetailsRequest, (id, p) => _parties.BoardSeekerDetails(id, new PacketReader(p).ReadUInt64()));
     }
 
     public Task LoggedInAsync(SocialMember member, CancellationToken ct)

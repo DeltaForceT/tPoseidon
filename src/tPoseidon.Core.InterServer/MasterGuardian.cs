@@ -8,13 +8,21 @@ public sealed class MasterGuardian
     private readonly Func<MasterServerClient?> _client;
     private readonly ushort _selfIndex;
     private readonly Action<string> _log;
+    private readonly MasterChannel _channel;
 
     public MasterGuardian(Func<MasterServerClient?> client, ushort selfIndex, Action<string> log)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _selfIndex = selfIndex;
         _log = log ?? throw new ArgumentNullException(nameof(log));
+        _channel = new MasterChannel(client, selfIndex, "guardian", log);
     }
+
+    public Task SaveStateAsync(ulong charUid, GuardianStateUpdate update, CancellationToken ct) =>
+        _channel.SendAsync(charUid, InterServerOpcode.CcmdGuardianState, GuardianMessages.EncodeStateUpdate(update), ct);
+
+    public Task SaveStatusAsync(ulong charUid, GuardianStatusUpdate update, CancellationToken ct) =>
+        _channel.SendAsync(charUid, InterServerOpcode.CcmdGuardianStatus, GuardianMessages.EncodeStatus(update), ct);
 
     public async Task<GuardianLogin?> LoadAsync(ulong charUid, CancellationToken ct)
     {

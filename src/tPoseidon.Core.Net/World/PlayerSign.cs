@@ -1,4 +1,5 @@
 using System.Text;
+using tPoseidon.Core.Net.Social;
 
 namespace tPoseidon.Core.Net.World;
 
@@ -7,6 +8,7 @@ public enum SignKind : byte
     None = 0,
     HeadMessage = 2,
     CardBattleTitle = 3,
+    PartyBoardNotice = 7,
     FortuneSign = 9,
 }
 
@@ -60,6 +62,23 @@ public sealed class PlayerSign
     {
         if (Kind == SignKind.FortuneSign) Kind = SignKind.None;
         return new[] { new SignFrame(FortuneSignCleared, Entity(entityId)) };
+    }
+
+    public IReadOnlyList<SignFrame> ShowPartyBoardNotice(ushort entityId, byte noticeKind, string text, Encoding encoding)
+    {
+        var frames = new List<SignFrame>(3);
+        ClearHeadMessage(entityId, frames);
+        ClearCardBattleTitle(entityId, frames);
+        Kind = SignKind.PartyBoardNotice;
+        frames.Add(new SignFrame(PartyBoardFrames.HeadNoticeShown, PartyBoardFrames.HeadNoticeShownFor(entityId, noticeKind, text, encoding)));
+        return frames;
+    }
+
+    public IReadOnlyList<SignFrame> ClearPartyBoardNotice(ushort entityId)
+    {
+        if (Kind != SignKind.PartyBoardNotice) return Array.Empty<SignFrame>();
+        Kind = SignKind.None;
+        return new[] { new SignFrame(PartyBoardFrames.HeadNoticeCleared, Entity(entityId)) };
     }
 
     public IReadOnlyList<SignFrame> ClearOnAction(ushort entityId)
