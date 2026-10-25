@@ -6,6 +6,13 @@ public static class CardIdentifyFrames
     public const uint NoScore = 0;
     public const int PositionSize = sizeof(uint);
 
+    public static byte[] Marker(ushort entityId)
+    {
+        var w = new PacketWriter(sizeof(ushort));
+        w.WriteUInt16(entityId);
+        return w.ToArray();
+    }
+
     public static byte[] Ended(uint score, long exp, long tmExp)
     {
         var w = new PacketWriter(3 * sizeof(uint));

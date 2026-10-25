@@ -10,6 +10,19 @@ public sealed class CoupleFramesTests
     private static readonly Encoding Text = Encoding.Latin1;
 
     [Fact]
+    public void SkillLearnedIsTheRingIndex()
+    {
+        Assert.Equal(new byte[] { 0x34, 0x12 }, CoupleFrames.SkillLearned(0x1234));
+    }
+
+    [Fact]
+    public void MakeEndedIsTheReasonCode()
+    {
+        Assert.Equal(new byte[] { 4, 0, 0, 0 }, CoupleFrames.MakeEnded(CoupleRules.EndTargetMissing));
+        Assert.Equal(new byte[] { 2, 0, 0, 0 }, CoupleFrames.MakeEnded(CoupleRules.EndConditionFailed));
+    }
+
+    [Fact]
     public void MakeStateCarriesBothReadyBytes()
     {
         Assert.Equal(new byte[] { 1, 0, (byte)'B', (byte)'o', 0, 0x04, 0x00, 1 }, CoupleFrames.MakeState(1, 0, "Bo", 4, 1, Text));
@@ -27,12 +40,19 @@ public sealed class CoupleFramesTests
     }
 
     [Fact]
-    public void OptionRequestIsSixteenBytes()
+    public void OptionRequestIsCouponTitleRingDress()
     {
-        var bytes = new byte[] { 1, 0, 0, 0, 0, 0, 0, 0, 0x4C, 0x9A, 0, 0, 0x58, 0x98, 12, 0 };
+        var bytes = new byte[] { 1, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0, 0x4C, 0x9A, 0x58, 0x98 };
         Assert.True(CoupleFrames.TryReadOption(bytes, out var request));
-        Assert.Equal(new MarriageOptionRequest(1, 39500, 39000, 12), request);
+        Assert.Equal(new MarriageOptionRequest(1, 12, 39500, 39000), request);
         Assert.False(CoupleFrames.TryReadOption(bytes.AsSpan(0, 15), out _));
+    }
+
+    [Fact]
+    public void OptionRefusalIsOneDword()
+    {
+        Assert.Equal(new byte[] { 4, 0, 0, 0 }, CoupleFrames.OptionRefused(4));
+        Assert.Equal(new byte[] { 5, 0, 0, 0 }, CoupleFrames.OptionRefused(5));
     }
 
     [Fact]

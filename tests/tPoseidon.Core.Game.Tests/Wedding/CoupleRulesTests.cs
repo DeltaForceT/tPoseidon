@@ -64,16 +64,55 @@ public sealed class CoupleRulesTests
     {
         var tables = Tables();
         var points = new CouplePoints(90, 50, 50);
-        var request = new MarriageOptionRequest(0, 39500, 39000, 12);
+        var request = new MarriageOptionRequest(0, 12, 39500, 39000);
         Assert.Equal(MarriageOptionRefusal.NotCloseEnough, CoupleRules.Choose(tables, CoupleStates.Joined, points, request, _ => 1, 100000).Refusal);
-        Assert.Equal(MarriageOptionRefusal.Title, CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request with { TitleIndex = 1 }, _ => 1, 100000).Refusal);
-        Assert.Equal(MarriageOptionRefusal.Ring, CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request with { RingItemId = 39509 }, _ => 1, 100000).Refusal);
+        Assert.Equal(MarriageOptionRefusal.TitleMissing, CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request with { TitleIndex = 99 }, _ => 1, 100000).Refusal);
+        Assert.Equal(MarriageOptionRefusal.TitleOutOfRange, CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request with { TitleIndex = 1 }, _ => 1, 100000).Refusal);
+        Assert.Equal(MarriageOptionRefusal.RingMissing, CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request with { RingItemId = 0 }, _ => 1, 100000).Refusal);
+        Assert.Equal(MarriageOptionRefusal.RingMissing, CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request with { RingItemId = 39999 }, _ => 1, 100000).Refusal);
+        Assert.Equal(MarriageOptionRefusal.RingOutOfRange, CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request with { RingItemId = 39509 }, _ => 1, 100000).Refusal);
+        Assert.Equal(MarriageOptionRefusal.DressMissing, CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request with { DressItemId = 39999 }, _ => 1, 100000).Refusal);
         Assert.Equal(MarriageOptionRefusal.DressCoupon, CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request, _ => 0, 100000).Refusal);
         Assert.Equal(MarriageOptionRefusal.Money, CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request, _ => 1, 29999).Refusal);
         var (refusal, choice) = CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request, _ => 1, 30000);
         Assert.Equal(MarriageOptionRefusal.None, refusal);
         Assert.Equal(30000, choice!.Fee);
         Assert.Equal([(39000, 1)], choice.Coupons());
+    }
+
+    [Fact]
+    public void ARingWithoutADressCostsNothingAndTakesNoDressCoupon()
+    {
+        var tables = Tables();
+        var points = new CouplePoints(90, 50, 50);
+        var request = new MarriageOptionRequest(0, 12, 39500, 0);
+        var (refusal, choice) = CoupleRules.Choose(tables, CoupleStates.CloseEnough, points, request, _ => 0, 0);
+        Assert.Equal(MarriageOptionRefusal.None, refusal);
+        Assert.Null(choice!.Dress);
+        Assert.Equal(0, choice.Fee);
+        Assert.Empty(choice.Coupons());
+    }
+
+    [Theory]
+    [InlineData(MarriageOptionRefusal.TitleMissing, 1u)]
+    [InlineData(MarriageOptionRefusal.RingMissing, 1u)]
+    [InlineData(MarriageOptionRefusal.DressMissing, 1u)]
+    [InlineData(MarriageOptionRefusal.TitleOutOfRange, 2u)]
+    [InlineData(MarriageOptionRefusal.RingOutOfRange, 2u)]
+    [InlineData(MarriageOptionRefusal.DressOutOfRange, 2u)]
+    [InlineData(MarriageOptionRefusal.RingCoupon, 3u)]
+    [InlineData(MarriageOptionRefusal.DressCoupon, 3u)]
+    [InlineData(MarriageOptionRefusal.Money, 4u)]
+    [InlineData(MarriageOptionRefusal.NotCloseEnough, 5u)]
+    public void RefusalsMapToTheServerCodes(MarriageOptionRefusal refusal, uint code)
+    {
+        Assert.Equal(code, CoupleRules.RefusalCode(refusal));
+    }
+
+    [Fact]
+    public void AGrantedChoiceHasNoRefusalCode()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => CoupleRules.RefusalCode(MarriageOptionRefusal.None));
     }
 
     [Fact]

@@ -6,6 +6,15 @@ namespace tPoseidon.Core.Net.Tests.World;
 public sealed class TimedItemFramesTests
 {
     [Fact]
+    public void TheClockFrameIsOneFileTime()
+    {
+        var now = new DateTime(2026, 10, 17, 4, 30, 0, DateTimeKind.Utc);
+        var body = TimedItemFrames.Clock(now);
+        Assert.Equal(8, body.Length);
+        Assert.Equal(ClientClock.FileTime(now), BitConverter.ToUInt64(body, 0));
+    }
+
+    [Fact]
     public void TheLoginFrameStartsWithTheServerClockThenListsEachItem()
     {
         var now = new DateTime(2026, 10, 17, 4, 30, 0, DateTimeKind.Utc);

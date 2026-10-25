@@ -18,6 +18,7 @@ public sealed class PlayerShopStall
     private readonly HashSet<ushort> _visitors = new();
     private readonly HashSet<ulong> _busy = new();
     private bool _locked;
+    private int _visits;
 
     public PlayerShopStall(ushort keeperId)
     {
@@ -37,6 +38,14 @@ public sealed class PlayerShopStall
         get
         {
             lock (_gate) return _slots.ToArray();
+        }
+    }
+
+    public int VisitsSinceStart
+    {
+        get
+        {
+            lock (_gate) return _visits;
         }
     }
 
@@ -75,9 +84,14 @@ public sealed class PlayerShopStall
         lock (_gate)
         {
             if (_visitors.Count >= PlayerShopRules.MaxVisitors) return false;
-            _visitors.Add(visitorId);
+            if (_visitors.Add(visitorId)) _visits++;
             return true;
         }
+    }
+
+    public void RestartCounters()
+    {
+        lock (_gate) _visits = 0;
     }
 
     public void RemoveVisitor(ushort visitorId)

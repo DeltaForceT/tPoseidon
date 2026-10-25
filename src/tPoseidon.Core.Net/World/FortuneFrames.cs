@@ -37,6 +37,16 @@ public static class FortuneFrames
     public const int RollRequestSize = 16;
     public const int AwardMaxLength = 100;
 
+    public const uint RefusedWrongStep = 1;
+    public const uint RefusedNoMoney = 2;
+
+    public static byte[] Refused(uint code)
+    {
+        var w = new PacketWriter(sizeof(uint));
+        w.WriteUInt32(code);
+        return w.ToArray();
+    }
+
     public static byte[] TitleAnnounce(ushort entityId, uint titleId)
     {
         var w = new PacketWriter(TitleAnnounceSize);

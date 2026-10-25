@@ -26,6 +26,37 @@ public sealed class PlayerSignTests
     }
 
     [Fact]
+    public void AMicrophoneSaysItZoneWideThenShowsTheBubbleAndANewOneClearsTheOld()
+    {
+        var sign = new PlayerSign();
+
+        var first = sign.ShowMicrophone(Entity, "Kay", "hello", Latin);
+
+        Assert.Equal([PlayerSign.MicrophoneChat, PlayerSign.MicrophoneBubbleShown], first.Select(frame => frame.Opcode));
+        Assert.Equal(new byte[] { 0x02, 0x01, (byte)'K', (byte)'a', (byte)'y', 0, (byte)'h', (byte)'e', (byte)'l', (byte)'l', (byte)'o', 0 }, first[0].Payload);
+        Assert.Equal(Shown("hello"), first[1].Payload);
+        Assert.Equal(SignKind.Microphone, sign.Kind);
+
+        var second = sign.ShowMicrophone(Entity, "Kay", "again", Latin);
+
+        Assert.Equal([PlayerSign.MicrophoneChat, PlayerSign.MicrophoneBubbleCleared, PlayerSign.MicrophoneBubbleShown], second.Select(frame => frame.Opcode));
+    }
+
+    [Fact]
+    public void TheMicrophoneTextIsCutAtOneHundredSixtyOneBytesAndClearedByMovement()
+    {
+        var sign = new PlayerSign();
+        var frames = sign.ShowMicrophone(Entity, "Kay", new string('a', 300), Latin);
+        Assert.Equal(sizeof(ushort) + PlayerSign.MicrophoneTextBytes + 1, frames[^1].Payload.Length);
+        var cleared = Assert.Single(sign.ClearOnAction(Entity));
+        Assert.Equal(PlayerSign.MicrophoneBubbleCleared, cleared.Opcode);
+        Assert.Equal(SignKind.None, sign.Kind);
+        Assert.Empty(sign.ClearMicrophoneOnAction(Entity));
+        Assert.True(PlayerSign.ClearsMicrophone(0x0018));
+        Assert.False(PlayerSign.ClearsMicrophone(0x0040));
+    }
+
+    [Fact]
     public void TheTextIsCutAtFiftyBytes()
     {
         var frame = Assert.Single(new PlayerSign().ShowHeadMessage(Entity, new string('a', 80), Latin));

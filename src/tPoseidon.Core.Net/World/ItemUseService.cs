@@ -33,6 +33,8 @@ public sealed record ItemUsePlayer
     public Func<SpecialItemHost?>? Special { get; init; }
     public Func<int, BonusPresentEntry?>? BonusPresent { get; init; }
     public Func<int, KeyboxEntry?>? Keybox { get; init; }
+    public Func<int, int?>? KeyRate { get; init; }
+    public Func<int>? ZoneType { get; init; }
     public Func<int, int, bool>? ExpPotion { get; init; }
     public Func<int, bool>? Imprint { get; init; }
 }
@@ -259,8 +261,8 @@ public sealed partial class ItemUseService
             case ItemUseHelper.Use when definition.Effect == tPoseidon.Core.Game.Pets.CharacterPetReinforceRules.ReinforceEffect:
                 await RefuseAsync($"item {item.ItemIndex}: a pet piercing is used through the character pet window", ct).ConfigureAwait(false);
                 break;
-            case ItemUseHelper.Use when definition.Effect == PresentRolls.KeyBoxEffect:
-                await OpenKeyBoxAsync(item, definition, wireUid, ct).ConfigureAwait(false);
+            case ItemUseHelper.Use when definition.Effect == KeyBoxRules.BoxEffect:
+                await RefuseAsync($"item {item.ItemIndex}: a key box is opened through the key box window", ct).ConfigureAwait(false);
                 break;
             case ItemUseHelper.Use when definition.Effect == tPoseidon.Core.Game.Fortune.FortuneRules.StarTearsEffect:
                 if (_player.StarTears is not { } starTears || !await starTears(definition, ct).ConfigureAwait(false))

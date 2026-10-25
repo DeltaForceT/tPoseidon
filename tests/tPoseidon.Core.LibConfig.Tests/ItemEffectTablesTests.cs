@@ -7,7 +7,7 @@ public sealed class ItemEffectTablesTests
 
     private const string Xml = """
         <?xml version="1.0" encoding="utf-8"?>
-        <INI TableCount="6" TableInfoCount="6">
+        <INI TableCount="7" TableInfoCount="7">
         <TABLE name="TeleportAdvInfo" RowCount="2" TableInfoID="1" FieldCnt="5">
             <FIELDINFO Name="ZoneIndex" IsKey="1" DataType="INT"></FIELDINFO>
             <ROW><ZoneIndex>0</ZoneIndex><ZoneType>0</ZoneType><Name><![CDATA[Gate]]></Name><ZoneID>3</ZoneID><LCDBunchFrame>0</LCDBunchFrame></ROW>
@@ -24,6 +24,11 @@ public sealed class ItemEffectTablesTests
         <TABLE name="KeyboxItemInfo" RowCount="1" TableInfoID="4" FieldCnt="7">
             <FIELDINFO Name="KeyBoxID" IsKey="1" DataType="INT"></FIELDINFO>
             <ROW><KeyBoxID>431827</KeyBoxID><KeyItemID><![CDATA[19839|19837|19840]]></KeyItemID><OnlyKeyitem>1</OnlyKeyitem><NoramlItemID>0</NoramlItemID><RareItemID_TypeA>431838</RareItemID_TypeA><RareItemID_TypeB>431843</RareItemID_TypeB><RareItem_TypeB_Droprate>30</RareItem_TypeB_Droprate></ROW>
+        </TABLE>
+        <TABLE name="KeyItemRateInfo" RowCount="2" TableInfoID="7" FieldCnt="2">
+            <FIELDINFO Name="ItemID" IsKey="1" DataType="INT"></FIELDINFO>
+            <ROW><ItemID>19839</ItemID><RaiseDroprate>10</RaiseDroprate></ROW>
+            <ROW><ItemID>19837</ItemID><RaiseDroprate>25</RaiseDroprate></ROW>
         </TABLE>
         <TABLE name="Item_ExpParam" RowCount="1" TableInfoID="5" FieldCnt="5">
             <FIELDINFO Name="ItemId" IsKey="1" DataType="INT"></FIELDINFO>
@@ -67,6 +72,9 @@ public sealed class ItemEffectTablesTests
         Assert.Equal(431838, box.RareItemIdA);
         Assert.Equal(431843, box.RareItemIdB);
         Assert.Equal(30, box.RareBRatePercent);
+        Assert.Equal(new KeyRateEntry(19839, 10), tables.KeyRates[19839]);
+        Assert.Equal(25, tables.KeyRates[19837].RaiseDroprate);
+        Assert.False(tables.KeyRates.ContainsKey(19840));
     }
 
     [Fact]

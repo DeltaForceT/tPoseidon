@@ -320,6 +320,7 @@ var host = new S2ServerHost
             if (character is null || character.OwnerAccountId != sessionAccountId.Value)
             {
                 Console.Error.WriteLine($"{LogTag} {ctx.Remote} CharSelect uid=0x{selectedCharUid:X16} not owned by account {sessionAccountId.Value}; refusing handoff");
+                await SendFrameAsync(ctx, Opcode.CHAR_SELECT_FAIL, randKey: 0x4D, new byte[] { 0x04, 0x04, 0x00, 0x00 }, innerCt);
                 return;
             }
 

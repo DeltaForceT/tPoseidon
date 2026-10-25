@@ -193,6 +193,19 @@ public sealed class CoupleServiceTests
     }
 
     [Fact]
+    public void SessionOpenOfTheDivorceReceiverRepeatsTheQuestion()
+    {
+        var record = Record(CoupleStates.DivorceRequested) with
+        {
+            Members = [new CoupleMember(Groom, false, 0, CoupleStates.DivorceRequester, "Gus", 4), new CoupleMember(Bride, true, 0, CoupleStates.DivorceReceiver, "Bea", 5)],
+        };
+        var service = Service(new FakeCouples { Couple = record });
+        var asked = service.OpenSession(Bride).Single(m => m.Opcode == CoupleSocialFrames.DivorceAsked);
+        Assert.Equal(new byte[] { (byte)'G', (byte)'u', (byte)'s', 0 }, asked.Payload);
+        Assert.DoesNotContain(service.OpenSession(Groom), m => m.Opcode == CoupleSocialFrames.DivorceAsked);
+    }
+
+    [Fact]
     public void SessionOpenPushesTheCoupleInfo()
     {
         var store = new FakeCouples { Couple = Record(CoupleStates.Married) };
@@ -236,7 +249,8 @@ public sealed class CoupleServiceTests
         service.OpenSession(Bride);
         Assert.Empty(service.BreakUp(Groom).Messages);
         var (requested, _) = service.RequestDivorce(Groom);
-        Assert.Contains(requested, m => m.To == Bride && m.Opcode == CoupleSocialFrames.DivorceRequested);
+        Assert.Contains(requested, m => m.To == Groom && m.Opcode == CoupleSocialFrames.DivorceRequested);
+        Assert.Contains(requested, m => m.To == Bride && m.Opcode == CoupleSocialFrames.DivorceAsked);
         Assert.Equal(CoupleStates.DivorceRequested, store.Couple!.State);
         service.AnswerDivorce(Bride, accept: false);
         Assert.Equal(CoupleStates.Married, store.Couple!.State);

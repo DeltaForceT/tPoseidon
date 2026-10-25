@@ -12,9 +12,21 @@ public sealed record KeyboxEntry(
     public const char KeySeparator = '|';
 }
 
-public sealed record BoxTables(IReadOnlyDictionary<int, BonusPresentEntry> Bonuses, IReadOnlyDictionary<int, KeyboxEntry> Keyboxes)
+public sealed record KeyRateEntry(int KeyItemId, int RaiseDroprate)
 {
-    public static IReadOnlySet<string> TableNames { get; } = new HashSet<string>(StringComparer.Ordinal) { BonusPresentEntry.TableName, KeyboxEntry.TableName };
+    public const string TableName = "KeyItemRateInfo";
+}
 
-    public static BoxTables Empty { get; } = new(new Dictionary<int, BonusPresentEntry>(), new Dictionary<int, KeyboxEntry>());
+public sealed record BoxTables(
+    IReadOnlyDictionary<int, BonusPresentEntry> Bonuses,
+    IReadOnlyDictionary<int, KeyboxEntry> Keyboxes,
+    IReadOnlyDictionary<int, KeyRateEntry> KeyRates)
+{
+    public static IReadOnlySet<string> TableNames { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        BonusPresentEntry.TableName, KeyboxEntry.TableName, KeyRateEntry.TableName,
+    };
+
+    public static BoxTables Empty { get; } = new(
+        new Dictionary<int, BonusPresentEntry>(), new Dictionary<int, KeyboxEntry>(), new Dictionary<int, KeyRateEntry>());
 }

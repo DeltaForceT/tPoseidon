@@ -474,6 +474,8 @@ tPoseidon.Core.Game.Quests.GuildSetupRequirement? guildSetup = null;
 var puzzleTables = PuzzleTables.Empty;
 var soulSystemTables = SoulSystemTables.Empty;
 var cardIdentifyTables = CardIdentifyTables.Empty;
+var worldMapTables = tPoseidon.Core.LibConfig.WorldMapTables.Empty;
+var worldMap = new WorldMapController(() => worldMapTables, LogTag);
 var ghostExchangeTables = GhostExchangeTables.Empty;
 var monsterDropRoller = new MonsterDropRoller(Array.Empty<MonItemDropInfoEntry>(), Array.Empty<MonItemTableDropEntry>());
 var skillBook = new SkillBook(Array.Empty<SkillParam2Entry>(), Array.Empty<SkillTableRow>(), Array.Empty<SkillTableRow>());
@@ -582,6 +584,8 @@ try
     Console.WriteLine($"{LogTag} equipment reform from libconfig: {equipReformTables.Materials.Count} rows (ItemReformTable), {equipReformTables.Curves.Count} curves (EquipReformRandomTable), {equipReformTables.Elixirs.Count} elixirs (EquipReform_HelpItem), stat range {equipReformTables.RandomStatMinPercent}..{equipReformTables.RandomStatMaxPercent}%, discount {equipReformTables.CostDiscount}");
     soulSystemTables = reader.LoadSoulSystemTables();
     cardIdentifyTables = reader.LoadCardIdentifyTables();
+    worldMapTables = reader.LoadWorldMapTables();
+    Console.WriteLine($"{LogTag} world map from libconfig: {worldMapTables.OpenedZones.Count} zones in opened regions (WorldMap_RegionInfo)");
     Console.WriteLine($"{LogTag} card identify from libconfig: {cardIdentifyTables.Grades.Count} grades, {cardIdentifyTables.Results.Count} result tables, {cardIdentifyTables.ComboRatios.Count} combo ratios, exp ratio {cardIdentifyTables.ExpRatio}, TM exp ratio {cardIdentifyTables.TmExpRatio}");
     Console.WriteLine($"{LogTag} soul system from libconfig: {(soulSystemTables.Info is null ? "no" : "1")} SoulSystemInfo row, {soulSystemTables.Sources.Count} sources, {soulSystemTables.PotionCounts.Count} potion rows, {soulSystemTables.Equipment.Count} soul items, {soulSystemTables.CraftsByResult.Count} recipes, {soulSystemTables.Intensify.Count} reinforce rows, {soulSystemTables.TartarosMaps.Count} Tartaros maps");
     Console.WriteLine($"{LogTag} melting from libconfig: {(meltingTables.Info is null ? "no" : "1")} MeltingInfo row, {meltingTables.Drops.Count} bands (MeltingDropInfo), stat range {meltingTables.RandomStatMinPercent}..{meltingTables.RandomStatMaxPercent}% (EquipReformRandomStatRatio)");
@@ -1141,6 +1145,7 @@ var cardIdentify = new CardIdentifyController(
     groundItems,
     idAllocator.NewId,
     SendToMapAsync,
+    (identifySt, identifyOpcode, identifyPayload) => SendToViewersAsync(identifySt.MapId, identifySt.PlayerX, identifySt.PlayerY, identifyOpcode, identifyPayload),
     tPoseidon.Core.Game.Monsters.PickupRules.BagCapacity,
     LogTag);
 var soulSystem = new SoulController(
@@ -1399,6 +1404,21 @@ var playerShops = new PlayerShopController(
     },
     () => liveSessions.Values.ToArray(),
     clientTextEncoding,
+    LogTag);
+
+var profileViews = new ProfileViewController(
+    charProfileStore,
+    pkInfoStore,
+    (mapId, entityId) => liveSessions.Values.FirstOrDefault(profileSt => profileSt.MapId == mapId && profileSt.PlayerEntityId == entityId),
+    characterId => guildStore.FindMembershipForCharacter(characterId) is { } membership && guildStore.FindGuild(membership.GuildCode) is { } memberGuild
+        ? memberGuild.GuildName
+        : string.Empty,
+    ProfileGearOf,
+    clientTextEncoding,
+    LogTag);
+
+var targetHealth = new TargetHealthController(
+    (mapId, entityId) => liveSessions.Values.FirstOrDefault(targetSt => targetSt.MapId == mapId && targetSt.PlayerEntityId == entityId),
     LogTag);
 
 var sessionReleases = new System.Collections.Concurrent.ConcurrentDictionary<S2SessionContext, Func<Task>>();
@@ -1957,6 +1977,8 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                     : Task.FromResult(false),
                 BonusPresent = boxId => boxTables.Bonuses.TryGetValue(boxId, out var bonusRow) ? bonusRow : null,
                 Keybox = boxId => boxTables.Keyboxes.TryGetValue(boxId, out var keyRow) ? keyRow : null,
+                KeyRate = keyId => boxTables.KeyRates.TryGetValue(keyId, out var rateRow) ? rateRow.RaiseDroprate : null,
+                ZoneType = () => liveSessions.TryGetValue(ctx, out var keyZoneSt) && mapKindById.TryGetValue(keyZoneSt.MapId, out var keyZone) ? keyZone.Type : 0,
                 ExpPotion = (potionId, life) =>
                 {
                     if (!expBoosts.TryGetValue(potionId, out var boost) || !liveSessions.TryGetValue(ctx, out var potionSt)) return false;
@@ -2123,6 +2145,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 fortuneTitleId: (uint)(loginFortune?.Info.TitleId ?? 0),
                 abilityPercents: gameMasters.Rates.AbilityPacket(),
                 petBag: petCollection.ConnectPhaseBag(character.CharacterId),
+                profileFlags: unchecked((uint)charProfileStore.GetOrCreate(character.CharacterId).PublicFlagBitmask),
                 ct: innerCt).ConfigureAwait(false);
 
             Console.WriteLine($"{LogTag} {ctx.Remote} 34-frame enter-world batch sent");
@@ -2283,7 +2306,11 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             return Task.CompletedTask;
         });
 
-        ctx.Dispatcher.Register(Opcode.C2S_OP_034D_CLIENT_LOCAL_PING, (_, _, _) => Task.CompletedTask);
+        ctx.Dispatcher.Register(Opcode.C2S_WORLD_MAP_OPEN, (_, _, _) =>
+            liveSessions.TryGetValue(ctx, out var worldMapSt) ? worldMap.OpenAsync(worldMapSt) : Task.CompletedTask);
+
+        ctx.Dispatcher.Register(Opcode.C2S_WORLD_MAP_CLOSE, (_, _, _) =>
+            liveSessions.TryGetValue(ctx, out var worldMapCloseSt) ? WorldMapController.CloseAsync(worldMapCloseSt) : Task.CompletedTask);
 
         ctx.Dispatcher.Register(Opcode.C2S_OP_04AF_CLIENT_LOCAL_PING, (_, _, _) => Task.CompletedTask);
 
@@ -2414,6 +2441,15 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         ctx.Dispatcher.SetGate(async (gatedOpcode, _, gateCt) =>
         {
+            if (liveSessions.TryGetValue(ctx, out var signedSt) && signedSt.Sign.Kind == tPoseidon.Core.Net.World.SignKind.Microphone
+                && tPoseidon.Core.Net.World.PlayerSign.ClearsMicrophone((ushort)gatedOpcode)
+                && (ushort)gatedOpcode != tPoseidon.Core.Net.World.PlayerSign.MicrophoneRequest)
+            {
+                foreach (var cleared in signedSt.Sign.ClearMicrophoneOnAction(signedSt.PlayerEntityId))
+                {
+                    await SendToMapAsync(signedSt.MapId, (Opcode)cleared.Opcode, cleared.Payload).ConfigureAwait(false);
+                }
+            }
             if (!liveSessions.TryGetValue(ctx, out var gatedSt) || gatedSt.Posture.SkillRefusal is not { } refusal) return false;
             if (PostureInput.IsSwallowed(gatedOpcode))
             {
@@ -4343,6 +4379,22 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         ctx.Dispatcher.Register(Opcode.C2S_PLAYER_SHOP_START, (_, _, _) =>
             liveSessions.TryGetValue(ctx, out var shopStartSt) ? playerShops.StartAsync(shopStartSt) : Task.CompletedTask);
 
+        ctx.Dispatcher.Register(Opcode.C2S_KEYBOX_OPEN, (_, payload, keyBoxOpenCt) => itemUse.OpenKeyBoxWindowAsync(payload, keyBoxOpenCt));
+
+        ctx.Dispatcher.Register(Opcode.C2S_KEYBOX_CONFIRM, (_, payload, keyBoxConfirmCt) => itemUse.ConfirmKeyBoxAsync(payload, keyBoxConfirmCt));
+
+        ctx.Dispatcher.Register(Opcode.C2S_PLAYER_SHOP_VISITS_QUERY, (_, _, _) =>
+            liveSessions.TryGetValue(ctx, out var shopVisitsSt) ? playerShops.VisitsAsync(shopVisitsSt) : Task.CompletedTask);
+
+        ctx.Dispatcher.Register(Opcode.C2S_PROFILE_VIEW, (_, payload, _) =>
+            liveSessions.TryGetValue(ctx, out var profileViewSt) ? profileViews.ViewAsync(profileViewSt, payload) : Task.CompletedTask);
+
+        ctx.Dispatcher.Register(Opcode.C2S_PROFILE_OPTIONS, (_, payload, _) =>
+            liveSessions.TryGetValue(ctx, out var profileOptionsSt) ? profileViews.OptionsAsync(profileOptionsSt, payload) : Task.CompletedTask);
+
+        ctx.Dispatcher.Register(Opcode.C2S_TARGET_HEALTH_QUERY, (_, payload, _) =>
+            liveSessions.TryGetValue(ctx, out var targetHealthSt) ? targetHealth.QueryAsync(targetHealthSt, payload) : Task.CompletedTask);
+
         ctx.Dispatcher.Register(Opcode.C2S_PLAYER_SHOP_CLOSE, (_, _, _) =>
             liveSessions.TryGetValue(ctx, out var shopCloseSt) ? playerShops.CloseAsync(shopCloseSt) : Task.CompletedTask);
 
@@ -4351,6 +4403,9 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         ctx.Dispatcher.Register(Opcode.C2S_PLAYER_SHOP_BUY, (_, payload, _) =>
             liveSessions.TryGetValue(ctx, out var shopBuySt) ? playerShops.BuyAsync(shopBuySt, payload) : Task.CompletedTask);
+
+        ctx.Dispatcher.Register(Opcode.PLAYER_SHOP_HELPER, (_, payload, _) =>
+            liveSessions.TryGetValue(ctx, out var helperSt) ? playerShops.HelperAsync(helperSt, payload) : Task.CompletedTask);
 
         ctx.Dispatcher.Register(Opcode.C2S_PLAYER_SHOP_SEARCH_OPEN, (_, _, _) =>
             liveSessions.TryGetValue(ctx, out var searchOpenSt) ? playerShops.OpenSearchAsync(searchOpenSt) : Task.CompletedTask);
@@ -5639,6 +5694,16 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             if (!liveSessions.TryGetValue(ctx, out var seeker)) return;
             await BroadcastSignAsync(seeker, seeker.Sign.EndCardBattleTitle(seeker.PlayerEntityId)).ConfigureAwait(false);
         });
+        ctx.Dispatcher.Register((Opcode)tPoseidon.Core.Net.World.PlayerSign.MicrophoneRequest, async (_, payload, _) =>
+        {
+            if (!liveSessions.TryGetValue(ctx, out var speaker) || speaker.Character is not { } speakerCharacter || WorldMapController.Busy(speaker)) return;
+            if (payload.Length <= sizeof(ulong)) return;
+            var microphoneUid = tPoseidon.Core.Net.World.BagItemIds.Stored(BitConverter.ToUInt64(payload.Span[..sizeof(ulong)]));
+            var microphone = itemStore.GetForCharacterBySlotKind(speakerCharacter.CharacterId, tPoseidon.Core.Data.SlotKind.Inventory).FirstOrDefault(held => held.ItemUid == microphoneUid);
+            if (microphone is null || itemCatalog.GetById(microphone.ItemIndex) is not { Effect: tPoseidon.Core.Game.Items.SpecialItemEffects.Microphone }) return;
+            var text = tPoseidon.Core.Net.Social.ChatFrames.ReadText(payload.Span[sizeof(ulong)..], clientTextEncoding);
+            await BroadcastSignAsync(speaker, speaker.Sign.ShowMicrophone(speaker.PlayerEntityId, speakerCharacter.Name, text, clientTextEncoding)).ConfigureAwait(false);
+        });
         ctx.Dispatcher.Register((Opcode)tPoseidon.Core.Net.World.PlayerSign.FortuneSignRequest, async (_, payload, _) =>
         {
             if (!liveSessions.TryGetValue(ctx, out var teller) || teller.Fortune is not { Round.InHouse: true }) return;
@@ -5793,12 +5858,16 @@ var partyQuestTimerTask = Task.Run(async () =>
 {
     using var partyQuestTimer = new PeriodicTimer(TimeSpan.FromSeconds(1));
     var timedItemTicks = 0;
+    var seedBuffClock = DateTimeOffset.UtcNow;
     try
     {
         while (await partyQuestTimer.WaitForNextTickAsync(stopSignal.Token).ConfigureAwait(false))
         {
             try
             {
+                var seedBuffNow = DateTimeOffset.UtcNow;
+                await soulSeeds.TickAsync(liveSessions.Values.Where(st => st.Character is not null).ToArray(), seedBuffNow - seedBuffClock).ConfigureAwait(false);
+                seedBuffClock = seedBuffNow;
                 await partyQuests.TickAsync(stopSignal.Token).ConfigureAwait(false);
                 if (scriptEngine.ConsumeReloadRequest()) ReloadScripts();
                 await scriptEngine.RunTimersAsync(scriptWorld, DateTimeOffset.Now, stopSignal.Token).ConfigureAwait(false);
@@ -6470,6 +6539,55 @@ int CarriedWeightOf(InGameSessionState carrier) =>
             carrier.PlayerMaxWt)
         : 0;
 
+int EquipmentElementOf(InGameSessionState player, int slot)
+{
+    if (!tPoseidon.Core.Game.Items.ItemPropertyRules.HasAttribute(slot) || player.Character is not { } wearer) return 0;
+    var propertyId = tPoseidon.Core.Game.Items.ItemPropertyRules.AttributeId(slot);
+    var sum = 0;
+    foreach (var worn in tPoseidon.Core.Game.Items.EquipmentRules.WornBy(itemStore, itemCatalog, wearer.CharacterId))
+    {
+        var value = itemPropertyRules.StatSum(worn.Definition, itemPropertyStore.ForItem(worn.Item.ItemUid), propertyId);
+        if (value != ItemStatCheckEntry.NoRequirement) sum += value;
+    }
+    return sum;
+}
+
+int ElementTotalOf(InGameSessionState player, int slot) =>
+    slot < 0 ? 0 : ElementSlots.Total(slot, EquipmentElementOf(player, slot), player.ResistBonus.GetValueOrDefault((byte)slot));
+
+ProfileGear ProfileGearOf(InGameSessionState target)
+{
+    var character = target.Character!;
+    var points = tPoseidon.Core.Game.Progression.StatusValueChart.PointsOf(character);
+    var table = statusChart.Compute(points);
+    long[] totals =
+    [
+        target.PlayerAp, target.PlayerAc, target.PlayerDx, target.PlayerMaxMp, target.PlayerMa, target.PlayerMd,
+        target.PlayerMaxWt, target.PlayerDa, target.PlayerLk, target.PlayerMaxHp, target.PlayerDp, target.PlayerHv,
+    ];
+    int[] tableValues = [table.Ap, table.Ac, table.Dx, table.Mp, table.Ma, table.Md, table.Wt, table.Da, table.Lk, table.Hp, table.Dp, table.Hv];
+    var resists = Enumerable.Range(0, tPoseidon.Core.Game.Progression.ProfileViewRules.ResistSlots).Select(slot => ElementTotalOf(target, slot)).ToArray();
+    var worn = tPoseidon.Core.Game.Items.EquipmentRules.WornBy(itemStore, itemCatalog, character.CharacterId)
+        .OrderBy(held => held.Slot)
+        .Select(held => new ProfileViewWorn(held.Slot, new tPoseidon.Core.Net.Packets.GameItemListPacket.ItemRecord
+        {
+            Class = held.Item.ItemClass,
+            ItemIndex = (uint)held.Item.ItemIndex,
+            ItemUid = (uint)(held.Item.ItemUid & 0xFFFFFFFFu),
+            EquipmentCount = held.Item.Stack,
+            StackCount = held.Item.Stack,
+            RefineType = (byte)held.Item.RefineType,
+            RefineLevel = held.Item.RefineLevel,
+            RefineState = held.Item.RefineState,
+            MixSlot = held.Item.ItemSlot,
+            Options = held.Item.ItemClass == ItemParamEntry.RareClass
+                ? tPoseidon.Core.Game.Items.ItemPropertyRules.ForClient(itemPropertyStore.ForItem(held.Item.ItemUid), held.Definition)
+                : Array.Empty<ItemProperty>(),
+        }))
+        .ToArray();
+    return new ProfileGear(totals, tableValues, points, resists, worn);
+}
+
 byte[] PlayerSpawnOf(InGameSessionState player) =>
     tPoseidon.Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(
         player.Character!, player.PlayerEntityId, itemStore, (player.PlayerX, player.PlayerY), player.AnnouncedSpeedQuarter,
@@ -6773,7 +6891,7 @@ gameMasters.World = new GameMasterWorldActions(
     RefreshGameMasterNpcsAsync,
     SetGameMasterIssueItem,
     OxGiveItemAsync,
-    playerShops.CloseAsync,
+    playerShops.CloseByGameMasterAsync,
     myCamps.ForceCloseAsync,
     SummonGameMasterNpcAsync);
 
@@ -8829,22 +8947,6 @@ var npcLoopTask = Task.Run(async () =>
             new[] { owner }, Opcode.S2C_RESIST_CHANGED, SkillEffectFrames.ResistChanged(records),
             MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false);
     }
-
-    int EquipmentElementOf(InGameSessionState player, int slot)
-    {
-        if (slot < 0 || player.Character is not { } wearer) return 0;
-        var propertyId = tPoseidon.Core.Game.Items.ItemPropertyRules.AttributeId(slot);
-        var sum = 0;
-        foreach (var worn in tPoseidon.Core.Game.Items.EquipmentRules.WornBy(itemStore, itemCatalog, wearer.CharacterId))
-        {
-            var value = itemPropertyRules.StatSum(worn.Definition, itemPropertyStore.ForItem(worn.Item.ItemUid), propertyId);
-            if (value != ItemStatCheckEntry.NoRequirement) sum += value;
-        }
-        return sum;
-    }
-
-    int ElementTotalOf(InGameSessionState player, int slot) =>
-        slot < 0 ? 0 : ElementSlots.Total(slot, EquipmentElementOf(player, slot), player.ResistBonus.GetValueOrDefault((byte)slot));
 
     async Task<bool> AfterPlayerEffectEndsAsync(
         KeyValuePair<S2SessionContext, InGameSessionState> owner,
@@ -15441,6 +15543,8 @@ internal sealed class InGameSessionState
     public bool ShopSearching { get; set; }
     public tPoseidon.Core.Game.PlayerShop.PlayerShopSearchResult? ShopSearch { get; set; }
     public bool CardIdentify { get; set; }
+
+    public bool WorldMapOpen { get; set; }
     public tPoseidon.Core.Game.Cards.CardIdentifyGame? CardGame { get; set; }
     public ItemParamEntry? PendingMonsterCard { get; set; }
     public bool GuardianBusy { get; set; }

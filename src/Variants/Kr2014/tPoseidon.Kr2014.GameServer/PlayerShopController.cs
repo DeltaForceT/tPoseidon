@@ -99,22 +99,44 @@ internal sealed class PlayerShopController
         Log(keeper, $"registers {request.Slots.Count} items, type {request.ShopType}, title '{request.Title}'");
     }
 
-    public Task StartAsync(InGameSessionState keeper)
+    public async Task StartAsync(InGameSessionState keeper)
     {
         ArgumentNullException.ThrowIfNull(keeper);
-        return keeper.Stall is null ? Task.CompletedTask : SendAsync(keeper, Opcode.S2C_PLAYER_SHOP_STARTED, Array.Empty<byte>());
+        if (keeper.Stall is not { } stall) return;
+        await EndVisitsAsync(keeper, stall, PlayerShopFrames.ShopClosedByKeeper).ConfigureAwait(false);
+        stall.RestartCounters();
+        await SendAsync(keeper, Opcode.S2C_PLAYER_SHOP_STARTED, Array.Empty<byte>()).ConfigureAwait(false);
     }
 
-    public async Task CloseAsync(InGameSessionState keeper)
+    public Task VisitsAsync(InGameSessionState player)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        var stall = player.Stall;
+        return SendAsync(player, Opcode.S2C_PLAYER_SHOP_VISITS, PlayerShopFrames.Visits(stall?.VisitsSinceStart ?? 0, stall?.VisitorCount ?? 0));
+    }
+
+    public Task CloseAsync(InGameSessionState keeper) => CloseCoreAsync(keeper, Opcode.S2C_PLAYER_SHOP_CLOSED);
+
+    public Task CloseByGameMasterAsync(InGameSessionState keeper) => CloseCoreAsync(keeper, Opcode.S2C_PLAYER_SHOP_CLOSED_BY_GM);
+
+    private async Task EndVisitsAsync(InGameSessionState keeper, PlayerShopStall stall, byte reason)
+    {
+        foreach (var visitorId in stall.Visitors)
+        {
+            if (_playerOnMap(keeper.MapId, visitorId) is not { VisitingKeeper: var visiting } visitor || visiting != keeper.PlayerEntityId) continue;
+            visitor.VisitingKeeper = null;
+            stall.RemoveVisitor(visitorId);
+            await SendAsync(visitor, Opcode.S2C_PLAYER_SHOP_VISITOR_ENDED, PlayerShopFrames.Code(reason)).ConfigureAwait(false);
+        }
+    }
+
+    private async Task CloseCoreAsync(InGameSessionState keeper, Opcode keeperNotice)
     {
         ArgumentNullException.ThrowIfNull(keeper);
         if (keeper.Stall is not { } stall) return;
         keeper.Stall = null;
-        foreach (var visitorId in stall.Visitors)
-        {
-            if (_playerOnMap(keeper.MapId, visitorId) is { VisitingKeeper: var visiting } visitor && visiting == keeper.PlayerEntityId) visitor.VisitingKeeper = null;
-        }
-        await SendAsync(keeper, Opcode.S2C_PLAYER_SHOP_CLOSED, Array.Empty<byte>()).ConfigureAwait(false);
+        await EndVisitsAsync(keeper, stall, PlayerShopFrames.ShopClosedByKeeper).ConfigureAwait(false);
+        await SendAsync(keeper, keeperNotice, Array.Empty<byte>()).ConfigureAwait(false);
         await _sendToArea(keeper, Opcode.S2C_PLAYER_SHOP_SIGN_REMOVED, PlayerShopFrames.Word(keeper.PlayerEntityId)).ConfigureAwait(false);
         Log(keeper, "closes the shop");
     }
@@ -204,6 +226,22 @@ internal sealed class PlayerShopController
         {
             stall.Release(purchase, sold);
         }
+        if (sold) await NotifyVisitorsOfSaleAsync(keeper, stall, purchase).ConfigureAwait(false);
+    }
+
+    private async Task NotifyVisitorsOfSaleAsync(InGameSessionState keeper, PlayerShopStall stall, PlayerShopPurchase purchase)
+    {
+        if (stall.Slots.Count == 0)
+        {
+            await EndVisitsAsync(keeper, stall, PlayerShopFrames.ShopSoldOut).ConfigureAwait(false);
+            return;
+        }
+        var notice = PlayerShopFrames.SaleNotice(purchase.ItemId, purchase.WireUid, purchase.Count);
+        foreach (var visitorId in stall.Visitors)
+        {
+            if (_playerOnMap(keeper.MapId, visitorId) is not { VisitingKeeper: var visiting } visitor || visiting != keeper.PlayerEntityId) continue;
+            await SendAsync(visitor, Opcode.S2C_PLAYER_SHOP_VISITOR_SALE, notice).ConfigureAwait(false);
+        }
     }
 
     public async Task OpenSearchAsync(InGameSessionState searcher)
@@ -243,6 +281,26 @@ internal sealed class PlayerShopController
         searcher.ShopSearch = result;
         await SendAsync(searcher, Opcode.S2C_PLAYER_SHOP_SEARCH_RESULT, PlayerShopSearchFrames.Page(result.TakePage(), _text)).ConfigureAwait(false);
         Log(searcher, $"searches category {query.Category}, level {query.MinLevel}..{query.MaxLevel}, text '{query.Text}': {result.Count} rows");
+    }
+
+    public async Task HelperAsync(InGameSessionState searcher, ReadOnlyMemory<byte> payload)
+    {
+        ArgumentNullException.ThrowIfNull(searcher);
+        if (!PlayerShopHelperFrames.TryReadQuery(payload.Span, _text, out var query)) return;
+        var rows = new List<PlayerShopHelperRow>();
+        foreach (var keeper in _players())
+        {
+            if (keeper.MapId != searcher.MapId || keeper.Stall is not { Registered: true } stall || keeper.Character is not { } keeperCharacter) continue;
+            foreach (var slot in stall.Slots)
+            {
+                if (slot.Count == 0 || _catalog.GetById((int)slot.ItemId) is not { } definition) continue;
+                var name = definition.Name.Length > 0 ? definition.Name : definition.NameEng;
+                if (!name.Contains(query, StringComparison.Ordinal)) continue;
+                rows.Add(new PlayerShopHelperRow(name, keeperCharacter.Name, stall.Title, (uint)slot.UnitPrice, keeper.PlayerX, keeper.PlayerY));
+            }
+        }
+        await SendAsync(searcher, Opcode.PLAYER_SHOP_HELPER, PlayerShopHelperFrames.Reply(rows, _text)).ConfigureAwait(false);
+        Log(searcher, $"asks the shop helper for '{query}': {rows.Count} rows");
     }
 
     public async Task NextSearchPageAsync(InGameSessionState searcher)

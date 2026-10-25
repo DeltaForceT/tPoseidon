@@ -59,33 +59,37 @@ public sealed class GameItemListPacket
         var w = new PacketWriter(totalSize);
 
         w.WriteUInt16((ushort)Records.Count);
-        foreach (var r in Records)
-        {
-            if (r.Class is not 1 and not 2)
-            {
-                throw new InvalidOperationException(
-                    $"ItemRecord.Class must be 1 (Item) or 2 (Equipment); got {r.Class}.");
-            }
-            w.WriteByte(r.Class);
-            w.WriteUInt32(r.ItemIndex);
-            w.WriteUInt32(r.ItemUid);
-            w.WriteUInt32(r.FieldA);
-            if (r.Class == 2)
-            {
-                w.WriteUInt16(r.EquipmentCount);
-                w.WriteByte(r.RefineType);
-                w.WriteByte(r.RefineLevel);
-                w.WriteByte(r.RefineState);
-                w.WriteByte(r.MixSlot);
-                w.WriteByte((byte)r.Options.Count);
-                foreach (var option in r.Options) WriteOption(w, option);
-            }
-            else
-            {
-                w.WriteUInt16(r.StackCount);
-            }
-        }
+        foreach (var r in Records) WriteRecord(w, r);
         return w.ToArray();
+    }
+
+    public static void WriteRecord(PacketWriter w, ItemRecord r)
+    {
+        ArgumentNullException.ThrowIfNull(w);
+        ArgumentNullException.ThrowIfNull(r);
+        if (r.Class is not 1 and not 2)
+        {
+            throw new InvalidOperationException(
+                $"ItemRecord.Class must be 1 (Item) or 2 (Equipment); got {r.Class}.");
+        }
+        w.WriteByte(r.Class);
+        w.WriteUInt32(r.ItemIndex);
+        w.WriteUInt32(r.ItemUid);
+        w.WriteUInt32(r.FieldA);
+        if (r.Class == 2)
+        {
+            w.WriteUInt16(r.EquipmentCount);
+            w.WriteByte(r.RefineType);
+            w.WriteByte(r.RefineLevel);
+            w.WriteByte(r.RefineState);
+            w.WriteByte(r.MixSlot);
+            w.WriteByte((byte)r.Options.Count);
+            foreach (var option in r.Options) WriteOption(w, option);
+        }
+        else
+        {
+            w.WriteUInt16(r.StackCount);
+        }
     }
 
     public static GameItemListPacket DecodePayload(ReadOnlySpan<byte> payload)

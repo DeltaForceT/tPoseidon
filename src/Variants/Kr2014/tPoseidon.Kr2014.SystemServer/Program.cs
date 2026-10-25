@@ -147,6 +147,7 @@ var giftServer = new tPoseidon.Kr2014.SystemServer.GiftServer(
     GiftAccepted = coupleServer.GiftAccepted,
 };
 
+var itemPrices = new tPoseidon.Kr2014.SystemServer.ItemPriceServer();
 var angelServer = new tPoseidon.Kr2014.SystemServer.AngelServer(
     new AngelService(
         new tPoseidon.Core.Data.Postgres.PostgresAngelStore(postgres.DataSource),
@@ -267,6 +268,7 @@ var clientHost = new tPoseidon.Core.Net.S2.S2ServerHost
         rankServer.Register(ctx.Dispatcher, ctx);
         cardBattleServer.Register(ctx.Dispatcher, ctx);
         gameMasterServer.Register(ctx.Dispatcher, ctx);
+        itemPrices.Register(ctx.Dispatcher, ctx);
         return Task.CompletedTask;
     },
     OnSessionClosed = async ctx =>

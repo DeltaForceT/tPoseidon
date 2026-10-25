@@ -20,6 +20,13 @@ public static class TimedItemFrames
         return w.ToArray();
     }
 
+    public static byte[] Clock(DateTime utcNow)
+    {
+        var w = new PacketWriter(sizeof(ulong));
+        w.WriteUInt64(ClientClock.FileTime(utcNow));
+        return w.ToArray();
+    }
+
     public static byte[] Notice(ulong itemUid, int minutesLeft)
     {
         var w = new PacketWriter(12);

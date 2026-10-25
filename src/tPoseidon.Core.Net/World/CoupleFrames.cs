@@ -8,6 +8,20 @@ public static class CoupleFrames
 {
     public const int OptionRequestSize = sizeof(ulong) + sizeof(uint) + 2 * sizeof(ushort);
 
+    public static byte[] SkillLearned(ushort ringItemIndex)
+    {
+        var w = new PacketWriter(sizeof(ushort));
+        w.WriteUInt16(ringItemIndex);
+        return w.ToArray();
+    }
+
+    public static byte[] MakeEnded(uint code)
+    {
+        var w = new PacketWriter(sizeof(uint));
+        w.WriteUInt32(code);
+        return w.ToArray();
+    }
+
     public static bool TryReadTarget(ReadOnlySpan<byte> payload, out ushort targetEntityId)
     {
         targetEntityId = 0;
@@ -31,6 +45,13 @@ public static class CoupleFrames
         var r = new PacketReader(payload);
         request = new MarriageOptionRequest(r.ReadUInt64(), (int)r.ReadUInt32(), r.ReadUInt16(), r.ReadUInt16());
         return true;
+    }
+
+    public static byte[] OptionRefused(uint code)
+    {
+        var w = new PacketWriter(sizeof(uint));
+        w.WriteUInt32(code);
+        return w.ToArray();
     }
 
     public static byte[] Proposed(byte role, string otherName, Encoding text)

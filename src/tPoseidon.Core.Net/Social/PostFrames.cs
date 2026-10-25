@@ -33,6 +33,8 @@ public static class PostFrames
     public const ushort SendFailed = 0x04D9;
     public const ushort Deleted = 0x04DB;
     public const ushort DeleteFailed = 0x04DC;
+    public const ushort LevelUpGiftNotice = 0x0306;
+    public const int LevelUpGiftNoticeMaxItems = 10;
 
     public const int ChunkSize = 0x780;
     public const int SendHeaderSize = 0x1AA;
@@ -112,6 +114,15 @@ public static class PostFrames
     {
         var w = new PacketWriter(4);
         w.WriteUInt32(code);
+        return w.ToArray();
+    }
+
+    public static byte[] LevelUpGiftNoticeBody(IReadOnlyList<int> itemIds)
+    {
+        ArgumentNullException.ThrowIfNull(itemIds);
+        var w = new PacketWriter(sizeof(ushort) + itemIds.Count * sizeof(int));
+        w.WriteUInt16((ushort)itemIds.Count);
+        foreach (var itemId in itemIds) w.WriteInt32(itemId);
         return w.ToArray();
     }
 

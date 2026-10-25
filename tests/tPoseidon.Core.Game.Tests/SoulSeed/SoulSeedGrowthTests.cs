@@ -69,6 +69,20 @@ public sealed class SoulSeedGrowthTests
     }
 
     [Fact]
+    public void TheBuffRunsOutAfterItsMilliseconds()
+    {
+        var seed = Planted();
+        var row = Row(0, 1, 0, false, 20, 20, 20, 20);
+        for (var i = 0; i < 3; i++) seed.OnEvent(0, 1, row);
+        Assert.False(seed.TickBuff(SoulSeedRules.BuffMilliseconds - 1));
+        Assert.Equal(1, seed.Buff().MillisecondsLeft);
+        Assert.True(seed.TickBuff(1));
+        Assert.Equal(SoulSeedRules.NoBuffGroup, seed.Buff().Group);
+        Assert.Equal(0, seed.Buff().Stacks);
+        Assert.False(seed.TickBuff(1000));
+    }
+
+    [Fact]
     public void MaximumLevelCapsNormalPointsAndSixLevelsComplete()
     {
         var seed = Planted();

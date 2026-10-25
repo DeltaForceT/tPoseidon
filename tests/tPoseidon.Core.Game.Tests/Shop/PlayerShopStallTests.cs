@@ -56,4 +56,32 @@ public sealed class PlayerShopStallTests
         Assert.Equal(7, stall.VisitorCount);
         Assert.True(stall.AddVisitor(9));
     }
+
+    [Fact]
+    public void VisitsCountEveryVisitorTakenInAndRestartZeroesThem()
+    {
+        var stall = new PlayerShopStall(7);
+        Assert.Equal(0, stall.VisitsSinceStart);
+        Assert.True(stall.AddVisitor(1));
+        Assert.True(stall.AddVisitor(2));
+        stall.RemoveVisitor(1);
+        Assert.True(stall.AddVisitor(3));
+        Assert.Equal(3, stall.VisitsSinceStart);
+        Assert.Equal(2, stall.VisitorCount);
+        stall.RestartCounters();
+        Assert.Equal(0, stall.VisitsSinceStart);
+        Assert.Equal(2, stall.VisitorCount);
+    }
+
+    [Fact]
+    public void AFullShopTakesNoVisitAndTheSameVisitorIsCountedOnce()
+    {
+        var stall = new PlayerShopStall(7);
+        for (ushort visitor = 1; visitor <= 8; visitor++) Assert.True(stall.AddVisitor(visitor));
+        Assert.False(stall.AddVisitor(9));
+        Assert.Equal(8, stall.VisitsSinceStart);
+        stall.RemoveVisitor(8);
+        Assert.True(stall.AddVisitor(7));
+        Assert.Equal(8, stall.VisitsSinceStart);
+    }
 }

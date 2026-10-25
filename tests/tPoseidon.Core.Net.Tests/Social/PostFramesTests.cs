@@ -14,6 +14,12 @@ public sealed class PostFramesTests
         new(41, uid, PostRules.MailBox, PostRules.GiftLetter, PostRules.Unread, PostRules.ReceiverSide, "Tata", "hi", Occur, Occur.AddDays(7));
 
     [Fact]
+    public void LevelUpGiftNoticeIsCountThenItemIds()
+    {
+        Assert.Equal(new byte[] { 2, 0, 0x65, 0, 0, 0, 0x66, 0, 0, 0 }, PostFrames.LevelUpGiftNoticeBody([101, 102]));
+    }
+
+    [Fact]
     public void TheSendFormIsReadAtTheKrHeaderOffsets()
     {
         var body = new byte[PostFrames.SendHeaderSize + 1 + 12];

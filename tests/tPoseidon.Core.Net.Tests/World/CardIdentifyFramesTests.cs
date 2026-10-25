@@ -14,6 +14,12 @@ public sealed class CardIdentifyFramesTests
     private static readonly byte[] PairRequest = [2, 0, 0, 0, 5, 0, 0, 0];
 
     [Fact]
+    public void MarkerIsTheEntityId()
+    {
+        Assert.Equal(new byte[] { 0x34, 0x12 }, CardIdentifyFrames.Marker(0x1234));
+    }
+
+    [Fact]
     public void EndIsScoreExpTmExp()
     {
         Assert.Equal(EndedBytes, CardIdentifyFrames.Ended(3, 10000, 1000));

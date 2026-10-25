@@ -123,6 +123,21 @@ public sealed class SoulSeedGrowth
         lock (_gate) return new SoulSeedBuff(BuffGroup, BuffMillisecondsLeft, BuffStacks, _buffValues.ToArray());
     }
 
+    public bool TickBuff(int elapsedMilliseconds)
+    {
+        lock (_gate)
+        {
+            if (BuffMillisecondsLeft <= 0) return false;
+            BuffMillisecondsLeft -= elapsedMilliseconds;
+            if (BuffMillisecondsLeft >= 1) return false;
+            BuffGroup = SoulSeedRules.NoBuffGroup;
+            BuffMillisecondsLeft = 0;
+            BuffStacks = 0;
+            Array.Clear(_buffValues);
+            return true;
+        }
+    }
+
     public int Total(int type)
     {
         lock (_gate) return TotalOf(type);

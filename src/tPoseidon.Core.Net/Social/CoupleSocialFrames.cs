@@ -33,6 +33,7 @@ public static class CoupleSocialFrames
     public const ushort BrokenUp = 0x2EA9;
     public const ushort RequestDivorce = 0x2EAA;
     public const ushort DivorceRequested = 0x2EAB;
+    public const ushort DivorceAsked = 0x2EAF;
     public const ushort DivorceAnswer = 0x2EB0;
     public const ushort DivorceDone = 0x2EB2;
     public const ushort CoupleInfo = 0x2EB4;
@@ -80,6 +81,15 @@ public static class CoupleSocialFrames
     {
         var w = new PacketWriter(8);
         w.WriteUInt64(coupleCode);
+        return w.ToArray();
+    }
+
+    public static byte[] DivorceAskedBody(string requesterName, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(requesterName);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(requesterName.Length + 1);
+        w.WriteNulTerminated(requesterName, text);
         return w.ToArray();
     }
 

@@ -64,6 +64,8 @@ internal sealed class SpecialItemHarness
 
     public Dictionary<int, KeyboxEntry> Keyboxes { get; } = new();
 
+    public Dictionary<int, int> KeyRates { get; } = new();
+
     public ItemUseService Service { get; private set; } = null!;
 
     public SpecialItemHost Host { get; private set; } = null!;
@@ -166,6 +168,8 @@ internal sealed class SpecialItemHarness
             Special = () => Host,
             BonusPresent = box => Bonuses.TryGetValue(box, out var bonus) ? bonus : null,
             Keybox = box => Keyboxes.TryGetValue(box, out var keybox) ? keybox : null,
+            KeyRate = key => KeyRates.TryGetValue(key, out var rate) ? rate : null,
+            ZoneType = () => State.ZoneType,
             ExpPotion = (potion, life) =>
             {
                 State.Potions.Add((potion, life));
@@ -203,6 +207,16 @@ internal sealed class SpecialItemHarness
         return Service.UseWithDataAsync(payload, CancellationToken.None);
     }
 
+    public Task OpenKeyBoxAsync(Item box) => Service.OpenKeyBoxWindowAsync(BitConverter.GetBytes(WireOf(box)), CancellationToken.None);
+
+    public Task ConfirmKeyBoxAsync(Item box, Item? key)
+    {
+        var payload = new byte[2 * sizeof(ulong)];
+        BitConverter.GetBytes(WireOf(box)).CopyTo(payload, 0);
+        if (key is not null) BitConverter.GetBytes(WireOf(key)).CopyTo(payload, sizeof(ulong));
+        return Service.ConfirmKeyBoxAsync(payload, CancellationToken.None);
+    }
+
     public Task UseAsync(Item item) => Service.UseAsync(BitConverter.GetBytes(WireOf(item)), CancellationToken.None);
 
     public bool InBag(Item item) => Items.FindByUid(item.ItemUid) is not null;
@@ -227,6 +241,8 @@ internal sealed class SpecialHostState
     public ushort MapId { get; set; } = 148;
 
     public ushort ReturnMap { get; set; } = 33;
+
+    public int ZoneType { get; set; } = 1;
 
     public Dictionary<ushort, int> MapOptions { get; } = new();
 

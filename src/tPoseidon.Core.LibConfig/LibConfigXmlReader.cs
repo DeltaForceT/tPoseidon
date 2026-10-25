@@ -501,12 +501,18 @@ public sealed class LibConfigXmlReader
     {
         var bonuses = new Dictionary<int, BonusPresentEntry>();
         var keyboxes = new Dictionary<int, KeyboxEntry>();
+        var keyRates = new Dictionary<int, KeyRateEntry>();
         LoadTablesNamed(BoxTables.TableNames, (table, row) =>
         {
             if (table == BonusPresentEntry.TableName)
             {
                 bonuses.TryAdd(ReadInt(row, "PresentId"), new BonusPresentEntry(
                     ReadInt(row, "PresentId"), ReadInt(row, "SelectItemId"), ReadInt(row, "PickBonusPresentId"), ReadInt(row, "UnpickBonusPresentId")));
+                return;
+            }
+            if (table == KeyRateEntry.TableName)
+            {
+                keyRates.TryAdd(ReadInt(row, "ItemID"), new KeyRateEntry(ReadInt(row, "ItemID"), ReadInt(row, "RaiseDroprate")));
                 return;
             }
             var keys = ReadString(row, "KeyItemID")
@@ -518,7 +524,7 @@ public sealed class LibConfigXmlReader
                 ReadInt(row, "KeyBoxID"), keys, ReadInt(row, "OnlyKeyitem") != 0, ReadInt(row, "NoramlItemID"),
                 ReadInt(row, "RareItemID_TypeA"), ReadInt(row, "RareItemID_TypeB"), ReadInt(row, "RareItem_TypeB_Droprate")));
         });
-        return new BoxTables(bonuses, keyboxes);
+        return new BoxTables(bonuses, keyboxes, keyRates);
     }
 
     public SpecialPortTables LoadSpecialPortTables()
@@ -637,6 +643,18 @@ public sealed class LibConfigXmlReader
             levels = Enumerable.Range(0, GhostExchangeTables.RefineLevelColumns).Select(n => ReadInt(row, $"ExchangeLv{n}")).ToArray();
         });
         return new GhostExchangeTables(groups, levels);
+    }
+
+    public WorldMapTables LoadWorldMapTables()
+    {
+        var regionTables = new HashSet<string>(StringComparer.Ordinal);
+        LoadTable(WorldMapTables.RegionTable, row =>
+        {
+            if (ReadInt(row, "IsOpened") != 0) regionTables.Add(ReadString(row, "RegionTable"));
+        });
+        var zones = new HashSet<int>();
+        if (regionTables.Count > 0) LoadTablesNamed(regionTables, (_, row) => zones.Add(ReadInt(row, "ZoneID")));
+        return new WorldMapTables(zones);
     }
 
     public CardIdentifyTables LoadCardIdentifyTables()

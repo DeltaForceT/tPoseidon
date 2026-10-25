@@ -25,6 +25,7 @@ public static class AngelFrames
     public const ushort Portal = 0x2E2C;
     public const ushort Busy = 0x2E2D;
     public const ushort GraduationMemo = 0x2181;
+    public const ushort NewbieGraduated = 0x2E23;
     public const string GraduationMemoKey = "_GRADUATE";
 
     public const ushort OrderNewbiePosition = 0xDC;

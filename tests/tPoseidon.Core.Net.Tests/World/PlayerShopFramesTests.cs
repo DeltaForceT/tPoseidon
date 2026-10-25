@@ -76,6 +76,19 @@ public sealed class PlayerShopFramesTests
     }
 
     [Fact]
+    public void SaleNoticeIsItemThenLowKeyThenCount()
+    {
+        Assert.Equal(new byte[] { 0x65, 0, 0, 0, 0x78, 0x56, 0x34, 0x12, 4, 0 }, PlayerShopFrames.SaleNotice(101, 0xAABBCCDD12345678, 4));
+    }
+
+    [Fact]
+    public void ShopEndedReasonsAreOneByte()
+    {
+        Assert.Equal(new byte[] { 0 }, PlayerShopFrames.Code(PlayerShopFrames.ShopClosedByKeeper));
+        Assert.Equal(new byte[] { 1 }, PlayerShopFrames.Code(PlayerShopFrames.ShopSoldOut));
+    }
+
+    [Fact]
     public void BoughtAndSoldCarryMoneyAndOneOperation()
     {
         var op = new BagOperation(QuestResultFrames.Created, 1, 101, 0x77, 4);
@@ -85,5 +98,13 @@ public sealed class PlayerShopFramesTests
         Assert.Equal(QuestResultFrames.ItemOperation(op), bought[4..]);
         Assert.Equal(4, BinaryPrimitives.ReadUInt16LittleEndian(sold.AsSpan(4)));
         Assert.Equal(QuestResultFrames.ItemOperation(op), sold[6..]);
+    }
+
+    [Fact]
+    public void VisitsFrameIsTwoWordsVisitsThenVisitorsNow()
+    {
+        Assert.Equal(new byte[] { 0x2C, 1, 3, 0 }, PlayerShopFrames.Visits(300, 3));
+        Assert.Equal(new byte[] { 0, 0, 0, 0 }, PlayerShopFrames.Visits(0, 0));
+        Assert.Equal(new byte[] { 0x34, 0x12, 8, 0 }, PlayerShopFrames.Visits(0x1234 + 0x10000, 8));
     }
 }

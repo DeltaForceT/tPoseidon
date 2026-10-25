@@ -86,6 +86,7 @@ internal sealed class MailController
     {
         var characterType = FriendRules.CharacterTypeOf(character);
         var sent = 0;
+        var delivered = new List<int>();
         for (var level = firstLevel; level <= lastLevel; level++)
         {
             foreach (var gift in gifts.Where(g => g.Fits(level, characterType)))
@@ -97,10 +98,16 @@ internal sealed class MailController
                     0)).ToList();
                 var result = await _master.SendGmGiftAsync(new GmGift(gift.Title, gift.Message, character.CharacterId, gift.Sender, items), default).ConfigureAwait(false);
                 Console.WriteLine($"{_logTag} [mail] level {level} gift {gift.Id} for 0x{player.PlayerEntityId:X4}: {(result.Succeeded ? $"post {result.Value!.PostUid}" : $"error {result.Error}")}");
-                if (result.Succeeded) sent++;
+                if (!result.Succeeded) continue;
+                sent++;
+                delivered.AddRange(gift.Items.Select(item => item.ItemId));
             }
         }
         if (sent > 0) await SyncAsync(player).ConfigureAwait(false);
+        if (delivered.Count > 0)
+        {
+            await SendAsync(player, PostFrames.LevelUpGiftNotice, PostFrames.LevelUpGiftNoticeBody(delivered.Take(PostFrames.LevelUpGiftNoticeMaxItems).ToList())).ConfigureAwait(false);
+        }
     }
 
     public async Task<byte[]?> CountFrameAsync(ulong characterId) =>

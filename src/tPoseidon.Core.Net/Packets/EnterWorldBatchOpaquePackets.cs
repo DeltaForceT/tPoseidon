@@ -72,23 +72,6 @@ public sealed class GameBatchFloatArrayPacket
     }
 }
 
-public sealed class SlotCountPacket
-{
-    public const int PayloadSize = 4;
-
-    public uint Count { get; init; } = 3;
-
-    public byte[] EncodePayload()
-    {
-        var buf = new byte[PayloadSize];
-        buf[0] = (byte)(Count & 0xFF);
-        buf[1] = (byte)((Count >> 8) & 0xFF);
-        buf[2] = (byte)((Count >> 16) & 0xFF);
-        buf[3] = (byte)((Count >> 24) & 0xFF);
-        return buf;
-    }
-}
-
 public sealed class HeadingVectorPacket
 {
     public const int PayloadSize = 12;

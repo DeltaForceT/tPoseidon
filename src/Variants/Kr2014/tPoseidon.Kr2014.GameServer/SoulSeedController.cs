@@ -107,6 +107,17 @@ internal sealed class SoulSeedController
         return frames;
     }
 
+    public async Task TickAsync(IEnumerable<InGameSessionState> players, TimeSpan elapsed)
+    {
+        ArgumentNullException.ThrowIfNull(players);
+        foreach (var player in players)
+        {
+            if (!player.Seed.TickBuff((int)elapsed.TotalMilliseconds)) continue;
+            await SendAsync(player, Opcode.S2C_SOUL_SEED_BUFF_ENDED, Array.Empty<byte>()).ConfigureAwait(false);
+            Console.WriteLine($"{_logTag} [soul seed] 0x{player.PlayerEntityId:X4} buff ended");
+        }
+    }
+
     public async Task EventAsync(InGameSessionState player, int eventType, int count)
     {
         foreach (var (opcode, payload) in Event(player, eventType, count)) await SendAsync(player, opcode, payload).ConfigureAwait(false);

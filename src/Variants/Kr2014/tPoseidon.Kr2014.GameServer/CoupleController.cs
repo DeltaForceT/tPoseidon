@@ -121,6 +121,7 @@ internal sealed class CoupleController
                 if (!learnSkill(skill)) return NpcScript.Refused;
                 _store.RecordCoupleSkill(couple.CoupleCode, character.CharacterId, CoupleRules.IsFemale(character.Species), skill, DateTimeOffset.UtcNow);
                 Log(st, $"learns couple skill {skill} from ring {couple.RingItemIndex}");
+                await SendAsync(st, Opcode.S2C_COUPLE_SKILL_LEARNED, CoupleFrames.SkillLearned((ushort)couple.RingItemIndex)).ConfigureAwait(false);
                 return NpcScript.Silent;
             case CoupleRules.CheckMarriageOption:
                 if (CoupleRules.MarriageOptionResult(state) is { } optionResult) return optionResult;
@@ -141,20 +142,39 @@ internal sealed class CoupleController
             return;
         }
         var target = _playerOnMap(st.MapId, targetId);
-        if (target?.Character is not { } targetCharacter || ReferenceEquals(target, st))
+        if (target is null)
+        {
+            Log(st, $"proposes to 0x{targetId:X4}: no such player");
+            await EndMakingAsync(st, CoupleRules.EndTargetMissing).ConfigureAwait(false);
+            return;
+        }
+        if (target.Character is not { } targetCharacter || ReferenceEquals(target, st))
         {
             Log(st, $"proposes to 0x{targetId:X4}: no such player");
             return;
         }
+        if (target.Trade is not null || target.IsDead)
+        {
+            Log(st, $"proposes to 0x{targetId:X4}: the target is busy");
+            st.CoupleSelecting = false;
+            await SendAsync(st, Opcode.S2C_COUPLE_TARGET_UNAVAILABLE).ConfigureAwait(false);
+            return;
+        }
+        var pending = false;
         lock (_gate)
         {
-            if (st.CoupleMaking is not null || target.CoupleMaking is not null || target.Trade is not null || target.IsDead)
+            if (st.CoupleMaking is not null || target.CoupleMaking is not null) pending = true;
+            else
             {
-                Log(st, $"proposes to 0x{targetId:X4}: a side is busy");
-                return;
+                    st.CoupleMaking = new CoupleMaking(target, CoupleRules.ProposerMark);
+                target.CoupleMaking = new CoupleMaking(st, CoupleRules.TargetMark);
             }
-            st.CoupleMaking = new CoupleMaking(target, CoupleRules.ProposerMark);
-            target.CoupleMaking = new CoupleMaking(st, CoupleRules.TargetMark);
+        }
+        if (pending)
+        {
+            Log(st, $"proposes to 0x{targetId:X4}: a proposal is pending");
+            await SendAsync(st, Opcode.S2C_COUPLE_REQUEST_PENDING).ConfigureAwait(false);
+            return;
         }
         target.CoupleSelecting = true;
         await SendAsync(st, Opcode.S2C_COUPLE_PROPOSED, CoupleFrames.Proposed(CoupleRules.ProposerRole, targetCharacter.Name, _text)).ConfigureAwait(false);
@@ -168,7 +188,7 @@ internal sealed class CoupleController
         var proposer = making.Partner;
         if (proposer.CoupleMaking is not { } proposerMaking || !ReferenceEquals(proposerMaking.Partner, st) || proposer.Character is null)
         {
-            End(st);
+            await EndMakingAsync(st, CoupleRules.EndProposerMissing).ConfigureAwait(false);
             return;
         }
         var fits = new[] { st, proposer }.All(side =>
@@ -177,7 +197,7 @@ internal sealed class CoupleController
         if (!fits)
         {
             Log(st, "accepts, but a side already has a couple or is below the level: ended");
-            End(st);
+            await EndMakingAsync(st, CoupleRules.EndConditionFailed).ConfigureAwait(false);
             return;
         }
         making.Accepted = true;
@@ -187,12 +207,10 @@ internal sealed class CoupleController
         Log(st, $"accepts the proposal of 0x{proposer.PlayerEntityId:X4}");
     }
 
-    public Task RefuseAsync(InGameSessionState st)
+    public async Task RefuseAsync(InGameSessionState st)
     {
         if (st.CoupleMaking is not null) Log(st, "ends the couple making");
-        End(st);
-        st.CoupleSelecting = false;
-        return Task.CompletedTask;
+        await EndMakingAsync(st, CoupleRules.EndRefused).ConfigureAwait(false);
     }
 
     public async Task ReadyAsync(InGameSessionState st, ReadOnlyMemory<byte> payload)
@@ -205,7 +223,8 @@ internal sealed class CoupleController
         }
         if (partnerCharacter.OwnerAccountId == character.OwnerAccountId)
         {
-            Log(st, "ready with a character of the same account: dropped (Player Same)");
+            Log(st, "ready with a character of the same account: ended (Player Same)");
+            await EndMakingAsync(st, CoupleRules.EndRefused).ConfigureAwait(false);
             return;
         }
         making.Ready = ready;
@@ -249,6 +268,7 @@ internal sealed class CoupleController
         if (_store.LoadForCharacter(character.CharacterId) is not { } couple)
         {
             Log(st, "marriage option without a couple");
+            await SendAsync(st, Opcode.S2C_MARRIAGE_OPTION_REFUSED, CoupleFrames.OptionRefused(CoupleRules.RefusalCode(MarriageOptionRefusal.NotCloseEnough))).ConfigureAwait(false);
             return;
         }
         var (refusal, choice) = CoupleRules.Choose(
@@ -256,20 +276,22 @@ internal sealed class CoupleController
         if (choice is null)
         {
             Log(st, $"marriage option ring {request.RingItemId} dress {request.DressItemId} title {request.TitleIndex} refused: {refusal}");
+            await SendAsync(st, Opcode.S2C_MARRIAGE_OPTION_REFUSED, CoupleFrames.OptionRefused(CoupleRules.RefusalCode(refusal))).ConfigureAwait(false);
             return;
         }
+        var dressItemId = choice.Dress?.ItemId ?? 0;
         var operations = new List<BagOperation>();
         foreach (var (itemId, count) in choice.Coupons()) operations.AddRange(Take(character.CharacterId, itemId, count));
         if (choice.Fee > 0) stats.GrantMoney(-choice.Fee, tPoseidon.Core.Game.Stats.StatChangeSource.Marriage);
-        if (!_store.SetMarriageOptions(couple.CoupleCode, choice.Ring.ItemId, choice.Dress.ItemId, (short)choice.Title.Index, DateTimeOffset.UtcNow))
+        if (!_store.SetMarriageOptions(couple.CoupleCode, choice.Ring.ItemId, dressItemId, (short)choice.Title.Index, DateTimeOffset.UtcNow))
         {
             Log(st, $"marriage options of couple {couple.CoupleCode} not stored");
             return;
         }
         if (operations.Count > 0) await SendAsync(st, Opcode.S2C_ITEM_ADDED, QuestResultFrames.ItemOperations(operations)).ConfigureAwait(false);
         await _link.SendAsync(CoupleSocialFrames.LinkMarriageOption,
-            CoupleSocialFrames.MarriageOption(couple.CoupleCode, (ushort)choice.Ring.ItemId, (ushort)choice.Dress.ItemId, (byte)choice.Title.Index), default).ConfigureAwait(false);
-        Log(st, $"couple {couple.CoupleCode} options: ring {choice.Ring.ItemId}, dress {choice.Dress.ItemId}, title {choice.Title.Index}, fee {choice.Fee} (coupon 0x{request.CouponWireUid:X})");
+            CoupleSocialFrames.MarriageOption(couple.CoupleCode, (ushort)choice.Ring.ItemId, (ushort)dressItemId, (byte)choice.Title.Index), default).ConfigureAwait(false);
+        Log(st, $"couple {couple.CoupleCode} options: ring {choice.Ring.ItemId}, dress {dressItemId}, title {choice.Title.Index}, fee {choice.Fee} (coupon 0x{request.CouponWireUid:X})");
     }
 
     public async Task EnteredZoneAsync(InGameSessionState st)
@@ -471,6 +493,10 @@ internal sealed class CoupleController
                         _text)).ConfigureAwait(false);
                     break;
                 case WeddingEventKind.CeremonyEnded:
+                    foreach (var spouse in new[] { hall.Groom.CharacterId, hall.Bride.CharacterId })
+                    {
+                        if (_playerById(spouse) is { } ceremonyMember) await SendAsync(ceremonyMember, Opcode.S2C_WEDDING_CONTROL_CLOSED).ConfigureAwait(false);
+                    }
                     await _link.SendAsync(WeddingHallFrames.LinkEndWedding, WeddingHallFrames.EndWedding(new WeddingEnded(hall.CoupleCode, hall.Guests)), default).ConfigureAwait(false);
                     Console.WriteLine($"{_logTag} [couple] wedding of couple {hall.CoupleCode} ended with {hall.Guests.Count} guests (0x{WeddingHallFrames.LinkEndWedding:X4} to the SystemServer)");
                     break;
@@ -491,6 +517,21 @@ internal sealed class CoupleController
         var partnerReady = making.Partner.CoupleMaking?.Ready ?? 0;
         await SendAsync(recipient, Opcode.S2C_COUPLE_MAKE_STATE, CoupleFrames.MakeState(
             flag, making.Ready, partnerCharacter.Name, (ushort)making.Partner.PlayerCharacterType, partnerReady, _text)).ConfigureAwait(false);
+    }
+
+    private async Task EndMakingAsync(InGameSessionState st, uint code)
+    {
+        var partner = st.CoupleMaking?.Partner;
+        var notify = new List<InGameSessionState>();
+        if (st.CoupleSelecting) notify.Add(st);
+        if (partner is not null && partner.CoupleSelecting && partner.CoupleMaking is { } other && ReferenceEquals(other.Partner, st)) notify.Add(partner);
+        End(st);
+        st.CoupleSelecting = false;
+        foreach (var side in notify)
+        {
+            side.CoupleSelecting = false;
+            await SendAsync(side, Opcode.S2C_COUPLE_MAKE_ENDED, CoupleFrames.MakeEnded(code)).ConfigureAwait(false);
+        }
     }
 
     private void End(InGameSessionState st)

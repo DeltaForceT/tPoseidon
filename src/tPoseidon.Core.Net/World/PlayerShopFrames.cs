@@ -15,8 +15,27 @@ public static class PlayerShopFrames
     public const int VisitRequestSize = 2;
     public const int BuyRequestSize = 20;
     public const byte MissingItem = 0;
+    public const byte ShopClosedByKeeper = 0;
+    public const byte ShopSoldOut = 1;
 
     public static byte[] Code(byte code) => [code];
+
+    public static byte[] SaleNotice(uint itemId, ulong wireUid, ushort count)
+    {
+        var w = new PacketWriter(2 * sizeof(uint) + sizeof(ushort));
+        w.WriteUInt32(itemId);
+        w.WriteUInt32(unchecked((uint)wireUid));
+        w.WriteUInt16(count);
+        return w.ToArray();
+    }
+
+    public static byte[] Visits(int visitsSinceStart, int visitorsNow)
+    {
+        var w = new PacketWriter(2 * sizeof(ushort));
+        w.WriteUInt16(unchecked((ushort)visitsSinceStart));
+        w.WriteUInt16(unchecked((ushort)visitorsNow));
+        return w.ToArray();
+    }
 
     public static byte[] Word(ushort value)
     {

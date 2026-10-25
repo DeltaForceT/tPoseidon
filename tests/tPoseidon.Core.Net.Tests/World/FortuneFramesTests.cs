@@ -9,6 +9,12 @@ namespace tPoseidon.Core.Net.Tests.World;
 public sealed class FortuneFramesTests
 {
     [Fact]
+    public void RefusedIsAFourByteCode()
+    {
+        Assert.Equal(new byte[] { 2, 0, 0, 0 }, FortuneFrames.Refused(FortuneFrames.RefusedNoMoney));
+    }
+
+    [Fact]
     public void AppliedFrameIsSourceByteThenTwoBlocks()
     {
         var bonus = FortuneRules.Parse("AP|16 HV|2 RFIT|3 DROP|4 EXP|5");

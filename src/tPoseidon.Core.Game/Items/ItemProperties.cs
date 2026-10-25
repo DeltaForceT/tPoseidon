@@ -42,6 +42,8 @@ public sealed class ItemPropertyRules
         return _curves.TryGetValue(curveName, out var curve) ? curve[rng.Next(CurveRolls)] : null;
     }
 
+    public static bool HasAttribute(int index) => index is >= 0 and <= 7 or >= 10 and <= 21;
+
     public static int AttributeId(int index) => index switch
     {
         >= 0 and <= 7 => 20000 + index,

@@ -15,6 +15,7 @@ internal sealed class CardIdentifyController
     private readonly GroundItemField _groundItems;
     private readonly Func<ushort> _newEntityId;
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
+    private readonly Func<InGameSessionState, Opcode, byte[], Task> _sendToViewers;
     private readonly int _bagCapacity;
     private readonly string _logTag;
     private readonly Random _rng = new();
@@ -28,6 +29,7 @@ internal sealed class CardIdentifyController
         GroundItemField groundItems,
         Func<ushort> newEntityId,
         Func<ushort, Opcode, byte[], Task> sendToMap,
+        Func<InGameSessionState, Opcode, byte[], Task> sendToViewers,
         int bagCapacity,
         string logTag)
     {
@@ -38,6 +40,7 @@ internal sealed class CardIdentifyController
         _groundItems = groundItems ?? throw new ArgumentNullException(nameof(groundItems));
         _newEntityId = newEntityId ?? throw new ArgumentNullException(nameof(newEntityId));
         _sendToMap = sendToMap ?? throw new ArgumentNullException(nameof(sendToMap));
+        _sendToViewers = sendToViewers ?? throw new ArgumentNullException(nameof(sendToViewers));
         _bagCapacity = bagCapacity;
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
@@ -55,6 +58,7 @@ internal sealed class CardIdentifyController
         player.CardIdentify = true;
         player.CardGame = new CardIdentifyGame();
         await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_STARTED, Array.Empty<byte>()).ConfigureAwait(false);
+        await _sendToViewers(player, Opcode.S2C_CARD_IDENTIFY_MARKER_SHOWN, CardIdentifyFrames.Marker(player.PlayerEntityId)).ConfigureAwait(false);
         Log(player, "starts");
     }
 
@@ -137,6 +141,7 @@ internal sealed class CardIdentifyController
         }
         if (reward.TmExp > 0 && player.GainRewardTmExp is { } gainTm) frames.AddRange(gainTm((int)Math.Min(reward.TmExp, int.MaxValue)));
         foreach (var (opcode, framePayload) in frames) await SendAsync(player, opcode, framePayload).ConfigureAwait(false);
+        await _sendToViewers(player, Opcode.S2C_CARD_IDENTIFY_MARKER_HIDDEN, CardIdentifyFrames.Marker(player.PlayerEntityId)).ConfigureAwait(false);
         await SendAsync(player, Opcode.CARD_IDENTIFY_END, CardIdentifyFrames.Ended((uint)Math.Max(0, score), reward.Exp, reward.TmExp)).ConfigureAwait(false);
         Log(player, $"CardIdentifyEnd() - score {score}, exp {reward.Exp}, TM exp {reward.TmExp} (level {level}, {game?.Stage ?? 0} stages)");
     }

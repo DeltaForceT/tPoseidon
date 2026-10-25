@@ -49,6 +49,13 @@ public sealed class CoupleService
         }
         if (_store.LoadForCharacter(characterId) is not { } couple) return Array.Empty<CoupleMessage>();
         var info = InfoFor(couple, characterId, loginPush: true);
+        var opening = new List<CoupleMessage> { info };
+        if (couple.State == CoupleStates.DivorceRequested
+            && couple.Members.FirstOrDefault(member => member.CharacterId == characterId) is { DivorceState: CoupleStates.DivorceReceiver }
+            && couple.Partner(characterId) is { } requester)
+        {
+            opening.Add(new CoupleMessage(characterId, CoupleSocialFrames.DivorceAsked, CoupleSocialFrames.DivorceAskedBody(requester.Name, _text)));
+        }
         if (couple.Partner(characterId) is { } partner && IsOpen(partner.CharacterId))
         {
             Event(characterId, CoupleCloseness.BothOnline);
@@ -57,7 +64,7 @@ public sealed class CoupleService
                 Event(characterId, CoupleCloseness.Anniversary);
             }
         }
-        return new[] { info };
+        return opening;
     }
 
     public string? Event(ulong characterId, int eventBit)
@@ -257,10 +264,14 @@ public sealed class CoupleService
         }
         if (couple.State != CoupleStates.Married) return (Array.Empty<CoupleMessage>(), $"state {couple.State} cannot request a divorce");
         if (!_store.RequestDivorce(couple.CoupleCode, characterId, partner.CharacterId, _time.GetUtcNow())) return (Array.Empty<CoupleMessage>(), "store refused the request");
-        var messages = new List<CoupleMessage>();
+        var messages = new List<CoupleMessage>
+        {
+            new(characterId, CoupleSocialFrames.DivorceRequested, CoupleSocialFrames.Character(characterId)),
+        };
         if (IsOpen(partner.CharacterId))
         {
-            messages.Add(new CoupleMessage(partner.CharacterId, CoupleSocialFrames.DivorceRequested, CoupleSocialFrames.Character(characterId)));
+            var requesterName = couple.Members.FirstOrDefault(member => member.CharacterId == characterId)?.Name ?? string.Empty;
+            messages.Add(new CoupleMessage(partner.CharacterId, CoupleSocialFrames.DivorceAsked, CoupleSocialFrames.DivorceAskedBody(requesterName, _text)));
         }
         messages.AddRange(Refreshed(couple.CoupleCode));
         return (messages, $"couple {couple.CoupleCode} divorce requested");

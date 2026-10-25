@@ -9,6 +9,7 @@ public enum SignKind : byte
     HeadMessage = 2,
     CardBattleTitle = 3,
     PartyBoardNotice = 7,
+    Microphone = 8,
     FortuneSign = 9,
 }
 
@@ -26,7 +27,15 @@ public sealed class PlayerSign
     public const ushort CardBattleTitleEndRequest = 0x013E;
     public const ushort FortuneSignRequest = 0x03DE;
     public const ushort FortuneSignEndRequest = 0x03DF;
+    public const ushort MicrophoneRequest = 0x0320;
+    public const ushort MicrophoneChat = 0x0320;
+    public const ushort MicrophoneBubbleShown = 0x032F;
+    public const ushort MicrophoneBubbleCleared = 0x0330;
     public const int TextBytes = 50;
+    public const int MicrophoneTextBytes = 0xA1;
+
+    private static readonly ushort[] MicrophoneClearingActions =
+        [0x0016, 0x0018, 0x001D, 0x0021, 0x002C, 0x0036, 0x013B, 0x014B, 0x01A1, 0x01D4, 0x01DD, 0x02C9, 0x0317, 0x0320];
 
     public SignKind Kind { get; private set; }
 
@@ -83,20 +92,50 @@ public sealed class PlayerSign
 
     public IReadOnlyList<SignFrame> ClearOnAction(ushort entityId)
     {
-        var frames = new List<SignFrame>(2);
+        var frames = new List<SignFrame>(3);
         ClearHeadMessage(entityId, frames);
         ClearCardBattleTitle(entityId, frames);
+        ClearMicrophone(entityId, frames);
         return frames;
     }
 
-    public static byte[] Text(ushort entityId, string text, Encoding encoding)
+    public static bool ClearsMicrophone(ushort clientOpcode) => MicrophoneClearingActions.Contains(clientOpcode);
+
+    public IReadOnlyList<SignFrame> ClearMicrophoneOnAction(ushort entityId)
+    {
+        var frames = new List<SignFrame>(1);
+        ClearMicrophone(entityId, frames);
+        return frames;
+    }
+
+    public IReadOnlyList<SignFrame> ShowMicrophone(ushort entityId, string name, string text, Encoding encoding)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(encoding);
+        var frames = new List<SignFrame>(3);
+        ClearHeadMessage(entityId, frames);
+        ClearMicrophone(entityId, frames);
+        var chat = new PacketWriter(sizeof(ushort) + name.Length + text.Length + 2);
+        chat.WriteUInt16(entityId);
+        chat.WriteNulTerminated(name, encoding);
+        chat.WriteNulTerminated(text, encoding);
+        frames.Insert(0, new SignFrame(MicrophoneChat, chat.ToArray()));
+        Kind = SignKind.Microphone;
+        frames.Add(new SignFrame(MicrophoneBubbleShown, Text(entityId, text, encoding, MicrophoneTextBytes)));
+        return frames;
+    }
+
+    public static byte[] Text(ushort entityId, string text, Encoding encoding) => Text(entityId, text, encoding, TextBytes);
+
+    public static byte[] Text(ushort entityId, string text, Encoding encoding, int limit)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(encoding);
         var bytes = encoding.GetBytes(text);
-        var w = new PacketWriter(sizeof(ushort) + TextBytes + 1);
+        var w = new PacketWriter(sizeof(ushort) + limit + 1);
         w.WriteUInt16(entityId);
-        w.WriteBytes(bytes.AsSpan(0, Math.Min(bytes.Length, TextBytes)));
+        w.WriteBytes(bytes.AsSpan(0, Math.Min(bytes.Length, limit)));
         w.WriteByte(0);
         return w.ToArray();
     }
@@ -120,6 +159,13 @@ public sealed class PlayerSign
         if (Kind != SignKind.HeadMessage) return;
         Kind = SignKind.None;
         frames.Add(new SignFrame(HeadMessageCleared, Entity(entityId)));
+    }
+
+    private void ClearMicrophone(ushort entityId, List<SignFrame> frames)
+    {
+        if (Kind != SignKind.Microphone) return;
+        Kind = SignKind.None;
+        frames.Add(new SignFrame(MicrophoneBubbleCleared, Entity(entityId)));
     }
 
     private void ClearCardBattleTitle(ushort entityId, List<SignFrame> frames)

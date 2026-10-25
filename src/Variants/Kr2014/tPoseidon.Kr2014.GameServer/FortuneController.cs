@@ -218,6 +218,7 @@ internal sealed class FortuneController
         if (hold.Round.Step != FortuneStep.Rolled)
         {
             Log(player, $"play again refused: step {hold.Round.Step}");
+            await SendAsync(player, Opcode.S2C_FORTUNE_REFUSED, FortuneFrames.Refused(FortuneFrames.RefusedWrongStep)).ConfigureAwait(false);
             return;
         }
         if (!await DealAsync(player, hold, stats.Money).ConfigureAwait(false)) return;
@@ -271,6 +272,7 @@ internal sealed class FortuneController
         if (money < nextFee)
         {
             Log(player, $"deal refused: money {money} below the next fee {nextFee}");
+            await SendAsync(player, Opcode.S2C_FORTUNE_REFUSED, FortuneFrames.Refused(FortuneFrames.RefusedNoMoney)).ConfigureAwait(false);
             return false;
         }
         FortuneCard[] cards;

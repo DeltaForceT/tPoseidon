@@ -12,16 +12,19 @@ public readonly record struct CouplePoints(int Relation, int Love, int Friend)
     }
 }
 
-public readonly record struct MarriageOptionRequest(ulong CouponWireUid, int RingItemId, int DressItemId, int TitleIndex);
+public readonly record struct MarriageOptionRequest(ulong CouponWireUid, int TitleIndex, int RingItemId, int DressItemId);
 
 public enum MarriageOptionRefusal
 {
     None,
     NotCloseEnough,
-    Title,
-    Ring,
+    TitleMissing,
+    TitleOutOfRange,
+    RingMissing,
+    RingOutOfRange,
     RingCoupon,
-    Dress,
+    DressMissing,
+    DressOutOfRange,
     DressCoupon,
     Money,
 }
@@ -30,15 +33,15 @@ public sealed record MarriageOptionChoice(
     MarriageTitleEntry Title,
     WeddingRingEntry Ring,
     MarriageExchangeEntry RingRow,
-    WeddingDressEntry Dress,
-    MarriageExchangeEntry DressRow)
+    WeddingDressEntry? Dress,
+    MarriageExchangeEntry? DressRow)
 {
-    public int Fee => RingRow.Fee + DressRow.Fee;
+    public int Fee => DressRow is null ? 0 : RingRow.Fee + DressRow.Fee;
 
     public IEnumerable<(int ItemId, int Count)> Coupons()
     {
         if (RingRow.ReqId != 0) yield return (RingRow.ReqId, RingRow.ReqNum);
-        if (DressRow.ReqId != 0) yield return (DressRow.ReqId, DressRow.ReqNum);
+        if (DressRow is { ReqId: not 0 }) yield return (DressRow.ReqId, DressRow.ReqNum);
     }
 }
 
@@ -49,6 +52,10 @@ public static class CoupleRules
     public const byte TargetRole = 2;
     public const byte AcceptedFlagForAcceptor = 0;
     public const byte AcceptedFlagForProposer = 1;
+    public const uint EndRefused = 0;
+    public const uint EndProposerMissing = 1;
+    public const uint EndConditionFailed = 2;
+    public const uint EndTargetMissing = 4;
     public const byte ProposerMark = 1;
     public const byte TargetMark = 0;
 
@@ -63,6 +70,12 @@ public static class CoupleRules
     public const int CheckMarriageOption = 235;
 
     public const int SkillAlreadyKnown = 2;
+
+    public const uint InfoMissingCode = 1;
+    public const uint PointsOutOfRangeCode = 2;
+    public const uint CouponMissingCode = 3;
+    public const uint NotEnoughMoneyCode = 4;
+    public const uint WrongCoupleStateCode = 5;
 
     public static bool IsCoupleFunction(uint functionId) => functionId is >= MakeCouple and <= CheckMarriageOption
         and not 227 and not 233;
@@ -106,6 +119,16 @@ public static class CoupleRules
         return tables.Titles.Where(row => row.Points.Contains(points.Relation, points.Love, points.Friend)).ToList();
     }
 
+    public static uint RefusalCode(MarriageOptionRefusal refusal) => refusal switch
+    {
+        MarriageOptionRefusal.TitleMissing or MarriageOptionRefusal.RingMissing or MarriageOptionRefusal.DressMissing => InfoMissingCode,
+        MarriageOptionRefusal.TitleOutOfRange or MarriageOptionRefusal.RingOutOfRange or MarriageOptionRefusal.DressOutOfRange => PointsOutOfRangeCode,
+        MarriageOptionRefusal.RingCoupon or MarriageOptionRefusal.DressCoupon => CouponMissingCode,
+        MarriageOptionRefusal.Money => NotEnoughMoneyCode,
+        MarriageOptionRefusal.NotCloseEnough => WrongCoupleStateCode,
+        _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A granted choice has no refusal code."),
+    };
+
     public static (MarriageOptionRefusal Refusal, MarriageOptionChoice? Choice) Choose(
         CoupleTables tables, byte coupleState, CouplePoints points, MarriageOptionRequest request, Func<int, int> heldCount, long money)
     {
@@ -113,19 +136,21 @@ public static class CoupleRules
         ArgumentNullException.ThrowIfNull(heldCount);
         if (coupleState != CoupleStates.CloseEnough) return (MarriageOptionRefusal.NotCloseEnough, null);
         var title = tables.Titles.FirstOrDefault(row => row.Index == request.TitleIndex);
-        if (title is null || !title.Points.Contains(points.Relation, points.Love, points.Friend)) return (MarriageOptionRefusal.Title, null);
+        if (title is null) return (MarriageOptionRefusal.TitleMissing, null);
+        if (!title.Points.Contains(points.Relation, points.Love, points.Friend)) return (MarriageOptionRefusal.TitleOutOfRange, null);
         var ringRow = tables.ExchangeRow(request.RingItemId);
-        if (!tables.Rings.TryGetValue(request.RingItemId, out var ring) || ringRow is null || !ringRow.Points.Contains(points.Relation, points.Love, points.Friend))
-        {
-            return (MarriageOptionRefusal.Ring, null);
-        }
+        if (request.RingItemId == 0 || !tables.Rings.TryGetValue(request.RingItemId, out var ring) || ringRow is null) return (MarriageOptionRefusal.RingMissing, null);
+        if (!ringRow.Points.Contains(points.Relation, points.Love, points.Friend)) return (MarriageOptionRefusal.RingOutOfRange, null);
         if (ringRow.ReqId != 0 && heldCount(ringRow.ReqId) < ringRow.ReqNum) return (MarriageOptionRefusal.RingCoupon, null);
-        var dressRow = tables.ExchangeRow(request.DressItemId);
-        if (!tables.Dresses.TryGetValue(request.DressItemId, out var dress) || dressRow is null || !dressRow.Points.Contains(points.Relation, points.Love, points.Friend))
+        WeddingDressEntry? dress = null;
+        MarriageExchangeEntry? dressRow = null;
+        if (request.DressItemId != 0)
         {
-            return (MarriageOptionRefusal.Dress, null);
+            dressRow = tables.ExchangeRow(request.DressItemId);
+            if (!tables.Dresses.TryGetValue(request.DressItemId, out dress) || dressRow is null) return (MarriageOptionRefusal.DressMissing, null);
+            if (!dressRow.Points.Contains(points.Relation, points.Love, points.Friend)) return (MarriageOptionRefusal.DressOutOfRange, null);
+            if (dressRow.ReqId != 0 && heldCount(dressRow.ReqId) < dressRow.ReqNum) return (MarriageOptionRefusal.DressCoupon, null);
         }
-        if (dressRow.ReqId != 0 && heldCount(dressRow.ReqId) < dressRow.ReqNum) return (MarriageOptionRefusal.DressCoupon, null);
         var choice = new MarriageOptionChoice(title, ring, ringRow, dress, dressRow);
         if (money < choice.Fee) return (MarriageOptionRefusal.Money, null);
         return (MarriageOptionRefusal.None, choice);

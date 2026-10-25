@@ -41,9 +41,10 @@ public static class EnterWorldBatchSynthesizer
         uint fortuneTitleId = 0,
         byte[]? abilityPercents = null,
         byte[]? petBag = null,
+        uint profileFlags = tPoseidon.Core.Game.Progression.ProfileViewRules.DefaultFlags,
         CancellationToken ct = default)
     {
-        await SendPhase1Async(ctx, character, entityId, questLists, itemStore, skillStore, rates, itemOptions, timedItems, titles, fortune, fortuneTitleId, abilityPercents, petBag, ct).ConfigureAwait(false);
+        await SendPhase1Async(ctx, character, entityId, questLists, itemStore, skillStore, rates, itemOptions, timedItems, titles, fortune, fortuneTitleId, abilityPercents, petBag, profileFlags, ct).ConfigureAwait(false);
         await SendPhase2Async(
             ctx, character, entityId, dialogService,
             worldEntities, characterInfoCatalog,
@@ -65,6 +66,7 @@ public static class EnterWorldBatchSynthesizer
         uint fortuneTitleId = 0,
         byte[]? abilityPercents = null,
         byte[]? petBag = null,
+        uint profileFlags = tPoseidon.Core.Game.Progression.ProfileViewRules.DefaultFlags,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ctx);
@@ -133,7 +135,7 @@ public static class EnterWorldBatchSynthesizer
 
         await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_2A4, randKey: 0x61, ListCountPacket.Empty.EncodePayload(), ct);
 
-        await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_3E4, randKey: 0x40, new SlotCountPacket { Count = 3 }.EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.S2C_PROFILE_OPTIONS, randKey: 0x40, tPoseidon.Core.Net.World.ProfileViewFrames.Options(profileFlags), ct);
 
         var profileTitle = titles?.ProfileTitle ?? new EntityIdAnnouncePacket { EntityId = entityId, PadBytes = 11 }.EncodePayload();
         await SendFrameAsync(ctx, Opcode.S2C_PROFILE_TITLE, randKey: 0x14, profileTitle, ct);

@@ -349,6 +349,7 @@ internal sealed class MyCampController : IDisposable
     private async Task StartTransferAsync(InGameSessionState st, ulong characterId, IReadOnlyCollection<MyCampItemRecord> records, bool forGuest)
     {
         _transfers[characterId] = new MyCampTransfer(records, forGuest);
+        if (!forGuest) await SendAsync(st, Opcode.S2C_TIMER_ITEM_CLOCK, TimedItemFrames.Clock(DateTime.UtcNow)).ConfigureAwait(false);
         await SendAsync(st, Opcode.S2C_MYCAMP_ITEM_COUNT, MyCampFrames.ItemCount(records.Count)).ConfigureAwait(false);
     }
 

@@ -58,7 +58,7 @@ public sealed class AngelServer
         if (_room.Find(characterId) is not { } member) return Task.CompletedTask;
         var outbox = _angels.LevelChanged(characterId, member.Character.OwnerAccountId, (int)level);
         foreach (var note in outbox.Notes) _log($"[angel] {note}");
-        return DeliverGraduationAsync(outbox, member.Character.Name, ct);
+        return DeliverGraduationAsync(outbox, characterId, member.Character.Name, ct);
     }
 
     public void Closed(SocialMember member)
@@ -74,7 +74,7 @@ public sealed class AngelServer
         return DeliverAsync(_angels.NewbieSpot(spot, id => _room.Find(id)?.Character.Name), ct);
     }
 
-    private async Task DeliverGraduationAsync(AngelOutbox outbox, string newbieName, CancellationToken ct)
+    private async Task DeliverGraduationAsync(AngelOutbox outbox, ulong newbie, string newbieName, CancellationToken ct)
     {
         await DeliverAsync(outbox, ct).ConfigureAwait(false);
         foreach (var angel in outbox.GraduationMemos)
@@ -93,6 +93,15 @@ public sealed class AngelServer
             }
             var stored = _friends.SendMessage(angel, FriendRules.GmSenderCharacterId, FriendRules.GmMessageKind, AngelFrames.GraduationMemoKey);
             _log($"[angel] graduation memo for the offline angel 0x{angel:X}: {(stored ? "stored" : "not stored")}");
+        }
+        if (!outbox.Graduated || _room.Find(newbie) is not { } graduate) return;
+        try
+        {
+            await graduate.Context.SendFrameAsync(AngelFrames.NewbieGraduated, Array.Empty<byte>(), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or IOException or System.Net.Sockets.SocketException)
+        {
+            _log($"[angel] graduation notice to 0x{newbie:X} not delivered: {ex.Message}");
         }
     }
 

@@ -57,12 +57,13 @@ public sealed class AngelServiceTests
         var store = new FakeAngels();
         store.Rows.Add((Newbie, Angel));
         var service = new AngelService(store, Text, new Clock());
-        Assert.Empty(service.LevelChanged(Newbie, 7, 30).Orders);
+        Assert.False(service.LevelChanged(Newbie, 7, 30).Graduated);
         var graduated = service.LevelChanged(Newbie, 7, 31);
         var order = Assert.Single(graduated.Orders);
         Assert.Equal((Angel, AngelFrames.OrderAngelReward), (order.CharacterId, order.OrderType));
         Assert.Equal(1, store.Results[Angel].GraduationCount);
         Assert.Equal(new[] { Angel }, graduated.GraduationMemos);
+        Assert.True(graduated.Graduated);
         Assert.Empty(service.LevelChanged(Newbie, 7, 32).Orders);
     }
 
