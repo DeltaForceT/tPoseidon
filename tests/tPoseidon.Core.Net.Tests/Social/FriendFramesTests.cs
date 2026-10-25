@@ -123,27 +123,99 @@ public sealed class FriendFramesTests
     public void AZoneMoveAnswerIsOneByte()
     {
         Assert.Equal(new byte[] { 1 }, FriendFrames.ZoneMoveAnswer(ZoneMoveAnswer.SameZone));
-        Assert.Equal(ZoneMoveAnswer.SameZone, FriendDecisions.ZoneMove(0x94, 0x94));
-        Assert.Equal(ZoneMoveAnswer.NotReachable, FriendDecisions.ZoneMove(0x94, 0x95));
-        Assert.Equal(ZoneMoveAnswer.NotReachable, FriendDecisions.ZoneMove(null, 0x95));
     }
 
     [Fact]
-    public void TheRelayOpcodesMatchTheServerTable()
+    public void AFriendInTheSameZoneNeedsNoLocationOrder()
     {
-        Assert.Equal(0x2149, FriendFrames.RequestSignalOn);
-        Assert.Equal(0x214A, FriendFrames.RequestSignalOff);
-        Assert.Equal(0x214B, FriendFrames.RequestSignalOnRelayed);
-        Assert.Equal(0x214C, FriendFrames.RequestSignalOffRelayed);
-        Assert.Equal(0x214E, FriendFrames.RequestInFlight);
-        Assert.Equal(0x2165, FriendFrames.RequestWaitRelay);
-        Assert.Equal(0x217D, FriendFrames.MessageBlockRelay);
-        Assert.Equal(0x217E, FriendFrames.MessageBlocked);
-        Assert.Equal(0x217F, FriendFrames.RequestShown);
-        Assert.Equal(0x2180, FriendFrames.RequestShownTo);
-        Assert.Equal(0x218A, FriendFrames.ChangeZoneToRequest);
-        Assert.Equal(0x218C, FriendFrames.ChangeZoneToAnswer);
+        var plan = FriendDecisions.ZoneMove(FriendZoneInfo.Settled(0x94), FriendZoneInfo.Settled(0x94));
+
+        Assert.Equal(new ZonePlanProbe(ZoneMoveStep.Answer, ZoneMoveAnswer.SameZone), new ZonePlanProbe(plan.Step, plan.Answer));
     }
+
+    [Fact]
+    public void AFriendChangingMapsAnswersMapMoving()
+    {
+        var plan = FriendDecisions.ZoneMove(FriendZoneInfo.Settled(0x94), FriendZoneInfo.Moving(0x95, 0x96));
+
+        Assert.Equal(new ZonePlanProbe(ZoneMoveStep.Answer, ZoneMoveAnswer.MapMoving), new ZonePlanProbe(plan.Step, plan.Answer));
+    }
+
+    [Fact]
+    public void AFriendInAnotherZoneIsLocatedByTheirGameServer()
+    {
+        var plan = FriendDecisions.ZoneMove(FriendZoneInfo.Settled(0x94), FriendZoneInfo.Settled(0x95));
+
+        Assert.Equal(ZoneMoveStep.LocateFriend, plan.Step);
+    }
+
+    [Fact]
+    public void ALocationInARealZoneBecomesTheMoveAnswerCarryingTheSixBytes()
+    {
+        var reply = FriendDecisions.ZoneMoveFromLocation(new byte[] { 0x10, 0x01, 0x20, 0x02, 0x94, 0x00 });
+
+        Assert.Equal(FriendFrames.ChangeZoneToPosition, reply.Opcode);
+        Assert.Equal(new byte[] { 0x10, 0x01, 0x20, 0x02, 0x94, 0x00 }, reply.Payload);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1000)]
+    public void ALocationWithoutAReachableZoneIsRefused(ushort zone)
+    {
+        var reply = FriendDecisions.ZoneMoveFromLocation(FriendFrames.Location(new FriendLocation(5, 6, zone)));
+
+        Assert.Equal(FriendFrames.ChangeZoneToAnswer, reply.Opcode);
+        Assert.Equal(new byte[] { 2 }, reply.Payload);
+    }
+
+    [Fact]
+    public void ASettledFriendInTheSameZoneIsAnsweredWithTheZoneAndTracked()
+    {
+        var reply = FriendDecisions.Position(FriendZoneInfo.Settled(0x94), FriendZoneInfo.Settled(0x94));
+
+        Assert.Equal(FriendFrames.PositionZone, reply.Opcode);
+        Assert.Equal(new byte[] { 0x94, 0x00 }, reply.Payload);
+        Assert.True(reply.TracksPosition);
+    }
+
+    [Fact]
+    public void ASettledFriendInAnotherZoneIsNotTracked()
+    {
+        var reply = FriendDecisions.Position(FriendZoneInfo.Settled(0x94), FriendZoneInfo.Settled(0x95));
+
+        Assert.False(reply.TracksPosition);
+    }
+
+    [Fact]
+    public void AFriendChangingMapsIsAnsweredWithBothZones()
+    {
+        var reply = FriendDecisions.Position(FriendZoneInfo.Settled(0x94), FriendZoneInfo.Moving(0x95, 0x96));
+
+        Assert.Equal(FriendFrames.PositionTransit, reply.Opcode);
+        Assert.Equal(new byte[] { 0x95, 0x00, 0x96, 0x00 }, reply.Payload);
+        Assert.False(reply.TracksPosition);
+    }
+
+    [Fact]
+    public void TheObserveOrderCarriesTheRequesterAndTheInterval()
+    {
+        var data = FriendFrames.ObserveOrder(0x0102030405060708, 3000);
+
+        Assert.Equal(new byte[] { 8, 7, 6, 5, 4, 3, 2, 1, 0xB8, 0x0B, 0, 0 }, data);
+        Assert.True(FriendFrames.TryReadObserveOrder(data, out var requester, out var interval));
+        Assert.Equal((0x0102030405060708UL, 3000U), (requester, interval));
+        Assert.False(FriendFrames.TryReadObserveOrder(data.AsSpan(0, 11), out _, out _));
+    }
+
+    [Fact]
+    public void ATrackedPositionIsTheCellsTheZoneAndTheFriend()
+    {
+        Assert.Equal(new byte[] { 0x0A, 0, 0x14, 0, 0x94, 0, 8, 7, 6, 5, 4, 3, 2, 1 }, FriendFrames.Tracked(10, 20, 0x94, 0x0102030405060708));
+    }
+
+    private readonly record struct ZonePlanProbe(ZoneMoveStep Step, ZoneMoveAnswer Answer);
+
 
     [Fact]
     public void AnImmediateMemoIsTheNameThenTheText()

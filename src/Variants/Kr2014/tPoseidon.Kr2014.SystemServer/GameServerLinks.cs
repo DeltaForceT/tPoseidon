@@ -9,6 +9,7 @@ public sealed class GameServerLinks
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
 
     private readonly ConcurrentDictionary<ulong, (S2SessionContext Link, ushort Zone)> _whereabouts = new();
+    private readonly ConcurrentDictionary<ulong, (ushort From, ushort To)> _transit = new();
     private readonly ConcurrentDictionary<(ulong CharacterId, ushort OrderType), (ushort AgencyId, ushort OrderId)> _outstanding = new();
     private readonly ConcurrentDictionary<S2SessionContext, byte> _links = new();
     private readonly string _keyTablePath;
@@ -58,6 +59,12 @@ public sealed class GameServerLinks
     public Func<S2SessionContext, ReadOnlyMemory<byte>, CancellationToken, Task>? OnGameMasterChat { get; set; }
 
     public ushort? ZoneOf(ulong characterId) => _whereabouts.TryGetValue(characterId, out var where) ? where.Zone : null;
+
+    public FriendZoneInfo? ZoneInfoOf(ulong characterId)
+    {
+        if (_transit.TryGetValue(characterId, out var moving)) return FriendZoneInfo.Moving(moving.From, moving.To);
+        return _whereabouts.TryGetValue(characterId, out var where) ? FriendZoneInfo.Settled(where.Zone) : null;
+    }
 
     public async Task RunAsync(string host, int port, CancellationToken ct)
     {
@@ -125,6 +132,15 @@ public sealed class GameServerLinks
         await SendOrderAsync(where, new OfficerOrder(order.AgencyId, orderId, order.OrderType, order.CharacterId, order.Data), ct).ConfigureAwait(false);
     }
 
+    public async Task<ushort?> SendReportedAsync(ulong characterId, ushort orderType, byte[] data, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        if (!_whereabouts.TryGetValue(characterId, out var where)) return null;
+        var orderId = NextOrderId();
+        await SendOrderAsync(where, new OfficerOrder(0, orderId, orderType, characterId, data), ct).ConfigureAwait(false);
+        return orderId;
+    }
+
     public async Task SendOnceAsync(ulong characterId, ushort orderType, byte[] data, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -171,12 +187,14 @@ public sealed class GameServerLinks
         {
             var (characterId, zone) = SystemLinkFrames.ReadCharacterAndZone(payload.Span);
             _whereabouts[characterId] = (link, zone);
+            _transit.TryRemove(characterId, out var transitEnded);
             ForgetOrders(characterId);
             if (OnEnterZone is not null) await OnEnterZone(characterId, zone, ct).ConfigureAwait(false);
         });
         link.Dispatcher.Register(SystemLinkFrames.LeaveZone, async (_, payload, ct) =>
         {
-            var (characterId, _) = SystemLinkFrames.ReadCharacterAndZone(payload.Span);
+            var (characterId, nextZone) = SystemLinkFrames.ReadCharacterAndZone(payload.Span);
+            if (_whereabouts.TryGetValue(characterId, out var current)) _transit[characterId] = (current.Zone, nextZone);
             if (OnLeaveZone is not null) await OnLeaveZone(characterId, ct).ConfigureAwait(false);
         });
         link.Dispatcher.Register(SystemLinkFrames.LoggedOut, async (opcode, payload, ct) =>
@@ -185,6 +203,7 @@ public sealed class GameServerLinks
             if (_whereabouts.TryGetValue(characterId, out var where) && ReferenceEquals(where.Link, link))
             {
                 _whereabouts.TryRemove(characterId, out _);
+                _transit.TryRemove(characterId, out var transitEnded);
                 ForgetOrders(characterId);
             }
             if (OnLeaveZone is not null) await OnLeaveZone(characterId, ct).ConfigureAwait(false);
@@ -312,6 +331,7 @@ public sealed class GameServerLinks
         {
             if (!ReferenceEquals(where.Link, link)) continue;
             _whereabouts.TryRemove(characterId, out _);
+            _transit.TryRemove(characterId, out var transitEnded);
             ForgetOrders(characterId);
         }
     }

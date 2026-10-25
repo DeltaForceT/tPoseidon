@@ -5,8 +5,21 @@ namespace tPoseidon.Core.Net.Social;
 
 public sealed record FriendListed(FriendEntry Entry, bool Online);
 
+public readonly record struct FriendLocation(ushort X, ushort Y, ushort Zone);
+
 public static class FriendFrames
 {
+    public const ushort OrderObservePosition = 0xB6;
+    public const ushort OrderReturnPosition = 0xB7;
+    public const ushort ReportPosition = 0xB6;
+    public const ushort PositionTransit = 0x2169;
+    public const ushort PositionTrack = 0x216A;
+    public const ushort ChangeZoneToPosition = 0x218B;
+    public const ushort LastMovableZone = 999;
+    public const uint TrackingIntervalMs = 3000;
+    public const int ObserveOrderLength = 12;
+    public const int LocationLength = 6;
+
     public const ushort SessionOpen = 0x2135;
     public const ushort Logout = 0x2136;
     public const ushort AddRequest = 0x2137;
@@ -185,6 +198,61 @@ public static class FriendFrames
         var w = new PacketWriter(2);
         w.WriteUInt16(zone);
         return w.ToArray();
+    }
+
+    public static byte[] ZonePair(ushort first, ushort second)
+    {
+        var w = new PacketWriter(4);
+        w.WriteUInt16(first);
+        w.WriteUInt16(second);
+        return w.ToArray();
+    }
+
+    public static byte[] ObserveOrder(ulong requesterId, uint intervalMs)
+    {
+        var w = new PacketWriter(ObserveOrderLength);
+        w.WriteUInt64(requesterId);
+        w.WriteUInt32(intervalMs);
+        return w.ToArray();
+    }
+
+    public static bool TryReadObserveOrder(ReadOnlySpan<byte> data, out ulong requesterId, out uint intervalMs)
+    {
+        requesterId = 0;
+        intervalMs = 0;
+        if (data.Length < ObserveOrderLength) return false;
+        var r = new PacketReader(data);
+        requesterId = r.ReadUInt64();
+        intervalMs = r.ReadUInt32();
+        return true;
+    }
+
+    public static byte[] Tracked(ushort cellX, ushort cellY, ushort zone, ulong characterId)
+    {
+        var w = new PacketWriter(14);
+        w.WriteUInt16(cellX);
+        w.WriteUInt16(cellY);
+        w.WriteUInt16(zone);
+        w.WriteUInt64(characterId);
+        return w.ToArray();
+    }
+
+    public static byte[] Location(FriendLocation location)
+    {
+        var w = new PacketWriter(LocationLength);
+        w.WriteUInt16(location.X);
+        w.WriteUInt16(location.Y);
+        w.WriteUInt16(location.Zone);
+        return w.ToArray();
+    }
+
+    public static bool TryReadLocation(ReadOnlySpan<byte> data, out FriendLocation location)
+    {
+        location = default;
+        if (data.Length < LocationLength) return false;
+        var r = new PacketReader(data);
+        location = new FriendLocation(r.ReadUInt16(), r.ReadUInt16(), r.ReadUInt16());
+        return true;
     }
 
     public static byte[] ZoneMoveAnswer(ZoneMoveAnswer answer) => new[] { (byte)answer };

@@ -183,6 +183,8 @@ public sealed class SystemServerLink
             case InstantChatFrames.OrderMyNotice:
             case InstantChatFrames.OrderReportLevel:
             case InstantChatFrames.OrderNoticeState:
+            case FriendFrames.OrderObservePosition:
+            case FriendFrames.OrderReturnPosition:
                 if (OrderReceived is { } received) await received(order, ct).ConfigureAwait(false);
                 break;
             case GameMasterFrames.OrderNpcOnOff:

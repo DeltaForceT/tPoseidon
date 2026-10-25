@@ -22,7 +22,7 @@ internal sealed class PvpDuelController : IDisposable
 
     private readonly IPvpStore _store;
     private readonly Func<IReadOnlyCollection<InGameSessionState>> _sessions;
-    private readonly Func<InGameSessionState, Task> _reviveLoser;
+    private readonly Func<InGameSessionState, Task> _reenterLoser;
     private readonly Encoding _text;
     private readonly string _logTag;
     private readonly PvpDuelRequests _requests = new();
@@ -33,11 +33,11 @@ internal sealed class PvpDuelController : IDisposable
     private DateTimeOffset _lastTick;
 
     public PvpDuelController(
-        IPvpStore store, Func<IReadOnlyCollection<InGameSessionState>> sessions, Func<InGameSessionState, Task> reviveLoser, Encoding text, string logTag)
+        IPvpStore store, Func<IReadOnlyCollection<InGameSessionState>> sessions, Func<InGameSessionState, Task> reenterLoser, Encoding text, string logTag)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
-        _reviveLoser = reviveLoser ?? throw new ArgumentNullException(nameof(reviveLoser));
+        _reenterLoser = reenterLoser ?? throw new ArgumentNullException(nameof(reenterLoser));
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
@@ -201,7 +201,7 @@ internal sealed class PvpDuelController : IDisposable
             if (!outcome.Cancelled) await SendAsync(fighter, Opcode.S2C_PVP_DUEL_RESULT, PvpDuelFrames.Result(outcome.Seats[seat])).ConfigureAwait(false);
             await SendAsync(fighter, Opcode.S2C_PVP_DUEL_END, PvpDuelFrames.End(fighter.PvpMode)).ConfigureAwait(false);
         }
-        if (outcome.RevivedSeat is { } revived && SessionOf(active, revived) is { IsDead: true } loser) await _reviveLoser(loser).ConfigureAwait(false);
+        if (outcome.RevivedSeat is { } revived && SessionOf(active, revived) is { IsDead: true } loser) await _reenterLoser(loser).ConfigureAwait(false);
         Log($"duel of character {active.Duel.CharacterOf(0)} and {active.Duel.CharacterOf(1)} ended (cancelled {outcome.Cancelled})");
     }
 

@@ -9,15 +9,19 @@ namespace tPoseidon.Kr2014.SystemServer;
 public sealed class FriendServer
 {
     private const byte NewFriendGroup = 0;
+    private static readonly TimeSpan LocateReportWindow = TimeSpan.FromSeconds(30);
 
     private readonly IFriendStore _friends;
     private readonly SocialRoom _room;
     private readonly Encoding _text;
     private readonly int _offlineMessageLimit;
     private readonly Action<string> _log;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<ushort, (ulong RequesterId, DateTimeOffset At)> _locating = new();
+    private readonly TimeProvider _clock;
 
-    public FriendServer(IFriendStore friends, SocialRoom room, Encoding text, int offlineMessageLimit, Action<string> log)
+    public FriendServer(IFriendStore friends, SocialRoom room, Encoding text, int offlineMessageLimit, Action<string> log, TimeProvider? clock = null)
     {
+        _clock = clock ?? TimeProvider.System;
         _friends = friends ?? throw new ArgumentNullException(nameof(friends));
         _room = room ?? throw new ArgumentNullException(nameof(room));
         _text = text ?? throw new ArgumentNullException(nameof(text));
@@ -144,7 +148,11 @@ public sealed class FriendServer
 
     public Action<ulong, ulong>? MemoSent { get; set; }
 
-    public Func<ulong, ushort?>? ZoneOf { get; set; }
+    public Func<ulong, FriendZoneInfo?>? ZoneInfoOf { get; set; }
+
+    public Func<ulong, ushort, byte[], CancellationToken, Task<ushort?>>? OrderFriendGame { get; set; }
+
+    public Func<ulong, ushort, byte[], CancellationToken, Task>? OrderPlayerGame { get; set; }
 
     public Func<ulong, bool>? IsGameMaster { get; set; }
 
@@ -173,12 +181,19 @@ public sealed class FriendServer
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member || payload.Length < sizeof(ulong)) return;
         var friendId = new PacketReader(payload.Span).ReadUInt64();
         if (!_friends.GetFriends(member.Character.CharacterId).Any(f => f.FriendCharacterId == friendId)) return;
-        if (_room.Find(friendId) is not { FriendLoggedIn: true } || ZoneOf?.Invoke(friendId) is not { } zone)
+        if (_room.Find(friendId) is not { FriendLoggedIn: true } || ZoneInfoOf?.Invoke(friendId) is not { } friendZone)
         {
             await SendAsync(ctx, FriendFrames.CounterpartGone, Array.Empty<byte>(), ct).ConfigureAwait(false);
             return;
         }
-        await SendAsync(ctx, FriendFrames.PositionZone, FriendFrames.Zone(zone), ct).ConfigureAwait(false);
+        var ownZone = ZoneInfoOf?.Invoke(member.Character.CharacterId) ?? default;
+        var reply = FriendDecisions.Position(ownZone, friendZone);
+        await SendAsync(ctx, reply.Opcode, reply.Payload, ct).ConfigureAwait(false);
+        if (reply.TracksPosition && OrderPlayerGame is not null)
+        {
+            await OrderPlayerGame(friendId, FriendFrames.OrderObservePosition,
+                FriendFrames.ObserveOrder(member.Character.CharacterId, FriendFrames.TrackingIntervalMs), ct).ConfigureAwait(false);
+        }
     }
 
     private async Task ChangeZoneToAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
@@ -186,13 +201,39 @@ public sealed class FriendServer
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member || payload.Length < sizeof(ulong)) return;
         var friendId = new PacketReader(payload.Span).ReadUInt64();
         if (!_friends.GetFriends(member.Character.CharacterId).Any(f => f.FriendCharacterId == friendId)) return;
-        if (_room.Find(friendId) is not { FriendLoggedIn: true } || ZoneOf?.Invoke(friendId) is not { } friendZone)
+        if (_room.Find(friendId) is not { FriendLoggedIn: true } || ZoneInfoOf?.Invoke(friendId) is not { } friendZone)
         {
             await SendAsync(ctx, FriendFrames.NotOnline, Array.Empty<byte>(), ct).ConfigureAwait(false);
             return;
         }
-        var own = ZoneOf?.Invoke(member.Character.CharacterId);
-        await SendAsync(ctx, FriendFrames.ChangeZoneToAnswer, FriendFrames.ZoneMoveAnswer(FriendDecisions.ZoneMove(own, friendZone)), ct).ConfigureAwait(false);
+        var ownZone = ZoneInfoOf?.Invoke(member.Character.CharacterId) ?? default;
+        var plan = FriendDecisions.ZoneMove(ownZone, friendZone);
+        if (plan.Step == ZoneMoveStep.Answer)
+        {
+            await SendAsync(ctx, FriendFrames.ChangeZoneToAnswer, FriendFrames.ZoneMoveAnswer(plan.Answer), ct).ConfigureAwait(false);
+            return;
+        }
+        var orderId = OrderFriendGame is null
+            ? null
+            : await OrderFriendGame(friendId, FriendFrames.OrderReturnPosition,
+                FriendFrames.ObserveOrder(member.Character.CharacterId, FriendFrames.TrackingIntervalMs), ct).ConfigureAwait(false);
+        if (orderId is not { } sent)
+        {
+            await SendAsync(ctx, FriendFrames.ChangeZoneToAnswer, FriendFrames.ZoneMoveAnswer(ZoneMoveAnswer.NotReachable), ct).ConfigureAwait(false);
+            return;
+        }
+        var now = _clock.GetUtcNow();
+        foreach (var stale in _locating.Where(pending => now - pending.Value.At > LocateReportWindow).Select(pending => pending.Key).ToArray()) _locating.TryRemove(stale, out _);
+        _locating[sent] = (member.Character.CharacterId, now);
+    }
+
+    public async Task ReportAsync(OfficerOrder report, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        if (report.OrderType != FriendFrames.ReportPosition || !_locating.TryRemove(report.OrderId, out var pending)) return;
+        if (_room.Find(pending.RequesterId) is not { FriendLoggedIn: true } requester) return;
+        var reply = FriendDecisions.ZoneMoveFromLocation(report.Data);
+        await SendAsync(requester.Context, reply.Opcode, reply.Payload, ct).ConfigureAwait(false);
     }
 
     private Task StoreRequestOption(S2SessionContext ctx, ReadOnlyMemory<byte> payload)

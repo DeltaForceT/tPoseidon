@@ -105,7 +105,9 @@ var coupleService = new CoupleService(
     coupleTables.EventPoints,
     System.Text.Encoding.GetEncoding(949),
     TimeProvider.System);
-friendServer.ZoneOf = gameLinks.ZoneOf;
+friendServer.ZoneInfoOf = gameLinks.ZoneInfoOf;
+friendServer.OrderFriendGame = gameLinks.SendReportedAsync;
+friendServer.OrderPlayerGame = gameLinks.SendOnceAsync;
 guildServer.Friends = friendStore;
 friendServer.MemoSent = (sender, target) => CoupleNote(coupleService.Memo(sender, target));
 chatServer.Whispered = (sender, target) => CoupleNote(coupleService.Whisper(sender, target));
@@ -328,6 +330,7 @@ gameLinks.OnCoupleMessage = coupleServer.LinkMessageAsync;
 gameLinks.OnReport = async (report, ct) =>
 {
     await angelServer.ReportAsync(report, ct).ConfigureAwait(false);
+    await friendServer.ReportAsync(report, ct).ConfigureAwait(false);
     await cardBattleServer.ReportAsync(report, ct).ConfigureAwait(false);
     await coupleServer.ReportAsync(report, ct).ConfigureAwait(false);
     await gameMasterServer.ReportAsync(report, ct).ConfigureAwait(false);

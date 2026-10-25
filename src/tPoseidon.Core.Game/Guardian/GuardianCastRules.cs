@@ -1,5 +1,6 @@
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Skills;
+using tPoseidon.Core.Game.Skills.Effects;
 
 namespace tPoseidon.Core.Game.Guardian;
 
@@ -7,6 +8,21 @@ public enum GuardianCastTarget
 {
     Enemy,
     Owner,
+}
+
+public enum GuardianCastKind
+{
+    None,
+    Cure,
+    Ground,
+    ObjectHit,
+    Area,
+    Chain,
+    PolarBear,
+    Tornado,
+    ManaRing,
+    TargetEffect,
+    Hit,
 }
 
 public readonly record struct GuardianCastCandidate(GuardianSkill Skill, GuardianCastTarget Target);
@@ -58,6 +74,7 @@ public static class GuardianCastRules
     public const float DefaultCooldownSeconds = 2f;
     public const byte CastEmote = 6;
     public const int GroupCount = 4;
+    public const int UsableCardOption = 2;
 
     private static readonly int[][] GroupRotation =
     [
@@ -72,16 +89,28 @@ public static class GuardianCastRules
 
     public static float CooldownSeconds(float? coolTime) => coolTime is { } seconds ? seconds * CooldownFactor : DefaultCooldownSeconds;
 
-    public static bool Supports(int actionId) =>
-        SkillHitShapes.Find(actionId) is { NeedsGun: false } || SkillAreaShapes.Find(actionId) is not null;
+    public static GuardianCastKind KindOf(int actionId, GuardianCastTarget target)
+    {
+        if (target == GuardianCastTarget.Owner) return actionId == SkillActions.Cure ? GuardianCastKind.Cure : GuardianCastKind.None;
+        if (GroundSkills.IsGround(actionId)) return GuardianCastKind.Ground;
+        if (ObjectHits.IsTargeted(actionId)) return GuardianCastKind.ObjectHit;
+        if (SkillAreaShapes.Find(actionId) is not null) return GuardianCastKind.Area;
+        if (ChainHits.Find(actionId) is not null) return GuardianCastKind.Chain;
+        if (PolarBearHits.CountOf(actionId) > 0) return GuardianCastKind.PolarBear;
+        if (actionId == SkillActions.TornadoBomb) return GuardianCastKind.Tornado;
+        if (actionId == SkillAreaRules.ManaRing) return GuardianCastKind.ManaRing;
+        if (SkillEffectKinds.Find(actionId) is { OnTarget: true }) return GuardianCastKind.TargetEffect;
+        return SkillHitShapes.Find(actionId) is not null || actionId == SkillActions.ManaArrow ? GuardianCastKind.Hit : GuardianCastKind.None;
+    }
 
     public static IEnumerable<GuardianCastCandidate> CardCandidates(
-        GuardianState guardian, float ownerHpRatio, Func<int, int> relationOf)
+        GuardianState guardian, float ownerHpRatio, Func<int, int> relationOf, Func<int, bool> usable)
     {
         ArgumentNullException.ThrowIfNull(guardian);
         ArgumentNullException.ThrowIfNull(relationOf);
+        ArgumentNullException.ThrowIfNull(usable);
         var cards = guardian.Skills
-            .Where(skill => skill.Type == GuardianSkillType.Card)
+            .Where(skill => skill.Type == GuardianSkillType.Card && usable(skill.SkillId))
             .OrderBy(skill => skill.FType)
             .ThenBy(skill => skill.Slot)
             .ToArray();

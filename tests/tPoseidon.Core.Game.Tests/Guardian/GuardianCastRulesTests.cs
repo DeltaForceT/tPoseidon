@@ -77,10 +77,10 @@ public sealed class GuardianCastRulesTests
     {
         var guardian = Guardian(1, Card(1100, 0, 1), Card(1101, 0, 0), Card(1200, 1, 0), Card(1300, 2, 0), Card(1400, 3, 0));
 
-        var ids = GuardianCastRules.CardCandidates(guardian, 1f, Relation).Select(candidate => candidate.Skill.SkillId).ToArray();
+        var ids = GuardianCastRules.CardCandidates(guardian, 1f, Relation, _ => true).Select(candidate => candidate.Skill.SkillId).ToArray();
 
         Assert.Equal<int>([1200, 1400, 1300, 1101, 1100], ids);
-        Assert.All(GuardianCastRules.CardCandidates(guardian, 1f, Relation), candidate => Assert.Equal(GuardianCastTarget.Enemy, candidate.Target));
+        Assert.All(GuardianCastRules.CardCandidates(guardian, 1f, Relation, _ => true), candidate => Assert.Equal(GuardianCastTarget.Enemy, candidate.Target));
     }
 
     [Fact]
@@ -88,7 +88,19 @@ public sealed class GuardianCastRulesTests
     {
         var guardian = Guardian(0, Card(4100, 0, 0), Card(1100, 0, 1));
 
-        Assert.Equal<int>([1100], GuardianCastRules.CardCandidates(guardian, 1f, Relation).Select(candidate => candidate.Skill.SkillId));
+        Assert.Equal<int>([1100], GuardianCastRules.CardCandidates(guardian, 1f, Relation, _ => true).Select(candidate => candidate.Skill.SkillId));
+    }
+
+    [Fact]
+    public void CardsWhoseSkillIsNotUsableByAGuardianAreNeverCandidates()
+    {
+        var guardian = Guardian(0, Card(1100, 0, 0), Card(1101, 0, 1), Card(5100, 2, 0));
+
+        var healthy = GuardianCastRules.CardCandidates(guardian, 1f, Relation, id => id != 1100);
+        var weak = GuardianCastRules.CardCandidates(guardian, 0.1f, Relation, id => id != 5100);
+
+        Assert.Equal<int>([1101], healthy.Select(candidate => candidate.Skill.SkillId));
+        Assert.Equal<int>([1100, 1101], weak.Select(candidate => candidate.Skill.SkillId));
     }
 
     [Fact]
@@ -96,8 +108,8 @@ public sealed class GuardianCastRulesTests
     {
         var guardian = Guardian(0, Card(1100, 0, 0), Card(5100, 2, 0));
 
-        var healthy = GuardianCastRules.CardCandidates(guardian, 0.2f, Relation).ToArray();
-        var weak = GuardianCastRules.CardCandidates(guardian, 0.19f, Relation).ToArray();
+        var healthy = GuardianCastRules.CardCandidates(guardian, 0.2f, Relation, _ => true).ToArray();
+        var weak = GuardianCastRules.CardCandidates(guardian, 0.19f, Relation, _ => true).ToArray();
 
         Assert.Equal<int>([1100], healthy.Select(candidate => candidate.Skill.SkillId));
         Assert.Equal<int>([5100, 1100], weak.Select(candidate => candidate.Skill.SkillId));
@@ -251,12 +263,27 @@ public sealed class GuardianCastRulesTests
         Assert.Equal(hpBefore, monster.HpWhenOwned);
     }
 
-    [Fact]
-    public void OnlyShapedHitsAndAreaHitsAreSupportedCasts()
+    [Theory]
+    [InlineData(1085, GuardianCastTarget.Owner, GuardianCastKind.Cure)]
+    [InlineData(1474, GuardianCastTarget.Owner, GuardianCastKind.None)]
+    [InlineData(1320, GuardianCastTarget.Owner, GuardianCastKind.None)]
+    [InlineData(1078, GuardianCastTarget.Enemy, GuardianCastKind.Hit)]
+    [InlineData(1296, GuardianCastTarget.Enemy, GuardianCastKind.None)]
+    [InlineData(1219, GuardianCastTarget.Owner, GuardianCastKind.None)]
+    [InlineData(1194, GuardianCastTarget.Enemy, GuardianCastKind.None)]
+    [InlineData(1148, GuardianCastTarget.Enemy, GuardianCastKind.None)]
+    [InlineData(1082, GuardianCastTarget.Enemy, GuardianCastKind.Hit)]
+    [InlineData(1310, GuardianCastTarget.Enemy, GuardianCastKind.Area)]
+    [InlineData(1111, GuardianCastTarget.Enemy, GuardianCastKind.ObjectHit)]
+    [InlineData(1159, GuardianCastTarget.Enemy, GuardianCastKind.Ground)]
+    [InlineData(1258, GuardianCastTarget.Enemy, GuardianCastKind.Chain)]
+    [InlineData(1103, GuardianCastTarget.Enemy, GuardianCastKind.Tornado)]
+    [InlineData(1086, GuardianCastTarget.Enemy, GuardianCastKind.ManaRing)]
+    [InlineData(1110, GuardianCastTarget.Enemy, GuardianCastKind.TargetEffect)]
+    [InlineData(1140, GuardianCastTarget.Enemy, GuardianCastKind.None)]
+    [InlineData(0, GuardianCastTarget.Enemy, GuardianCastKind.None)]
+    public void EachCardActionIsSentToTheSameCastRoutineThePlayersUses(int actionId, GuardianCastTarget target, GuardianCastKind expected)
     {
-        Assert.True(GuardianCastRules.Supports(SkillHitShapes.Shockwave));
-        Assert.True(GuardianCastRules.Supports(1310));
-        Assert.False(GuardianCastRules.Supports(SkillHitShapes.ButtPlate));
-        Assert.False(GuardianCastRules.Supports(0));
+        Assert.Equal(expected, GuardianCastRules.KindOf(actionId, target));
     }
 }
