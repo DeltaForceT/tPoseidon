@@ -11,7 +11,7 @@
     <AnalysisLevel>latest</AnalysisLevel>
     <AnalysisMode>Recommended</AnalysisMode>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <Version>0.55.1-beta</Version>
+    <Version>0.55.2-beta</Version>
     <Company>the tPoseidon authors</Company>
     <Copyright>Copyright (c) 2026 the tPoseidon authors</Copyright>
     <Product>tPoseidon</Product>

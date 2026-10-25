@@ -2,6 +2,13 @@
 
 Every release is listed here, newest first. Versions look like `0.MINOR.PATCH-beta`; [BETA.md](docs/beta/BETA.md) explains what the numbers mean. Back up your database before every update. A release that changes the database says so at the top.
 
+## 0.55.2-beta
+
+A fix release for clients that never reached the server. No database changes.
+
+- Fixed: the KR 2014 client ignores the server address it is started with and always connects to an old Korean server address built into `Trickster.bin`, so it stopped after the loading bar on every PC that did not redirect that address. Play now writes the server's address into the player's own client before starting it (the local server, or the host given to `tposeidon play --server`). The original is kept as `Trickster.bin.tposeidon-original`.
+- The client always connects to lobby port 9980. Play now says so instead of starting a client that cannot connect when the lobby port is changed.
+
 ## 0.55.1-beta
 
 A fix release for clients that would not start. No database changes.

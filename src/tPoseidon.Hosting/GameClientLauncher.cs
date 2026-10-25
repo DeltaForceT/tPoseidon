@@ -51,6 +51,7 @@ public static class GameClientLauncher
         ClientFolder.PrepareEnglishMode(settings.ClientFolder);
 
         var executable = Path.Combine(settings.ClientFolder, check.Executable);
+        ClientAddressPatch.Apply(executable, settings.Network.PublicAddress, settings.Ports.Lobby);
         ProcessStartInfo info;
         if (OperatingSystem.IsWindows())
         {
