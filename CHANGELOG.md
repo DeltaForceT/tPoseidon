@@ -2,6 +2,13 @@
 
 Every release is listed here, newest first. Versions look like `0.MINOR.PATCH-beta`; [BETA.md](docs/beta/BETA.md) explains what the numbers mean. Back up your database before every update. A release that changes the database says so at the top.
 
+## 0.55.1-beta
+
+A fix release for clients that would not start. No database changes.
+
+- Fixed: clients without the English-mode files (`data/libconfig_eng.dat`, `data/libconfig_eng.idx`, `data/tahoma12.fnt`) crashed or closed right after Play. Setup and Play now add them as copies of the client's own `libconfig.dat`, `libconfig.idx` and `gulim12.fnt`.
+- The one-time login pass that Play gives the client now lasts five minutes instead of one, so a client that takes long to load still logs in.
+
 ## 0.55.0-beta
 
 The first public beta, released as v0.55 Beta. It targets the KR 2014 client. [docs/beta/SYSTEMS.md](docs/beta/SYSTEMS.md) has the full list of what works, what needs testing and what is missing.

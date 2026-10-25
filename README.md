@@ -29,7 +29,7 @@ tPoseidon is in beta. These are the rules that matter. The full text is in [BETA
 - **No forks and no redistribution of modified copies during the beta.** Download it, run it, host it for yourself and your community. Don't publish modified builds, forks or other emulators based on it, and don't re-upload the packages.
 - **No wipes.** Your accounts and characters live in your own database. Updates migrate it. Back up before every update.
 - **Bring your own KR 2014 client.** We don't ship it. Never share client or game files in this project's spaces.
-- **Put your version in every bug report**, for example `0.55.0-beta`. `tposeidon status` prints it.
+- **Put your version in every bug report**, for example `0.55.1-beta`. `tposeidon status` prints it.
 - **Report security problems privately.** See [SECURITY.md](SECURITY.md). Don't post them in issues or on the forum.
 - **Be respectful.** Everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -40,7 +40,7 @@ You can make a character and play through a good part of the game, but you will 
 ## Requirements
 
 - **PostgreSQL 14 or newer**, installed by you. It holds accounts and characters. [docs/install/postgresql.md](docs/install/postgresql.md) has short steps for Windows, Linux, macOS and Docker.
-- **The KR 2014 game client**, your own copy. tPoseidon reads the game data it needs from your client folder while it runs.
+- **The KR 2014 game client**, your own copy. tPoseidon reads the game data it needs from your client folder while it runs. The client is started in English mode, which needs `data/libconfig_eng.dat`, `data/libconfig_eng.idx` and `data/tahoma12.fnt`. Some copies of the client don't have them; setup and Play then add them as copies of the client's own `libconfig.dat`, `libconfig.idx` and `gulim12.fnt`. Nothing is downloaded, and files the client already has are never replaced.
 - Nothing else. The release packages carry their own .NET runtime.
 
 | | Windows | Linux | macOS |

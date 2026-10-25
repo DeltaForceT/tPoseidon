@@ -8,6 +8,8 @@ public sealed class ClientFolderTests
         using var temp = new TempFolder();
         temp.WriteFile("Trickster.bin");
         temp.WriteFile(Path.Combine("data", "libconfig.dat"));
+        temp.WriteFile(Path.Combine("data", "libconfig.idx"));
+        temp.WriteFile(Path.Combine("data", "gulim12.fnt"));
         Directory.CreateDirectory(temp.Combine("data", "map"));
 
         var check = ClientFolder.Check(temp.Path);
@@ -36,7 +38,8 @@ public sealed class ClientFolderTests
         var check = ClientFolder.Check(temp.Path);
         Assert.False(check.Ok);
         Assert.Equal("Trickster.exe", check.Executable);
-        Assert.Equal(2, check.Problems.Count);
+        Assert.Equal(4, check.Problems.Count);
+        Assert.Contains("no data/tahoma12.fnt or data/gulim12.fnt", check.Problems);
     }
 
     [Fact]
@@ -56,6 +59,39 @@ public sealed class ClientFolderTests
         var english = temp.WriteFile(Path.Combine("data", "libconfig_eng.dat"));
         Assert.Equal(english, ClientFolder.LibConfigFor(temp.Path, "gsp"));
         Assert.EndsWith("libconfig.dat", ClientFolder.LibConfigFor(temp.Path, "kr"), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AKoreanOnlyClientGetsCopiesOfItsOwnFilesForEnglishMode()
+    {
+        using var temp = new TempFolder();
+        temp.WriteFile(Path.Combine("data", "libconfig.dat"), "config");
+        temp.WriteFile(Path.Combine("data", "libconfig.idx"), "index");
+        temp.WriteFile(Path.Combine("data", "gulim12.fnt"), "font");
+
+        var copies = ClientFolder.PrepareEnglishMode(temp.Path);
+
+        Assert.Equal(new[] { "libconfig_eng.dat", "libconfig_eng.idx", "tahoma12.fnt" }, copies.Select(copy => Path.GetFileName(copy.Target)));
+        Assert.Equal("config", File.ReadAllText(temp.Combine("data", "libconfig_eng.dat")));
+        Assert.Equal("index", File.ReadAllText(temp.Combine("data", "libconfig_eng.idx")));
+        Assert.Equal("font", File.ReadAllText(temp.Combine("data", "tahoma12.fnt")));
+        Assert.Empty(ClientFolder.MissingEnglishModeFiles(temp.Path));
+    }
+
+    [Fact]
+    public void FilesTheClientAlreadyHasAreNeverReplaced()
+    {
+        using var temp = new TempFolder();
+        temp.WriteFile(Path.Combine("data", "libconfig.dat"), "korean");
+        temp.WriteFile(Path.Combine("data", "libconfig.idx"), "index");
+        temp.WriteFile(Path.Combine("data", "libconfig_eng.dat"), "english");
+        temp.WriteFile(Path.Combine("data", "libconfig_eng.idx"), "english index");
+        temp.WriteFile(Path.Combine("data", "tahoma12.fnt"), "tahoma");
+        temp.WriteFile(Path.Combine("data", "gulim12.fnt"), "gulim");
+
+        Assert.Empty(ClientFolder.PrepareEnglishMode(temp.Path));
+        Assert.Equal("english", File.ReadAllText(temp.Combine("data", "libconfig_eng.dat")));
+        Assert.Equal("tahoma", File.ReadAllText(temp.Combine("data", "tahoma12.fnt")));
     }
 
     [Fact]

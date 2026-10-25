@@ -90,6 +90,10 @@ internal sealed class SetupCommand
                 settings.ClientFolder = full;
                 settings.ClientExecutable = check.Executable;
                 Console.WriteLine($"   Found the client ({check.Executable}).");
+                foreach (var copy in ClientFolder.PrepareEnglishMode(full))
+                {
+                    Console.WriteLine($"   Added {Path.GetFileName(copy.Target)} (a copy of {Path.GetFileName(copy.Source)}), which the client needs to start.");
+                }
                 Console.WriteLine();
                 return;
             }

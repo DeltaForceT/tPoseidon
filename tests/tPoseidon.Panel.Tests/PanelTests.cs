@@ -72,12 +72,16 @@ public sealed class PanelTests : IDisposable
         File.WriteAllText(Path.Combine(client, "Trickster.bin"), "");
         Directory.CreateDirectory(Path.Combine(client, "data", "map"));
         File.WriteAllText(Path.Combine(client, "data", "libconfig.dat"), "");
+        File.WriteAllText(Path.Combine(client, "data", "libconfig.idx"), "");
+        File.WriteAllText(Path.Combine(client, "data", "gulim12.fnt"), "");
         var state = new SetupState(new InstallPaths(_root), new HostSettings());
         var page = new ClientPage(state);
         Box(page, 0).Text = client;
         Assert.True(page.Validate());
         Assert.Equal(client, state.Settings.ClientFolder);
         Assert.Equal("Trickster.bin", state.Settings.ClientExecutable);
+        Assert.True(File.Exists(Path.Combine(client, "data", "libconfig_eng.dat")));
+        Assert.True(File.Exists(Path.Combine(client, "data", "tahoma12.fnt")));
     }
 
     [AvaloniaFact]

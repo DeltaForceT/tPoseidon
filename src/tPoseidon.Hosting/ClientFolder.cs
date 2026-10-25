@@ -4,11 +4,62 @@ namespace tPoseidon.Hosting;
 
 public sealed record ClientCheck(bool Ok, string Executable, IReadOnlyList<string> Problems);
 
+public sealed record ClientFileCopy(string Source, string Target);
+
 public static class ClientFolder
 {
     private const string DataFolderName = "data";
     private const string EnglishServiceName = "gsp";
     private static readonly string[] ExecutableCandidates = { "Trickster.bin", "Trickster.exe" };
+    private static readonly (string Target, string Source)[] EnglishModeFiles =
+    {
+        ("libconfig_eng.dat", "libconfig.dat"),
+        ("libconfig_eng.idx", "libconfig.idx"),
+        ("tahoma12.fnt", "gulim12.fnt"),
+    };
+
+    public static IReadOnlyList<ClientFileCopy> MissingEnglishModeFiles(string clientFolder)
+    {
+        var data = DataFolder(clientFolder);
+        var copies = new List<ClientFileCopy>();
+        foreach (var (target, source) in EnglishModeFiles)
+        {
+            if (ClientFiles.Locate(Path.Combine(data, target)) is not null)
+            {
+                continue;
+            }
+
+            var found = ClientFiles.Locate(Path.Combine(data, source));
+            if (found is not null)
+            {
+                copies.Add(new ClientFileCopy(found, Path.Combine(data, target)));
+            }
+        }
+
+        return copies;
+    }
+
+    public static IReadOnlyList<ClientFileCopy> PrepareEnglishMode(string clientFolder)
+    {
+        var copies = MissingEnglishModeFiles(clientFolder);
+        foreach (var copy in copies)
+        {
+            try
+            {
+                File.Copy(copy.Source, copy.Target, overwrite: false);
+            }
+            catch (IOException ex)
+            {
+                throw new HostingException($"Could not create {copy.Target} from {Path.GetFileName(copy.Source)}: {ex.Message}", "Close the game client and any program using the client folder, then try again.", ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new HostingException($"Could not create {copy.Target}: {ex.Message}", "Move the client to a folder you can write to (not Program Files), or give your account write access to it.", ex);
+            }
+        }
+
+        return copies;
+    }
 
     public static string DataFolder(string clientFolder) =>
         LocateDirectory(clientFolder, DataFolderName) ?? Path.Combine(clientFolder, DataFolderName);
@@ -55,9 +106,12 @@ public static class ClientFolder
         }
         else
         {
-            if (ClientFiles.Locate(Path.Combine(data, "libconfig.dat")) is null && ClientFiles.Locate(Path.Combine(data, "libconfig_eng.dat")) is null)
+            foreach (var (target, source) in EnglishModeFiles)
             {
-                problems.Add("no data/libconfig.dat or data/libconfig_eng.dat");
+                if (ClientFiles.Locate(Path.Combine(data, target)) is null && ClientFiles.Locate(Path.Combine(data, source)) is null)
+                {
+                    problems.Add($"no data/{target} or data/{source}");
+                }
             }
 
             if (LocateDirectory(data, "map") is null)

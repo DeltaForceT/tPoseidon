@@ -48,6 +48,8 @@ public static class GameClientLauncher
             throw new HostingException($"The client folder {settings.ClientFolder} is not usable ({string.Join("; ", check.Problems)}). Run tposeidon setup again.");
         }
 
+        ClientFolder.PrepareEnglishMode(settings.ClientFolder);
+
         var executable = Path.Combine(settings.ClientFolder, check.Executable);
         ProcessStartInfo info;
         if (OperatingSystem.IsWindows())

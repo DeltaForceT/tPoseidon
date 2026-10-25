@@ -13,7 +13,7 @@ public static class LaunchTicket
 {
     public const string ClientLaunchPassword = "dummy";
 
-    public static readonly TimeSpan Lifetime = TimeSpan.FromSeconds(60);
+    public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(5);
 
     public static IPAddress Normalize(IPAddress address)
     {
