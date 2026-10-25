@@ -363,8 +363,8 @@ public sealed class GuardIntegrationTests
             closeTimes.Add(await TryLoginAsync(harness, "victim", "guess" + attempt, expectReply: false));
         }
 
-        Assert.True(closeTimes[0] < TimeSpan.FromSeconds(0.5), $"first failure took {closeTimes[0]}");
         Assert.All(closeTimes.Skip(1), time => Assert.True(time >= TimeSpan.FromSeconds(0.9), $"a later failure took only {time}"));
+        Assert.All(closeTimes.Skip(1), time => Assert.True(time - closeTimes[0] >= TimeSpan.FromSeconds(0.5), $"the first failure took {closeTimes[0]} and a delayed one only {time}"));
 
         await TryLoginAsync(harness, "victim", GuardHarness.RightPassword, expectReply: false);
         Assert.Equal(1, guard.Counters[GuardCounter.Lockouts]);
