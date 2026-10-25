@@ -274,4 +274,21 @@ public sealed class GuildFramesTests
         Assert.Equal(("Crew", "Master"), GuildFrames.ReadNameOrder(data, Latin));
         Assert.Equal((string.Empty, string.Empty), GuildFrames.ReadNameOrder(GuildFrames.NameOrderFor(string.Empty, string.Empty, Latin), Latin));
     }
+
+    [Fact]
+    public void AGuildSmsRequestIsTheGuildCodeThenTheText()
+    {
+        var payload = new byte[] { 0x4D, 0, 0, 0, (byte)'h', (byte)'i', 0 };
+
+        Assert.Equal((77u, "hi"), GuildFrames.ReadGuildSms(payload, Latin));
+        Assert.Equal(0x2B8B, GuildFrames.GuildSms);
+        Assert.Equal(0x2B8D, GuildFrames.GuildSmsOwnGuild);
+    }
+
+    [Fact]
+    public void AShortOrUnterminatedGuildSmsRequestIsRejected()
+    {
+        Assert.Null(GuildFrames.ReadGuildSms(new byte[] { 1, 0, 0, 0 }, Latin));
+        Assert.Null(GuildFrames.ReadGuildSms(new byte[] { 1, 0, 0, 0, (byte)'a' }, Latin));
+    }
 }

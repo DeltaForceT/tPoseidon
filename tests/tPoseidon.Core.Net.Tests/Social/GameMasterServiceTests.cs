@@ -372,7 +372,7 @@ public sealed class GameMasterServiceTests
     {
         var (service, friends) = WithFriends();
 
-        var outbox = service.Memo("Other", "Hello");
+        var outbox = service.Memo("Other", "Hello", _ => null);
 
         var text = Assert.Single(outbox.Texts);
         Assert.Equal(GameMasterChat.MemoSentText, text.Name);
@@ -382,13 +382,27 @@ public sealed class GameMasterServiceTests
     }
 
     [Fact]
+    public void MemoForAnOnlineCharacterIsShownAtOnceAndNotStored()
+    {
+        var (service, friends) = WithFriends();
+
+        var outbox = service.Memo("Other", "Hello", name => name == "Other" ? 0x4002UL : null);
+
+        var shown = Assert.Single(outbox.DirectMessages);
+        Assert.Equal((0x4002UL, FriendFrames.GmMemoNow), (shown.To, shown.Opcode));
+        Assert.Equal(FriendFrames.MemoNow("Other", "Hello", Text), shown.Payload);
+        Assert.Equal(GameMasterChat.MemoSentText, Assert.Single(outbox.Texts).Name);
+        Assert.Empty(friends.TakeMessages(0x4002));
+    }
+
+    [Fact]
     public void MemoRefusesEmptyOversizedAndUnknownTargets()
     {
         var (service, friends) = WithFriends();
 
-        Assert.Equal(GameMasterChat.MemoEmptyText, Assert.Single(service.Memo("Other", string.Empty).Texts).Name);
-        Assert.Equal(GameMasterChat.MemoTooLongText, Assert.Single(service.Memo("Other", new string('x', GameMasterFrames.MemoLength + 1)).Texts).Name);
-        Assert.Empty(service.Memo("Gone", "Hello").Texts);
+        Assert.Equal(GameMasterChat.MemoEmptyText, Assert.Single(service.Memo("Other", string.Empty, _ => null).Texts).Name);
+        Assert.Equal(GameMasterChat.MemoTooLongText, Assert.Single(service.Memo("Other", new string('x', GameMasterFrames.MemoLength + 1), _ => null).Texts).Name);
+        Assert.Empty(service.Memo("Gone", "Hello", _ => null).Texts);
         Assert.Empty(friends.TakeMessages(0x4002));
     }
 

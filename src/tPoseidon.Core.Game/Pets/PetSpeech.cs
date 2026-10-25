@@ -42,6 +42,7 @@ public sealed class PetSpeechState
     public const int ShortCooldownMs = 3000;
     public const int LongCooldownMs = 6000;
     public const byte OwnerDiedEvent = 3;
+    public const int MutedZoneType = 0x0E;
     public const byte OwnerSatEvent = 0x0A;
     public const byte OwnerLayDownEvent = 0x0B;
 
@@ -52,6 +53,8 @@ public sealed class PetSpeechState
     private int _coolingMs;
     private int _cooldownMs;
     private DateTimeOffset _tickedAt;
+
+    public static bool MutedIn(int zoneType) => zoneType == MutedZoneType;
 
     public static byte? EventForPosture(byte postureCode) => postureCode switch
     {

@@ -64,6 +64,7 @@ A short "try" hint is given where one is obvious.
 - Sector visibility (3x3) - crowded maps, check nothing pops in late
 - Sitting and lying down shown to other players - sit while a friend watches
 - Time-of-day map colours
+- Portal region click (the client sends 0x04B1 for a portal on a Fiesta map): the server checks the map range, the Fiesta window and its banquet hall portal, the level band of the portal table and the two-entries-a-day limit, answers the original codes (accepted, closed, level, daily limit) and walks the character to the portal like the ordinary portal click (the dead are not walked, **inferred**)
 
 ### Combat and skills
 - Class skill sets: first-tier job skills, buffs, debuffs, heals, shields, party auras, scroll, thrown, gun, field, ground-target and chain-hit skills - try your class skills on a monster and tell us which misbehave
@@ -109,6 +110,8 @@ A short "try" hint is given where one is obvious.
 - Player shop, shop signs, remote search and buy
 - Memory port: save, delete, teleport
 - Special use items, built from the original game server's item helper and the 2014 client data. Each is consumed only when its effect was stored; every refusal keeps the item:
+- Remove all equipment button (equipment window): releases every listed worn item at once, or refuses the whole list when one item cannot be released; at most 30 items in one request (**inferred**)
+- Ending the card identification game from the client's end question (**inferred** from the client text; the original server has no handler for it)
   - Hair dye (effect 15): the colour sent with the use request (0 to 20) is stored for the hair of the shown job tier, then the user is told and everyone on the map sees the new colour
   - Gender change (effect 21): the type turns into its pair (1 and 2, 3 and 4, 5 and 6, 7 and 8), the hair is cleared, worn items go to the bag, the new species' starter ear and tail are given; refused after a job change, for the polar bear, and when the bag cannot take the worn items plus the two new ones (INFERRED: the original tests the worn items and two free slots separately)
   - Skill reset (effect 23): removes one skill and returns its TM points (affection points plus the levels gained, plus the mastery cost less one at level 11); refused for skills of 5000 and above, for a skill another owned skill needs as a prerequisite, and for a skill not owned
@@ -157,6 +160,12 @@ A short "try" hint is given where one is obvious.
 - Angel system: call, accept, warp, graduation at level 31
 - Couple and wedding: couple making, closeness points, divorce, wedding hall, wedding board, the lover's position and moving to the lover (married couples, also across game servers; refused while the lover is on a map the original servers close to it)
 - Report a player to the GMs
+- Friend list replies: the request dialog signals relayed to the requester, the request-shown notice, the request-in-flight refusal, the add-pair mismatch, deleting an offline friend, a friend's job and name changes shown to his online friends, the friend's zone (position request) and the same-zone answer of move-to-friend (**inferred**: the character whose request is in flight, the zone-only position form, and 'not reachable' for another zone)
+- A friend request to a game master is refused as not available, and reporting a game master is refused with the original reply
+- Guild-to-guild SMS (guild window): a message to another guild goes to its master at once, or into the master's message box when he is offline; sending to your own guild is refused with the original reply
+- Angel graduation tells each of the newbie's angels with a memo (online at once; offline it is stored as a game master memo, **inferred**), and a game master memo to an online character is shown at once
+- Head message, card battle title and fortune sign share one sign slot as on the original servers: setting one removes the others, the head message and the card battle title disappear when the character moves, and the card battle title can be ended; there is no region refusal and newcomers do not see an existing sign (**inferred**)
+- Chat bar of a dead character, which the client sends on its own channel: shown to the map as the original line (**inferred**: the client switches channel on the flag the death routine sets)
 
 ### Progression
 - Honor titles and quest-completion grants
@@ -187,6 +196,7 @@ A short "try" hint is given where one is obvious.
 - Guardian card-skill order list
 - Guardian card save: the cards set in the guardian's skill slots are kept
 - Pet collection (**reconstructed**): a 3-star or better pet in the bag eats its food and collects an item from the current map every few seconds while you are online; deeper drilling maps lower the chance; mine maps need a pet and food with the special dig mark (no item in the KR data has it, so mines refuse with the original message); take the items to your bag or throw them away (the pet's items are kept after logout and sent again at login); the filter check boxes of the window are not sent by the client, so they change nothing
+- Pet speech reacts to the owner's death and stays silent in zone type 14 (**inferred**)
 
 ### GM and hosting
 - GM login, logout, teleport and kick from chat and from the command line tool
@@ -225,6 +235,11 @@ A short "try" hint is given where one is obvious.
 
 ### Items and economy
 - Not included: purchase events, coupons and the Drill Egg gacha; the web shop catalogue starts empty and is up to each server owner
+
+### Social
+- Friend list: the exact position of a friend on the same map and the move-to-friend teleport to another map need the original game server orders for friend position and zone move, which are not built; the position request answers the zone only, and move-to-friend answers 'not reachable' for another zone
+- Friend replies that the original server never sends (two of the client's friend opcodes) and report replies that its code never sends or that need a queued report lookup are not built; the lookup here is immediate
+- Cancelling a delayed item use: no usable item of the 2014 item table has a use delay, so the state cannot be entered
 
 ### GM and hosting
 - Watching a guild game room: the 2014 client sends the watch request, but it has no reader for the original answers (accepted / refused) nor for the observer notice the original game server sends to the map, so a watcher cannot be shown; not built

@@ -946,10 +946,11 @@ public sealed class GameMasterService
         return outbox;
     }
 
-    public GameMasterOutbox Memo(string name, string text)
+    public GameMasterOutbox Memo(string name, string text, Func<string, ulong?> online)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(online);
         var outbox = new GameMasterOutbox();
         if (text.Length == 0)
         {
@@ -961,6 +962,13 @@ public sealed class GameMasterService
         {
             outbox.Texts.Add(new GameMasterText(GameMasterChat.MemoTooLongText, Array.Empty<string>()));
             outbox.Notes.Add($"memo for '{name}' refused: over {GameMasterFrames.MemoLength} bytes");
+            return outbox;
+        }
+        if (online(name) is { } present)
+        {
+            outbox.DirectMessages.Add(new CoupleMessage(present, FriendFrames.GmMemoNow, FriendFrames.MemoNow(name, text, _text)));
+            outbox.Texts.Add(new GameMasterText(GameMasterChat.MemoSentText, new[] { text, name }));
+            outbox.Notes.Add($"memo shown at once to 0x{present:X}");
             return outbox;
         }
         if (StoreMemo(name, text) is not { } owner)

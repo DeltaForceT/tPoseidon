@@ -66,4 +66,89 @@ public sealed class FriendFramesTests
 
         Assert.Equal(new byte[] { 7, 0, 0, 0, 0, 0, 0, 0, 0, (byte)'T', (byte)'a', (byte)'t', (byte)'a', 0, FriendFrames.OnlineStatus, 0x02, 0x01 }, bytes);
     }
+
+    [Fact]
+    public void ADeletedOfflineFriendIsAUidAndAName()
+    {
+        var bytes = FriendFrames.CharacterAndName(0x0102030405060708, "Bo", Latin);
+
+        Assert.Equal(new byte[] { 8, 7, 6, 5, 4, 3, 2, 1, (byte)'B', (byte)'o', 0 }, bytes);
+        Assert.Equal(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, (byte)'B', (byte)'o', 0 }, FriendFrames.CharacterAndName(0, "Bo", Latin));
+    }
+
+    [Fact]
+    public void ATypeChangeIsAUidAndTwoBytes()
+    {
+        Assert.Equal(new byte[] { 7, 0, 0, 0, 0, 0, 0, 0, 5, 3 }, FriendFrames.TypeChanged(7, 5, 3));
+    }
+
+    [Fact]
+    public void TheNewFriendOpcodesMatchTheClientTable()
+    {
+        Assert.Equal(0x2139, FriendFrames.DeleteOffline);
+        Assert.Equal(0x2155, FriendFrames.DeletedOffline);
+        Assert.Equal(0x2177, FriendFrames.DeleteOfflineFailed);
+        Assert.Equal(0x2186, FriendFrames.FriendTypeChanged);
+        Assert.Equal(0x2188, FriendFrames.AddPairMismatch);
+        Assert.Equal(0x2189, FriendFrames.FriendRenamed);
+    }
+
+    [Theory]
+    [InlineData(false, false, AcceptClass.Insert)]
+    [InlineData(false, true, AcceptClass.Insert)]
+    [InlineData(true, true, AcceptClass.AlreadyFriends)]
+    [InlineData(true, false, AcceptClass.PairMismatch)]
+    public void AnAcceptIsClassifiedByBothLists(bool acceptorListsRequester, bool requesterListsAcceptor, AcceptClass expected)
+    {
+        Assert.Equal(expected, FriendDecisions.ClassifyAccept(acceptorListsRequester, requesterListsAcceptor));
+    }
+
+    [Fact]
+    public void AGuildSmsForTheMasterCarriesTheSenderAndTheText()
+    {
+        var bytes = FriendFrames.GuildSmsFrom(7, "Cy", "hi", Latin);
+
+        Assert.Equal(new byte[] { 7, 0, 0, 0, 0, 0, 0, 0, (byte)'C', (byte)'y', 0, (byte)'h', (byte)'i', 0 }, bytes);
+        Assert.Equal(0x2185, FriendFrames.GuildSmsReceived);
+    }
+
+    [Fact]
+    public void ARelayedPositionIsTheZoneAlone()
+    {
+        Assert.Equal(new byte[] { 0x94, 0x00 }, FriendFrames.Zone(0x94));
+        Assert.Equal(0x2168, FriendFrames.PositionZone);
+    }
+
+    [Fact]
+    public void AZoneMoveAnswerIsOneByte()
+    {
+        Assert.Equal(new byte[] { 1 }, FriendFrames.ZoneMoveAnswer(ZoneMoveAnswer.SameZone));
+        Assert.Equal(ZoneMoveAnswer.SameZone, FriendDecisions.ZoneMove(0x94, 0x94));
+        Assert.Equal(ZoneMoveAnswer.NotReachable, FriendDecisions.ZoneMove(0x94, 0x95));
+        Assert.Equal(ZoneMoveAnswer.NotReachable, FriendDecisions.ZoneMove(null, 0x95));
+    }
+
+    [Fact]
+    public void TheRelayOpcodesMatchTheServerTable()
+    {
+        Assert.Equal(0x2149, FriendFrames.RequestSignalOn);
+        Assert.Equal(0x214A, FriendFrames.RequestSignalOff);
+        Assert.Equal(0x214B, FriendFrames.RequestSignalOnRelayed);
+        Assert.Equal(0x214C, FriendFrames.RequestSignalOffRelayed);
+        Assert.Equal(0x214E, FriendFrames.RequestInFlight);
+        Assert.Equal(0x2165, FriendFrames.RequestWaitRelay);
+        Assert.Equal(0x217D, FriendFrames.MessageBlockRelay);
+        Assert.Equal(0x217E, FriendFrames.MessageBlocked);
+        Assert.Equal(0x217F, FriendFrames.RequestShown);
+        Assert.Equal(0x2180, FriendFrames.RequestShownTo);
+        Assert.Equal(0x218A, FriendFrames.ChangeZoneToRequest);
+        Assert.Equal(0x218C, FriendFrames.ChangeZoneToAnswer);
+    }
+
+    [Fact]
+    public void AnImmediateMemoIsTheNameThenTheText()
+    {
+        Assert.Equal(new byte[] { (byte)'B', (byte)'o', 0, (byte)'h', (byte)'i', 0 }, FriendFrames.MemoNow("Bo", "hi", Latin));
+        Assert.Equal(0x2183, FriendFrames.GmMemoNow);
+    }
 }

@@ -1,4 +1,5 @@
 using System.Text;
+using tPoseidon.Core.Data;
 using tPoseidon.Core.Net;
 using tPoseidon.Core.Net.S2;
 using tPoseidon.Core.Net.Social;
@@ -11,10 +12,12 @@ public sealed class AngelServer
     private readonly SocialRoom _room;
     private readonly GameServerLinks _games;
     private readonly Encoding _text;
+    private readonly IFriendStore _friends;
     private readonly Action<string> _log;
 
-    public AngelServer(AngelService angels, SocialRoom room, GameServerLinks games, Encoding text, Action<string> log)
+    public AngelServer(AngelService angels, SocialRoom room, GameServerLinks games, IFriendStore friends, Encoding text, Action<string> log)
     {
+        _friends = friends ?? throw new ArgumentNullException(nameof(friends));
         _angels = angels ?? throw new ArgumentNullException(nameof(angels));
         _room = room ?? throw new ArgumentNullException(nameof(room));
         _games = games ?? throw new ArgumentNullException(nameof(games));
@@ -55,7 +58,7 @@ public sealed class AngelServer
         if (_room.Find(characterId) is not { } member) return Task.CompletedTask;
         var outbox = _angels.LevelChanged(characterId, member.Character.OwnerAccountId, (int)level);
         foreach (var note in outbox.Notes) _log($"[angel] {note}");
-        return DeliverAsync(outbox, ct);
+        return DeliverGraduationAsync(outbox, member.Character.Name, ct);
     }
 
     public void Closed(SocialMember member)
@@ -69,6 +72,28 @@ public sealed class AngelServer
         ArgumentNullException.ThrowIfNull(report);
         if (report.OrderType != AngelFrames.OrderNewbiePosition || AngelFrames.ReadSpot(report.Data) is not { } spot) return Task.CompletedTask;
         return DeliverAsync(_angels.NewbieSpot(spot, id => _room.Find(id)?.Character.Name), ct);
+    }
+
+    private async Task DeliverGraduationAsync(AngelOutbox outbox, string newbieName, CancellationToken ct)
+    {
+        await DeliverAsync(outbox, ct).ConfigureAwait(false);
+        foreach (var angel in outbox.GraduationMemos)
+        {
+            if (_room.Find(angel) is { } online)
+            {
+                try
+                {
+                    await online.Context.SendFrameAsync(AngelFrames.GraduationMemo, AngelFrames.GraduationMemoFor(newbieName, _text), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is ObjectDisposedException or IOException or System.Net.Sockets.SocketException)
+                {
+                    _log($"[angel] graduation memo to 0x{angel:X} not delivered: {ex.Message}");
+                }
+                continue;
+            }
+            var stored = _friends.SendMessage(angel, FriendRules.GmSenderCharacterId, FriendRules.GmMessageKind, AngelFrames.GraduationMemoKey);
+            _log($"[angel] graduation memo for the offline angel 0x{angel:X}: {(stored ? "stored" : "not stored")}");
+        }
     }
 
     private delegate AngelOutbox? AngelRequest(SocialMember member, ReadOnlySpan<byte> payload);

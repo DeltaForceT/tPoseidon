@@ -27,6 +27,8 @@ public sealed class SocialMember
 
     public ushort? FriendRequestOption { get; set; }
 
+    public bool FriendRequestPending { get; set; }
+
     public bool GiftOpen { get; set; }
 
     public ushort? ChatClientId { get; set; }

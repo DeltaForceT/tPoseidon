@@ -896,6 +896,15 @@ public sealed class LibConfigXmlReader
         return new FiestaTables(slots, ports);
     }
 
+    public PortalLevelBands LoadPortalLevelBands()
+    {
+        var bands = new Dictionary<(int Map, int Portal), PortalLevelBand>();
+        LoadTable(PortalLevelBands.TableName, row => bands.TryAdd(
+            (ReadInt(row, "Map"), ReadInt(row, "PortalID")),
+            new PortalLevelBand(ReadInt(row, "MinLevel"), ReadInt(row, "MaxLevel"))));
+        return new PortalLevelBands(bands);
+    }
+
     public TreasureMapTables LoadTreasureMapTables()
     {
         var teleports = new Dictionary<int, TreasureTeleportEntry>();

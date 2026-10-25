@@ -61,6 +61,7 @@ public sealed class GuildServer
             GuildFrames.ReadDetailByCodeRequest(p) is { } guildCode ? _guilds.DetailByCode(id, guildCode) : null);
         On(dispatcher, ctx, GuildFrames.DetailByCharacter, (id, p) =>
             GuildFrames.ReadDetailByCharacterRequest(p, _text) is { } name ? _guilds.DetailByCharacter(id, name) : null);
+        dispatcher.Register(GuildFrames.GuildSms, (_, payload, ct) => GuildSmsAsync(ctx, payload, ct));
         dispatcher.Register(GuildGameRooms.DetailRequest, async (_, payload, ct) =>
         {
             if (_room.Find(ctx) is not { } member || !GuildGameRooms.TryReadDetail(payload.Span, out var gameType, out var roomId)) return;
@@ -399,6 +400,30 @@ public sealed class GuildServer
             }
             return DeliverAsync(outbox, ct);
         });
+
+    public IFriendStore? Friends { get; set; }
+
+    private async Task GuildSmsAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    {
+        if (_room.Find(ctx) is not { } member || GuildFrames.ReadGuildSms(payload.Span, _text) is not { } sms) return;
+        var owner = member.Character.CharacterId;
+        var plan = _guilds.GuildSms(owner, sms.GuildCode);
+        switch (plan.Outcome)
+        {
+            case GuildSmsOutcome.OwnGuild:
+                await ctx.SendFrameAsync(GuildFrames.GuildSmsOwnGuild, Array.Empty<byte>(), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+                break;
+            case GuildSmsOutcome.Deliver when _room.Find(plan.MasterCharacterId) is { } master:
+                await master.Context.SendFrameAsync(FriendFrames.GuildSmsReceived,
+                    FriendFrames.GuildSmsFrom(owner, plan.SenderName, sms.Text, _text), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+                _log($"[guild] sms from 0x{owner:X} to the master 0x{plan.MasterCharacterId:X} of guild {sms.GuildCode}");
+                break;
+            case GuildSmsOutcome.Deliver:
+                var stored = Friends?.SendMessage(plan.MasterCharacterId, owner, FriendRules.GuildMessageKind, FriendRules.Truncate(sms.Text, FriendRules.MessageContentLength, _text)) == true;
+                _log($"[guild] sms from 0x{owner:X} to the offline master 0x{plan.MasterCharacterId:X} of guild {sms.GuildCode}: {(stored ? "stored" : "not stored")}");
+                break;
+        }
+    }
 
     public async Task<int> ForceDissolveAsync(uint guildCode, ulong masterCharacterId, CancellationToken ct)
     {

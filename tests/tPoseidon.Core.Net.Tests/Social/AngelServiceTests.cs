@@ -62,6 +62,7 @@ public sealed class AngelServiceTests
         var order = Assert.Single(graduated.Orders);
         Assert.Equal((Angel, AngelFrames.OrderAngelReward), (order.CharacterId, order.OrderType));
         Assert.Equal(1, store.Results[Angel].GraduationCount);
+        Assert.Equal(new[] { Angel }, graduated.GraduationMemos);
         Assert.Empty(service.LevelChanged(Newbie, 7, 32).Orders);
     }
 
@@ -145,5 +146,14 @@ public sealed class AngelServiceTests
         Assert.Equal(9UL, BitConverter.ToUInt64(bytes, 4));
         Assert.Equal("Ann", Text.GetString(bytes, 12, 3));
         Assert.All(bytes.Skip(15), b => Assert.Equal(0, b));
+    }
+
+    [Fact]
+    public void TheGraduationMemoNamesTheNewbieAndTheMemoKey()
+    {
+        var bytes = AngelFrames.GraduationMemoFor("Bo", Text);
+
+        Assert.Equal(new byte[] { (byte)'B', (byte)'o', 0, (byte)'_', (byte)'G', (byte)'R', (byte)'A', (byte)'D', (byte)'U', (byte)'A', (byte)'T', (byte)'E', 0 }, bytes);
+        Assert.Equal(0x2181, AngelFrames.GraduationMemo);
     }
 }

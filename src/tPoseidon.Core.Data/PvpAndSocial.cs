@@ -58,12 +58,23 @@ public static class FriendRules
     public const int GroupNameLength = 20;
     public const ulong GmSenderCharacterId = 0;
     public const byte GmMessageKind = 2;
+    public const byte GuildMessageKind = 3;
     public const string GmSenderName = "GM";
 
     public static readonly IReadOnlyList<string> DefaultGroupNames = new[]
     {
         "Best Friends", "Soulmates", "Companions", "Relatives", "Good Fellas",
     };
+
+    public static string Truncate(string value, int byteLimit, System.Text.Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(text);
+        if (text.GetByteCount(value) <= byteLimit) return value;
+        var length = value.Length;
+        while (length > 0 && text.GetByteCount(value.AsSpan(0, length)) > byteLimit) length--;
+        return value[..length];
+    }
 
     public static ushort CharacterTypeOf(Character character)
     {

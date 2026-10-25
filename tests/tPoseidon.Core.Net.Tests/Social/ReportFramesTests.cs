@@ -26,4 +26,10 @@ public sealed class ReportFramesTests
         Assert.Equal(20 * ReportFrames.ChatLineText(line).Length, rows.Sum(row => row.Length));
         Assert.True(rows.Count > 1);
     }
+
+    [Fact]
+    public void ReportingAGameMasterIsAnsweredWithAnEmptyFrame()
+    {
+        Assert.Equal(0x2727, ReportFrames.DefendantIsGameMaster);
+    }
 }

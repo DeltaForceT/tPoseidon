@@ -171,4 +171,13 @@ public sealed class PetSpeechTests
 
         Assert.Equal("Get up", state.Tick(Start.AddMilliseconds(100), book, FoxType, Roll)!.Value.Text);
     }
+
+    [Theory]
+    [InlineData(14, true)]
+    [InlineData(1, false)]
+    [InlineData(0, false)]
+    public void OnlyZoneType14MutesPetSpeech(int zoneType, bool muted)
+    {
+        Assert.Equal(muted, PetSpeechState.MutedIn(zoneType));
+    }
 }

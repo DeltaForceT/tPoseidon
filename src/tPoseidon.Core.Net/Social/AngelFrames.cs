@@ -24,6 +24,8 @@ public static class AngelFrames
     public const ushort AcceptRefused = 0x2E28;
     public const ushort Portal = 0x2E2C;
     public const ushort Busy = 0x2E2D;
+    public const ushort GraduationMemo = 0x2181;
+    public const string GraduationMemoKey = "_GRADUATE";
 
     public const ushort OrderNewbiePosition = 0xDC;
     public const ushort OrderAngelMove = 0xDD;
@@ -31,6 +33,16 @@ public static class AngelFrames
 
     public const int NameField = 24;
     public const int SpotSize = sizeof(ulong) + sizeof(uint) + 2 * sizeof(short);
+
+    public static byte[] GraduationMemoFor(string newbieName, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(newbieName);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(48);
+        w.WriteNulTerminated(newbieName, text);
+        w.WriteNulTerminated(GraduationMemoKey, text);
+        return w.ToArray();
+    }
 
     public static byte[] ListOf(IReadOnlyList<AngelRelation> angels, Encoding text)
     {

@@ -5,6 +5,16 @@ namespace tPoseidon.Core.Net.Social;
 
 public sealed record GuildMessage(ulong To, ushort Opcode, byte[] Payload);
 
+public enum GuildSmsOutcome
+{
+    Dropped,
+    OwnGuild,
+    UnknownGuild,
+    Deliver,
+}
+
+public sealed record GuildSmsPlan(GuildSmsOutcome Outcome, ulong MasterCharacterId, string SenderName);
+
 public sealed record GuildNameOrder(ulong CharacterId, string GuildName, string Alias);
 
 public sealed class GuildOutbox : IReadOnlyList<GuildMessage>
@@ -440,6 +450,18 @@ public sealed class GuildService
             foreach (var gone in members) ClearMembership(outbox, gone);
         }
         return (GuildRules.Ok, outbox);
+    }
+
+    public GuildSmsPlan GuildSms(ulong characterId, uint guildCode)
+    {
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } sender) return new GuildSmsPlan(GuildSmsOutcome.Dropped, 0, string.Empty);
+            if (sender.GuildCode == guildCode) return new GuildSmsPlan(GuildSmsOutcome.OwnGuild, 0, sender.Name);
+            return _rules.Detail(guildCode) is { } detail
+                ? new GuildSmsPlan(GuildSmsOutcome.Deliver, detail.Guild.MasterCharacterId, sender.Name)
+                : new GuildSmsPlan(GuildSmsOutcome.UnknownGuild, 0, sender.Name);
+        }
     }
 
     public GuildOutbox DetailByCode(ulong characterId, uint guildCode)

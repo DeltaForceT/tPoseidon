@@ -41,6 +41,10 @@ public static class GuildFrames
     public const ushort DetailByCode = (ushort)Opcode.C2S_GUILD_DETAIL_BY_CODE;
     public const ushort DetailByCharacter = (ushort)Opcode.C2S_GUILD_DETAIL_BY_CHARACTER;
 
+    public const ushort GuildSms = 0x2B8B;
+    public const ushort GuildSmsOwnGuild = 0x2B8D;
+    public const int GuildSmsMinimum = sizeof(uint) + 1;
+
     public const ushort Created = (ushort)Opcode.S2C_GUILD_CREATED;
     public const ushort ApplyResult = (ushort)Opcode.S2C_GUILD_APPLY_RESULT;
     public const ushort NewVolunteer = (ushort)Opcode.S2C_GUILD_NEW_VOLUNTEER;
@@ -468,6 +472,16 @@ public static class GuildFrames
         ArgumentNullException.ThrowIfNull(text);
         if (payload.Length < CreateRequestLength) return null;
         return new GuildCreateRequest(ReadText(payload, 0, GuildNameLength, text), ReadText(payload, 0x2D, IntroLength, text));
+    }
+
+    public static (uint GuildCode, string Text)? ReadGuildSms(ReadOnlySpan<byte> payload, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (payload.Length < GuildSmsMinimum) return null;
+        var body = payload[sizeof(uint)..];
+        var end = body.IndexOf((byte)0);
+        if (end < 0) return null;
+        return (BinaryPrimitives.ReadUInt32LittleEndian(payload), text.GetString(body[..end]));
     }
 
     public static uint? ReadApplyRequest(ReadOnlySpan<byte> payload) =>

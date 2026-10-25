@@ -15,6 +15,8 @@ internal sealed class FiestaController
     private readonly Func<FiestaTables> _tables;
     private readonly IFiestaEntryStore _store;
     private readonly Func<ushort, int> _mapOption;
+    private readonly Func<int, int> _mapClass;
+    private readonly Func<PortalLevelBands> _portalBands;
     private readonly Func<IReadOnlyCollection<InGameSessionState>> _sessions;
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
     private readonly Encoding _text;
@@ -25,9 +27,11 @@ internal sealed class FiestaController
     private readonly Random _rng = new();
 
     public FiestaController(
-        Func<FiestaTables> tables, IFiestaEntryStore store, Func<ushort, int> mapOption, Func<IReadOnlyCollection<InGameSessionState>> sessions,
-        Func<ushort, Opcode, byte[], Task> sendToMap, Encoding text, string logTag)
+        Func<FiestaTables> tables, IFiestaEntryStore store, Func<ushort, int> mapOption, Func<int, int> mapClass, Func<PortalLevelBands> portalBands,
+        Func<IReadOnlyCollection<InGameSessionState>> sessions, Func<ushort, Opcode, byte[], Task> sendToMap, Encoding text, string logTag)
     {
+        _mapClass = mapClass ?? throw new ArgumentNullException(nameof(mapClass));
+        _portalBands = portalBands ?? throw new ArgumentNullException(nameof(portalBands));
         _tables = tables ?? throw new ArgumentNullException(nameof(tables));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _mapOption = mapOption ?? throw new ArgumentNullException(nameof(mapOption));
@@ -139,6 +143,13 @@ internal sealed class FiestaController
         var zone = (ushort)FiestaRules.ReturnZone(guest.FiestaReturnZone, home);
         Log(guest, $"Fiesta zone {guest.MapId} closed: back to zone {zone}");
         await requestZoneChange(new ZoneChangeRequest(zone, TeleportArrival.ChangeZoneType, null, TimeSpan.Zero), default).ConfigureAwait(false);
+    }
+
+    public int PortalClickCode(InGameSessionState st, PortalRegionClick click, DateTime now)
+    {
+        ArgumentNullException.ThrowIfNull(st);
+        var entry = st.Character is { } character ? EntryOf(st, character.CharacterId) : new FiestaEntryRecord(0, null);
+        return PortalClickRules.Check(click, _mapClass, _portalBands(), _tables().Slots, entry, now);
     }
 
     private FiestaEntryRecord EntryOf(InGameSessionState st, ulong characterId)

@@ -37,8 +37,9 @@ var postgres = await tPoseidon.Core.Data.Postgres.PostgresStoreBootstrap.Initial
 var accountStore = postgres.Store;
 var sessionLogins = new tPoseidon.Core.Net.S2.LoginSessionHandler(accountStore);
 var socialRoom = new tPoseidon.Kr2014.SystemServer.SocialRoom();
+var friendStore = new tPoseidon.Core.Data.Postgres.PostgresFriendStore(postgres.DataSource);
 var friendServer = new tPoseidon.Kr2014.SystemServer.FriendServer(
-    new tPoseidon.Core.Data.Postgres.PostgresFriendStore(postgres.DataSource),
+    friendStore,
     socialRoom,
     System.Text.Encoding.GetEncoding(949),
     systemIni?.GetInt("FriendOfflineSMSLimitCount", tPoseidon.Core.Data.FriendRules.OfflineMessageLimit) ?? tPoseidon.Core.Data.FriendRules.OfflineMessageLimit,
@@ -104,6 +105,8 @@ var coupleService = new CoupleService(
     coupleTables.EventPoints,
     System.Text.Encoding.GetEncoding(949),
     TimeProvider.System);
+friendServer.ZoneOf = gameLinks.ZoneOf;
+guildServer.Friends = friendStore;
 friendServer.MemoSent = (sender, target) => CoupleNote(coupleService.Memo(sender, target));
 chatServer.Whispered = (sender, target) => CoupleNote(coupleService.Whisper(sender, target));
 partyServer.PartyChanged = members => { foreach (var note in coupleService.PartyChanged(members)) CoupleNote(note); };
@@ -149,6 +152,7 @@ var angelServer = new tPoseidon.Kr2014.SystemServer.AngelServer(
         TimeProvider.System),
     socialRoom,
     gameLinks,
+    friendStore,
     System.Text.Encoding.GetEncoding(949),
     Log);
 
@@ -205,6 +209,8 @@ var gameMasterServer = new tPoseidon.Kr2014.SystemServer.GameMasterServer(
     Log);
 gameMasterServer.GuildDissolver = guildServer.ForceDissolveAsync;
 gameMasterServer.GuildRooms = guildServer.GameRooms;
+friendServer.IsGameMaster = gameMasterServer.IsGameMaster;
+reportServer.IsGameMaster = gameMasterServer.IsGameMaster;
 
 var clientHost = new tPoseidon.Core.Net.S2.S2ServerHost
 {
@@ -293,12 +299,14 @@ gameLinks.OnDeadChanged = partyServer.DeadChangedAsync;
 gameLinks.OnKindChanged = async (characterId, kind, job, ct) =>
 {
     if (socialRoom.Find(characterId) is { } changed) changed.CharacterType = kind;
+    await friendServer.TypeChangedAsync(characterId, kind, job, ct).ConfigureAwait(false);
     await partyServer.KindChangedAsync(characterId, kind, job, ct).ConfigureAwait(false);
 };
 gameLinks.OnRenamed = async (characterId, _, newName, ct) =>
 {
     socialRoom.Find(characterId)?.Rename(newName);
     guildServer.Renamed(characterId, newName);
+    await friendServer.RenamedAsync(characterId, newName, ct).ConfigureAwait(false);
     await partyServer.RenamedAsync(characterId, newName, ct).ConfigureAwait(false);
 };
 gameLinks.OnMegaphone = async (_, style, message, ct) =>

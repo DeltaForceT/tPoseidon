@@ -33,6 +33,8 @@ public sealed class ReportServer
         _log = log ?? throw new ArgumentNullException(nameof(log));
     }
 
+    public Func<ulong, bool>? IsGameMaster { get; set; }
+
     public void Register(OpcodeDispatcher dispatcher, S2SessionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
@@ -71,6 +73,11 @@ public sealed class ReportServer
         if (slots.Any(slot => slot is not null && string.Equals(slot.Defendant, defendant, StringComparison.Ordinal)))
         {
             await SendAsync(ctx, ReportFrames.AlreadyReported, name, ct).ConfigureAwait(false);
+            return;
+        }
+        if (_room.FindNamed(defendant) is { } named && IsGameMaster?.Invoke(named.Character.CharacterId) == true)
+        {
+            await SendAsync(ctx, ReportFrames.DefendantIsGameMaster, Array.Empty<byte>(), ct).ConfigureAwait(false);
             return;
         }
         var found = _room.FindNamed(defendant) is { } online

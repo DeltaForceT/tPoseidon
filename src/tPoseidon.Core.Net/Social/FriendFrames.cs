@@ -19,6 +19,14 @@ public static class FriendFrames
     public const ushort OnlineMessage = 0x216C;
     public const ushort OfflineMessage = 0x2171;
     public const ushort RequestOption = 0x215F;
+    public const ushort DeleteOffline = 0x2139;
+    public const ushort RequestSignalOn = 0x2149;
+    public const ushort RequestSignalOff = 0x214A;
+    public const ushort RequestWaitRelay = 0x2165;
+    public const ushort PositionRequest = 0x2167;
+    public const ushort MessageBlockRelay = 0x217D;
+    public const ushort RequestShown = 0x217F;
+    public const ushort ChangeZoneToRequest = 0x218A;
 
     public const ushort NotAvailable = 0x213C;
     public const ushort NotFound = 0x213D;
@@ -39,6 +47,20 @@ public static class FriendFrames
     public const ushort MessageNotTheirFriend = 0x2176;
     public const ushort RemoveFailed = 0x2184;
     public const ushort AddFailed = 0x2187;
+    public const ushort GuildSmsReceived = 0x2185;
+    public const ushort GmMemoNow = 0x2183;
+    public const ushort RequestSignalOnRelayed = 0x214B;
+    public const ushort RequestSignalOffRelayed = 0x214C;
+    public const ushort RequestInFlight = 0x214E;
+    public const ushort PositionZone = 0x2168;
+    public const ushort MessageBlocked = 0x217E;
+    public const ushort RequestShownTo = 0x2180;
+    public const ushort ChangeZoneToAnswer = 0x218C;
+    public const ushort AddPairMismatch = 0x2188;
+    public const ushort DeletedOffline = 0x2155;
+    public const ushort DeleteOfflineFailed = 0x2177;
+    public const ushort FriendTypeChanged = 0x2186;
+    public const ushort FriendRenamed = 0x2189;
     public const ushort ListWithFriends = 0x213E;
     public const ushort FriendOnline = 0x213F;
     public const ushort FriendOffline = 0x2140;
@@ -131,6 +153,41 @@ public static class FriendFrames
         w.WriteNulTerminated(name, text);
         return w.ToArray();
     }
+
+    public static byte[] TypeChanged(ulong characterId, byte kind, byte job)
+    {
+        var w = new PacketWriter(10);
+        w.WriteUInt64(characterId);
+        w.WriteByte(kind);
+        w.WriteByte(job);
+        return w.ToArray();
+    }
+
+    public static byte[] GuildSmsFrom(ulong senderCharacterId, string senderName, string content, Encoding text)
+    {
+        var w = new PacketWriter(96);
+        w.WriteUInt64(senderCharacterId);
+        w.WriteNulTerminated(senderName, text);
+        w.WriteNulTerminated(content, text);
+        return w.ToArray();
+    }
+
+    public static byte[] MemoNow(string name, string content, Encoding text)
+    {
+        var w = new PacketWriter(96);
+        w.WriteNulTerminated(name, text);
+        w.WriteNulTerminated(content, text);
+        return w.ToArray();
+    }
+
+    public static byte[] Zone(ushort zone)
+    {
+        var w = new PacketWriter(2);
+        w.WriteUInt16(zone);
+        return w.ToArray();
+    }
+
+    public static byte[] ZoneMoveAnswer(ZoneMoveAnswer answer) => new[] { (byte)answer };
 
     public static byte[] GroupChange(ulong friendCharacterId, byte groupNum, uint value)
     {

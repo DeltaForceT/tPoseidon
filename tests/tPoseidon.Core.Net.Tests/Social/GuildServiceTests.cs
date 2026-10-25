@@ -432,4 +432,34 @@ public sealed class GuildServiceTests
         Assert.Equal(GuildFrames.DetailRefused(GuildFrames.DetailNoCharacter), Assert.Single(service.DetailByCharacter(Cy, "Nobody")).Payload);
         Assert.Equal(GuildFrames.DetailRefused(GuildFrames.DetailNotFound), Assert.Single(service.DetailByCharacter(Ana, "Cy")).Payload);
     }
+
+    [Fact]
+    public void AGuildSmsToAnotherGuildGoesToItsMaster()
+    {
+        var (service, _) = GuildOfAnaAndBo();
+        service.OpenSession(Cy);
+
+        var plan = service.GuildSms(Cy, 77);
+
+        Assert.Equal(new GuildSmsPlan(GuildSmsOutcome.Deliver, Ana, "Cy"), plan);
+    }
+
+    [Fact]
+    public void AGuildSmsToTheOwnGuildIsRefused()
+    {
+        var (service, _) = GuildOfAnaAndBo();
+
+        Assert.Equal(GuildSmsOutcome.OwnGuild, service.GuildSms(Bo, 77).Outcome);
+    }
+
+    [Fact]
+    public void AGuildSmsToAnUnknownGuildOrBeforeTheSessionOpensIsNotDelivered()
+    {
+        var (service, _) = GuildOfAnaAndBo();
+        service.OpenSession(Cy);
+        service.Login(0x1999, "Dee");
+
+        Assert.Equal(GuildSmsOutcome.UnknownGuild, service.GuildSms(Cy, 5).Outcome);
+        Assert.Equal(GuildSmsOutcome.Dropped, service.GuildSms(0x1999, 77).Outcome);
+    }
 }

@@ -183,7 +183,7 @@ public sealed class GameMasterServer
         Command(dispatcher, ctx, GameMasterFrames.GuildMemoToAllMasters, (_, p) =>
             ReadStrings(p, 1) is { } memo ? _gameMasters.GuildMemoToAllMasters(memo[0]) : null);
         Command(dispatcher, ctx, GameMasterFrames.Memo, (_, p) =>
-            ReadStrings(p, 2) is { } memo ? _gameMasters.Memo(memo[0], memo[1]) : null);
+            ReadStrings(p, 2) is { } memo ? _gameMasters.Memo(memo[0], memo[1], Online) : null);
         Command(dispatcher, ctx, GameMasterFrames.Speed, (gm, p) =>
             p.Length >= 1 ? _gameMasters.SuperRun(gm.CharacterId, gm.Tool, p[0]) : null);
         Command(dispatcher, ctx, GameMasterFrames.Immortal, (gm, p) =>
@@ -412,6 +412,8 @@ public sealed class GameMasterServer
         _log($"[gm] guild '{guildName}' force dissolve: {(ok ? "done" : $"refused ({error})")}");
         await ctx.SendFrameAsync(ok ? GameMasterFrames.GuildDissolveOk : GameMasterFrames.GuildDissolveFail, GameMasterFrames.GuildName(guildName, _text), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
     }
+
+    public bool IsGameMaster(ulong characterId) => _gameMasters.IsLoggedIn(characterId);
 
     private bool IsOnline(ulong characterId) => _room.Find(characterId) is not null;
 

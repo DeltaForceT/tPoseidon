@@ -446,6 +446,7 @@ var coupleTables = CoupleTables.Empty;
 var pkInfo = PkInfoTables.Empty;
 var guildGameTypes = GuildGameTypeTables.Empty;
 var fiestaTables = FiestaTables.Empty;
+var portalLevelBands = PortalLevelBands.Empty;
 var specialPortTables = SpecialPortTables.Empty;
 var boxTables = BoxTables.Empty;
 IReadOnlyDictionary<int, ImprintEntry> imprintRows = new Dictionary<int, ImprintEntry>();
@@ -535,6 +536,7 @@ try
     pkInfo = reader.LoadPkInfo();
     guildGameTypes = reader.LoadGuildGameTypeTables();
     fiestaTables = reader.LoadFiestaTables();
+    portalLevelBands = reader.LoadPortalLevelBands();
     specialPortTables = reader.LoadSpecialPortTables();
     boxTables = reader.LoadBoxTables();
     expBoosts = reader.LoadExpBoosts();
@@ -1255,6 +1257,8 @@ var fiesta = new FiestaController(
     () => fiestaTables,
     new PostgresFiestaEntryStore(pg.DataSource),
     mapId => mapKindById.TryGetValue(mapId, out var fiestaMap) ? fiestaMap.Option : 0,
+    mapId => mapKindById.TryGetValue(mapId, out var classMap) ? classMap.Class : 0,
+    () => portalLevelBands,
     () => liveSessions.Values.ToArray(),
     SendToMapAsync,
     clientTextEncoding,
@@ -2273,6 +2277,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             }
             var move = C2SMovementPacket.DecodePayload(payload.Span);
             if (liveSessions.TryGetValue(ctx, out var deadMoveSt) && deadMoveSt.IsDead) return;
+            if (deadMoveSt is not null) await BroadcastSignAsync(deadMoveSt, deadMoveSt.Sign.ClearOnAction(deadMoveSt.PlayerEntityId)).ConfigureAwait(false);
             var moveFlag = liveSessions.TryGetValue(ctx, out var weighedSt) ? AllowedMoveTypeOf(weighedSt, move.Flag) : move.Flag;
 
             var moveNow = DateTimeOffset.UtcNow;
@@ -3831,6 +3836,68 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             return true;
         }
 
+        async Task<bool> TryStartPortalWalkAsync(ushort clickX, ushort clickY, byte changeType)
+        {
+            if (currentChar is null || portalLookup is null) return false;
+            var clicked = portalLookup.FindDestinationWithin(currentChar.MapId, clickX, clickY, PortalClick.Margin);
+            var standing = portalLookup.FindDestination(currentChar.MapId, playerLastX, playerLastY);
+            if (clicked is not null
+                && standing?.DestPortalId != clicked.DestPortalId
+                && liveSessions.TryGetValue(ctx, out var portalSt)
+                && playerMoveSpeeds is { } portalSpeeds
+                && zoneGeometryByMap.TryGetValue(portalSt.MapId, out var portalGeometry))
+            {
+                var portalMoveType = tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(changeType);
+                var portalSpeed = SpeedOfMoveType(portalSpeeds, portalMoveType, SpeedFactorOf(portalSt));
+                var portalRoute = portalSpeed > 0 ? WanderRoute.Find(portalGeometry, portalSt.PlayerX, portalSt.PlayerY, clickX, clickY) : null;
+                if (portalRoute is not null)
+                {
+                    var portalFromX = portalSt.PlayerX;
+                    var portalFromY = portalSt.PlayerY;
+                    var portalEnd = ((ushort)portalRoute.DestinationX, (ushort)portalRoute.DestinationY);
+                    var portalChangeType = changeType;
+                    portalSt.PickupItemEntityId = 0;
+                    portalSt.PickupWalkEnd = null;
+                    portalSt.PlayerMoveType = portalMoveType;
+                    portalSt.PortalWalk = new PortalWalk(
+                        DateTimeOffset.UtcNow.AddMilliseconds(Math.Ceiling(portalRoute.Length / portalSpeed * 1000.0)),
+                        portalEnd,
+                        async () =>
+                        {
+                            playerPrevX = playerLastX;
+                            playerPrevY = playerLastY;
+                            playerLastX = portalEnd.Item1;
+                            playerLastY = portalEnd.Item2;
+                            if (portalLookup.FindDestinationWithin(currentChar.MapId, portalEnd.Item1, portalEnd.Item2, PortalClick.Margin) is not { } reached
+                                || reached.DestPortalId != clicked.DestPortalId)
+                            {
+                                Console.WriteLine($"{LogTag} {ctx.Remote} portal click walk ended at ({portalEnd.Item1},{portalEnd.Item2}) outside portal {clicked.DestPortalId}");
+                                return;
+                            }
+                            await SendZoneChangeAsync(reached, portalChangeType, portalPreamble: true, "portal click walk").ConfigureAwait(false);
+                        });
+                    var portalSpeedQuarter = ProgressFrames.SpeedQuarter(portalSpeed);
+                    if (portalSpeedQuarter != portalSt.AnnouncedSpeedQuarter)
+                    {
+                        portalSt.AnnouncedSpeedQuarter = portalSpeedQuarter;
+                        await SendToMapAsync(portalSt.MapId, Opcode.S2C_ENTITY_SPEED, ProgressFrames.Speed(portalSt.PlayerEntityId, portalSpeed)).ConfigureAwait(false);
+                    }
+                    await SendToMapAsync(portalSt.MapId, Opcode.ENTITY_MOVE, new EntityMovementPacket
+                    {
+                        EntityId = portalSt.PlayerEntityId,
+                        FromX = portalFromX,
+                        FromY = portalFromY,
+                        ToX = portalEnd.Item1,
+                        ToY = portalEnd.Item2,
+                        Flag = changeType,
+                    }.EncodePayload()).ConfigureAwait(false);
+                    Console.WriteLine($"{LogTag} {ctx.Remote} portal click walks to portal {clicked.DestPortalId} at ({clickX},{clickY}) -> map {clicked.DestMapId}");
+                    return true;
+                }
+            }
+            return false;
+        }
+
         ctx.Dispatcher.Register(Opcode.C2S_REQUEST_MOVE, async (_, payload, _) =>
         {
             tPoseidon.Core.Net.Packets.LeaveZoneRequestPacket req;
@@ -3854,64 +3921,8 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 Console.Error.WriteLine($"{LogTag} {ctx.Remote} 0x01D4 portalLookup is null (data/portals.json failed to load at startup) — drop");
                 return;
             }
-            var clickX = req.DestZone;
-            var clickY = req.SourceEntity;
-            var clicked = portalLookup.FindDestinationWithin(currentChar.MapId, clickX, clickY, PortalClick.Margin);
+            if (await TryStartPortalWalkAsync(req.DestZone, req.SourceEntity, req.ChangeType).ConfigureAwait(false)) return;
             var standing = portalLookup.FindDestination(currentChar.MapId, playerLastX, playerLastY);
-            if (clicked is not null
-                && standing?.DestPortalId != clicked.DestPortalId
-                && liveSessions.TryGetValue(ctx, out var portalSt)
-                && playerMoveSpeeds is { } portalSpeeds
-                && zoneGeometryByMap.TryGetValue(portalSt.MapId, out var portalGeometry))
-            {
-                var portalMoveType = tPoseidon.Core.Game.Combat.MeleeApproach.EffectiveMoveType(req.ChangeType);
-                var portalSpeed = SpeedOfMoveType(portalSpeeds, portalMoveType, SpeedFactorOf(portalSt));
-                var portalRoute = portalSpeed > 0 ? WanderRoute.Find(portalGeometry, portalSt.PlayerX, portalSt.PlayerY, clickX, clickY) : null;
-                if (portalRoute is not null)
-                {
-                    var portalFromX = portalSt.PlayerX;
-                    var portalFromY = portalSt.PlayerY;
-                    var portalEnd = ((ushort)portalRoute.DestinationX, (ushort)portalRoute.DestinationY);
-                    var portalChangeType = req.ChangeType;
-                    portalSt.PickupItemEntityId = 0;
-                    portalSt.PickupWalkEnd = null;
-                    portalSt.PlayerMoveType = portalMoveType;
-                    portalSt.PortalWalk = new PortalWalk(
-                        DateTimeOffset.UtcNow.AddMilliseconds(Math.Ceiling(portalRoute.Length / portalSpeed * 1000.0)),
-                        portalEnd,
-                        async () =>
-                        {
-                            playerPrevX = playerLastX;
-                            playerPrevY = playerLastY;
-                            playerLastX = portalEnd.Item1;
-                            playerLastY = portalEnd.Item2;
-                            if (portalLookup.FindDestinationWithin(currentChar.MapId, portalEnd.Item1, portalEnd.Item2, PortalClick.Margin) is not { } reached
-                                || reached.DestPortalId != clicked.DestPortalId)
-                            {
-                                Console.WriteLine($"{LogTag} {ctx.Remote} 0x01D4 walk ended at ({portalEnd.Item1},{portalEnd.Item2}) outside portal {clicked.DestPortalId}");
-                                return;
-                            }
-                            await SendZoneChangeAsync(reached, portalChangeType, portalPreamble: true, "0x01D4 walk").ConfigureAwait(false);
-                        });
-                    var portalSpeedQuarter = ProgressFrames.SpeedQuarter(portalSpeed);
-                    if (portalSpeedQuarter != portalSt.AnnouncedSpeedQuarter)
-                    {
-                        portalSt.AnnouncedSpeedQuarter = portalSpeedQuarter;
-                        await SendToMapAsync(portalSt.MapId, Opcode.S2C_ENTITY_SPEED, ProgressFrames.Speed(portalSt.PlayerEntityId, portalSpeed)).ConfigureAwait(false);
-                    }
-                    await SendToMapAsync(portalSt.MapId, Opcode.ENTITY_MOVE, new EntityMovementPacket
-                    {
-                        EntityId = portalSt.PlayerEntityId,
-                        FromX = portalFromX,
-                        FromY = portalFromY,
-                        ToX = portalEnd.Item1,
-                        ToY = portalEnd.Item2,
-                        Flag = req.ChangeType,
-                    }.EncodePayload()).ConfigureAwait(false);
-                    Console.WriteLine($"{LogTag} {ctx.Remote} 0x01D4 walks to portal {clicked.DestPortalId} at ({clickX},{clickY}) -> map {clicked.DestMapId}");
-                    return;
-                }
-            }
             var dest = standing
                     ?? portalLookup.FindDestination(currentChar.MapId, playerPrevX, playerPrevY);
             if (dest is null)
@@ -3923,6 +3934,19 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             if (!await SendZoneChangeAsync(dest, req.ChangeType, portalPreamble: true, "0x01D4").ConfigureAwait(false)) return;
 
             Console.WriteLine($"{LogTag} {ctx.Remote} 0x01D4 wire dest_zone=0x{req.DestZone:X4} entity=0x{req.SourceEntity:X4} → resolved dest_map={dest.DestMapId} spawn=({dest.SpawnX},{dest.SpawnY})");
+        });
+
+        ctx.Dispatcher.Register(Opcode.C2S_PORTAL_REGION_MOVE, async (_, payload, _) =>
+        {
+            if (currentChar is null || !liveSessions.TryGetValue(ctx, out var clicker) || !PortalClickFrames.TryRead(payload.Span, out var click)) return;
+            var code = fiesta.PortalClickCode(clicker, click.Click, DateTime.Now);
+            if (code == tPoseidon.Core.Game.Warp.PortalClickRules.Accepted && !clicker.IsDead)
+            {
+                await TryStartPortalWalkAsync(click.X, click.Y, click.MoveType).ConfigureAwait(false);
+            }
+            byte portalReplyKey;
+            lock (moveRng) portalReplyKey = (byte)moveRng.Next(1, 256);
+            await ctx.SendFrameAsync(Opcode.S2C_PORTAL_REGION_MOVE_RESULT, PortalClickFrames.Result(code, click.Click.Region), portalReplyKey, sessionCt).ConfigureAwait(false);
         });
 
         ctx.Dispatcher.Register(Opcode.C2S_ENTER_MAP, async (_, payload, _) =>
@@ -5470,13 +5494,47 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             BroadcastChatAsync(tPoseidon.Core.Net.Social.ChatFrames.Said, payload));
         ctx.Dispatcher.Register(tPoseidon.Core.Net.Social.ChatFrames.ChatBar, (_, payload, _) =>
             BroadcastChatAsync(tPoseidon.Core.Net.Social.ChatFrames.ChatBarSaid, payload));
+        ctx.Dispatcher.Register(tPoseidon.Core.Net.Social.ChatFrames.GhostSay, async (_, payload, _) =>
+        {
+            if (currentChar is null || !liveSessions.TryGetValue(ctx, out var ghost) || !ghost.IsDead) return;
+            var text = tPoseidon.Core.Net.Social.ChatFrames.ReadText(payload.Span, clientTextEncoding);
+            await SendToMapAsync(ghost.MapId, (Opcode)tPoseidon.Core.Net.Social.ChatFrames.GhostSaid,
+                tPoseidon.Core.Net.Social.ChatFrames.Line(ghost.PlayerEntityId, currentChar.Name, text, clientTextEncoding)).ConfigureAwait(false);
+            Console.WriteLine($"{LogTag} {ctx.Remote} [chat] 0x02C8 '{currentChar.Name}': {text}");
+        });
+        async Task BroadcastSignAsync(InGameSessionState owner, IReadOnlyList<tPoseidon.Core.Net.World.SignFrame> frames)
+        {
+            foreach (var frame in frames) await SendToMapAsync(owner.MapId, (Opcode)frame.Opcode, frame.Payload).ConfigureAwait(false);
+        }
+
         ctx.Dispatcher.Register(tPoseidon.Core.Net.Social.ChatFrames.HeadMessage, async (_, payload, _) =>
         {
             if (!liveSessions.TryGetValue(ctx, out var speaker)) return;
             var text = tPoseidon.Core.Net.Social.ChatFrames.ReadText(payload.Span, clientTextEncoding);
             if (tPoseidon.Core.Net.Social.GameMasterChat.IsCommandLine(text)) return;
-            await SendToMapAsync(speaker.MapId, (Opcode)tPoseidon.Core.Net.Social.ChatFrames.HeadMessageShown,
-                tPoseidon.Core.Net.Social.ChatFrames.Head(speaker.PlayerEntityId, text, clientTextEncoding)).ConfigureAwait(false);
+            await BroadcastSignAsync(speaker, speaker.Sign.ShowHeadMessage(speaker.PlayerEntityId, text, clientTextEncoding)).ConfigureAwait(false);
+        });
+        ctx.Dispatcher.Register((Opcode)tPoseidon.Core.Net.World.PlayerSign.CardBattleTitleRequest, async (_, payload, _) =>
+        {
+            if (!liveSessions.TryGetValue(ctx, out var seeker) || seeker.IsDead) return;
+            var text = tPoseidon.Core.Net.Social.ChatFrames.ReadText(payload.Span, clientTextEncoding);
+            await BroadcastSignAsync(seeker, seeker.Sign.ShowCardBattleTitle(seeker.PlayerEntityId, text, clientTextEncoding)).ConfigureAwait(false);
+        });
+        ctx.Dispatcher.Register((Opcode)tPoseidon.Core.Net.World.PlayerSign.CardBattleTitleEndRequest, async (_, _, _) =>
+        {
+            if (!liveSessions.TryGetValue(ctx, out var seeker)) return;
+            await BroadcastSignAsync(seeker, seeker.Sign.EndCardBattleTitle(seeker.PlayerEntityId)).ConfigureAwait(false);
+        });
+        ctx.Dispatcher.Register((Opcode)tPoseidon.Core.Net.World.PlayerSign.FortuneSignRequest, async (_, payload, _) =>
+        {
+            if (!liveSessions.TryGetValue(ctx, out var teller) || teller.Fortune is not { Round.InHouse: true }) return;
+            var text = tPoseidon.Core.Net.Social.ChatFrames.ReadText(payload.Span, clientTextEncoding);
+            await BroadcastSignAsync(teller, teller.Sign.ShowFortuneSign(teller.PlayerEntityId, text, clientTextEncoding)).ConfigureAwait(false);
+        });
+        ctx.Dispatcher.Register((Opcode)tPoseidon.Core.Net.World.PlayerSign.FortuneSignEndRequest, async (_, _, _) =>
+        {
+            if (!liveSessions.TryGetValue(ctx, out var teller) || teller.Fortune is not { Round.InHouse: true }) return;
+            await BroadcastSignAsync(teller, teller.Sign.EndFortuneSign(teller.PlayerEntityId)).ConfigureAwait(false);
         });
         ctx.Dispatcher.Register(tPoseidon.Core.Net.Social.ChatFrames.FindPlayer, async (_, payload, findCt) =>
         {
@@ -14551,8 +14609,9 @@ var npcLoopTask = Task.Run(async () =>
             foreach (var session in sessions)
             {
                 var petOwner = session.Value;
-                if (petOwner.IsDead || petOwner.Pet is not { } speakingPet || speakingPet.MapId != mapId) continue;
+                if (petOwner.Pet is not { } speakingPet || speakingPet.MapId != mapId) continue;
                 if (speakingPet.Speech.Tick(now, petSpeech, speakingPet.CharacterType, npcLoopRng.Next) is not { } utterance) continue;
+                if (mapKindById.TryGetValue(mapId, out var speakingMap) && tPoseidon.Core.Game.Pets.PetSpeechState.MutedIn(speakingMap.Type)) continue;
                 if (!await SendFromLoopAsync(sessions, Opcode.S2C_PET_SPEECH,
                     PetSpeechFrames.Speech(speakingPet.EntityId, utterance, clientTextEncoding),
                     MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false)) return;
@@ -14920,12 +14979,15 @@ internal sealed class InGameSessionState
         set
         {
             _isDead = value;
-            if (value) StandUp();
+            if (!value) return;
+            StandUp();
+            Pet?.Speech.Raise(tPoseidon.Core.Game.Pets.PetSpeechState.OwnerDiedEvent);
         }
     }
 
     private bool _isDead;
     public PlayerPosture Posture { get; } = new();
+    public tPoseidon.Core.Net.World.PlayerSign Sign { get; } = new();
     public long PlayerMaxHp { get; set; }
     public tPoseidon.Core.Game.Combat.EngagementList Engagements { get; } = new();
     public NaturalRecovery Recovery { get; } = new();

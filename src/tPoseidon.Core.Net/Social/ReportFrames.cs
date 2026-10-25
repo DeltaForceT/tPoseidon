@@ -20,6 +20,7 @@ public static class ReportFrames
     public const ushort ReportedSelf = 0x271A;
     public const ushort AlreadyReported = 0x271B;
     public const ushort NoFreeSlot = 0x271C;
+    public const ushort DefendantIsGameMaster = 0x2727;
     public const ushort SlotGranted = 0x271E;
     public const ushort NoSuchCharacter = 0x2720;
     public const ushort Cancelled = 0x2721;

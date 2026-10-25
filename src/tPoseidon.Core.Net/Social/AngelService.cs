@@ -14,6 +14,8 @@ public sealed class AngelOutbox
 
     public List<CoupleMessage> Direct { get; } = new();
 
+    public List<ulong> GraduationMemos { get; } = new();
+
     public List<string> Notes { get; } = new();
 
     public void Send(ulong to, ushort opcode, byte[] payload) => Messages.Add(new CoupleMessage(to, opcode, payload));
@@ -73,7 +75,11 @@ public sealed class AngelService
             return outbox;
         }
         lock (_gate) _newbies.Remove(characterId);
-        foreach (var angel in graduation.Angels) outbox.Orders.Add(new AngelOrder(angel, AngelFrames.OrderAngelReward, AngelFrames.Character(angel)));
+        foreach (var angel in graduation.Angels)
+        {
+            outbox.Orders.Add(new AngelOrder(angel, AngelFrames.OrderAngelReward, AngelFrames.Character(angel)));
+            outbox.GraduationMemos.Add(angel);
+        }
         outbox.Notes.Add($"0x{characterId:X} graduated at level {level}: {graduation.Gifts} gift rows, {graduation.Angels.Count} angels rewarded");
         return outbox;
     }

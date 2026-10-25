@@ -83,7 +83,7 @@ public sealed class GameMasterChatRouter
                 _service.TeleportToChr(characterId, args.Count == 2 ? args[0] : string.Empty, args[^1], _online),
             GameMasterChat.Kick when args.Count == 1 => GameMasterService.Kick(characterId, args[0], _online),
             GameMasterChat.Kick when args.Count == 2 => _service.KickWithCause(characterId, false, args[0], args[1], _online),
-            GameMasterChat.Memo when args.Count == 2 => _service.Memo(args[0], args[1]),
+            GameMasterChat.Memo when args.Count == 2 => _service.Memo(args[0], args[1], _online),
             GameMasterChat.RemovePlayerShop when args.Count == 1 => GameMasterService.RemovePersonalShop(args[0], _online),
             GameMasterChat.RemoveMyCamp when args.Count == 1 => GameMasterService.RemoveMyCamp(args[0], _online),
             GameMasterChat.RemoveMyChat when args.Count == 1 => InstantChatRemover?.Invoke(characterId, args[0]),
