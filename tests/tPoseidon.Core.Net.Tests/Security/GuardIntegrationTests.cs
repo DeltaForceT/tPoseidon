@@ -303,15 +303,17 @@ public sealed class GuardIntegrationTests
             flood.AddRange(flooder.Frame(GuardHarness.EchoOpcode, [(byte)i]));
         }
 
+        var cutWhileSending = false;
         try
         {
             await flooder.SendRawAsync(flood.ToArray());
         }
         catch (IOException)
         {
+            cutWhileSending = true;
         }
 
-        Assert.True(await flooder.WaitClosedAsync(Wait));
+        Assert.True(cutWhileSending || await flooder.WaitClosedAsync(Wait));
         Assert.Equal(1, guard.Counters[GuardCounter.PacketFloods]);
 
         for (var i = 0; i < 30; i++)
