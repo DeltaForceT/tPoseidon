@@ -14,7 +14,7 @@ public static class GameClientLauncher
         var launch = settings.Launch;
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"{launch.ServiceName},{launch.Account},{launch.ServerDescription},{launch.WorldName},{launch.GroupName},{launch.WorldId},{settings.Network.PublicAddress}|world|group|{settings.Ports.Lobby}");
+            $"{ClientFolder.Service(settings)},{launch.Account},{launch.ServerDescription},{launch.WorldName},{launch.GroupName},{launch.WorldId},{settings.Network.PublicAddress}|world|group|{settings.Ports.Lobby}");
     }
 
     public static string Launch(HostSettings settings)
@@ -48,7 +48,10 @@ public static class GameClientLauncher
             throw new HostingException($"The client folder {settings.ClientFolder} is not usable ({string.Join("; ", check.Problems)}). Run tposeidon setup again.");
         }
 
-        ClientFolder.PrepareEnglishMode(settings.ClientFolder);
+        if (string.Equals(ClientFolder.Service(settings), ClientFolder.EnglishService, StringComparison.OrdinalIgnoreCase))
+        {
+            ClientFolder.PrepareEnglishMode(settings.ClientFolder);
+        }
 
         var executable = Path.Combine(settings.ClientFolder, check.Executable);
         ClientAddressPatch.Apply(executable, settings.Network.PublicAddress, settings.Ports.Lobby);

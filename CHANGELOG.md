@@ -2,6 +2,14 @@
 
 Every release is listed here, newest first. Versions look like `0.MINOR.PATCH-beta`; [BETA.md](docs/beta/BETA.md) explains what the numbers mean. Back up your database before every update. A release that changes the database says so at the top.
 
+## 0.55.3-beta
+
+No database changes.
+
+- Korean clients now show Korean text. Play starts the client in its own Korean mode when the client's game data is Korean, and in English mode when it is translated. Before, every client started in English mode, which draws Korean text as garbled Latin letters.
+- The panel's settings menu has a **Client language** choice: automatic (the default), Korean or English. Existing installs move to automatic.
+- Play now writes the server address into both of the client's built-in addresses, the English one and the Korean one.
+
 ## 0.55.2-beta
 
 A fix release for clients that never reached the server. No database changes.

@@ -286,25 +286,10 @@ public sealed class ClientPage : WizardPage
             return false;
         }
 
-        IReadOnlyList<ClientFileCopy> added;
-        try
-        {
-            added = ClientFolder.PrepareEnglishMode(full);
-        }
-        catch (HostingException ex)
-        {
-            Mark(_path, true);
-            _result.Show(BannerKind.Error, ex.Summary, ex.Hint ?? "");
-            return false;
-        }
-
         Mark(_path, false);
         _state.Settings.ClientFolder = full;
         _state.Settings.ClientExecutable = check.Executable;
-        var addedText = added.Count == 0
-            ? ""
-            : $" Added {string.Join(", ", added.Select(copy => $"{Path.GetFileName(copy.Target)} (a copy of {Path.GetFileName(copy.Source)})"))}, which the client needs to start.";
-        _result.Show(BannerKind.Success, "Found the client.", $"{check.Executable} and the data folder are present.{addedText}");
+        _result.Show(BannerKind.Success, "Found the client.", $"{check.Executable} and the data folder are present.");
         return true;
     }
 

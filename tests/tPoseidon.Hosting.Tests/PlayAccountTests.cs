@@ -83,7 +83,7 @@ public sealed class PlayAccountTests
     [Fact]
     public void TheLaunchArgumentCarriesThePlayAccount()
     {
-        var settings = new HostSettings { Launch = { Account = "Alice" }, Network = { PublicAddress = "192.0.2.10" } };
+        var settings = new HostSettings { Launch = { Account = "Alice", ServiceName = ClientFolder.EnglishService }, Network = { PublicAddress = "192.0.2.10" } };
 
         Assert.StartsWith("gsp,Alice,desc,Trickster,Trickster,1,192.0.2.10|world|group|", GameClientLauncher.LaunchArgument(settings), StringComparison.Ordinal);
     }

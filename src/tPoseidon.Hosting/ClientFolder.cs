@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using tPoseidon.Core.Common;
+using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Hosting;
 
@@ -8,8 +10,13 @@ public sealed record ClientFileCopy(string Source, string Target);
 
 public static class ClientFolder
 {
+    public const string AutomaticService = "auto";
+    public const string EnglishService = "gsp";
+    public const string KoreanService = "korean";
+    public const int KoreanTextCharacters = 1000;
+
     private const string DataFolderName = "data";
-    private const string EnglishServiceName = "gsp";
+    private static readonly ConcurrentDictionary<string, string> DetectedServices = new(StringComparer.Ordinal);
     private static readonly string[] ExecutableCandidates = { "Trickster.bin", "Trickster.exe" };
     private static readonly (string Target, string Source)[] EnglishModeFiles =
     {
@@ -75,12 +82,62 @@ public static class ClientFolder
         var data = DataFolder(clientFolder);
         var english = ClientFiles.Locate(Path.Combine(data, "libconfig_eng.dat"));
         var korean = ClientFiles.Locate(Path.Combine(data, "libconfig.dat"));
-        if (string.Equals(serviceName, EnglishServiceName, StringComparison.OrdinalIgnoreCase) && english is not null)
+        if (string.Equals(serviceName, EnglishService, StringComparison.OrdinalIgnoreCase) && english is not null)
         {
             return english;
         }
 
         return korean ?? english ?? Path.Combine(data, "libconfig.dat");
+    }
+
+    public static string LibConfigFor(HostSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return LibConfigFor(settings.ClientFolder, Service(settings));
+    }
+
+    public static string Service(HostSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return ServiceFor(settings.ClientFolder, settings.Launch.ServiceName);
+    }
+
+    public static string ServiceFor(string clientFolder, string configuredService)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredService) && !string.Equals(configuredService, AutomaticService, StringComparison.OrdinalIgnoreCase))
+        {
+            return configuredService;
+        }
+
+        var data = DataFolder(clientFolder);
+        var libconfig = ClientFiles.Locate(Path.Combine(data, "libconfig_eng.dat")) ?? ClientFiles.Locate(Path.Combine(data, "libconfig.dat"));
+        if (libconfig is null)
+        {
+            return KoreanService;
+        }
+
+        var file = new FileInfo(libconfig);
+        var key = $"{file.FullName}|{file.Length}|{file.LastWriteTimeUtc.Ticks}";
+        return DetectedServices.GetOrAdd(key, _ => IsKoreanText(LibConfigDatDecryptor.DecryptFile(file.FullName)) ? KoreanService : EnglishService);
+    }
+
+    public static bool IsKoreanText(ReadOnlySpan<byte> text)
+    {
+        var found = 0;
+        for (var i = 0; i + 1 < text.Length; i++)
+        {
+            if (text[i] is >= 0xB0 and <= 0xC8 && text[i + 1] is >= 0xA1 and <= 0xFE)
+            {
+                if (++found >= KoreanTextCharacters)
+                {
+                    return true;
+                }
+
+                i++;
+            }
+        }
+
+        return false;
     }
 
     public static ClientCheck Check(string clientFolder)

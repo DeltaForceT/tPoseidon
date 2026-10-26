@@ -80,8 +80,6 @@ public sealed class PanelTests : IDisposable
         Assert.True(page.Validate());
         Assert.Equal(client, state.Settings.ClientFolder);
         Assert.Equal("Trickster.bin", state.Settings.ClientExecutable);
-        Assert.True(File.Exists(Path.Combine(client, "data", "libconfig_eng.dat")));
-        Assert.True(File.Exists(Path.Combine(client, "data", "tahoma12.fnt")));
     }
 
     [AvaloniaFact]

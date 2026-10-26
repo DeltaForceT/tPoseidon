@@ -6,17 +6,24 @@ namespace tPoseidon.Hosting;
 
 public sealed record ClientAddressResult(string Address, bool Changed, string? BackupPath);
 
+public sealed record ClientLobbySlot(string Service, string PrecedingAddress, string BuiltInAddress);
+
 public static class ClientAddressPatch
 {
-    public const string BuiltInLobbyAddress = "216.39.108.160";
-    public const string PrecedingAddress = "192.168.12.26";
     public const int SlotBytes = 16;
     public const int ClientLobbyPort = 9980;
     public const string BackupSuffix = ".tposeidon-original";
 
-    public static int FindSlot(ReadOnlySpan<byte> executable)
+    public static IReadOnlyList<ClientLobbySlot> Slots { get; } = new[]
     {
-        var marker = Encoding.ASCII.GetBytes(PrecedingAddress + "\0");
+        new ClientLobbySlot(ClientFolder.KoreanService, "192.168.12.221", "211.44.251.24"),
+        new ClientLobbySlot(ClientFolder.EnglishService, "192.168.12.26", "216.39.108.160"),
+    };
+
+    public static int FindSlot(ReadOnlySpan<byte> executable, ClientLobbySlot lobby)
+    {
+        ArgumentNullException.ThrowIfNull(lobby);
+        var marker = Encoding.ASCII.GetBytes(lobby.PrecedingAddress + "\0");
         var first = executable.IndexOf(marker);
         if (first < 0 || executable[(first + marker.Length)..].IndexOf(marker) >= 0 || first % SlotBytes != 0 || first + 2 * SlotBytes > executable.Length)
         {
@@ -91,16 +98,16 @@ public static class ClientAddressPatch
 
         var address = ClientAddressFor(serverAddress);
         var bytes = File.ReadAllBytes(executablePath);
-        var slot = FindSlot(bytes);
-        if (slot < 0)
+        var slots = Slots.Select(lobby => FindSlot(bytes, lobby)).ToArray();
+        if (slots.Any(slot => slot < 0))
         {
             throw new HostingException(
-                $"{Path.GetFileName(executablePath)} is not the KR 2014 client tPoseidon knows: the lobby address it connects to was not found.",
+                $"{Path.GetFileName(executablePath)} is not the KR 2014 client tPoseidon knows: the lobby addresses it connects to were not found.",
                 "Use the 2014.01.28 KR client, or reinstall it.",
                 null);
         }
 
-        if (string.Equals(ReadAddress(bytes, slot), address, StringComparison.Ordinal))
+        if (slots.All(slot => string.Equals(ReadAddress(bytes, slot), address, StringComparison.Ordinal)))
         {
             return new ClientAddressResult(address, false, null);
         }
@@ -115,7 +122,11 @@ public static class ClientAddressPatch
                 backup = backupPath;
             }
 
-            WriteAddress(bytes, slot, address);
+            foreach (var slot in slots)
+            {
+                WriteAddress(bytes, slot, address);
+            }
+
             File.WriteAllBytes(executablePath, bytes);
         }
         catch (IOException ex)

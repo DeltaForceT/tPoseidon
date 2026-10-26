@@ -20,7 +20,7 @@ public static class ServerEnvironment
             ["MT_DATA_DIR"] = paths.ServerData,
             [PostgresMigrations.MigrationsDirectoryVariable] = paths.Migrations,
             ["MT_VARIANT_DATA_ROOT"] = clientData,
-            ["MT_LIBCONFIG_PATH"] = ClientFolder.LibConfigFor(settings.ClientFolder, settings.Launch.ServiceName),
+            ["MT_LIBCONFIG_PATH"] = ClientFolder.LibConfigFor(settings),
             ["MT_DB_CONNECTION"] = settings.Database.Connection,
             ["MT_DB_SCHEMA"] = settings.Database.Schema,
             ["MT_PUBLIC_IP"] = settings.Network.PublicAddress,

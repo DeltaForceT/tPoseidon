@@ -343,6 +343,36 @@ public sealed class PanelHost
 
     public string PlayAccountName => Settings?.Launch.Account ?? "";
 
+    public string ClientLanguage => Settings?.Launch.ServiceName is { Length: > 0 } service ? service : ClientFolder.AutomaticService;
+
+    public async Task ChooseClientLanguageAsync(string service)
+    {
+        if (Settings is not { } settings)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                settings.Launch.ServiceName = service;
+                settings.Save(Paths);
+            }).ConfigureAwait(true);
+            var mode = service switch
+            {
+                ClientFolder.KoreanService => "Korean",
+                ClientFolder.EnglishService => "English",
+                _ => "the language of the game data",
+            };
+            LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Play now starts the client in {mode}. Restart the servers so they read the matching game data.");
+        }
+        catch (HostingException ex)
+        {
+            Fail(LogHub.PanelSource, ex);
+        }
+    }
+
     public async Task<IReadOnlyList<string>> ListAccountsAsync()
     {
         if (Settings is not { } settings)

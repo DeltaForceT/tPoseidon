@@ -9,6 +9,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using tPoseidon.Hosting;
 using tPoseidon.Hosting.Servers;
 
 namespace tPoseidon.Panel;
@@ -190,6 +191,7 @@ public sealed class MainWindow : Window
         setup.Click += (_, _) => OpenSetup();
         var backup = new MenuItem { Header = "Back up the database" };
         backup.Click += async (_, _) => await _host.BackupAsync().ConfigureAwait(true);
+        var language = new MenuItem { Header = "Client language" };
         var folder = new MenuItem { Header = "Open the data folder" };
         folder.Click += async (_, _) => await OpenDataFolderAsync().ConfigureAwait(true);
         var splash = new MenuItem { Header = "Replay startup splash" };
@@ -207,6 +209,7 @@ public sealed class MainWindow : Window
             {
                 setup,
                 backup,
+                language,
                 folder,
                 new Separator(),
                 _reduce,
@@ -216,6 +219,8 @@ public sealed class MainWindow : Window
         contextMenu.Opening += (_, _) =>
         {
             backup.IsEnabled = _host.IsSetUp;
+            language.IsEnabled = _host.IsSetUp;
+            FillLanguageChoices(language);
             splash.IsEnabled = !_motion.Reduced;
         };
         menu.ContextMenu = contextMenu;
@@ -352,6 +357,26 @@ public sealed class MainWindow : Window
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         };
+    }
+
+    private void FillLanguageChoices(MenuItem language)
+    {
+        language.Items.Clear();
+        foreach (var (service, label) in new[]
+        {
+            (ClientFolder.AutomaticService, "Automatic (from the game data)"),
+            (ClientFolder.KoreanService, "Korean"),
+            (ClientFolder.EnglishService, "English"),
+        })
+        {
+            var item = new MenuItem
+            {
+                Header = label,
+                Icon = string.Equals(service, _host.ClientLanguage, StringComparison.OrdinalIgnoreCase) ? Tokens.Glyphs(Glyph.Check, 12, Tokens.Accent) : null,
+            };
+            item.Click += async (_, _) => await _host.ChooseClientLanguageAsync(service).ConfigureAwait(true);
+            language.Items.Add(item);
+        }
     }
 
     private async Task PickPlayAccountAsync()

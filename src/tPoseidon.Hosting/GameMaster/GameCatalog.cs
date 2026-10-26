@@ -48,7 +48,7 @@ public sealed class GameCatalog
     public static GameCatalog For(HostSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        var libconfig = ClientFolder.LibConfigFor(settings.ClientFolder, settings.Launch.ServiceName);
+        var libconfig = ClientFolder.LibConfigFor(settings);
         return File.Exists(libconfig)
             ? Load(libconfig)
             : Empty($"The game data file {libconfig} was not found, so the pickers show ids only. Check the client folder in the setup.");

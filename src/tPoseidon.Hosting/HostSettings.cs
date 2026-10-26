@@ -21,7 +21,11 @@ public sealed class HostSettings
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
-    public int FormatVersion { get; set; } = 1;
+    public const int CurrentFormatVersion = 2;
+
+    private const int AutomaticServiceFormatVersion = 2;
+
+    public int FormatVersion { get; set; } = CurrentFormatVersion;
 
     public string ClientFolder { get; set; } = "";
 
@@ -66,6 +70,8 @@ public sealed class HostSettings
         }
 
         settings.Security ??= new GuardSettings();
+        settings.Launch ??= new ClientLaunchSettings();
+        settings.Upgrade();
         var problems = settings.Security.Problems();
         if (problems.Count > 0)
         {
@@ -83,6 +89,20 @@ public sealed class HostSettings
         ArgumentNullException.ThrowIfNull(paths);
         return Load(paths)
             ?? throw new HostingException($"tPoseidon is not set up yet in {paths.Root}. Run 'tposeidon setup' first.");
+    }
+
+    public void Upgrade()
+    {
+        if (FormatVersion < AutomaticServiceFormatVersion
+            && string.Equals(Launch.ServiceName, Hosting.ClientFolder.EnglishService, StringComparison.OrdinalIgnoreCase))
+        {
+            Launch.ServiceName = Hosting.ClientFolder.AutomaticService;
+        }
+
+        if (FormatVersion < CurrentFormatVersion)
+        {
+            FormatVersion = CurrentFormatVersion;
+        }
     }
 
     public void Save(InstallPaths paths)
@@ -145,7 +165,7 @@ public sealed class PortSettings
 
 public sealed class ClientLaunchSettings
 {
-    public string ServiceName { get; set; } = "gsp";
+    public string ServiceName { get; set; } = ClientFolder.AutomaticService;
 
     public string Account { get; set; } = "";
 

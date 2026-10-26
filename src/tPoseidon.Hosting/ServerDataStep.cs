@@ -18,7 +18,7 @@ public static class ServerDataStep
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(settings);
-        var libconfig = ClientFolder.LibConfigFor(settings.ClientFolder, settings.Launch.ServiceName);
+        var libconfig = ClientFolder.LibConfigFor(settings);
         var mapFolder = ClientFolder.MapFolder(settings.ClientFolder);
         var builder = paths.AppExecutable(SnapshotBuilderAssembly);
         if (!File.Exists(builder))

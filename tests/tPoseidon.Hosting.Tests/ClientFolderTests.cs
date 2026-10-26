@@ -95,6 +95,27 @@ public sealed class ClientFolderTests
     }
 
     [Fact]
+    public void KoreanTextIsRecognisedFromItsCharacterPairs()
+    {
+        var hangul = new byte[] { 0xC7, 0xD1, 0xB1, 0xDB };
+        var korean = Enumerable.Repeat(hangul, ClientFolder.KoreanTextCharacters / 2).SelectMany(pair => pair).ToArray();
+        var fewer = korean.AsSpan(0, korean.Length - 2).ToArray();
+        var english = System.Text.Encoding.ASCII.GetBytes(string.Concat(Enumerable.Repeat("<CommonName>Guide</CommonName>", 500)));
+
+        Assert.True(ClientFolder.IsKoreanText(korean));
+        Assert.False(ClientFolder.IsKoreanText(fewer));
+        Assert.False(ClientFolder.IsKoreanText(english));
+    }
+
+    [Fact]
+    public void AnExplicitServiceIsKeptAndAClientWithoutDataStartsKorean()
+    {
+        using var temp = new TempFolder();
+        Assert.Equal(ClientFolder.EnglishService, ClientFolder.ServiceFor(temp.Path, ClientFolder.EnglishService));
+        Assert.Equal(ClientFolder.KoreanService, ClientFolder.ServiceFor(temp.Path, ClientFolder.AutomaticService));
+    }
+
+    [Fact]
     public void EnsureUsableThrowsForBrokenFolder()
     {
         using var temp = new TempFolder();

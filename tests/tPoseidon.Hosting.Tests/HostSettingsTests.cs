@@ -48,6 +48,28 @@ public sealed class HostSettingsTests
     }
 
     [Fact]
+    public void FormatOneSettingsMoveTheOldEnglishDefaultToAutomatic()
+    {
+        using var temp = new TempFolder();
+        temp.WriteFile("tposeidon.json", "{ \"formatVersion\": 1, \"launch\": { \"serviceName\": \"gsp\" } }");
+
+        var loaded = HostSettings.Load(new InstallPaths(temp.Path))!;
+
+        Assert.Equal(ClientFolder.AutomaticService, loaded.Launch.ServiceName);
+        Assert.Equal(HostSettings.CurrentFormatVersion, loaded.FormatVersion);
+    }
+
+    [Fact]
+    public void CurrentSettingsKeepAnExplicitService()
+    {
+        using var temp = new TempFolder();
+        var paths = new InstallPaths(temp.Path);
+        new HostSettings { Launch = { ServiceName = ClientFolder.EnglishService } }.Save(paths);
+
+        Assert.Equal(ClientFolder.EnglishService, HostSettings.Load(paths)!.Launch.ServiceName);
+    }
+
+    [Fact]
     public void BrokenFileIsExplained()
     {
         using var temp = new TempFolder();
