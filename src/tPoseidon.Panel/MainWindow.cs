@@ -192,6 +192,12 @@ public sealed class MainWindow : Window
         var backup = new MenuItem { Header = "Back up the database" };
         backup.Click += async (_, _) => await _host.BackupAsync().ConfigureAwait(true);
         var language = new MenuItem { Header = "Client language" };
+        var languages = LanguageChoices();
+        foreach (var choice in languages)
+        {
+            language.Items.Add(choice.Item);
+        }
+
         var folder = new MenuItem { Header = "Open the data folder" };
         folder.Click += async (_, _) => await OpenDataFolderAsync().ConfigureAwait(true);
         var splash = new MenuItem { Header = "Replay startup splash" };
@@ -220,7 +226,10 @@ public sealed class MainWindow : Window
         {
             backup.IsEnabled = _host.IsSetUp;
             language.IsEnabled = _host.IsSetUp;
-            FillLanguageChoices(language);
+            foreach (var choice in languages)
+            {
+                choice.Item.Icon = string.Equals(choice.Service, _host.ClientLanguage, StringComparison.OrdinalIgnoreCase) ? Tokens.Glyphs(Glyph.Check, 12, Tokens.Accent) : null;
+            }
             splash.IsEnabled = !_motion.Reduced;
         };
         menu.ContextMenu = contextMenu;
@@ -359,24 +368,20 @@ public sealed class MainWindow : Window
         };
     }
 
-    private void FillLanguageChoices(MenuItem language)
+    private (string Service, MenuItem Item)[] LanguageChoices()
     {
-        language.Items.Clear();
-        foreach (var (service, label) in new[]
+        var choices = new[]
         {
-            (ClientFolder.AutomaticService, "Automatic (from the game data)"),
-            (ClientFolder.KoreanService, "Korean"),
-            (ClientFolder.EnglishService, "English"),
-        })
+            (ClientFolder.AutomaticService, new MenuItem { Header = "Automatic (from the game data)" }),
+            (ClientFolder.KoreanService, new MenuItem { Header = "Korean" }),
+            (ClientFolder.EnglishService, new MenuItem { Header = "English" }),
+        };
+        foreach (var (service, item) in choices)
         {
-            var item = new MenuItem
-            {
-                Header = label,
-                Icon = string.Equals(service, _host.ClientLanguage, StringComparison.OrdinalIgnoreCase) ? Tokens.Glyphs(Glyph.Check, 12, Tokens.Accent) : null,
-            };
             item.Click += async (_, _) => await _host.ChooseClientLanguageAsync(service).ConfigureAwait(true);
-            language.Items.Add(item);
         }
+
+        return choices;
     }
 
     private async Task PickPlayAccountAsync()

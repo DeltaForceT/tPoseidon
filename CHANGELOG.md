@@ -2,7 +2,7 @@
 
 Every release is listed here, newest first. Versions look like `0.MINOR.PATCH-beta`; [BETA.md](docs/beta/BETA.md) explains what the numbers mean. Back up your database before every update. A release that changes the database says so at the top.
 
-## 0.55.3-beta
+## 0.56.0-beta
 
 No database changes.
 

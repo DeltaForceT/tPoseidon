@@ -366,6 +366,7 @@ public sealed class PanelHost
                 _ => "the language of the game data",
             };
             LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Play now starts the client in {mode}. Restart the servers so they read the matching game data.");
+            Notify(BannerKind.Success, $"Client language: {mode}", "Play uses it from the next start. Restart the servers so they read the matching game data.");
         }
         catch (HostingException ex)
         {

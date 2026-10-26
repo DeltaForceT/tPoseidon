@@ -175,6 +175,29 @@ public sealed class PanelTests : IDisposable
         host.End();
     }
 
+    [AvaloniaFact]
+    public async Task TheClientLanguageMenuOffersThreeChoicesAndSavesTheChoice()
+    {
+        var paths = new InstallPaths(_root);
+        new HostSettings { Database = { Connection = "Host=127.0.0.1;Port=1;Database=tposeidon;Username=tposeidon" } }.Save(paths);
+        var host = new PanelHost(paths);
+        var window = new MainWindow(host, new PanelPreferences());
+        host.Reload();
+
+        var language = window.GetLogicalDescendants().OfType<Button>()
+            .Select(button => button.ContextMenu)
+            .OfType<ContextMenu>()
+            .SelectMany(menu => menu.Items.OfType<MenuItem>())
+            .Single(item => item.Header is "Client language");
+        Assert.Equal(3, language.Items.Count);
+
+        await host.ChooseClientLanguageAsync(ClientFolder.KoreanService);
+
+        Assert.Equal(ClientFolder.KoreanService, host.ClientLanguage);
+        Assert.Equal(ClientFolder.KoreanService, HostSettings.Load(paths)!.Launch.ServiceName);
+        host.End();
+    }
+
     private static TextBox Box(Control page, int index) => page.GetLogicalDescendants().OfType<TextBox>().ElementAt(index);
 
     private static int FreePort()

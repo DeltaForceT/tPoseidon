@@ -26,7 +26,7 @@ body:
     attributes:
       label: tPoseidon version
       description: "From `tposeidon status`, the panel title bar, or the release file name."
-      placeholder: 0.55.3-beta
+      placeholder: 0.56.0-beta
     validations:
       required: true
 

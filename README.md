@@ -29,7 +29,7 @@ tPoseidon is in beta. These are the rules that matter. The full text is in [BETA
 - **No forks and no redistribution of modified copies during the beta.** Download it, run it, host it for yourself and your community. Don't publish modified builds, forks or other emulators based on it, and don't re-upload the packages.
 - **No wipes.** Your accounts and characters live in your own database. Updates migrate it. Back up before every update.
 - **Bring your own KR 2014 client.** We don't ship it. Never share client or game files in this project's spaces.
-- **Put your version in every bug report**, for example `0.55.3-beta`. `tposeidon status` prints it.
+- **Put your version in every bug report**, for example `0.56.0-beta`. `tposeidon status` prints it.
 - **Report security problems privately.** See [SECURITY.md](SECURITY.md). Don't post them in issues or on the forum.
 - **Be respectful.** Everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
