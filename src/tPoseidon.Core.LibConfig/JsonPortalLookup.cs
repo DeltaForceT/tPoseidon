@@ -7,15 +7,22 @@ public sealed class JsonPortalLookup : IPortalLookup
 {
     private readonly Dictionary<ushort, PortalEntrance[]> _entrancesByMap;
     private readonly Dictionary<(ushort DestMap, ushort FromMap), (ushort X, ushort Y)> _arrivalByPair;
+    private readonly Dictionary<ushort, (ushort X, ushort Y)[]> _entryPointsByMap;
+    private readonly Random _rng;
 
     public JsonPortalLookup(
         IReadOnlyDictionary<ushort, IReadOnlyList<PortalEntrance>> entrancesByMap,
-        IReadOnlyDictionary<(ushort, ushort), (ushort, ushort)> arrivalByPair)
+        IReadOnlyDictionary<(ushort, ushort), (ushort, ushort)> arrivalByPair,
+        IReadOnlyDictionary<ushort, IReadOnlyList<(ushort X, ushort Y)>>? entryPointsByMap = null,
+        Random? rng = null)
     {
         ArgumentNullException.ThrowIfNull(entrancesByMap);
         ArgumentNullException.ThrowIfNull(arrivalByPair);
         _entrancesByMap = entrancesByMap.ToDictionary(kv => kv.Key, kv => kv.Value.ToArray());
         _arrivalByPair = arrivalByPair.ToDictionary(kv => kv.Key, kv => kv.Value);
+        _entryPointsByMap = entryPointsByMap?.ToDictionary(kv => kv.Key, kv => kv.Value.ToArray())
+            ?? new Dictionary<ushort, (ushort X, ushort Y)[]>();
+        _rng = rng ?? Random.Shared;
     }
 
     public int MapCount => _entrancesByMap.Count;
@@ -27,8 +34,12 @@ public sealed class JsonPortalLookup : IPortalLookup
             ? entrances
             : Array.Empty<PortalEntrance>();
 
-    public (ushort X, ushort Y)? FindArrival(ushort fromMapId, ushort destMapId) =>
-        _arrivalByPair.TryGetValue((destMapId, fromMapId), out var spawn) ? spawn : null;
+    public (ushort X, ushort Y) FindArrival(ushort fromMapId, ushort destMapId)
+    {
+        (ushort X, ushort Y)? direct = _arrivalByPair.TryGetValue((destMapId, fromMapId), out var spawn) ? spawn : null;
+        var entryPoints = _entryPointsByMap.TryGetValue(destMapId, out var points) ? points : Array.Empty<(ushort X, ushort Y)>();
+        lock (_rng) return PortalArrivalRule.Resolve(direct, entryPoints, _rng);
+    }
 
     public PortalDestination? FindDestinationWithin(ushort sourceMapId, int posX, int posY, int margin)
     {
@@ -74,10 +85,7 @@ public sealed class JsonPortalLookup : IPortalLookup
 
     private PortalDestination DestinationOf(PortalEntrance hit, ushort sourceMapId)
     {
-        if (!_arrivalByPair.TryGetValue((hit.DestMap, sourceMapId), out var spawn))
-        {
-            spawn = ((ushort)((hit.XMin + hit.XMax) / 2), (ushort)((hit.YMin + hit.YMax) / 2));
-        }
+        var spawn = FindArrival(sourceMapId, hit.DestMap);
         return new PortalDestination
         {
             DestMapId = hit.DestMap,
@@ -98,25 +106,35 @@ public sealed class JsonPortalLookup : IPortalLookup
         ArgumentException.ThrowIfNullOrEmpty(mapDirectory);
         var entrances = new Dictionary<ushort, IReadOnlyList<PortalEntrance>>();
         var arrivals = new Dictionary<(ushort, ushort), (ushort, ushort)>();
+        var entryPoints = new Dictionary<ushort, IReadOnlyList<(ushort X, ushort Y)>>();
         foreach (var map in maps)
         {
             var fileName = map.Md3FileName.Trim();
             if (fileName.Length == 0) continue;
             if (Md3MapReader.ReadMap(tPoseidon.Core.Common.ClientFiles.Combine(mapDirectory, fileName)) is not { } md3) continue;
-            AddMap(map.Id, md3, entrances, arrivals);
+            AddMap(map.Id, md3, entrances, arrivals, entryPoints);
         }
-        return new JsonPortalLookup(entrances, arrivals);
+        return new JsonPortalLookup(entrances, arrivals, entryPoints);
     }
 
     public static void AddMap(
         ushort mapId,
         Md3Map md3,
         Dictionary<ushort, IReadOnlyList<PortalEntrance>> entrances,
-        Dictionary<(ushort, ushort), (ushort, ushort)> arrivals)
+        Dictionary<(ushort, ushort), (ushort, ushort)> arrivals,
+        Dictionary<ushort, IReadOnlyList<(ushort X, ushort Y)>>? entryPoints = null)
     {
         ArgumentNullException.ThrowIfNull(md3);
         ArgumentNullException.ThrowIfNull(entrances);
         ArgumentNullException.ThrowIfNull(arrivals);
+        if (entryPoints is not null)
+        {
+            var entries = md3.Points
+                .Where(point => point.Type == ArrivalPointType)
+                .Select(point => ((ushort)Math.Clamp(point.X, 0, ushort.MaxValue), (ushort)Math.Clamp(point.Y, 0, ushort.MaxValue)))
+                .ToArray();
+            if (entries.Length > 0) entryPoints[mapId] = entries;
+        }
         var list = md3.Ranges
             .Where(range => range.Destination is > 0 and <= ushort.MaxValue)
             .Select(range => new PortalEntrance

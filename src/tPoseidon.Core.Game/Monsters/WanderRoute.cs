@@ -142,12 +142,6 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
                 if (geometry.IsBlocked(nextX, nextY)) continue;
 
                 var diagonal = stepX != 0 && stepY != 0;
-                if (diagonal
-                    && (geometry.IsBlocked(nextX, currentY) || geometry.IsBlocked(currentX, nextY)))
-                {
-                    continue;
-                }
-
                 var next = nextY * width + nextX;
                 if (closed.Contains(next)) continue;
 

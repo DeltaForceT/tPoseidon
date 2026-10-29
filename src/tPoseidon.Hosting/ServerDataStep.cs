@@ -10,6 +10,8 @@ public static class ServerDataStep
 {
     public const string SnapshotBuilderAssembly = "tPoseidon.Tools.BuildWorldSnapshot";
     public const int Steps = 3;
+    public const int DataVersion = 2;
+    public const string DataVersionFile = "data-version.txt";
     private const string SnapshotVariant = "kr2014";
     private const string ZoneRoutingFile = "master-zone-routing.json";
     private const string ZoneRouting = "{\n  \"default\": 2,\n  \"zones\": {\n    \"148\": 2,\n    \"153\": 3\n  }\n}\n";
@@ -41,7 +43,7 @@ public static class ServerDataStep
 
         progress?.Report(new StepProgress(2, Steps, "Reading maps, NPC points, portals and monster tables from the client..."));
         var summary = ServerDataGenerator.Generate(libconfig, mapFolder, paths.ServerData);
-        progress?.Report(new StepProgress(2, Steps, $"{summary.Maps} maps, {summary.NpcPoints} NPC points, {summary.Portals} portals on {summary.PortalMaps} maps, {summary.PoolRows} monster rows on {summary.PoolMaps} maps."));
+        progress?.Report(new StepProgress(2, Steps, $"{summary.Maps} maps, {summary.Portals} portals on {summary.PortalMaps} maps, {summary.PoolRows} monster rows on {summary.PoolMaps} maps."));
 
         var routing = Path.Combine(paths.ServerData, ZoneRoutingFile);
         if (!File.Exists(routing))
@@ -62,5 +64,16 @@ public static class ServerDataStep
         {
             throw new HostingException($"Building the world snapshot failed (exit {result.ExitCode}):{Environment.NewLine}{result.Output}");
         }
+
+        File.WriteAllText(Path.Combine(paths.ServerData, DataVersionFile), DataVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    public static bool IsCurrent(InstallPaths paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        var stamp = Path.Combine(paths.ServerData, DataVersionFile);
+        return File.Exists(stamp)
+            && int.TryParse(File.ReadAllText(stamp).Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var version)
+            && version == DataVersion;
     }
 }

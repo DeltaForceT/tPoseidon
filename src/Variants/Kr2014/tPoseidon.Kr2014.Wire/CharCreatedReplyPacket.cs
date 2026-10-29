@@ -83,7 +83,7 @@ public sealed class CharCreatedReplyPacket
         WriteUInt64Le(buf, CharUidOffset, CharUid);
         buf[SlotOffset] = Slot;
 
-        var nameBytes = Encoding.ASCII.GetBytes(CharacterName ?? string.Empty);
+        var nameBytes = ClientText.Encoding.GetBytes(CharacterName ?? string.Empty);
         if (nameBytes.Length > MaxCharacterNameChars)
         {
             throw new InvalidOperationException(
@@ -141,7 +141,7 @@ public sealed class CharCreatedReplyPacket
 
     private static void WriteNameField(byte[] buf, int offset, int fieldBytes, string value)
     {
-        var bytes = Encoding.ASCII.GetBytes(value);
+        var bytes = ClientText.Encoding.GetBytes(value);
         if (bytes.Length > fieldBytes)
         {
             throw new InvalidOperationException(
@@ -156,7 +156,7 @@ public sealed class CharCreatedReplyPacket
         var slice = buf.Slice(offset, fieldBytes);
         var nul = slice.IndexOf((byte)0);
         var len = nul < 0 ? fieldBytes : nul;
-        return Encoding.ASCII.GetString(slice[..len]);
+        return ClientText.Encoding.GetString(slice[..len]);
     }
 
     private static void WriteUInt16Le(byte[] buf, int offset, ushort value)

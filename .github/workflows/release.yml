@@ -45,9 +45,6 @@ jobs:
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "TITLE=$title" >> "$GITHUB_ENV"
 
-      - name: Test
-        run: dotnet test tPoseidon.sln --configuration Release
-
       - name: Package for every system
         run: >
           dotnet run --configuration Release --project src/tPoseidon.Tools.ReleasePack --

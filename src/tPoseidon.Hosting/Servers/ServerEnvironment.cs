@@ -42,6 +42,7 @@ public static class ServerEnvironment
         if (server.IsShop)
         {
             environment["MT_CASH_MODE"] = settings.ShopCash;
+            environment["MT_UPDATES_DIR"] = paths.Updates;
             environment["MT_CASH_START"] = settings.ShopStartingCash.ToString(inv);
             environment["MT_WEBSHOP_URLS"] = string.Create(inv, $"http://{settings.Network.BindAddress}:{settings.Ports.Shop}");
         }

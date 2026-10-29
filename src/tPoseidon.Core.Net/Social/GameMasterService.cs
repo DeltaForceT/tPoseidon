@@ -291,19 +291,68 @@ public sealed class GameMasterService
         outbox.Notes.Add(rows > 0 ? $"account of '{name}' set to user authority {authority}" : $"account of '{name}' not changed: no such character");
     }
 
-    public static GameMasterOutbox? PresentItem(string name, uint itemId, ushort count, Func<string, ulong?> online)
+    public GameMasterOutbox? PresentItem(ulong gameMaster, string name, uint itemId, ushort count, Func<string, ulong?> online)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(online);
         if (itemId == 0 || count == 0) return null;
-        var outbox = new GameMasterOutbox();
         if (online(name) is not { } receiver)
         {
+            var outbox = new GameMasterOutbox();
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.PresentItemFail, GameMasterFrames.PresentFail(itemId, count, name, (byte)GameMasterFrames.AckPresentNotOnline, _text)));
             outbox.Notes.Add($"present item {itemId} x{count} to '{name}' refused: not online");
             return outbox;
         }
+        return PresentItem(receiver, itemId, count);
+    }
+
+    public static GameMasterOutbox? PresentItem(ulong receiver, uint itemId, ushort count)
+    {
+        if (itemId == 0 || count == 0) return null;
+        var outbox = new GameMasterOutbox();
         outbox.Orders.Add(new PartyOrder(receiver, GameMasterFrames.OrderPresentItem, 0, GameMasterFrames.Present(receiver, itemId, count)));
         outbox.Notes.Add($"present item {itemId} x{count} to 0x{receiver:X}");
+        return outbox;
+    }
+
+    public GameMasterOutbox? NotDelivered(ulong gameMaster, PartyOrder order)
+    {
+        ArgumentNullException.ThrowIfNull(order);
+        if (order.OrderType == GameMasterFrames.OrderPresentItem)
+        {
+            return PresentAnswer(gameMaster, order.Data ?? Array.Empty<byte>(), GameMasterFrames.AckPresentNotOnline);
+        }
+        var (failureOpcode, reason, label) = order.OrderType switch
+        {
+            GameMasterFrames.OrderSummonMonster or GameMasterFrames.OrderSummonMonsterArea => (GameMasterFrames.SummonMonsterFail, (byte)GameMasterFrames.AckFailed, "summon monster"),
+            GameMasterFrames.OrderSetIssueItem => (GameMasterFrames.SetIssueItemFail, (byte)GameMasterFrames.AckFailed, "set issue item"),
+            GameMasterFrames.OrderOxGiveItem => (GameMasterFrames.OxGiveItemFail, (byte)GameMasterFrames.AckNoGameMaster, "OX give item"),
+            GameMasterFrames.OrderSetMusic => (GameMasterFrames.SetMusicFail, (byte)GameMasterFrames.AckFailed, "set music"),
+            GameMasterFrames.OrderSummonNpc => (GameMasterFrames.SummonNpcFail, (byte)0, "summon NPC"),
+            GameMasterFrames.OrderRemoveObject or GameMasterFrames.OrderRemoveOwnMonsters => (GameMasterFrames.RemoveObjectFail, (byte)0, "remove object"),
+            GameMasterFrames.OrderCharInfo => (GameMasterFrames.CharInfoMissing, (byte)0, "character info"),
+            _ => (default(ushort), (byte)0, string.Empty),
+        };
+        if (label.Length == 0) return null;
+        var withReason = order.OrderType is not (GameMasterFrames.OrderSummonNpc or GameMasterFrames.OrderRemoveObject or GameMasterFrames.OrderRemoveOwnMonsters or GameMasterFrames.OrderCharInfo);
+        var outbox = new GameMasterOutbox();
+        outbox.Messages.Add(new CoupleMessage(gameMaster, failureOpcode, withReason ? new[] { reason } : Array.Empty<byte>()));
+        outbox.Notes.Add($"{label} refused: the character is not on a game server");
+        return outbox;
+    }
+
+    public GameMasterOutbox? PresentAnswer(ulong gameMaster, ReadOnlySpan<byte> order, uint result)
+    {
+        if (!GameMasterFrames.TryReadPresent(order, out _, out var itemId, out var count)) return null;
+        var outbox = new GameMasterOutbox();
+        if (result == GameMasterFrames.AckOk)
+        {
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.PresentItemOk, Array.Empty<byte>()));
+            outbox.Notes.Add($"present item {itemId} x{count}: done");
+            return outbox;
+        }
+        outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.PresentItemFail, GameMasterFrames.PresentFail(itemId, count, string.Empty, (byte)result, _text)));
+        outbox.Notes.Add($"present item {itemId} x{count}: refused (reason {result})");
         return outbox;
     }
 

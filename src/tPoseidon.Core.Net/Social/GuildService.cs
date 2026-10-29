@@ -1,5 +1,6 @@
 using System.Text;
 using tPoseidon.Core.Data;
+using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Net.Social;
 
@@ -42,12 +43,16 @@ public sealed class GuildService
     private readonly object _gate = new();
     private readonly Dictionary<ulong, Member> _online = new();
     private readonly IGuildRulesStore _rules;
+    private readonly IGuildShopStore _shop;
+    private readonly GuildShopTables _goods;
     private readonly Encoding _text;
     private readonly TimeProvider _time;
 
-    public GuildService(IGuildRulesStore rules, Encoding text, TimeProvider time)
+    public GuildService(IGuildRulesStore rules, IGuildShopStore shop, GuildShopTables goods, Encoding text, TimeProvider time)
     {
         _rules = rules ?? throw new ArgumentNullException(nameof(rules));
+        _shop = shop ?? throw new ArgumentNullException(nameof(shop));
+        _goods = goods ?? throw new ArgumentNullException(nameof(goods));
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _time = time ?? throw new ArgumentNullException(nameof(time));
     }
@@ -393,6 +398,55 @@ public sealed class GuildService
         return outbox;
     }
 
+    public GuildOutbox ShopBuy(ulong characterId, uint goodsIndex)
+    {
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { State: GuildRules.Joined } member) return outbox;
+            if (!GuildShopRules.MayBuy(member.Rights)) return ShopRefused(outbox, characterId, GuildShopErrors.NotAuthority);
+            if (goodsIndex > int.MaxValue
+                || !_goods.Goods.TryGetValue((int)goodsIndex, out var good)
+                || GuildShopRules.TypeOf(good.Type) is not { } type)
+            {
+                return ShopRefused(outbox, characterId, GuildShopErrors.NotFoundGoods);
+            }
+            var receipt = _shop.Purchase(new GuildShopOrder(member.GuildCode, member.Name, good.Index, type, good.Price));
+            if (receipt.Error != GuildShopErrors.None) return ShopRefused(outbox, characterId, receipt.Error);
+            var detail = type is GuildShopGoodsType.Depot or GuildShopGoodsType.DepotExpansion ? _rules.Detail(member.GuildCode) : null;
+            foreach (var recipient in OnlineMembers(member.GuildCode))
+            {
+                outbox.Add(new GuildMessage(recipient.CharacterId, GuildShopFrames.Bought, GuildShopFrames.BoughtFor(goodsIndex)));
+                if (type == GuildShopGoodsType.MemberExpansion)
+                {
+                    outbox.Add(new GuildMessage(recipient.CharacterId, GuildShopFrames.MaxMembers, GuildShopFrames.MaxMembersFor(receipt.After.MaxMembers)));
+                }
+                else if (detail is not null)
+                {
+                    AddState(outbox, recipient, detail);
+                }
+            }
+        }
+        return outbox;
+    }
+
+    public GuildOutbox ShopHistory(ulong characterId)
+    {
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { State: GuildRules.Joined } member) return outbox;
+            outbox.Add(new GuildMessage(characterId, GuildShopFrames.HistoryResult, GuildShopFrames.HistoryFor(_shop.History(member.GuildCode), _text)));
+        }
+        return outbox;
+    }
+
+    private static GuildOutbox ShopRefused(GuildOutbox outbox, ulong characterId, int error)
+    {
+        outbox.Add(new GuildMessage(characterId, GuildShopFrames.Error, GuildShopFrames.ErrorFor(error)));
+        return outbox;
+    }
+
     public GuildOutbox Dissolve(ulong characterId)
     {
         var outbox = new GuildOutbox();
@@ -509,11 +563,7 @@ public sealed class GuildService
             var gradeIndex = GradeIndexOf(member.GradeCode);
             outbox.Add(new GuildMessage(id, GuildFrames.OwnInfoResult,
                 GuildFrames.OwnInfoFor(member.GuildCode, id, member.Nick, gradeIndex, member.NewNotice, inGuild: true, _text)));
-            var grades = Enumerable.Range(1, GuildFrames.GradeCount)
-                .Select(code => detail.Grades.FirstOrDefault(g => g.GradeCode == code)?.GradeName ?? string.Empty)
-                .ToArray();
-            var state = new GuildStateView(BlockOf(member, detail), (ushort)detail.MaxMembers, gradeIndex, member.Rights, grades);
-            outbox.Add(new GuildMessage(id, GuildFrames.State, GuildFrames.StateFor(state, _text)));
+            AddState(outbox, member, detail);
             return;
         }
         if (member.State == GuildRules.Applying)
@@ -522,6 +572,16 @@ public sealed class GuildService
             return;
         }
         outbox.Add(new GuildMessage(id, GuildFrames.OwnInfoResult, GuildFrames.OwnInfoFor(0, id, string.Empty, 0, false, inGuild: false, _text)));
+    }
+
+    private void AddState(GuildOutbox outbox, Member member, GuildDetail detail)
+    {
+        var grades = Enumerable.Range(1, GuildFrames.GradeCount)
+            .Select(code => detail.Grades.FirstOrDefault(g => g.GradeCode == code)?.GradeName ?? string.Empty)
+            .ToArray();
+        var state = new GuildStateView(
+            BlockOf(member, detail), (ushort)detail.MaxMembers, GradeIndexOf(member.GradeCode), member.Rights, grades, (byte)detail.DepotTabs, (uint)detail.Coins);
+        outbox.Add(new GuildMessage(member.CharacterId, GuildFrames.State, GuildFrames.StateFor(state, _text)));
     }
 
     private static GuildBlock BlockOf(Member member, GuildDetail detail) =>

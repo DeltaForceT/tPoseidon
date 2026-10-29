@@ -366,7 +366,7 @@ internal sealed class HarconController : IDisposable
             case HarconRules.SkillFunction when args.Count >= 1:
                 var harcon = state.Defended.Concat(state.Targets).Select(_monsters.Get).OfType<MonsterEntity>()
                     .Where(monster => !monster.IsDead)
-                    .OrderBy(monster => Math.Abs(monster.CurrentX - npc.Spawn.X) + Math.Abs(monster.CurrentY - npc.Spawn.Y))
+                    .OrderBy(monster => Math.Abs(monster.DestinationX - npc.Spawn.X) + Math.Abs(monster.DestinationY - npc.Spawn.Y))
                     .FirstOrDefault();
                 if (harcon is null) return NpcScript.Refused;
                 _castTactic(harcon.EntityId, args[0]);

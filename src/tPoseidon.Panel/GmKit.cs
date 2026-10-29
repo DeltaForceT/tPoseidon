@@ -2,6 +2,8 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -172,6 +174,22 @@ public sealed class GmKit
         };
     }
 
+    public static Control Tab(string description, params (string Heading, Control[] Sections)[] groups)
+    {
+        var page = new StackPanel { Spacing = 10 };
+        page.Children.Add(new TextBlock { Text = description, Foreground = Tokens.TextSecondary, TextWrapping = TextWrapping.Wrap });
+        foreach (var (heading, sections) in groups)
+        {
+            page.Children.Add(new TextBlock { Text = heading.ToUpperInvariant(), FontSize = Tokens.FontSizeCaption, FontWeight = FontWeight.SemiBold, Foreground = Tokens.Accent, Margin = new Thickness(2, 8, 0, -2) });
+            foreach (var section in sections)
+            {
+                page.Children.Add(section);
+            }
+        }
+
+        return page;
+    }
+
     public static ComboBox Choice(IEnumerable<string> items, double width = double.NaN) =>
         new() { ItemsSource = items.ToList(), SelectedIndex = 0, Height = 28, MinHeight = 0, Width = width, FontSize = Tokens.FontSizeBody, VerticalContentAlignment = VerticalAlignment.Center };
 
@@ -277,35 +295,46 @@ public sealed class GmKit
     }
 }
 
-public sealed record GmPick(string Id, string Text);
+public sealed record GmPick(string Id, string Text, GmArt? Art = null);
 
 public sealed class GmPicker : StackPanel
 {
+    public const double IconRowBox = 36;
+    public const double SpriteRowBox = 56;
+    public const double PreviewBox = 120;
+    public const int PreviewZoom = 4;
+
     private readonly GmModel _model;
     private readonly Func<GameCatalog, string, IEnumerable<GmPick>> _query;
-    private readonly ListBox _list = new() { Height = 132, Background = Tokens.Surface0, BorderBrush = Tokens.BorderSubtle, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), FontSize = Tokens.FontSizeBody };
+    private readonly ListBox _list = new() { Height = 150, Background = Tokens.Surface0, BorderBrush = Tokens.BorderSubtle, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), FontSize = Tokens.FontSizeBody };
     private readonly TextBlock _count = new() { FontSize = Tokens.FontSizeCaption, Foreground = Tokens.TextMuted, TextWrapping = TextWrapping.Wrap };
     private readonly DispatcherTimer _debounce = new() { Interval = TimeSpan.FromMilliseconds(220) };
+    private readonly GmPictureSlot? _preview;
     private GameCatalog? _catalog;
 
-    public GmPicker(GmModel model, string what, string idLabel, Func<GameCatalog, string, IEnumerable<GmPick>> query, params Control[] filters)
+    public GmPicker(GmModel model, string what, string idLabel, Func<GameCatalog, string, IEnumerable<GmPick>> query, bool pictures, params Control[] filters)
     {
         _model = model;
         _query = query;
         Spacing = 4;
         Search = GmKit.Box($"Search {what} by name or id", 240);
         Id = GmKit.Box(idLabel, 110);
+        _list.ItemTemplate = new FuncDataTemplate<GmPick>((pick, _) => Row(pick), true);
         Search.TextChanged += (_, _) => Restart();
-        _debounce.Tick += (_, _) =>
+        Search.KeyDown += (_, e) =>
         {
-            _debounce.Stop();
-            Show();
+            if (e.Key == Key.Enter)
+            {
+                Flush();
+            }
         };
+        _debounce.Tick += (_, _) => Flush();
         _list.SelectionChanged += (_, _) =>
         {
-            if (_list.SelectedItem is ListBoxItem { Tag: GmPick pick })
+            if (_list.SelectedItem is GmPick pick)
             {
                 Id.Text = pick.Id;
+                _preview?.Show(pick.Art);
                 Picked?.Invoke(pick);
             }
         };
@@ -313,7 +342,21 @@ public sealed class GmPicker : StackPanel
         line.AddRange(filters);
         line.Add(GmKit.Field(idLabel, Id));
         Children.Add(GmKit.Line([.. line]));
-        Children.Add(_list);
+        if (pictures)
+        {
+            _preview = new GmPictureSlot(model, PreviewBox, PreviewZoom);
+            var frame = new Border { Child = _preview, Background = Tokens.Surface0, BorderBrush = Tokens.BorderSubtle, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top };
+            var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            body.Children.Add(_list);
+            Grid.SetColumn(frame, 1);
+            body.Children.Add(frame);
+            Children.Add(body);
+        }
+        else
+        {
+            Children.Add(_list);
+        }
+
         Children.Add(_count);
         AttachedToVisualTree += async (_, _) =>
         {
@@ -334,10 +377,31 @@ public sealed class GmPicker : StackPanel
 
     public TextBox Id { get; }
 
+    public void Flush()
+    {
+        _debounce.Stop();
+        Show();
+    }
+
     public void Restart()
     {
         _debounce.Stop();
         _debounce.Start();
+    }
+
+    private Control Row(GmPick pick)
+    {
+        var text = new TextBlock { Text = pick.Text, Margin = new Thickness(8, 3), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        if (pick.Art is not { } art)
+        {
+            return text;
+        }
+
+        var box = art.Standing ? SpriteRowBox : IconRowBox;
+        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+        line.Children.Add(new GmPictureSlot(_model, box, 1, art));
+        line.Children.Add(text);
+        return line;
     }
 
     private void Show()
@@ -348,9 +412,7 @@ public sealed class GmPicker : StackPanel
         }
 
         var matches = _query(_catalog, Search.Text ?? "").Take(GmKit.PickerRows + 1).ToList();
-        _list.ItemsSource = matches.Take(GmKit.PickerRows)
-            .Select(pick => new ListBoxItem { Tag = pick, Content = new TextBlock { Text = pick.Text, Margin = new Thickness(8, 3), TextTrimming = TextTrimming.CharacterEllipsis } })
-            .ToList();
+        _list.ItemsSource = matches.Take(GmKit.PickerRows).ToList();
         _count.Text = _catalog.Problem
             ?? (matches.Count == 0 ? "Nothing matches. You can still type an id."
             : matches.Count > GmKit.PickerRows ? string.Create(CultureInfo.InvariantCulture, $"Showing the first {GmKit.PickerRows} matches; type more to narrow it down.")

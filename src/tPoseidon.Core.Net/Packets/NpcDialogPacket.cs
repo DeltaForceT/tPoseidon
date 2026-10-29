@@ -17,7 +17,7 @@ public sealed class NpcDialogPacket
     public byte[] EncodePayload()
     {
         ArgumentNullException.ThrowIfNull(Text);
-        var textBytes = Encoding.ASCII.GetBytes(Text);
+        var textBytes = ClientText.Encoding.GetBytes(Text);
 
         var payload = new byte[5 + textBytes.Length + TrailingPadBytes];
         payload[0] = (byte)(EntityId & 0xFF);
@@ -65,7 +65,7 @@ public sealed class NpcDialogPacket
 
             var end = textRegion.Length;
             while (end > 0 && textRegion[end - 1] == 0) end--;
-            text = Encoding.ASCII.GetString(textRegion[..end]);
+            text = ClientText.Encoding.GetString(textRegion[..end]);
         }
         return new NpcDialogPacket
         {

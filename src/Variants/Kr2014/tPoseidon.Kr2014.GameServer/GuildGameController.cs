@@ -2,6 +2,7 @@ using System.Text;
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Guild;
+using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.Game.Warp;
 using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.Dialogs;
@@ -16,7 +17,15 @@ internal sealed class GuildGameController : IDisposable
     private readonly Func<GuildGameTypeTables> _types;
     private readonly Func<IReadOnlyCollection<InGameSessionState>> _sessions;
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
-    private readonly Func<InGameSessionState, Task> _revive;
+    private readonly Func<InGameSessionState, (ushort X, ushort Y)?, Task> _revive;
+    private readonly MonsterManager _monsters;
+    private readonly IReadOnlyDictionary<ushort, ZoneGeometry> _geometry;
+    private readonly Func<MonsterMatchTables> _monsterTables;
+    private readonly Func<MonsterEntity, byte[]> _spawnFrame;
+    private readonly Func<ushort, byte[]> _despawnFrame;
+    private readonly object _killGate = new();
+    private readonly List<(MonsterEntity Monster, ushort Killer)> _monsterKills = new();
+    private readonly Dictionary<uint, HashSet<ulong>> _watchers = new();
     private readonly Encoding _text;
     private readonly string _logTag;
     private readonly Dictionary<uint, GuildMatch> _matches = new();
@@ -24,31 +33,51 @@ internal sealed class GuildGameController : IDisposable
     private readonly Dictionary<uint, MatchEnd> _awaitingLadder = new();
     private readonly SemaphoreSlim _sync = new(1, 1);
     private readonly Random _rng = new();
+    private readonly Dictionary<uint, DateTimeOffset> _firstSummonAt = new();
+    private readonly Dictionary<uint, DateTimeOffset> _boardAt = new();
+    private readonly Dictionary<(uint Room, ulong Character), (int Region, int Milliseconds)> _dwell = new();
     private DateTimeOffset _lastTick;
+
+    private const int SummonDwellMilliseconds = 2500;
+    private const int FirstSummonDelayMilliseconds = 2000;
+    private const int BoardPeriodMilliseconds = 1000;
+    private const int FirstTrigger = 0;
+    private const byte SummonFromRegion = 0;
+    private const byte SummonFromTimer = 1;
 
     public GuildGameController(
         SystemServerLink link, Func<GuildGameTypeTables> types, Func<IReadOnlyCollection<InGameSessionState>> sessions,
-        Func<ushort, Opcode, byte[], Task> sendToMap, Func<InGameSessionState, Task> revive, Encoding text, string logTag)
+        Func<ushort, Opcode, byte[], Task> sendToMap, Func<InGameSessionState, (ushort X, ushort Y)?, Task> revive,
+        MonsterManager monsters, IReadOnlyDictionary<ushort, ZoneGeometry> geometry, Func<MonsterMatchTables> monsterTables,
+        Func<MonsterEntity, byte[]> spawnFrame, Func<ushort, byte[]> despawnFrame, Encoding text, string logTag)
     {
         _link = link ?? throw new ArgumentNullException(nameof(link));
         _types = types ?? throw new ArgumentNullException(nameof(types));
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
         _sendToMap = sendToMap ?? throw new ArgumentNullException(nameof(sendToMap));
         _revive = revive ?? throw new ArgumentNullException(nameof(revive));
+        _monsters = monsters ?? throw new ArgumentNullException(nameof(monsters));
+        _geometry = geometry ?? throw new ArgumentNullException(nameof(geometry));
+        _monsterTables = monsterTables ?? throw new ArgumentNullException(nameof(monsterTables));
+        _spawnFrame = spawnFrame ?? throw new ArgumentNullException(nameof(spawnFrame));
+        _despawnFrame = despawnFrame ?? throw new ArgumentNullException(nameof(despawnFrame));
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
         _link.OrderReceived += OrderAsync;
+        _monsters.MonsterKilled += OnMonsterKilled;
     }
 
     public void Dispose()
     {
         _link.OrderReceived -= OrderAsync;
+        _monsters.MonsterKilled -= OnMonsterKilled;
         _sync.Dispose();
     }
 
     private Task OrderAsync(OfficerOrder order, CancellationToken ct) => order.OrderType switch
     {
         GuildGameOrders.OrderEnterMatch => Locked(() => EnterMatchAsync(order)),
+        GuildGameOrders.OrderWatchMatch => Locked(() => WatchMatchAsync(order)),
         GuildGameOrders.OrderLobbyNotice => _sendToMap(GuildGameOrders.LobbyZone, Opcode.S2C_GUILD_GAME_ROOM_NOTICE, order.Data),
         GuildGameOrders.OrderStartNotice => _sendToMap(GuildGameOrders.LobbyZone, Opcode.S2C_GUILD_GAME_START_NOTICE, order.Data),
         GuildGameOrders.OrderResultNotice => _sendToMap(GuildGameOrders.LobbyZone, Opcode.S2C_GUILD_GAME_RESULT_NOTICE, order.Data),
@@ -75,7 +104,8 @@ internal sealed class GuildGameController : IDisposable
         }
         if (!_matches.TryGetValue(enter.RoomKey, out var match))
         {
-            match = new GuildMatch(enter.RoomKey, enter.GameType, (ushort)map, type.TimeLimit, enter.NoLadderFlag);
+            var monsterMatch = enter.GameType == GuildGameRules.MonsterMatchType ? new MonsterMatch(_monsterTables(), enter.ScoreGoal) : null;
+            match = new GuildMatch(enter.RoomKey, enter.GameType, (ushort)map, type.TimeLimit, enter.NoLadderFlag, monsterMatch);
             _matches[enter.RoomKey] = match;
         }
         var team = match.AddSide(enter.GuildCode, enter.GuildName, order.CharacterId, enter.League);
@@ -92,6 +122,55 @@ internal sealed class GuildGameController : IDisposable
             await WarpAsync(member, match.MapId).ConfigureAwait(false);
         }
         Console.WriteLine($"{_logTag} [guild game] room {enter.RoomKey}: guild {enter.GuildCode} '{enter.GuildName}' is team {team} on map {match.MapId} ({entered}/{enter.Members.Count} members moved)");
+    }
+
+    private async Task WatchMatchAsync(OfficerOrder order)
+    {
+        if (GuildGameOrders.ReadWatchMatch(order.Data) is not { } roomKey)
+        {
+            Console.WriteLine($"{_logTag} [guild game] ORDER 0xEA for 0x{order.CharacterId:X} not read ({order.Data.Length} B)");
+            return;
+        }
+        if (Session(order.CharacterId) is not { } watcher || watcher.MapId != GuildGameOrders.LobbyZone)
+        {
+            Console.WriteLine($"{_logTag} [guild game] ORDER 0xEA room {roomKey}: 0x{order.CharacterId:X} is not in the lobby {GuildGameOrders.LobbyZone}");
+            return;
+        }
+        if (!_matches.TryGetValue(roomKey, out var match) || match.State >= GuildMatchState.Close)
+        {
+            Console.WriteLine($"{_logTag} [guild game] ORDER 0xEA room {roomKey}: no match is running for 0x{order.CharacterId:X}");
+            return;
+        }
+        if (MatchOf(order.CharacterId) is not null) return;
+        if (!_watchers.TryGetValue(roomKey, out var watching)) _watchers[roomKey] = watching = new HashSet<ulong>();
+        watching.Add(order.CharacterId);
+        await WarpAsync(watcher, match.MapId, WatcherArrival(match.MapId)).ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} [guild game] room {roomKey}: 0x{order.CharacterId:X} watches on map {match.MapId}");
+    }
+
+    private (ushort X, ushort Y)? WatcherArrival(ushort mapId)
+    {
+        if (!_geometry.TryGetValue(mapId, out var geometry) || geometry.MaxX <= geometry.MinX || geometry.MaxY <= geometry.MinY) return null;
+        return ((ushort)Math.Clamp((geometry.MaxX - geometry.MinX) / 2 + geometry.MinX, 0, ushort.MaxValue),
+            (ushort)Math.Clamp((geometry.MaxY - geometry.MinY) / 2 + geometry.MinY, 0, ushort.MaxValue));
+    }
+
+    private uint? WatchedRoom(ulong characterId)
+    {
+        foreach (var (room, watching) in _watchers)
+        {
+            if (watching.Contains(characterId)) return room;
+        }
+        return null;
+    }
+
+    private void StopWatching(ulong characterId)
+    {
+        foreach (var room in _watchers.Keys.ToArray())
+        {
+            _watchers[room].Remove(characterId);
+            if (_watchers[room].Count == 0) _watchers.Remove(room);
+        }
     }
 
     public Task ReadyAsync(InGameSessionState st) => Locked(async () =>
@@ -112,6 +191,12 @@ internal sealed class GuildGameController : IDisposable
 
     public Task BadQuitAsync(InGameSessionState st) => Locked(async () =>
     {
+        if (st.Character is { } watcher && WatchedRoom(watcher.CharacterId) is not null)
+        {
+            StopWatching(watcher.CharacterId);
+            await WarpAsync(st, GuildGameOrders.LobbyZone).ConfigureAwait(false);
+            return;
+        }
         if (st.Character is not { } character || MatchOf(character.CharacterId) is not { } match) return;
         match.BadQuit(character.CharacterId);
         Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: 0x{st.PlayerEntityId:X4} quit (state {match.State})");
@@ -120,6 +205,12 @@ internal sealed class GuildGameController : IDisposable
 
     public Task DenyAsync(InGameSessionState st) => Locked(async () =>
     {
+        if (st.Character is { } watcher && WatchedRoom(watcher.CharacterId) is not null)
+        {
+            StopWatching(watcher.CharacterId);
+            await WarpAsync(st, GuildGameOrders.LobbyZone).ConfigureAwait(false);
+            return;
+        }
         if (st.Character is not { } character || MatchOf(character.CharacterId) is not { } match) return;
         match.Leave(character.CharacterId);
         Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: 0x{st.PlayerEntityId:X4} left the room");
@@ -134,18 +225,27 @@ internal sealed class GuildGameController : IDisposable
         {
             await SendMatchAsync(match, Opcode.S2C_GUILD_GAME_KILL, GuildGameFrames.Kill(match.GameType, kill.KillerId, kill.VictimId, kill.RespawnFlag)).ConfigureAwait(false);
         }
+        else
+        {
+            await SendMatchAsync(match, Opcode.S2C_GUILD_GAME_KILL, GuildGameFrames.MonsterMatchPlayerKill(kill.VictimId, kill.KillerId, kill.RespawnFlag)).ConfigureAwait(false);
+            await SendMonsterBoardAsync(match).ConfigureAwait(false);
+        }
         Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: kills {match.TeamKills[0]}/{match.TeamKills[1]}, deaths {match.TeamDeaths[0]}/{match.TeamDeaths[1]}");
     });
 
     public Task EnteredZoneAsync(InGameSessionState st) => Locked(() =>
     {
-        if (st.Character is { } character && MatchOf(character.CharacterId) is { } match && st.MapId != match.MapId) match.Leave(character.CharacterId);
+        if (st.Character is not { } character) return Task.CompletedTask;
+        if (MatchOf(character.CharacterId) is { } match && st.MapId != match.MapId) match.Leave(character.CharacterId);
+        if (WatchedRoom(character.CharacterId) is { } room && (!_matches.TryGetValue(room, out var watched) || st.MapId != watched.MapId)) StopWatching(character.CharacterId);
         return Task.CompletedTask;
     });
 
     public Task LeftAsync(InGameSessionState st) => Locked(() =>
     {
-        if (st.Character is { } character && MatchOf(character.CharacterId) is { } match) match.Leave(character.CharacterId);
+        if (st.Character is not { } character) return Task.CompletedTask;
+        StopWatching(character.CharacterId);
+        if (MatchOf(character.CharacterId) is { } match) match.Leave(character.CharacterId);
         return Task.CompletedTask;
     });
 
@@ -153,11 +253,125 @@ internal sealed class GuildGameController : IDisposable
     {
         var elapsed = _lastTick == default ? 0 : (int)Math.Clamp((now - _lastTick).TotalMilliseconds, 0, int.MaxValue);
         _lastTick = now;
+        var kills = DrainMonsterKills();
         foreach (var match in _matches.Values.ToArray())
         {
             foreach (var raised in match.Tick(elapsed)) await ApplyAsync(match, raised, now).ConfigureAwait(false);
+            if (match.Monsters is not null && match.State == GuildMatchState.Battle) await TickMonstersAsync(match, elapsed, now, kills).ConfigureAwait(false);
         }
     });
+
+    private List<(MonsterEntity Monster, ushort Killer)> DrainMonsterKills()
+    {
+        lock (_killGate)
+        {
+            var drained = _monsterKills.ToList();
+            _monsterKills.Clear();
+            return drained;
+        }
+    }
+
+    private void OnMonsterKilled(MonsterEntity monster, ushort killer)
+    {
+        lock (_killGate) _monsterKills.Add((monster, killer));
+    }
+
+    private async Task TickMonstersAsync(GuildMatch match, int elapsed, DateTimeOffset now, List<(MonsterEntity Monster, ushort Killer)> kills)
+    {
+        var monsters = match.Monsters!;
+        if (_firstSummonAt.TryGetValue(match.RoomKey, out var due) && now >= due)
+        {
+            _firstSummonAt.Remove(match.RoomKey);
+            if (monsters.Touch(FirstTrigger) is { } first) await SummonAsync(match, first, SummonFromTimer).ConfigureAwait(false);
+        }
+        foreach (var (monster, killer) in kills)
+        {
+            if (monsters.MonsterKilled(monster.EntityId, KillerCharacter(killer)) is not { } kill) continue;
+            await SendMatchAsync(match, Opcode.S2C_GUILD_GAME_KILL,
+                GuildGameFrames.MonsterKill(kill.SameTeam, (ushort)kill.MonsterId, kill.ObjectId, kill.KillerId)).ConfigureAwait(false);
+            await SendMonsterBoardAsync(match).ConfigureAwait(false);
+        }
+        if (!_geometry.TryGetValue(match.MapId, out var geometry)) return;
+        foreach (var fighter in match.Fighters.ToArray())
+        {
+            var key = (match.RoomKey, fighter.CharacterId);
+            if (Session(fighter.CharacterId) is not { IsDead: false } session
+                || geometry.RegionContaining(ZoneGeometry.RegionTypeMonsterAppearance, session.PlayerX, session.PlayerY) is not { } region)
+            {
+                _dwell.Remove(key);
+                continue;
+            }
+            var spent = _dwell.TryGetValue(key, out var known) && known.Region == region.Id ? known.Milliseconds + elapsed : elapsed;
+            _dwell[key] = (region.Id, spent);
+            if (spent > SummonDwellMilliseconds && monsters.Touch(region.Id) is { } touched) await SummonAsync(match, touched, SummonFromRegion).ConfigureAwait(false);
+        }
+        if (!_boardAt.TryGetValue(match.RoomKey, out var boardDue) || now >= boardDue)
+        {
+            _boardAt[match.RoomKey] = now.AddMilliseconds(BoardPeriodMilliseconds);
+            await SendMonsterBoardAsync(match).ConfigureAwait(false);
+        }
+    }
+
+    private ulong KillerCharacter(ushort killerEntity) =>
+        _sessions().FirstOrDefault(session => session.PlayerEntityId == killerEntity)?.Character?.CharacterId ?? 0;
+
+    private async Task SummonAsync(GuildMatch match, MatchSummon summon, byte flag)
+    {
+        _geometry.TryGetValue(match.MapId, out var geometry);
+        for (var team = 0; team < GuildGameRules.Teams; team++)
+        {
+            var home = geometry?.Points.FirstOrDefault(point => point.Type == ZoneGeometry.PointTypeRegionSpawn && point.Id == team + 1);
+            if (home is not { } spot)
+            {
+                Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: map {match.MapId} has no monster spawn point {team + 1}");
+                continue;
+            }
+            var monster = _monsters.Spawn(summon.MonsterId, match.MapId,
+                (ushort)Math.Clamp(spot.X, 0, ushort.MaxValue), (ushort)Math.Clamp(spot.Y, 0, ushort.MaxValue), null, null, team + 1);
+            if (monster is null) continue;
+            summon.Monsters[team] = monster.EntityId;
+            await _sendToMap(match.MapId, Opcode.NPC_SPAWN, _spawnFrame(monster)).ConfigureAwait(false);
+        }
+        await SendMatchAsync(match, Opcode.S2C_GUILD_GAME_MONSTER_SUMMON,
+            GuildGameFrames.MonsterSummon((byte)summon.TriggerId, flag, summon.Monsters[0] ?? 0, summon.Monsters[1] ?? 0)).ConfigureAwait(false);
+        await SendMonsterBoardAsync(match).ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: trigger {summon.TriggerId} summons monster {summon.MonsterId} for both teams");
+    }
+
+    private async Task RemoveSummonedAsync(GuildMatch match, IEnumerable<ushort> entities)
+    {
+        foreach (var entity in entities)
+        {
+            if (_monsters.Remove(entity)) await _sendToMap(match.MapId, Opcode.S2C_ENTITY_DESPAWN, _despawnFrame(entity)).ConfigureAwait(false);
+        }
+    }
+
+    private async Task SendMonsterBoardAsync(GuildMatch match)
+    {
+        if (match.Monsters is not { } monsters) return;
+        var sides = match.Sides.Select(side => new GuildScoreSide(side.GuildCode, side.GuildName)).ToArray();
+        var entries = new List<GuildMonsterScoreEntry>();
+        foreach (var fighter in match.Fighters)
+        {
+            if (Session(fighter.CharacterId) is not { Character: { } character } session) continue;
+            entries.Add(new GuildMonsterScoreEntry(
+                (byte)fighter.Team, (ushort)session.PlayerCharacterType, (ushort)(session.Stats?.Level ?? character.Level), character.Name,
+                fighter.CharacterId, 0, Clamp16(fighter.Score), Clamp16(fighter.Kills), Clamp16(fighter.Deaths), Clamp16(fighter.WrongKills)));
+        }
+        var tallies = new IReadOnlyList<BossTally>[] { monsters.Tally(0), monsters.Tally(1) };
+        var live = new IReadOnlyList<GuildSummonLine>[GuildGameRules.Teams];
+        for (var team = 0; team < GuildGameRules.Teams; team++)
+        {
+            live[team] = monsters.Summons
+                .Where(summon => summon.Monsters[team] is not null && !summon.Dead[team])
+                .Select(summon => new GuildSummonLine(summon.Monsters[team]!.Value, summon.MonsterId, (ushort)Math.Clamp(summon.SecondsLeft, 0, ushort.MaxValue)))
+                .ToArray();
+        }
+        var payload = GuildGameFrames.MonsterScoreBoard(match.RoomKey, sides, (uint)Math.Max(match.SecondsLeft, 0), entries, tallies, live, _text);
+        await SendMatchAsync(match, Opcode.S2C_GUILD_GAME_SCORE, payload).ConfigureAwait(false);
+    }
+
+    private static ushort Clamp16(int value) => (ushort)Math.Clamp(value, 0, ushort.MaxValue);
 
     private async Task ApplyAsync(GuildMatch match, GuildMatchEvent raised, DateTimeOffset now)
     {
@@ -176,17 +390,29 @@ internal sealed class GuildGameController : IDisposable
                     modes.Add(new GuildGameFighterMode(session.PlayerEntityId, session.PvpMode));
                 }
                 await SendMatchAsync(match, Opcode.S2C_GUILD_GAME_START, GuildGameFrames.BattleStart(modes)).ConfigureAwait(false);
-                if (match.GameType <= GuildGameRules.DeathMatch) await SendScoreBoardAsync(match).ConfigureAwait(false);
+                if (match.GameType <= GuildGameRules.DeathMatch)
+                {
+                    await SendScoreBoardAsync(match).ConfigureAwait(false);
+                }
+                else
+                {
+                    _firstSummonAt[match.RoomKey] = now.AddMilliseconds(FirstSummonDelayMilliseconds);
+                    await SendMonsterBoardAsync(match).ConfigureAwait(false);
+                }
                 Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: battle on map {match.MapId}, {modes.Count} fighters, {match.SecondsLeft} s");
                 break;
             case GuildMatchRespawn respawn:
                 foreach (var characterId in respawn.CharacterIds)
                 {
-                    if (Session(characterId) is { IsDead: true } fallen) await _revive(fallen).ConfigureAwait(false);
+                    if (Session(characterId) is { IsDead: true } fallen) await _revive(fallen, RespawnPoint(match, characterId)).ConfigureAwait(false);
                 }
+                break;
+            case GuildMatchSummonsExpired expired:
+                await RemoveSummonedAsync(match, expired.Expired.Select(line => line.Monster)).ConfigureAwait(false);
                 break;
             case GuildMatchEnded ended:
                 var end = ended.End;
+                await ClearMonsterMatchAsync(match).ConfigureAwait(false);
                 if (_link.IsConnected)
                 {
                     _awaitingLadder[match.RoomKey] = end;
@@ -210,10 +436,15 @@ internal sealed class GuildGameController : IDisposable
                     if (Session(fighter.CharacterId) is { } session) await WarpAsync(session, GuildGameOrders.LobbyZone).ConfigureAwait(false);
                     match.Leave(fighter.CharacterId);
                 }
+                foreach (var watcherId in _watchers.GetValueOrDefault(match.RoomKey)?.ToArray() ?? Array.Empty<ulong>())
+                {
+                    if (Session(watcherId) is { } watching) await WarpAsync(watching, GuildGameOrders.LobbyZone).ConfigureAwait(false);
+                }
                 Forget(match);
                 Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey} closed");
                 break;
             case GuildMatchInvalid:
+                await ClearMonsterMatchAsync(match).ConfigureAwait(false);
                 await _link.SendAsync(GuildGameOrders.RoomInvalid, GuildGameOrders.RoomInvalidFor(match.GameType, match.RoomKey), default).ConfigureAwait(false);
                 Forget(match);
                 Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: no fighters left, room invalid");
@@ -252,8 +483,24 @@ internal sealed class GuildGameController : IDisposable
     private Task SendResultAsync(GuildMatch match, MatchEnd end, GuildResultSide team0, GuildResultSide team1) =>
         SendMatchAsync(match, Opcode.S2C_GUILD_GAME_RESULT, GuildGameFrames.Result((byte)GuildMatch.WinnerTeam(end), end.Result, end.Reason, team0, team1));
 
+    private (ushort X, ushort Y)? RespawnPoint(GuildMatch match, ulong characterId)
+    {
+        if (match.FighterOf(characterId) is not { } fighter || !_geometry.TryGetValue(match.MapId, out var geometry)) return null;
+        return GuildArenaSpawn.Pick(geometry, fighter.Team, bound => { lock (_rng) return _rng.Next(bound); });
+    }
+
+    private async Task ClearMonsterMatchAsync(GuildMatch match)
+    {
+        if (match.Monsters is not { } monsters) return;
+        await RemoveSummonedAsync(match, monsters.Summons.SelectMany(summon => summon.Monsters).OfType<ushort>().ToArray()).ConfigureAwait(false);
+    }
+
     private void Forget(GuildMatch match)
     {
+        _watchers.Remove(match.RoomKey);
+        _firstSummonAt.Remove(match.RoomKey);
+        _boardAt.Remove(match.RoomKey);
+        foreach (var key in _dwell.Keys.Where(key => key.Room == match.RoomKey).ToArray()) _dwell.Remove(key);
         _awaitingLadder.Remove(match.RoomKey);
         _matches.Remove(match.RoomKey);
         _battleBegan.Remove(match.RoomKey);
@@ -291,12 +538,16 @@ internal sealed class GuildGameController : IDisposable
         {
             if (Session(fighter.CharacterId) is { } session) await SendAsync(session, opcode, payload).ConfigureAwait(false);
         }
+        foreach (var watcherId in _watchers.GetValueOrDefault(match.RoomKey)?.ToArray() ?? Array.Empty<ulong>())
+        {
+            if (Session(watcherId) is { } watching) await SendAsync(watching, opcode, payload).ConfigureAwait(false);
+        }
     }
 
-    private static Task WarpAsync(InGameSessionState st, ushort zone)
+    private static Task WarpAsync(InGameSessionState st, ushort zone, (ushort X, ushort Y)? position = null)
     {
         if (st.MapId == zone || st.RequestZoneChange is not { } requestZoneChange) return Task.CompletedTask;
-        return requestZoneChange(new ZoneChangeRequest(zone, TeleportArrival.ChangeZoneType, null, TimeSpan.Zero, null), default);
+        return requestZoneChange(new ZoneChangeRequest(zone, TeleportArrival.ChangeZoneType, null, TimeSpan.Zero, position), default);
     }
 
     private async Task Locked(Func<Task> action)

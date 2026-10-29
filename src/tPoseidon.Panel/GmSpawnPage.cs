@@ -16,14 +16,12 @@ public static class GmSpawnPage
     {
         ArgumentNullException.ThrowIfNull(kit);
         var model = kit.Model;
-        var page = new StackPanel { Spacing = 10 };
         var place = new SpawnPlace(kit);
-        page.Children.Add(place.Section);
 
         var monster = GmPickers.Monster(model);
         var count = GmKit.Box("Count", 70, "1");
         var radius = GmKit.Box("Radius", 70, "0");
-        page.Children.Add(GmKit.Section(
+        var monstersSection = GmKit.Section(
             "Monsters",
             string.Create(CultureInfo.InvariantCulture, $"Monster types {GameMasterFrames.FirstSummonableMonster} to {GameMasterFrames.LastSummonableMonster}. They appear at the place chosen above, spread over the radius; your GM does not move. The server remembers them for \"Remove only the monsters I spawned\"."),
             monster,
@@ -44,11 +42,11 @@ public static class GmSpawnPage
                 {
                     var type = checks.Number(monster.Id, "The monster type", GameMasterFrames.FirstSummonableMonster, GameMasterFrames.LastSummonableMonster);
                     return [type, checks.Number(count, "The count", 1, byte.MaxValue), .. place.OriginalOrderArguments(checks)];
-                }))));
+                })));
 
         var npc = GmPickers.Npc(model);
         var lines = GmKit.Lines("Lines the NPC keeps, one per line (optional)");
-        page.Children.Add(GmKit.Section(
+        var npcSection = GmKit.Section(
             "NPCs",
             "Places an NPC where your GM stands. It stays until the game server restarts.",
             npc,
@@ -59,29 +57,17 @@ public static class GmSpawnPage
                 var kept = (lines.Text ?? "").Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0).ToList();
                 checks.Require(kept.Count <= MostNpcLines, lines, string.Create(CultureInfo.InvariantCulture, $"An NPC keeps at most {MostNpcLines} lines."));
                 return [type, .. kept];
-            }, primary: true))));
+            }, primary: true)));
 
         var give = GmPickers.Item(model);
-        var receiver = GmKit.Box("Character name", 200);
-        var giveCount = GmKit.Box("Count", 80, "1");
-        model.CharacterChosen += chosen => receiver.Text = chosen;
-        page.Children.Add(GmKit.Section(
-            "Items",
-            "Gives items to an online character, or lets an NPC on your GM's map hand one out to each player who talks to it.",
+        var handOutSection = GmKit.Section(
+            "NPC hands out an item",
+            "Lets an NPC on your GM's map hand one item out to each player who talks to it. To put an item in one player's bag use the Players tab.",
             give,
-            GmKit.Line(
-                GmKit.Field("To", receiver),
-                GmKit.Field("Count", giveCount),
-                kit.Tool("Give", "present", checks =>
-                {
-                    var who = checks.Text(receiver, "The character name");
-                    var id = checks.Number(give.Id, "The item id", 0, uint.MaxValue);
-                    return [who, id, checks.Number(giveCount, "Count", 1, ushort.MaxValue)];
-                }, primary: true)),
-            IssueLine(kit, give)));
+            IssueLine(kit, give));
 
         var objectId = GmKit.Box("Object id", 110);
-        page.Children.Add(GmKit.Section(
+        var clearSection = GmKit.Section(
             "Clear",
             "Remove only the monsters your GM spawned (on any map), every monster on your GM's map (spawned or not), or one monster by its object id.",
             GmKit.Line(
@@ -89,8 +75,12 @@ public static class GmSpawnPage
                 kit.Tool("Remove every monster on my GM's map", "remove-monsters", _ => [],
                     _ => new GmConfirm("Remove every monster on your GM's map?", "This also removes the map's own monsters until they come back.", "Remove")),
                 GmKit.Field("Object id", objectId),
-                kit.Tool("Remove this monster", "remove-object", checks => [checks.Number(objectId, "The object id", 1, ushort.MaxValue)]))));
-        return page;
+                kit.Tool("Remove this monster", "remove-object", checks => [checks.Number(objectId, "The object id", 1, ushort.MaxValue)])));
+        return GmKit.Tab(
+            "Place monsters and NPCs where your GM stands or on a map you choose, and clear them again.",
+            ("Where", [place.Section]),
+            ("Monsters", [monstersSection, clearSection]),
+            ("NPCs", [npcSection, handOutSection]));
     }
 
     private static WrapPanel IssueLine(GmKit kit, GmPicker item)

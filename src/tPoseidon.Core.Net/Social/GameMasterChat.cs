@@ -39,6 +39,7 @@ public sealed class GameMasterChat
     public const string MoveBlockList = "MoveBlockList";
     public const string TradeBlockList = "TradeBlockList";
     public const string SummonMonster = "SummonMonster";
+    public const string Item = "Item";
     public const string CommandHelp = "CommandHelp";
 
     public const string GmFlagSetText = "GM_GMFlagSet";
@@ -61,6 +62,19 @@ public sealed class GameMasterChat
     public const string BadArgumentsLine = "The command was not understood; type @commandhelp for the list.";
     public const string UnknownCommandLine = "Unknown command; type @commandhelp for the list.";
     public const string UnavailableLine = "The GM service is not available right now.";
+    public const string ItemGivenLine = "The item was given.";
+    public const string ItemUnknownLine = "The item was not given: no such item.";
+    public const string ItemNotOnlineLine = "The item was not given: the character is not in the game.";
+    public const string ItemNoRoomLine = "The item was not given: the bag has no room for it.";
+    public const string ItemFailedLine = "The item was not given.";
+
+    public static string ItemRefusedLine(byte reason) => reason switch
+    {
+        (byte)GameMasterFrames.AckPresentUnknownItem => ItemUnknownLine,
+        (byte)GameMasterFrames.AckPresentNoReceiver or (byte)GameMasterFrames.AckPresentNotOnline => ItemNotOnlineLine,
+        (byte)GameMasterFrames.AckPresentNoRoom => ItemNoRoomLine,
+        _ => ItemFailedLine,
+    };
 
     private static readonly System.Text.RegularExpressions.Regex Placeholder = new(@"%\s?(?:I64u|s|d)", System.Text.RegularExpressions.RegexOptions.Compiled);
 
@@ -90,6 +104,7 @@ public sealed class GameMasterChat
         new GameMasterChatUsage(MoveBlockList, "", "List the move-blocked characters."),
         new GameMasterChatUsage(TradeBlockList, "", "List the trade-blocked characters."),
         new GameMasterChatUsage(SummonMonster, "<monsterType> [count]", "Summon monsters where you stand (monster type 2000 to 3434)."),
+        new GameMasterChatUsage(Item, "<itemId> [count] [name]", "Put an item in your own bag, or in the bag of the named online character (count defaults to 1)."),
         new GameMasterChatUsage(CommandHelp, "", "Print the GM command help lines of the client data."),
     };
 

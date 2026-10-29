@@ -54,7 +54,13 @@ public sealed class App : Application
             Motion.Shared.SetReduced(preferences.ReduceAnimations || options.Reduce);
             var host = new PanelHost(InstallPaths.Resolve(options.Home));
             var main = new MainWindow(host, preferences);
-            main.Closed += (_, _) => desktop.Shutdown();
+            var bubble = new BubbleShell(main, host, preferences);
+            main.FirstShown += bubble.Start;
+            main.Closed += (_, _) =>
+            {
+                bubble.Retire();
+                desktop.Shutdown();
+            };
             void AfterIntro()
             {
                 if (problem is not null)

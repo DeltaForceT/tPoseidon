@@ -112,6 +112,9 @@ public sealed class GuildGameRooms
     public const ushort RoomClosedNotice = 0x2C90;
     public const ushort LeaveRequest = 0x2C92;
     public const ushort SideLeftNotice = 0x2C93;
+    public const ushort WatchRequest = 0x2C95;
+    public const ushort WatchOk = 0x2C96;
+    public const ushort WatchError = 0x2C97;
     public const ushort StartRequest = 0x2C98;
     public const ushort ListRequest = 0x2C9B;
     public const ushort List = 0x2C9C;
@@ -158,6 +161,7 @@ public sealed class GuildGameRooms
     public const byte JoinOfficeError = 0x0B;
     public const byte TooManyParticipants = 0x0D;
     public const byte RoomListClosed = 0x0C;
+    public const byte WatchersRefused = 0x12;
     public const byte NewRoomGameMasterFlag = 1;
     public const byte RoomListOpen = 1;
     public const byte WaitingState = 0;
@@ -317,6 +321,19 @@ public sealed class GuildGameRooms
             if (room.Sides.Count >= SidesPerRoom) return GuildRoomResult.Refused(JoinError, JoinOfficeError);
             room.Sides.Add(new GuildRoomSide(requester.GuildCode, requester.GuildName, requester));
             return new GuildRoomResult(null, JoinOk, room);
+        }
+    }
+
+    public GuildRoomResult TryWatch(GuildRoomJoin request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        lock (_gate)
+        {
+            if (!_rooms.TryGetValue(request.RoomKey, out var room)) return GuildRoomResult.Refused(WatchError, RoomMissing);
+            if (!ListOpenLocked(room.GameType)) return GuildRoomResult.Refused(WatchError, RoomListClosed);
+            if (room.GameMasterFlag == 0) return GuildRoomResult.Refused(WatchError, WatchersRefused);
+            if (room.HasPassword && !string.Equals(room.Settings.Password, request.Password, StringComparison.Ordinal)) return GuildRoomResult.Refused(WatchError, WrongPassword);
+            return new GuildRoomResult(null, WatchOk, room);
         }
     }
 

@@ -101,7 +101,8 @@ public static class ClientAddressPatch
         var slots = Slots.Select(lobby => FindSlot(bytes, lobby)).ToArray();
         if (slots.Any(slot => slot < 0))
         {
-            throw new HostingException(
+            throw new PlayFailure(
+                PlayFailureReason.NotKr2014Client,
                 $"{Path.GetFileName(executablePath)} is not the KR 2014 client tPoseidon knows: the lobby addresses it connects to were not found.",
                 "Use the 2014.01.28 KR client, or reinstall it.",
                 null);
@@ -131,11 +132,11 @@ public static class ClientAddressPatch
         }
         catch (IOException ex)
         {
-            throw new HostingException($"Could not update {executablePath}: {ex.Message}", "Close the game client, then try again.", ex);
+            throw new PlayFailure(PlayFailureReason.ClientRunning, $"Could not update {executablePath}: {ex.Message}", "Close the game client, then try again.", ex);
         }
         catch (UnauthorizedAccessException ex)
         {
-            throw new HostingException($"Could not update {executablePath}: {ex.Message}", "Move the client to a folder you can write to (not Program Files), or give your account write access to it.", ex);
+            throw new PlayFailure(PlayFailureReason.ClientNotWritable, $"Could not update {executablePath}: {ex.Message}", "Move the client to a folder you can write to (not Program Files), or give your account write access to it.", ex);
         }
 
         return new ClientAddressResult(address, true, backup);

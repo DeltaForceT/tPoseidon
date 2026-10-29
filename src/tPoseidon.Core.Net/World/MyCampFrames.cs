@@ -187,6 +187,9 @@ public static class MyCampFrames
         }
     }
 
+    public static byte ReadTransferResult(ReadOnlySpan<byte> payload) =>
+        payload.Length > 0 ? payload[0] : MyCampRules.TransferFailed;
+
     public static bool TryReadOpen(ReadOnlySpan<byte> payload, Encoding text, out MyCampOpenRequest request)
     {
         request = default;

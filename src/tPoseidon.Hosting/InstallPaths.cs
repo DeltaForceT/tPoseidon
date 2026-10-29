@@ -34,6 +34,10 @@ public sealed class InstallPaths
 
     public string Backups => Path.Combine(Root, "backups");
 
+    public string Updates => Path.Combine(Root, "updates");
+
+    public string LauncherHistory => Path.Combine(Root, "launcher-history.json");
+
     public string ServerData => Path.Combine(Root, "server-data");
 
     public string KeyTable => Path.Combine(ServerData, "keytable-s2v2010.bin");

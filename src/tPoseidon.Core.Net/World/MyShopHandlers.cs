@@ -1,4 +1,3 @@
-using System.Text;
 using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Net.World;
@@ -13,7 +12,7 @@ public static class MyShopHandlers
         Func<MyShopReturn?> locate,
         Func<Task> depart,
         Func<Task> restore,
-        Encoding encoding,
+        Func<Task> listCampItems,
         Action<string> log)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
@@ -21,7 +20,7 @@ public static class MyShopHandlers
         ArgumentNullException.ThrowIfNull(locate);
         ArgumentNullException.ThrowIfNull(depart);
         ArgumentNullException.ThrowIfNull(restore);
-        ArgumentNullException.ThrowIfNull(encoding);
+        ArgumentNullException.ThrowIfNull(listCampItems);
         ArgumentNullException.ThrowIfNull(log);
 
         dispatcher.Register(Opcode.C2S_MYSHOP_OPEN, async (_, _, ct) =>
@@ -50,8 +49,7 @@ public static class MyShopHandlers
             send(Opcode.S2C_BOUGHT_LIST, MyShopFrames.EmptyList(), ct));
         dispatcher.Register(Opcode.C2S_BOUGHT_LIST_CAMP, (_, _, ct) =>
             send(Opcode.S2C_BOUGHT_LIST_CAMP, MyShopFrames.EmptyList(), ct));
-        dispatcher.Register(Opcode.C2S_MYSHOP_ENTER, (_, _, ct) =>
-            send(Opcode.S2C_MYSHOP_ENTERED, MyShopFrames.Entered(string.Empty, encoding), ct));
+        dispatcher.Register(Opcode.C2S_MYSHOP_ENTER, (_, _, _) => listCampItems());
         dispatcher.Register(Opcode.C2S_MYSHOP_CLOSE, async (_, _, ct) =>
         {
             if (locate() is not { } back) return;

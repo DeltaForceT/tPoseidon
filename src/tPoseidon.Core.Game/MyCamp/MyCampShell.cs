@@ -17,6 +17,9 @@ public static class MyCampRules
     public const byte Chat = 1;
     public const byte Shop = 2;
 
+    public const byte TransferOk = 0;
+    public const byte TransferFailed = 1;
+
     public const byte StateNew = 0;
     public const byte StateInventory = 1;
     public const byte StatePlaced = 2;
@@ -66,9 +69,11 @@ public readonly record struct MyCampItemRecord(ulong ItemUid, ulong ParentsUid, 
 
 public enum MyCampTransferKind
 {
-    Owner,
+    Open,
+    ModeChange,
     Guest,
     Recycle,
+    Shop,
 }
 
 public sealed class MyCampTransfer
@@ -76,7 +81,7 @@ public sealed class MyCampTransfer
     private readonly Queue<MyCampItemRecord> _left;
 
     public MyCampTransfer(IReadOnlyCollection<MyCampItemRecord> records, bool forGuest)
-        : this(records, forGuest ? MyCampTransferKind.Guest : MyCampTransferKind.Owner)
+        : this(records, forGuest ? MyCampTransferKind.Guest : MyCampTransferKind.Open)
     {
     }
 

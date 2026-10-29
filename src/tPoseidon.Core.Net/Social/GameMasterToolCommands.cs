@@ -9,7 +9,6 @@ public sealed record GameMasterToolRequest(ushort Opcode, byte[] Body);
 
 public static class GameMasterToolCommands
 {
-    public const int ClientTextCodePage = 949;
 
     public static IReadOnlyList<GameMasterToolCommand> All { get; } = new[]
     {
@@ -26,7 +25,7 @@ public static class GameMasterToolCommands
         new GameMasterToolCommand("char-count", "<zoneId>", "Count the characters in a zone.", "tposeidon gm char-count 23 --gm Boss", true),
         new GameMasterToolCommand("zone-counts", "", "List every zone with characters in it and how many.", "tposeidon gm zone-counts --gm Boss", true),
         new GameMasterToolCommand("char-info", "<name>", "Show the account, id, zone, level and money of an online character.", "tposeidon gm char-info Friend --gm Boss", true),
-        new GameMasterToolCommand("present", "<name> <itemId> [count]", "Put items in an online character's bag (count defaults to 1).", "tposeidon gm present Friend 1001 5 --gm Boss", false),
+        new GameMasterToolCommand("present", "<name> <itemId> [count]", "Put items in the bag of a character who is in the game (count defaults to 1); the answer says whether they arrived.", "tposeidon gm present Friend 1001 5 --gm Boss", true),
         new GameMasterToolCommand("summon-monster", "<monsterType> [count] [mapId]", "Summon monsters (monster type 2000 to 3434; count defaults to 1). Without a map they appear at the GM character's position; with a map id (1 to 999) they appear at a random arrival point of that map and the GM stays where he is.", "tposeidon gm summon-monster 2001 3 23 --gm Boss", true),
         new GameMasterToolCommand("spawn-monsters", "<monsterType> <count> <radius> [mapId [x y]]", "Summon monsters spread over a circle of radius world units (0 for one spot). Without a map the circle is centred on the GM character; with only a map id on a random arrival point of that map; with a map id and x y on those coordinates (map id 0 means the GM character's map). The GM stays where he is, and the server remembers the monsters for remove-my-monsters.", "tposeidon gm spawn-monsters 2001 10 150 23 800 600 --gm Boss", true),
         new GameMasterToolCommand("remove-my-monsters", "", "Remove only the monsters this GM character summoned (with summon-monster or spawn-monsters) that are still alive.", "tposeidon gm remove-my-monsters --gm Boss", true),
@@ -83,11 +82,7 @@ public static class GameMasterToolCommands
             : ulong.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out characterId);
     }
 
-    public static Encoding ClientText()
-    {
-        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-        return Encoding.GetEncoding(ClientTextCodePage);
-    }
+    public static Encoding ClientText() => tPoseidon.Core.Common.ClientText.Encoding;
 
     public static GameMasterToolRequest? Build(string command, IReadOnlyList<string> args, Encoding text)
     {

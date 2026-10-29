@@ -1,6 +1,6 @@
 namespace tPoseidon.Core.LibConfig;
 
-public sealed record ItemName(int Id, string Name, string Table);
+public sealed record ItemName(int Id, string Name, string Table, ItemParamEntry Definition);
 
 public sealed class ItemNames
 {
@@ -19,7 +19,7 @@ public sealed class ItemNames
         var names = new Dictionary<int, ItemName>();
         foreach (var (table, entry) in entries)
         {
-            if (!string.IsNullOrWhiteSpace(entry.Name)) names.TryAdd(entry.Id, new ItemName(entry.Id, entry.Name.Trim(), table));
+            if (!string.IsNullOrWhiteSpace(entry.Name)) names.TryAdd(entry.Id, new ItemName(entry.Id, entry.Name.Trim(), table, entry));
         }
         _names = names;
     }

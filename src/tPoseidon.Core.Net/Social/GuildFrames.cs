@@ -2,12 +2,13 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 using tPoseidon.Core.Common;
+using tPoseidon.Core.Data;
 
 namespace tPoseidon.Core.Net.Social;
 
 public sealed record GuildBlock(ulong CharacterId, uint GuildCode, string GuildName, string MasterName, string Greeting);
 
-public sealed record GuildStateView(GuildBlock Block, ushort MaxMembers, byte GradeIndex, ushort Rights, IReadOnlyList<string> GradeNames);
+public sealed record GuildStateView(GuildBlock Block, ushort MaxMembers, byte GradeIndex, ushort Rights, IReadOnlyList<string> GradeNames, byte DepotTabs = 0, uint Coins = 0);
 
 public sealed record GuildMemberRow(
     ulong CharacterId,
@@ -165,6 +166,10 @@ public static class GuildFrames
 
     public const ushort RightEditMembers = 0x01;
     public const ushort RightVolunteers = 0x02;
+    public const ushort RightDepot = GuildDepotRules.DepotRight;
+    public const int RightDepotIndex = 6;
+    public const ushort RightShop = GuildShopRules.ShopRight;
+    public const int RightShopIndex = GuildShopRules.ShopRightIndex;
     public const ushort MasterRights = 0xFFFF;
     public const int MostMembersToAccept = 0x7E;
 
@@ -208,7 +213,9 @@ public static class GuildFrames
         var w = new PacketWriter(StateLength);
         w.WriteZero(0x11);
         w.WriteUInt16(state.MaxMembers);
-        w.WriteZero(0x23 - 0x13);
+        w.WriteByte(state.DepotTabs);
+        w.WriteUInt32(state.Coins);
+        w.WriteZero(0x23 - 0x18);
         w.WriteUInt32(0);
         w.WriteUInt32(Ok);
         WriteBlock(w, state.Block, text);
@@ -546,7 +553,10 @@ public static class GuildFrames
             var own = grade == gradeIndex;
             w.WriteByte(own && (rights & RightEditMembers) != 0 ? (byte)1 : (byte)0);
             w.WriteByte(own && (rights & RightVolunteers) != 0 ? (byte)1 : (byte)0);
-            w.WriteZero(GradeRightsStride - 2);
+            w.WriteZero(RightShopIndex - 2);
+            w.WriteByte(own && (rights & RightShop) != 0 ? (byte)1 : (byte)0);
+            w.WriteByte(own && (rights & RightDepot) != 0 ? (byte)1 : (byte)0);
+            w.WriteZero(GradeRightsStride - RightDepotIndex - 1);
         }
     }
 

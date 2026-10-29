@@ -113,7 +113,7 @@ public sealed class PlayerSpawnLoginPacket
     public byte[] EncodePayload()
     {
         ArgumentNullException.ThrowIfNull(Name);
-        var nameBytes = Encoding.ASCII.GetBytes(Name);
+        var nameBytes = ClientText.Encoding.GetBytes(Name);
         var lookMask = LookMask;
         var overrideMask = LookOverrideMask;
         var footerLen = LookMaskOffset + 4 + 4 * CountBits(lookMask) + 4 + 4 * CountBits(overrideMask) + LookRestBytes;
@@ -161,7 +161,7 @@ public sealed class PlayerSpawnLoginPacket
             throw new InvalidPacketException(
                 "Kr2014 PlayerSpawnLogin name field has no NUL terminator.");
         }
-        var name = nul == 0 ? string.Empty : Encoding.ASCII.GetString(payload.Slice(HeaderBytes, nul));
+        var name = nul == 0 ? string.Empty : ClientText.Encoding.GetString(payload.Slice(HeaderBytes, nul));
         var f = HeaderBytes + nul + 1;
         var at = f + LookMaskOffset;
         var looks = ReadLooks(payload, ref at, LookBits);

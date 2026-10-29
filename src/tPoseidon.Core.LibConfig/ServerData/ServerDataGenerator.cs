@@ -4,12 +4,11 @@ using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.LibConfig.ServerData;
 
-public sealed record ServerDataSummary(int Maps, int NpcPoints, int PortalMaps, int Portals, int PoolMaps, int PoolRows);
+public sealed record ServerDataSummary(int Maps, int PortalMaps, int Portals, int PoolMaps, int PoolRows);
 
 public static class ServerDataGenerator
 {
     public const string MapInfoFile = "map-info.json";
-    public const string NpcPointsFile = "npc-points.json";
     public const string PortalsFile = "portals.json";
     public const string ZonePoolsFile = "zone-mob-pools.json";
     public const string MonsterSpawnsFile = "monster-spawns.json";
@@ -41,11 +40,10 @@ public static class ServerDataGenerator
 
         Directory.CreateDirectory(outputDirectory);
         WriteMapInfo(Path.Combine(outputDirectory, MapInfoFile), maps);
-        var npcPoints = WriteNpcPoints(Path.Combine(outputDirectory, NpcPointsFile), maps, md3ByMap);
         var (portalMaps, portals) = WritePortals(Path.Combine(outputDirectory, PortalsFile), maps, md3ByMap);
         var (poolMaps, poolRows) = WriteZonePools(Path.Combine(outputDirectory, ZonePoolsFile), maps, pools);
         WriteEmptyObject(Path.Combine(outputDirectory, MonsterSpawnsFile));
-        return new ServerDataSummary(maps.Count, npcPoints, portalMaps, portals, poolMaps, poolRows);
+        return new ServerDataSummary(maps.Count, portalMaps, portals, poolMaps, poolRows);
     }
 
     private static void WriteMapInfo(string path, IReadOnlyList<MapInfoEntry> maps)
@@ -72,41 +70,6 @@ public static class ServerDataGenerator
         }
 
         json.WriteEndObject();
-    }
-
-    private static int WriteNpcPoints(string path, IReadOnlyList<MapInfoEntry> maps, Dictionary<ushort, Md3Map> md3ByMap)
-    {
-        var total = 0;
-        using var stream = File.Create(path);
-        using var json = new Utf8JsonWriter(stream, WriterOptions);
-        json.WriteStartObject();
-        foreach (var map in maps)
-        {
-            if (!md3ByMap.TryGetValue(map.Id, out var md3)) continue;
-            var points = new SortedDictionary<int, Md3PointObject>();
-            foreach (var point in md3.Points)
-            {
-                if (point.Type is not (MapPointTypes.Npc or MapPointTypes.Shop) || point.Id is < 0 or > ushort.MaxValue) continue;
-                points.TryAdd(point.Id, point);
-            }
-
-            if (points.Count == 0) continue;
-            json.WriteStartObject(Key(map.Id));
-            foreach (var (id, point) in points)
-            {
-                json.WriteStartObject(id.ToString(CultureInfo.InvariantCulture));
-                json.WriteNumber("Type", point.Type);
-                json.WriteNumber("X", point.X);
-                json.WriteNumber("Y", point.Y);
-                json.WriteEndObject();
-                total++;
-            }
-
-            json.WriteEndObject();
-        }
-
-        json.WriteEndObject();
-        return total;
     }
 
     private static (int Maps, int Portals) WritePortals(string path, IReadOnlyList<MapInfoEntry> maps, Dictionary<ushort, Md3Map> md3ByMap)

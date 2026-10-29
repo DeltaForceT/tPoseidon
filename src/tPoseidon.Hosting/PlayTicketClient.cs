@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 
 namespace tPoseidon.Hosting;
 
@@ -33,9 +34,21 @@ public static class PlayTicketClient
         {
             response = await http.PostAsync(endpoint, form, ct).ConfigureAwait(false);
         }
+        catch (HttpRequestException ex) when (ex.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionRefused })
+        {
+            throw new PlayFailure(
+                PlayFailureReason.WebPortClosed,
+                $"The server's web port is closed ({endpoint.Authority} refused the connection).",
+                "Ask the server owner to open the web port (9990 by default) and to run the item shop, which also hands out the login passes.",
+                ex);
+        }
         catch (HttpRequestException ex)
         {
-            throw new HostingException($"The server at {endpoint.Authority} could not be reached: {ex.Message}", ex);
+            throw new PlayFailure(PlayFailureReason.ServerUnreachable, $"The server at {endpoint.Authority} could not be reached: {ex.Message}", "Check the address, your internet connection and that the server is running.", ex);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new PlayFailure(PlayFailureReason.ServerUnreachable, $"The server at {endpoint.Authority} did not answer in time.", "Check the address, your internet connection and that the server is running.", ex);
         }
 
         using (response)
@@ -45,11 +58,11 @@ public static class PlayTicketClient
                 case HttpStatusCode.OK:
                     return;
                 case HttpStatusCode.Unauthorized:
-                    throw new HostingException("The account name or password is wrong.");
+                    throw new PlayFailure(PlayFailureReason.WrongPassword, "The account name or password is wrong.");
                 case HttpStatusCode.TooManyRequests:
-                    throw new HostingException("Too many failed logins. Wait a few minutes and try again.");
+                    throw new PlayFailure(PlayFailureReason.TooManyAttempts, "Too many failed logins. Wait a few minutes and try again.");
                 default:
-                    throw new HostingException($"The server refused the login ({(int)response.StatusCode}).");
+                    throw new PlayFailure(PlayFailureReason.ServerRefused, $"The server refused the login ({(int)response.StatusCode}).");
             }
         }
     }

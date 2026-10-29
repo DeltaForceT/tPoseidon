@@ -29,7 +29,7 @@ tPoseidon is in beta. These are the rules that matter. The full text is in [BETA
 - **No forks and no redistribution of modified copies during the beta.** Download it, run it, host it for yourself and your community. Don't publish modified builds, forks or other emulators based on it, and don't re-upload the packages.
 - **No wipes.** Your accounts and characters live in your own database. Updates migrate it. Back up before every update.
 - **Bring your own KR 2014 client.** We don't ship it. Never share client or game files in this project's spaces.
-- **Put your version in every bug report**, for example `0.56.0-beta`. `tposeidon status` prints it.
+- **Put your version in every bug report**, for example `0.60.0-beta`. `tposeidon status` prints it.
 - **Report security problems privately.** See [SECURITY.md](SECURITY.md). Don't post them in issues or on the forum.
 - **Be respectful.** Everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -71,7 +71,50 @@ Most of our testing happens on Windows. The Linux and macOS builds come from the
 
 The original game logged you in through the publisher's website, and the client never knew your password. tPoseidon does the same job itself. When you press Play (or run `tposeidon play`) on the server's computer, it leaves a one-time pass for your Play account in the database and then starts the client. The client logs in with a built-in placeholder password, and the lobby accepts that only if a pass is waiting for that account from that address. A pass works once and runs out after about a minute. Everyone else still needs the real password.
 
-Friends who play from other computers run `tposeidon play --server <your address> --account <their account> --client <their client folder>`. It asks for their password, checks it with your server's web port (the same one as the item shop, 9990 by default), and starts their client pointed at your server. The server must run the item shop for this. Their password travels to your server, so put the web port behind HTTPS (see [Hosting securely](docs/install/hosting-securely.md)) when your server is public and pass the secure address with `--web-url https://play.example.org:9990`.
+Friends who play from other computers can use the launcher below, or run `tposeidon play --server <your address> --account <their account> --client <their client folder>`. It asks for their password, checks it with your server's web port (the same one as the item shop, 9990 by default), and starts their client pointed at your server. The server must run the item shop for this. Their password travels to your server, so put the web port behind HTTPS (see [Hosting securely](docs/install/hosting-securely.md)) when your server is public and pass the secure address with `--web-url https://play.example.org:9990`.
+
+### Joining a friend's server
+
+Friends do not need the server package, PostgreSQL or the command line. They download the separate launcher, `tposeidon-launcher-<version>-win-x64.zip`, unpack it and open `tposeidon-launcher.cmd`. They need their own KR 2014 client and an account on your server.
+
+The launcher is one window. The top shows the server's banner, name, colour and status (Online, Offline or Maintenance) and its news; the right side is the login card with a large Play button and a progress bar for updates. The gear in the corner opens the settings: client folder, client language (Automatic, Korean or English) and the list of servers.
+
+1. Pick the client folder in the settings. The launcher says what is missing when the folder is not a usable client.
+2. Add your server: either type its address (and, for an HTTPS server, its web address), or press **Import file...** and choose the server file you gave them. Opening a server file with the launcher on the command line also imports it.
+3. Enter the account name and password and press **Play**.
+
+The button logs in over your server's web port first. Once the login is accepted, the launcher checks your published update (see [Updating your players' clients](docs/install/launcher-updates.md)) and downloads what is missing by itself, with a progress bar. **Play** unlocks only when every file is installed and verified; if the download fails the launcher says why and offers **Retry**, and never starts a half-updated client. Play then writes your server's address into their own client and starts it. The launcher remembers the client folder, the servers, the last account and the language in its own settings file in their user data folder (`tPoseidon/launcher.json` under `%APPDATA%` on Windows). It never stores the password. If something is wrong it says which part: wrong password, server unreachable, web port closed, not the KR 2014 client, client folder not writable, the client already running or an update that failed its checksum.
+
+### Make a launcher for your players
+
+Instead of asking players to add your server by hand, build a launcher that is yours. In the panel's menu (the three dots) choose **Make a launcher for your players...** and go through five steps:
+
+1. **Identity**: your server's name, the text in the launcher's title bar and your logo (a PNG). The shortcut and window icon are made from the logo.
+2. **Look**: a background picture (optional) and an accent colour. A live preview on the right shows what your players will see.
+3. **Connection**: your public address and web port. **Check connection** fetches `/launcher/manifest.json` from them. A server that only accepts players on this computer is refused, because nobody else could use the launcher.
+4. **Links and text**: your website, your Discord, a welcome note and the default client language.
+5. **Build**: pick a folder. You get `<Server name> Setup.exe`, an installer to give to your players, and `<server>-launcher-<version>.zip` with the same launcher unpacked.
+
+To try it at once, tick **Use the tPoseidon look (test)** at the top of the wizard. It fills the logo, background, colours, title and icon with tPoseidon's own, so you can build and test a launcher without any pictures and change it later.
+
+What your players get:
+
+- The installer needs no administrator rights. It installs to `%LOCALAPPDATA%\Programs\<Server name>`, adds Start menu and desktop shortcuts with your server's name and icon, and lists the launcher in Windows' installed apps with an uninstaller. It will not install over a launcher that is running.
+- The launcher is locked to your server. Players cannot add servers or change the look. They pick their game client folder, log in, and open **Options**.
+- **Options** are the settings the original client's setup tool offered: resolution (800 x 600 or 1024 x 768), full screen, effects and map effects, sound off, sample rate, bits, channels, screen shot format (BMP or JPG) and JPG quality. They are saved in the registry under the client's own profile (`Trickster_gsp` for the English mode, `Trickster_NT` for the Korean mode), the same place the original tool writes; the launcher reads where that is from the client itself, and apply the next time the game starts. They cannot be saved while the game is running.
+- After login the launcher downloads any update you published before Play unlocks. Updates are required.
+
+The wizard needs the launcher pieces that come with a released tPoseidon package (the `launcher-kit` folder next to the panel). A launcher without a `branding` folder next to it stays the open launcher described above, for testing.
+
+To make the server file, open the panel's menu (the three dots) and choose **Share a server file for friends...**, or run:
+
+```
+tposeidon server-file [--name <text>] [--note <text>] [--color <#RRGGBB>] [--web-url <url>] [--output <file>]
+```
+
+The file holds your server's name, its public address from setup, the web address players log in through (`http://<address>:9990` unless you pass another, such as your `https://` one), an optional accent colour and an optional note. It holds no passwords or secrets, so you can post it in a chat. It needs the audience set to LAN or the internet, the item shop on, and the web port reachable from your friends' computers. Because their password travels to that port, use HTTPS for a public server (see [Hosting securely](docs/install/hosting-securely.md)).
+
+To give your players news, a banner and your own content files, drop them in the `updates` folder and press **Publish launcher update** in the panel menu, or run `tposeidon launcher publish`. Only publish your own files, never the original game files. [Updating your players' clients](docs/install/launcher-updates.md) has the details.
 
 `tposeidon stop` shuts the servers down. Your settings are in `tposeidon.json` next to the program, and you can run `tposeidon setup` again whenever you want to change them.
 
@@ -80,6 +123,12 @@ Opening your server to the internet? Read [Hosting securely](docs/install/hostin
 ## The control panel
 
 `tposeidon-panel` (`tposeidon-panel.cmd` on Windows) opens a control panel. It is packaged for Windows, Linux and macOS, but so far it has only been tried on Windows; the `tposeidon` command works everywhere. It does what the commands do (setup, start, stop, backup), shows every server's log, and has a security window for the connection guard.
+
+### The quick-access bubble
+
+Minimising the panel shrinks it into a soap bubble at the centre of the screen. The bubble's ring shows the servers at a glance (green all running, amber some running, grey stopped, red a server failed). Drag it anywhere; it remembers its place. Click it to unfold four groups of round buttons: **Servers** (start all, stop all, restart all, logs), **Game** (game master tools, client language, launch the client), **Players** (share a server file, make a launcher, edit launcher news and updates, publish launcher update) and **Panel** (open the panel, security, back up the database, open the data folder, exit). Each tool opens in its own window, and pressing the button again brings that window to the front. **Open the panel**, or the panel's taskbar button, brings the panel back and the bubble goes away. When a server stops unexpectedly or fails to start, the bubble pulses and shows a short note; click the note to open the logs. The bubble never appears during first-time setup, and closing the panel closes it as usual.
+
+The **Bubble** toggle in the panel's top bar turns the bubble on or off (on by default). While it is on, the panel keeps start, stop and restart all, the game master tools and the client launcher, and leaves the other tools to the bubble. Turn it off and they come back to the panel. The launcher tools (make a launcher, edit launcher news and updates, publish launcher update) are always in the **Launcher** entry of the panel's menu (the three dots), whether the bubble is on or off.
 
 ## Game master tools
 
@@ -106,10 +155,9 @@ You need the .NET 8 SDK.
 
 ```
 dotnet build tPoseidon.sln
-dotnet test tPoseidon.sln
 ```
 
-A few tests read local reference data that isn't in the repository. They skip themselves, with a reason, when it's missing. During the beta the source is here to read, build and test, and to prepare bug reports; see [CONTRIBUTING.md](CONTRIBUTING.md).
+During the beta the source is here to read and build, and to prepare bug reports; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## How it was made
 

@@ -4,7 +4,6 @@ using tPoseidon.Core.Net.S2;
 using tPoseidon.Core.Net.Social;
 
 ConsoleFileLog.EnableIfConfigured();
-System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : ServerEndpointConfig.SystemPort;
 const string LogTag = "[sserver1]";
 void Log(string message) => Console.WriteLine($"{LogTag} {message}");
@@ -41,7 +40,7 @@ var friendStore = new tPoseidon.Core.Data.Postgres.PostgresFriendStore(postgres.
 var friendServer = new tPoseidon.Kr2014.SystemServer.FriendServer(
     friendStore,
     socialRoom,
-    System.Text.Encoding.GetEncoding(949),
+    tPoseidon.Core.Common.ClientText.Encoding,
     systemIni?.GetInt("FriendOfflineSMSLimitCount", tPoseidon.Core.Data.FriendRules.OfflineMessageLimit) ?? tPoseidon.Core.Data.FriendRules.OfflineMessageLimit,
     Log);
 var partyRules = tPoseidon.Core.Net.Social.PartyRules.FromIni(
@@ -50,37 +49,24 @@ var partyRules = tPoseidon.Core.Net.Social.PartyRules.FromIni(
 var reportServer = new tPoseidon.Kr2014.SystemServer.ReportServer(
     new tPoseidon.Core.Data.Postgres.PostgresReportStore(postgres.DataSource),
     socialRoom,
-    System.Text.Encoding.GetEncoding(949),
+    tPoseidon.Core.Common.ClientText.Encoding,
     (byte)ServerIdentity.System1.ServerIndex,
     Log);
 var gameLinks = new tPoseidon.Kr2014.SystemServer.GameServerLinks(tPoseidon.Core.Net.S2.S2ServerHost.DefaultKeyTablePath(), Log)
 {
-    Text = System.Text.Encoding.GetEncoding(949),
+    Text = tPoseidon.Core.Common.ClientText.Encoding,
 };
 var instantChatRooms = new tPoseidon.Core.Net.Social.InstantChatRooms(
-    System.Text.Encoding.GetEncoding(949),
+    tPoseidon.Core.Common.ClientText.Encoding,
     (ushort)(systemIni?.GetInt("ChatNoticeMakeLimitLevel", tPoseidon.Core.Net.Social.InstantChatRooms.DefaultMakeLimitLevel) ?? tPoseidon.Core.Net.Social.InstantChatRooms.DefaultMakeLimitLevel),
     (ushort)(systemIni?.GetInt("ChatNoticeJoinLimitLevel", tPoseidon.Core.Net.Social.InstantChatRooms.DefaultJoinLimitLevel) ?? tPoseidon.Core.Net.Social.InstantChatRooms.DefaultJoinLimitLevel));
-var chatServer = new tPoseidon.Kr2014.SystemServer.ChatServer(socialRoom, instantChatRooms, gameLinks, System.Text.Encoding.GetEncoding(949), Log);
+var chatServer = new tPoseidon.Kr2014.SystemServer.ChatServer(socialRoom, instantChatRooms, gameLinks, tPoseidon.Core.Common.ClientText.Encoding, Log);
 var partyServer = new tPoseidon.Kr2014.SystemServer.PartyServer(
-    new tPoseidon.Core.Net.Social.PartyService(System.Text.Encoding.GetEncoding(949), partyRules, TimeProvider.System),
+    new tPoseidon.Core.Net.Social.PartyService(tPoseidon.Core.Common.ClientText.Encoding, partyRules, TimeProvider.System),
     socialRoom,
     gameLinks,
-    System.Text.Encoding.GetEncoding(949),
+    tPoseidon.Core.Common.ClientText.Encoding,
     Log);
-var guildServer = new tPoseidon.Kr2014.SystemServer.GuildServer(
-    new tPoseidon.Core.Net.Social.GuildService(
-        new tPoseidon.Core.Data.Postgres.PostgresGuildRulesStore(postgres.DataSource),
-        System.Text.Encoding.GetEncoding(949),
-        TimeProvider.System),
-    new tPoseidon.Core.Data.Postgres.PostgresGuildMatchStore(postgres.DataSource),
-    TimeProvider.System,
-    socialRoom,
-    gameLinks,
-    System.Text.Encoding.GetEncoding(949),
-    Log,
-    (systemIni?.GetInt("GuildGameTestMode", 0) ?? 0) != 0);
-
 var variantDataRoot = Environment.GetEnvironmentVariable("MT_VARIANT_DATA_ROOT")
     ?? Path.GetFullPath(RepoRoot.Data("variants", "Kr2014"));
 var libConfigPath = new[]
@@ -89,6 +75,25 @@ var libConfigPath = new[]
     Path.Combine(variantDataRoot, "libconfig_eng.dat"),
     RepoRoot.Data("libconfig_kr_en.xml"),
 }.FirstOrDefault(File.Exists);
+var guildShopTables = libConfigPath is null
+    ? tPoseidon.Core.LibConfig.GuildShopTables.Empty
+    : new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadGuildShopTables();
+Log($"guild shop from libconfig: {guildShopTables.Goods.Count} goods (GuildShopGoodsTable)");
+var guildServer = new tPoseidon.Kr2014.SystemServer.GuildServer(
+    new tPoseidon.Core.Net.Social.GuildService(
+        new tPoseidon.Core.Data.Postgres.PostgresGuildRulesStore(postgres.DataSource),
+        new tPoseidon.Core.Data.Postgres.PostgresGuildShopStore(postgres.DataSource),
+        guildShopTables,
+        tPoseidon.Core.Common.ClientText.Encoding,
+        TimeProvider.System),
+    new tPoseidon.Core.Data.Postgres.PostgresGuildMatchStore(postgres.DataSource),
+    TimeProvider.System,
+    socialRoom,
+    gameLinks,
+    tPoseidon.Core.Common.ClientText.Encoding,
+    Log,
+    (systemIni?.GetInt("GuildGameTestMode", 0) ?? 0) != 0);
+
 if (libConfigPath is not null)
 {
     guildServer.RoomCaptions = tPoseidon.Core.Net.Social.GuildRoomCaptions.From(
@@ -103,7 +108,7 @@ var coupleService = new CoupleService(
     coupleTables.DeleteQuestIds,
     coupleTables.DeleteSkillIds,
     coupleTables.EventPoints,
-    System.Text.Encoding.GetEncoding(949),
+    tPoseidon.Core.Common.ClientText.Encoding,
     TimeProvider.System);
 friendServer.ZoneInfoOf = gameLinks.ZoneInfoOf;
 friendServer.OrderFriendGame = gameLinks.SendReportedAsync;
@@ -120,7 +125,7 @@ var weddingHalls = new WeddingHallService(
     new tPoseidon.Core.Data.Postgres.PostgresCoupleRulesStore(postgres.DataSource),
     coupleService.IsOpen,
     coupleService.Refresh,
-    System.Text.Encoding.GetEncoding(949),
+    tPoseidon.Core.Common.ClientText.Encoding,
     TimeProvider.System,
     systemIni?.GetBool("IsWeddingTest", false) ?? false);
 var zoneTypes = new Dictionary<int, int>();
@@ -135,13 +140,13 @@ var coupleServer = new tPoseidon.Kr2014.SystemServer.CoupleServer(
     socialRoom,
     gameLinks,
     zone => zoneTypes.TryGetValue(zone, out var zoneType) ? zoneType : null,
-    System.Text.Encoding.GetEncoding(949),
+    tPoseidon.Core.Common.ClientText.Encoding,
     Log);
 
 var giftServer = new tPoseidon.Kr2014.SystemServer.GiftServer(
     new tPoseidon.Core.Data.Postgres.PostgresGiftStore(postgres.DataSource),
     socialRoom,
-    System.Text.Encoding.GetEncoding(949),
+    tPoseidon.Core.Common.ClientText.Encoding,
     Log)
 {
     GiftAccepted = coupleServer.GiftAccepted,
@@ -151,12 +156,12 @@ var itemPrices = new tPoseidon.Kr2014.SystemServer.ItemPriceServer();
 var angelServer = new tPoseidon.Kr2014.SystemServer.AngelServer(
     new AngelService(
         new tPoseidon.Core.Data.Postgres.PostgresAngelStore(postgres.DataSource),
-        System.Text.Encoding.GetEncoding(949),
+        tPoseidon.Core.Common.ClientText.Encoding,
         TimeProvider.System),
     socialRoom,
     gameLinks,
     friendStore,
-    System.Text.Encoding.GetEncoding(949),
+    tPoseidon.Core.Common.ClientText.Encoding,
     Log);
 
 var cardBattleItems = new tPoseidon.Core.Data.Postgres.PostgresItemStore(postgres.DataSource);
@@ -167,18 +172,18 @@ var cardBattleServer = new tPoseidon.Kr2014.SystemServer.CardBattleServer(
         (characterId, card) => cardBattleItems.GetForCharacterBySlotKind(characterId, tPoseidon.Core.Data.SlotKind.Inventory)
             .Any(item => item.ItemUid == tPoseidon.Core.Net.World.BagItemIds.Stored(card.ItemUid) && item.ItemIndex == card.ItemId),
         Random.Shared.Next,
-        System.Text.Encoding.GetEncoding(949),
+        tPoseidon.Core.Common.ClientText.Encoding,
         libConfigPath is null
             ? null
             : new tPoseidon.Core.Game.CardBattle.SpecialCardSets(new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadCardSpecialSets())),
     socialRoom,
     gameLinks,
-    System.Text.Encoding.GetEncoding(949),
+    tPoseidon.Core.Common.ClientText.Encoding,
     Log);
 
 var rankingStore = new tPoseidon.Core.Data.Postgres.PostgresRankingStore(postgres.DataSource);
 var rankServer = new tPoseidon.Kr2014.SystemServer.RankServer(
-    new RankService(rankingStore, System.Text.Encoding.GetEncoding(949)),
+    new RankService(rankingStore, tPoseidon.Core.Common.ClientText.Encoding),
     rankingStore,
     socialRoom,
     Log);
@@ -188,7 +193,7 @@ var gameMasterChat = new GameMasterChat(
     gameMasterReader?.LoadNameStringTable(GameMasterChat.ResultTable) ?? new Dictionary<string, string>(),
     gameMasterReader?.LoadNameStringTable(GameMasterChat.HelpTable) ?? new Dictionary<string, string>());
 MasterServerClient? masterClient = null;
-var gameMasterService = new GameMasterService(postgres.GmAuthority, System.Text.Encoding.GetEncoding(949))
+var gameMasterService = new GameMasterService(postgres.GmAuthority, tPoseidon.Core.Common.ClientText.Encoding)
     {
         Friends = new tPoseidon.Core.Data.Postgres.PostgresFriendStore(postgres.DataSource),
         Guilds = new tPoseidon.Core.Data.Postgres.PostgresGuildStore(postgres.DataSource),
@@ -204,10 +209,11 @@ var gameMasterServer = new tPoseidon.Kr2014.SystemServer.GameMasterServer(
     gameMasterService,
     gameMasterChat,
     postgres.GmAuthority,
+    new tPoseidon.Core.Data.Postgres.PostgresCharacterDirectory(postgres.DataSource),
     socialRoom,
     gameLinks,
     new tPoseidon.Core.Data.Postgres.PostgresGmRateEventStore(postgres.DataSource),
-    System.Text.Encoding.GetEncoding(949),
+    tPoseidon.Core.Common.ClientText.Encoding,
     systemIni?.GetBool("GameMasterToolLoopbackOnly", true) ?? true,
     Log);
 gameMasterServer.GuildDissolver = guildServer.ForceDissolveAsync;
@@ -315,7 +321,7 @@ gameLinks.OnRenamed = async (characterId, _, newName, ct) =>
 };
 gameLinks.OnMegaphone = async (_, style, message, ct) =>
 {
-    var shout = tPoseidon.Core.Net.World.SpecialItemFrames.MegaphoneShouted(style, message, System.Text.Encoding.GetEncoding(949));
+    var shout = tPoseidon.Core.Net.World.SpecialItemFrames.MegaphoneShouted(style, message, tPoseidon.Core.Common.ClientText.Encoding);
     foreach (var member in socialRoom.Members)
     {
         try

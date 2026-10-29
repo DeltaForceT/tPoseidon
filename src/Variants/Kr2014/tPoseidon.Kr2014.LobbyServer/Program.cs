@@ -22,10 +22,9 @@ Console.WriteLine($"{LogTag} SERVER_LIST encoder ready ({serverListPlaintext.Len
 var pg = await PostgresStoreBootstrap.InitializeAsync();
 var accountStore = pg.Store;
 var launchTickets = new PostgresLaunchTicketStore(pg.DataSource);
-Console.WriteLine($"{LogTag} account store ready (Postgres-backed); use mt-account-create to register operators");
+Console.WriteLine($"{LogTag} account store ready (PostgreSQL)");
 
-System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-var clientText = System.Text.Encoding.GetEncoding(949);
+var clientText = tPoseidon.Core.Common.ClientText.Encoding;
 var lobbyStatesReset = accountStore.ResetLobbyStates();
 Console.WriteLine($"{LogTag} lobby start: {lobbyStatesReset} account(s) left in the lobby or server-select state set to 0");
 var lobbySessions = new System.Collections.Concurrent.ConcurrentDictionary<S2SessionContext, uint>();

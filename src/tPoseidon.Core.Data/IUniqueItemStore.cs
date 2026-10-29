@@ -64,6 +64,8 @@ public static class UniqueItemRules
 
 public readonly record struct BossKillRecord(int MonsterId, DateTimeOffset LatestKill);
 
+public readonly record struct BossKillHistoryRecord(int MonsterId, int KillCount, DateTimeOffset FirstKill);
+
 public interface IUniqueItemStore
 {
     IReadOnlyList<UniqueItemInfo> MasterRestart();
@@ -79,6 +81,8 @@ public interface IUniqueItemStore
     bool BossKilled(ulong charUid, int monsterId, DateTimeOffset now);
 
     IReadOnlyList<BossKillRecord> LatestBossKills(ulong charUid);
+
+    IReadOnlyList<BossKillHistoryRecord> BossKillHistory(ulong charUid);
 
     bool AddCount(int itemIndex, int units, DateTimeOffset now);
 }

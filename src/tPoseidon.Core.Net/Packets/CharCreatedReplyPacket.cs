@@ -74,7 +74,7 @@ public sealed class CharCreatedReplyPacket
         var slice = buf.Slice(offset, fieldBytes);
         var nul = slice.IndexOf((byte)0);
         var len = nul < 0 ? fieldBytes : nul;
-        return Encoding.ASCII.GetString(slice[..len]);
+        return ClientText.Encoding.GetString(slice[..len]);
     }
 
     private static uint ReadUInt32Le(ReadOnlySpan<byte> buf, int offset) =>

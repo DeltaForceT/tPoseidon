@@ -44,11 +44,10 @@ public sealed class GmWindow : Window
 
         var kit = new GmKit(model, this);
         AddTab("Players", GmPlayersPage.Build(kit));
-        AddTab("Spawn", GmSpawnPage.Build(kit));
-        AddTab("Server", GmServerPage.Build(kit));
-        AddTab("Events", GmEventsPage.Build(kit));
+        AddTab("Blocks and penalties", GmBlocksPage.Build(kit));
+        AddTab("Spawns", GmSpawnPage.Build(kit));
+        AddTab("World and events", GmWorldPage.Build(kit));
         AddTab("Guilds", GmGuildsPage.Build(kit));
-        AddTab("Penalties", GmPenaltiesPage.Build(kit));
         AddTab("GM accounts", GmAccountsPage.Build(kit, UseForLogin));
         AddTab("Help", GmHelpPage.Build(kit));
 
@@ -92,12 +91,28 @@ public sealed class GmWindow : Window
 
     public IReadOnlyList<string> Tabs => _tabs.Select(tab => tab.Chip.Content as string ?? "").ToList();
 
-    public static void Toggle(InstallPaths paths)
+    public static void Open(InstallPaths paths)
     {
         if (s_instance is null)
         {
             s_instance = new GmWindow(new GmModel(GmServices.For(paths)));
             s_instance.Show();
+            return;
+        }
+
+        if (s_instance.WindowState == WindowState.Minimized)
+        {
+            s_instance.WindowState = WindowState.Normal;
+        }
+
+        s_instance.Activate();
+    }
+
+    public static void Toggle(InstallPaths paths)
+    {
+        if (s_instance is null)
+        {
+            Open(paths);
         }
         else
         {

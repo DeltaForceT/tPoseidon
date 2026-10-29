@@ -99,6 +99,6 @@ public sealed class CharacterListPacket
         var nul = nameRegion.IndexOf((byte)0);
         var len = nul < 0 ? nameRegion.Length : nul;
         if (len == 0) return string.Empty;
-        return Encoding.ASCII.GetString(nameRegion[..len]);
+        return ClientText.Encoding.GetString(nameRegion[..len]);
     }
 }

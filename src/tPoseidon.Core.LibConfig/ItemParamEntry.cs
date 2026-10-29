@@ -62,6 +62,8 @@ public sealed record ItemParamEntry
 
     public int Mp { get; init; }
 
+    public int Money { get; init; }
+
     public int ExtendedOptions { get; init; }
 
     public int CharacterTypeFlags { get; init; }

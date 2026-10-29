@@ -7,15 +7,10 @@ public sealed record MonsterRegenRow(int MonsterId, int Region, int Average, int
 
 public sealed class MonsterRegenCycle
 {
-    public const ushort FallbackX = 600;
-    public const ushort FallbackY = 400;
-
     public const int FirstFieldMonsterId = 2000;
     public const int LastFieldMonsterId = 3434;
     public const int FirstSpecialMonsterId = 16000;
     public const int LastSpecialMonsterId = 16998;
-
-    private const int NoRegion = 0;
 
     private readonly MonsterManager _monsters;
     private readonly IMonsterParamLookup _catalog;
@@ -51,33 +46,6 @@ public sealed class MonsterRegenCycle
     {
         ArgumentNullException.ThrowIfNull(rows);
 
-        var regionPoints = new Dictionary<int, List<ZonePoint>>();
-        var generalPoints = new List<ZonePoint>();
-        ZonePoint? firstEntry = null;
-        if (geometry is not null)
-        {
-            foreach (var point in geometry.Points)
-            {
-                switch (point.Type)
-                {
-                    case ZoneGeometry.PointTypeRegionSpawn:
-                        if (!regionPoints.TryGetValue(point.Id, out var ofRegion))
-                        {
-                            ofRegion = new List<ZonePoint>();
-                            regionPoints[point.Id] = ofRegion;
-                        }
-                        ofRegion.Add(point);
-                        break;
-                    case ZoneGeometry.PointTypeSpawn:
-                        generalPoints.Add(point);
-                        break;
-                    case ZoneGeometry.PointTypeEntry:
-                        firstEntry ??= point;
-                        break;
-                }
-            }
-        }
-
         var ratioSum = 0f;
         foreach (var row in rows) ratioSum += row.Ratio;
 
@@ -88,9 +56,7 @@ public sealed class MonsterRegenCycle
                 Cap = mapCap,
                 Rows = rows.ToArray(),
                 RatioSum = ratioSum,
-                RegionPoints = regionPoints,
-                GeneralPoints = generalPoints,
-                FirstEntry = firstEntry,
+                SpawnPoints = new ZoneSpawnPoints(geometry),
             };
         }
     }
@@ -123,7 +89,7 @@ public sealed class MonsterRegenCycle
                 var definition = _catalog.GetById(row.MonsterId);
                 if (definition is null || definition.Type == (int)MonsterAType.BossMonster) continue;
 
-                var (x, y) = PickPosition(zone, row.Region);
+                var (x, y) = zone.SpawnPoints.Pick(row.Region, _rng);
                 var monster = _monsters.Spawn(
                     row.MonsterId, mapId, x, y, spawnPointId: null, explicitEntityId: null, regionId: row.Region);
                 if (monster is null) continue;
@@ -149,32 +115,12 @@ public sealed class MonsterRegenCycle
         }
     }
 
-    private (ushort X, ushort Y) PickPosition(Zone zone, int region)
-    {
-        if (region != NoRegion
-            && zone.RegionPoints.TryGetValue(region, out var ofRegion)
-            && ofRegion.Count > 0)
-        {
-            return At(ofRegion[_rng.Next(ofRegion.Count)]);
-        }
-        if (zone.GeneralPoints.Count > 0)
-        {
-            return At(zone.GeneralPoints[_rng.Next(zone.GeneralPoints.Count)]);
-        }
-        return zone.FirstEntry is { } entry ? At(entry) : (FallbackX, FallbackY);
-    }
-
-    private static (ushort X, ushort Y) At(ZonePoint point) =>
-        ((ushort)Math.Clamp(point.X, 0, ushort.MaxValue), (ushort)Math.Clamp(point.Y, 0, ushort.MaxValue));
-
     private sealed class Zone
     {
         public required int Cap { get; init; }
         public required MonsterRegenRow[] Rows { get; init; }
         public required float RatioSum { get; init; }
-        public required Dictionary<int, List<ZonePoint>> RegionPoints { get; init; }
-        public required List<ZonePoint> GeneralPoints { get; init; }
-        public required ZonePoint? FirstEntry { get; init; }
+        public required ZoneSpawnPoints SpawnPoints { get; init; }
         public Dictionary<(int MonsterId, int Region), int> Counts { get; } = new();
         public int Alive { get; set; }
     }

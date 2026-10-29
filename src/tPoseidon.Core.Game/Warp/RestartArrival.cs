@@ -4,8 +4,8 @@ namespace tPoseidon.Core.Game.Warp;
 
 public static class RestartArrival
 {
-    public const ushort FallbackX = 500;
-    public const ushort FallbackY = 400;
+    public const ushort FallbackX = PortalArrivalRule.FallbackX;
+    public const ushort FallbackY = PortalArrivalRule.FallbackY;
     public const byte ChangeZoneType = 1;
 
     public const ushort FirstReturnMap = 1;

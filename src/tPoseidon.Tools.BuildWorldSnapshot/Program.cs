@@ -70,7 +70,6 @@ var mapInfoPath = Path.Combine(dataDir, "map-info.json");
 var portalsPath = Path.Combine(dataDir, "portals.json");
 var monsterSpawnsPath = Path.Combine(dataDir, "monster-spawns.json");
 var zonePoolsPath = Path.Combine(dataDir, "zone-mob-pools.json");
-var npcPointsCatalogPath = Path.Combine(dataDir, "npc-points.json");
 
 if (string.IsNullOrWhiteSpace(libconfigOverride))
 {
@@ -98,7 +97,6 @@ Hash("map-info.json", mapInfoPath);
 Hash("portals.json", portalsPath);
 Hash("monster-spawns.json", monsterSpawnsPath);
 Hash("zone-mob-pools.json", zonePoolsPath);
-Hash("npc-points.json", npcPointsCatalogPath);
 Hash(Path.GetFileName(libconfigPath), libconfigPath);
 
 Console.WriteLine($"{LogTag} libconfig: {libconfigPath}");
@@ -154,18 +152,11 @@ catch (Exception ex)
     return 2;
 }
 
-INpcPointProvider npcPointProvider;
-try
-{
-    var jsonProvider = JsonNpcPointProvider.LoadFromFile(npcPointsCatalogPath);
-    Console.WriteLine($"{LogTag} npc-points: {jsonProvider.Count} points across {jsonProvider.MapCount} maps");
-    npcPointProvider = jsonProvider;
-}
-catch (Exception ex)
-{
-    Warn($"npc-points load failed ({ex.GetType().Name}: {ex.Message})");
-    npcPointProvider = InMemoryNpcPointProvider.CoralTownDefaults();
-}
+var npcPointProvider = Md3PointCatalog.Load(
+    mapInfoLookup.All.Where(map => map.NpcTable.Length > 0),
+    md3Dir,
+    MapPointTypes.Npc);
+Console.WriteLine($"{LogTag} npc-points: {npcPointProvider.Count} points read from the map files");
 
 IMonsterSpawnProvider monsterSpawnProvider;
 try

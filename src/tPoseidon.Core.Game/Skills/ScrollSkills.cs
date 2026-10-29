@@ -31,7 +31,6 @@ public static class ScrollSkills
     public const int FlatCalculation = 1;
     public const int LevelCalculation = 2;
     public const int PartyMembers = 6;
-    public const int TextCodePage = 949;
 
     private const int LevelMultiplier = 4;
     private const int LevelDivisor = 10;

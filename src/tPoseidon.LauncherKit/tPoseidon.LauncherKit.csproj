@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyName>tPoseidon.LauncherKit</AssemblyName>
+    <RootNamespace>tPoseidon.LauncherKit</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
+    <ProjectReference Include="..\tPoseidon.Hosting\tPoseidon.Hosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="tPoseidon.LauncherKit.Tests" />
+  </ItemGroup>
+
+</Project>

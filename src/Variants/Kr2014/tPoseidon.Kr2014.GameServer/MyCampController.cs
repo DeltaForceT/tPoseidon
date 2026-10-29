@@ -93,19 +93,18 @@ internal sealed class MyCampController : IDisposable
         st.PlayerX = MyCampRules.OwnerX;
         st.PlayerY = MyCampRules.OwnerY;
         await _sendToMap(shell.FieldMap, Opcode.S2C_PLAYER_SPAWN_POST_WARP, MyCampFrames.House(shell, shell.OwnerId, _text)).ConfigureAwait(false);
-        await SendAsync(st, Opcode.S2C_MYCAMP_OWNER_ENTER, MyCampFrames.OwnerEnter(shell, _text)).ConfigureAwait(false);
+        await StartTransferAsync(st, character.CharacterId, shell.Layout.Values.ToArray(), MyCampTransferKind.Open).ConfigureAwait(false);
         Log(st, $"opens camp (slot {shell.SlotCode}, mode {shell.Mode}, house 0x{shell.HouseId:X4} on map {shell.FieldMap}, {shell.Layout.Count} items)");
     });
 
     public Task OwnerReadyAsync(InGameSessionState st, ReadOnlyMemory<byte> payload) => Locked(async () =>
     {
-        if (st.Character is not { } character || ShellOfOwner(st) is not { } shell || payload.Length < 6) return;
+        if (ShellOfOwner(st) is not { } shell || payload.Length < 6) return;
         st.PlayerX = (ushort)BitConverter.ToInt16(payload.Span[2..4]);
         st.PlayerY = (ushort)BitConverter.ToInt16(payload.Span[4..6]);
         shell.Ready = true;
         await SendAsync(st, Opcode.S2C_MYCAMP_OWNER_READY, Array.Empty<byte>()).ConfigureAwait(false);
         await _showPlayers(st).ConfigureAwait(false);
-        await StartTransferAsync(st, character.CharacterId, shell.Layout.Values.ToArray(), forGuest: false).ConfigureAwait(false);
     });
 
     public Task TransferNextAsync(InGameSessionState st) => Locked(async () =>
@@ -117,6 +116,15 @@ internal sealed class MyCampController : IDisposable
             return;
         }
         await SendAsync(st, Opcode.S2C_MYCAMP_ITEMS, MyCampFrames.Items(transfer.NextChunk(MyCampRules.TransferChunkBytes))).ConfigureAwait(false);
+    });
+
+    public Task StartShopListAsync(InGameSessionState st) => Locked(async () =>
+    {
+        if (st.Character is not { } character) return;
+        var slot = SlotOf(character.CharacterId);
+        var records = Records(character.OwnerAccountId, slot?.SlotCode, guest: false);
+        await StartTransferAsync(st, character.CharacterId, records, MyCampTransferKind.Shop).ConfigureAwait(false);
+        Log(st, $"my shop camp list of {records.Count} camp items started");
     });
 
     public Task StartRecycleListAsync(InGameSessionState st) => Locked(async () =>
@@ -139,21 +147,28 @@ internal sealed class MyCampController : IDisposable
         return Task.CompletedTask;
     });
 
-    public Task TransferEndAsync(InGameSessionState st, bool aborted) => Locked(async () =>
+    public Task TransferEndAsync(InGameSessionState st, byte result) => Locked(async () =>
     {
         if (st.Character is not { } character || !_transfers.Remove(character.CharacterId, out var transfer)) return;
-        if (transfer.Kind == MyCampTransferKind.Recycle)
+        var succeeded = result == MyCampRules.TransferOk;
+        switch (transfer.Kind)
         {
-            if (!aborted) await SendAsync(st, Opcode.S2C_RECYCLE_MYCAMP_READY, RecycleFrames.MyCampListReady(character.Name, _text)).ConfigureAwait(false);
-            return;
-        }
-        if (!transfer.ForGuest)
-        {
-            if (ShellOfOwner(st) is { } own) await SendAsync(st, Opcode.S2C_MYCAMP_MODE, new[] { own.Mode }).ConfigureAwait(false);
-            return;
+            case MyCampTransferKind.Recycle:
+                if (succeeded) await SendAsync(st, Opcode.S2C_RECYCLE_MYCAMP_READY, RecycleFrames.MyCampListReady(character.Name, _text)).ConfigureAwait(false);
+                return;
+            case MyCampTransferKind.Shop:
+                if (succeeded) await SendAsync(st, Opcode.S2C_MYSHOP_ENTERED, MyShopFrames.Entered(SlotOf(character.CharacterId)?.SlotName ?? string.Empty, _text)).ConfigureAwait(false);
+                else await SendAsync(st, Opcode.S2C_MYSHOP_ENTER_FAILED, Array.Empty<byte>()).ConfigureAwait(false);
+                return;
+            case MyCampTransferKind.Open or MyCampTransferKind.ModeChange:
+                if (ShellOfOwner(st) is not { } own) return;
+                if (!succeeded) await CloseAsync(own).ConfigureAwait(false);
+                else if (transfer.Kind == MyCampTransferKind.Open) await SendAsync(st, Opcode.S2C_MYCAMP_OWNER_ENTER, MyCampFrames.OwnerEnter(own, _text)).ConfigureAwait(false);
+                else await SendAsync(st, Opcode.S2C_MYCAMP_MODE, new[] { own.Mode }).ConfigureAwait(false);
+                return;
         }
         if (GuestShell(character.CharacterId) is not { } shell) return;
-        if (aborted)
+        if (!succeeded)
         {
             shell.RemoveGuest(character.CharacterId);
             await SendAsync(st, Opcode.S2C_MYCAMP_ENTER_REFUSED, new[] { MyCampRules.EnterFailed }).ConfigureAwait(false);
@@ -191,7 +206,7 @@ internal sealed class MyCampController : IDisposable
             return;
         }
         shell!.AddGuest(character.CharacterId);
-        await StartTransferAsync(st, character.CharacterId, shell.Placed(), forGuest: true).ConfigureAwait(false);
+        await StartTransferAsync(st, character.CharacterId, shell.Placed(), MyCampTransferKind.Guest).ConfigureAwait(false);
     });
 
     public Task LeaveAsync(InGameSessionState st) => Locked(async () =>
@@ -263,7 +278,7 @@ internal sealed class MyCampController : IDisposable
             }
             shell.LoadLayout(Records(shell, guest: false));
             await _sendToMap(shell.FieldMap, Opcode.S2C_MYCAMP_HOUSE_UPDATE, MyCampFrames.HouseUpdate(shell, MyCampRules.HouseFlagState, _text)).ConfigureAwait(false);
-            await StartTransferAsync(st, character.CharacterId, shell.Layout.Values.ToArray(), forGuest: false).ConfigureAwait(false);
+            await StartTransferAsync(st, character.CharacterId, shell.Layout.Values.ToArray(), MyCampTransferKind.ModeChange).ConfigureAwait(false);
         }
         Log(st, $"camp mode {shell.Mode}");
     });
@@ -346,10 +361,10 @@ internal sealed class MyCampController : IDisposable
         }
     });
 
-    private async Task StartTransferAsync(InGameSessionState st, ulong characterId, IReadOnlyCollection<MyCampItemRecord> records, bool forGuest)
+    private async Task StartTransferAsync(InGameSessionState st, ulong characterId, IReadOnlyCollection<MyCampItemRecord> records, MyCampTransferKind kind)
     {
-        _transfers[characterId] = new MyCampTransfer(records, forGuest);
-        if (!forGuest) await SendAsync(st, Opcode.S2C_TIMER_ITEM_CLOCK, TimedItemFrames.Clock(DateTime.UtcNow)).ConfigureAwait(false);
+        _transfers[characterId] = new MyCampTransfer(records, kind);
+        if (kind != MyCampTransferKind.Guest) await SendAsync(st, Opcode.S2C_TIMER_ITEM_CLOCK, TimedItemFrames.Clock(DateTime.UtcNow)).ConfigureAwait(false);
         await SendAsync(st, Opcode.S2C_MYCAMP_ITEM_COUNT, MyCampFrames.ItemCount(records.Count)).ConfigureAwait(false);
     }
 

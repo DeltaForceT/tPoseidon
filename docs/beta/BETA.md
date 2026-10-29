@@ -45,10 +45,7 @@ To update:
 
 ## Version numbers
 
-They look like `0.MINOR.PATCH-beta`. The first beta is `0.55.0-beta`, shown as v0.55 Beta; a fix release after it would be `0.55.1-beta`.
-
-- MINOR goes up when we add systems or the database changes.
-- PATCH goes up for fixes that don't touch the database.
+They look like `0.MINOR.PATCH-beta`, for example `0.60.0-beta`, shown as v0.60 Beta. A higher number is a newer release, and a release that changes the database says so at the top of its notes.
 
 You'll find the version in `tposeidon status`, the control panel's title bar and the release file name. Put it in every bug report.
 

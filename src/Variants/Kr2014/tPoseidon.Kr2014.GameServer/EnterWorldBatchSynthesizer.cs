@@ -42,9 +42,11 @@ public static class EnterWorldBatchSynthesizer
         byte[]? abilityPercents = null,
         byte[]? petBag = null,
         uint profileFlags = tPoseidon.Core.Game.Progression.ProfileViewRules.DefaultFlags,
+        byte[]? bossKillWindow = null,
+        byte[]? coverLetter = null,
         CancellationToken ct = default)
     {
-        await SendPhase1Async(ctx, character, entityId, questLists, itemStore, skillStore, rates, itemOptions, timedItems, titles, fortune, fortuneTitleId, abilityPercents, petBag, profileFlags, ct).ConfigureAwait(false);
+        await SendPhase1Async(ctx, character, entityId, questLists, itemStore, skillStore, rates, itemOptions, timedItems, titles, fortune, fortuneTitleId, abilityPercents, petBag, profileFlags, bossKillWindow, coverLetter, ct).ConfigureAwait(false);
         await SendPhase2Async(
             ctx, character, entityId, dialogService,
             worldEntities, characterInfoCatalog,
@@ -67,6 +69,8 @@ public static class EnterWorldBatchSynthesizer
         byte[]? abilityPercents = null,
         byte[]? petBag = null,
         uint profileFlags = tPoseidon.Core.Game.Progression.ProfileViewRules.DefaultFlags,
+        byte[]? bossKillWindow = null,
+        byte[]? coverLetter = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ctx);
@@ -133,14 +137,14 @@ public static class EnterWorldBatchSynthesizer
 
         await SendFrameAsync(ctx, Opcode.S2C_FORTUNE_APPLIED, randKey: 0x08, fortune ?? BuildBatchCounter3D7().EncodePayload(), ct);
 
-        await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_2A4, randKey: 0x61, ListCountPacket.Empty.EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.S2C_BOSS_KILL_HISTORY, randKey: 0x61, bossKillWindow ?? ListCountPacket.Empty.EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.S2C_PROFILE_OPTIONS, randKey: 0x40, tPoseidon.Core.Net.World.ProfileViewFrames.Options(profileFlags), ct);
 
         var profileTitle = titles?.ProfileTitle ?? new EntityIdAnnouncePacket { EntityId = entityId, PadBytes = 11 }.EncodePayload();
         await SendFrameAsync(ctx, Opcode.S2C_PROFILE_TITLE, randKey: 0x14, profileTitle, ct);
 
-        await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_3EA, randKey: 0xB1, ListCountPacket.Empty.EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.S2C_PROFILE_COVER_LETTER, randKey: 0xB1, coverLetter ?? ListCountPacket.Empty.EncodePayload(), ct);
     }
 
     public static async Task SendPhase2Async(
@@ -382,10 +386,10 @@ public static class EnterWorldBatchSynthesizer
             EntityId = npc.EntityId,
             Kind = NpcSpawnPacket.EntityKind.Npc,
             TemplateId = (ushort)npc.ChrType,
-            SpawnX = (ushort)npc.Spawn.X,
-            SpawnY = (ushort)npc.Spawn.Y,
-            CurrentX = (ushort)npc.Spawn.X,
-            CurrentY = (ushort)npc.Spawn.Y,
+            PositionX = (ushort)npc.Spawn.X,
+            PositionY = (ushort)npc.Spawn.Y,
+            DestinationX = (ushort)npc.Spawn.X,
+            DestinationY = (ushort)npc.Spawn.Y,
             Name = npc.DisplayName ?? characterInfoCatalog.GetById(npc.ChrType)?.DisplayName ?? "NPC",
             Trailer = trailer,
         }.EncodePayload();
@@ -484,9 +488,11 @@ public static class EnterWorldBatchSynthesizer
         {
             var mobs = monsterManager.GetByMap(character.MapId);
             byte rk = 0x42;
+            var mobsNow = DateTimeOffset.UtcNow;
             foreach (var mob in mobs)
             {
-                if (!inView(mob.CurrentX, mob.CurrentY)) continue;
+                var (mobX, mobY) = mob.GetInterpolatedPosition(mobsNow);
+                if (!inView(mobX, mobY)) continue;
                 var trailer = new byte[23];
                 trailer[2] = 0x15;
                 trailer[7] = 0x01;
@@ -500,10 +506,10 @@ public static class EnterWorldBatchSynthesizer
                     UnknownField6 = 0,
                     UnknownField8 = mobLevel,
                     Reserved10 = 0x00000001,
-                    SpawnX = mob.SpawnX,
-                    SpawnY = mob.SpawnY,
-                    CurrentX = mob.CurrentX,
-                    CurrentY = mob.CurrentY,
+                    PositionX = mobX,
+                    PositionY = mobY,
+                    DestinationX = mob.DestinationX,
+                    DestinationY = mob.DestinationY,
                     Name = mob.Name,
                     Trailer = trailer,
                 };

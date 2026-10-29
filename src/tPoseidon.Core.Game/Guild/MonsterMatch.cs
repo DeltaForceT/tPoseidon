@@ -6,6 +6,7 @@ public static class GuildGameRules
 {
     public const byte TeamMatch = 0;
     public const byte DeathMatch = 1;
+    public const byte MonsterMatchType = 2;
     public const int Teams = 2;
     public const byte WinnerDraw = 1;
     public const byte WinnerTeam0 = 2;
@@ -55,11 +56,16 @@ public sealed class MatchSummon
 
 public readonly record struct MatchEnd(byte Winner, byte Result, byte Reason);
 
+public readonly record struct BossTally(int MonsterId, byte Point, byte Count);
+
+public readonly record struct MonsterKill(int MonsterId, ushort ObjectId, int MonsterTeam, ulong KillerId, bool KillerFound, bool SameTeam);
+
 public sealed class MonsterMatch
 {
     private readonly MonsterMatchTables _points;
     private readonly List<MatchFighter> _fighters = new();
     private readonly Dictionary<int, MatchSummon> _summons = new();
+    private readonly SortedDictionary<int, BossTally>[] _tally = { new(), new() };
     private int _tickCarryMs;
 
     public MonsterMatch(MonsterMatchTables points, int scoreGoal)
@@ -74,6 +80,8 @@ public sealed class MonsterMatch
     public int[] TeamDeaths { get; } = new int[GuildGameRules.Teams];
     public IReadOnlyList<MatchFighter> Fighters => _fighters;
     public IReadOnlyCollection<MatchSummon> Summons => _summons.Values;
+
+    public IReadOnlyList<BossTally> Tally(int team) => _tally[team].Values.ToArray();
 
     public MatchFighter Join(ulong characterId, int team)
     {
@@ -116,26 +124,30 @@ public sealed class MonsterMatch
         return expired;
     }
 
-    public bool MonsterKilled(ushort monsterEntity, ulong killerId)
+    public MonsterKill? MonsterKilled(ushort monsterEntity, ulong killerId)
     {
         var summon = _summons.Values.FirstOrDefault(candidate => candidate.Monsters.Contains(monsterEntity));
-        if (summon is null) return false;
+        if (summon is null) return null;
         var monsterTeam = Array.IndexOf(summon.Monsters, monsterEntity);
         summon.Dead[monsterTeam] = true;
-        if (_fighters.FirstOrDefault(fighter => fighter.CharacterId == killerId) is { } killer)
+        var killer = _fighters.FirstOrDefault(fighter => fighter.CharacterId == killerId);
+        var sameTeam = killer is not null && killer.Team == monsterTeam;
+        if (killer is not null)
         {
-            if (killer.Team == monsterTeam && _points.ByMonster(summon.MonsterId) is { } row)
+            if (sameTeam && _points.ByMonster(summon.MonsterId) is { } row)
             {
                 killer.Score += row.Point;
                 TeamScore[killer.Team] += row.Point;
+                var known = _tally[killer.Team].GetValueOrDefault(row.MonsterId);
+                _tally[killer.Team][row.MonsterId] = new BossTally(row.MonsterId, (byte)Math.Clamp(row.Point, 0, byte.MaxValue), (byte)Math.Min(known.Count + 1, byte.MaxValue));
             }
-            else
+            else if (!sameTeam)
             {
                 killer.WrongKills++;
             }
         }
         if (summon.Cleared) _summons.Remove(summon.TriggerId);
-        return true;
+        return new MonsterKill(summon.MonsterId, monsterEntity, monsterTeam, killerId, killer is not null, sameTeam);
     }
 
     public void PlayerKilled(ulong victimId, ulong killerId)

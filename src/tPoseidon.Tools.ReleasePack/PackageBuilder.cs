@@ -33,6 +33,7 @@ internal sealed class PackageBuilder
         "docs/beta/SYSTEMS.md",
         "docs/install/postgresql.md",
         "docs/install/hosting-securely.md",
+        "docs/install/launcher-updates.md",
         "docs/scripting/README.md",
         "docs/scripting/examples/daily_login_reward.tscript",
         "docs/scripting/examples/fetch_quest.tscript",
@@ -40,6 +41,19 @@ internal sealed class PackageBuilder
         "docs/scripting/examples/greeter.tscript",
     };
 
+    private static readonly string[] LauncherRids = { "win-x64" };
+
+    private static readonly string[] LauncherDocuments =
+    {
+        "README.md",
+        "LICENSE",
+        "NOTICE",
+    };
+
+    private const string LauncherProject = "src/tPoseidon.Launcher/tPoseidon.Launcher.csproj";
+    private const string InstallerProject = "src/tPoseidon.Launcher.Installer/tPoseidon.Launcher.Installer.csproj";
+    private const string LauncherKitFolder = "launcher-kit";
+    private const string WindowsPlayerLauncher = "@echo off\r\nstart \"\" \"%~dp0app\\tPoseidon.Launcher.exe\" %*\r\n";
     private const string WindowsLauncher = "@echo off\r\n\"%~dp0app\\tposeidon.exe\" %*\r\n";
     private const string UnixLauncher = "#!/bin/sh\nhere=$(cd \"$(dirname \"$0\")\" && pwd)\nexec \"$here/app/tposeidon\" \"$@\"\n";
     private const string WindowsPanelLauncher = "@echo off\r\nstart \"\" \"%~dp0app\\tPoseidon.Panel.exe\" %*\r\n";
@@ -87,6 +101,10 @@ internal sealed class PackageBuilder
         }
 
         CopyMigrations(Path.Combine(_repoRoot, "scripts", "migrations"), Path.Combine(app, "migrations"));
+        if (HasLauncher(rid))
+        {
+            PublishLauncherKit(rid, Path.Combine(app, LauncherKitFolder));
+        }
 
         var licenseFiles = await PackageTools.LicensesAsync(_lock.Licenses, _cache, ct).ConfigureAwait(false);
 
@@ -128,6 +146,71 @@ internal sealed class PackageBuilder
 
         var archiveInfo = new FileInfo(archivePath);
         return new PackageResult(archivePath, archiveInfo.Length, await PackageTools.HashOfAsync(archivePath, ct).ConfigureAwait(false), entries);
+    }
+
+    public static bool HasLauncher(string rid) => LauncherRids.Contains(rid, StringComparer.Ordinal);
+
+    public async Task<PackageResult> BuildLauncherAsync(string rid, CancellationToken ct)
+    {
+        if (!HasLauncher(rid))
+        {
+            throw new InvalidOperationException($"There is no player launcher for {rid}.");
+        }
+
+        var name = $"{ReleaseManifest.FilePrefix}-launcher-{_options.Version}-{rid}";
+        var stage = Path.Combine(_stageRoot, name);
+        if (Directory.Exists(stage))
+        {
+            Directory.Delete(stage, recursive: true);
+        }
+
+        var app = Path.Combine(stage, "app");
+        Directory.CreateDirectory(app);
+        Console.WriteLine($"{rid}: publishing the player launcher");
+        Publish(LauncherProject, rid, app);
+
+        var licenseFiles = await PackageTools.LicensesAsync(_lock.Licenses, _cache, ct).ConfigureAwait(false);
+
+        Directory.CreateDirectory(_output);
+        var archivePath = Path.Combine(_output, name + ".zip");
+        IReadOnlyList<PackageEntry> entries;
+        using (var archive = new PackageArchive(archivePath, zip: true, comment: $"{ReleaseManifest.Product} launcher {_identity}"))
+        {
+            foreach (var file in Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal))
+            {
+                var relative = Path.GetRelativePath(stage, file).Replace('\\', '/');
+                archive.AddFile(file, name + "/" + relative, PackageTools.ModeFor(file));
+            }
+
+            foreach (var document in LauncherDocuments)
+            {
+                archive.AddFile(Path.Combine(_repoRoot, document), name + "/" + document, PackageArchive.RegularMode);
+            }
+
+            foreach (var (source, entry) in licenseFiles)
+            {
+                archive.AddFile(source, name + "/" + entry, PackageArchive.RegularMode);
+            }
+
+            archive.AddText(name + "/tposeidon-launcher.cmd", WindowsPlayerLauncher, PackageArchive.RegularMode);
+            entries = archive.Entries;
+        }
+
+        var archiveInfo = new FileInfo(archivePath);
+        return new PackageResult(archivePath, archiveInfo.Length, await PackageTools.HashOfAsync(archivePath, ct).ConfigureAwait(false), entries);
+    }
+
+    private void PublishLauncherKit(string rid, string kit)
+    {
+        Console.WriteLine($"{rid}: publishing the launcher kit for the panel");
+        PackageTools.Publish(_repoRoot, LauncherProject, rid, Path.Combine(kit, "launcher"), _identity, ["-p:ApplicationIcon="]);
+        PackageTools.Publish(
+            _repoRoot,
+            InstallerProject,
+            rid,
+            Path.Combine(kit, "installer"),
+            _identity,
+            ["-p:PublishSingleFile=true", "-p:IncludeNativeLibrariesForSelfExtract=true", "-p:EnableCompressionInSingleFile=true"]);
     }
 
     private void Publish(string project, string rid, string output) =>

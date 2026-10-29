@@ -11,6 +11,7 @@ internal sealed class ProfileViewController
     private readonly Func<ushort, ushort, InGameSessionState?> _playerOnMap;
     private readonly Func<ulong, string> _guildNameOf;
     private readonly Func<InGameSessionState, ProfileGear> _gearOf;
+    private readonly Func<ulong, CancellationToken, Task<IReadOnlyList<BossKillHistoryRecord>?>> _bossKillsOf;
     private readonly Encoding _text;
     private readonly string _logTag;
     private readonly Random _rng = new();
@@ -22,6 +23,7 @@ internal sealed class ProfileViewController
         Func<ushort, ushort, InGameSessionState?> playerOnMap,
         Func<ulong, string> guildNameOf,
         Func<InGameSessionState, ProfileGear> gearOf,
+        Func<ulong, CancellationToken, Task<IReadOnlyList<BossKillHistoryRecord>?>> bossKillsOf,
         Encoding text,
         string logTag)
     {
@@ -30,25 +32,30 @@ internal sealed class ProfileViewController
         _playerOnMap = playerOnMap ?? throw new ArgumentNullException(nameof(playerOnMap));
         _guildNameOf = guildNameOf ?? throw new ArgumentNullException(nameof(guildNameOf));
         _gearOf = gearOf ?? throw new ArgumentNullException(nameof(gearOf));
+        _bossKillsOf = bossKillsOf ?? throw new ArgumentNullException(nameof(bossKillsOf));
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
 
-    public Task ViewAsync(InGameSessionState asker, ReadOnlyMemory<byte> payload)
+    public async Task ViewAsync(InGameSessionState asker, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(asker);
         if (!ProfileViewFrames.TryReadRequest(payload.Span, out var entityId))
         {
             Console.WriteLine($"{_logTag} [profile] view request of {payload.Length} bytes not read");
-            return Task.CompletedTask;
+            return;
         }
         if (_playerOnMap(asker.MapId, entityId) is not { Character: { } character, Stats: { } stats } target)
         {
-            return SendAsync(asker, Opcode.S2C_PROFILE_VIEW_UNKNOWN, ProfileViewFrames.Unknown());
+            await SendAsync(asker, Opcode.S2C_PROFILE_VIEW_UNKNOWN, ProfileViewFrames.Unknown()).ConfigureAwait(false);
+            return;
         }
         var profile = _profiles.GetOrCreate(character.CharacterId);
         var record = _pk.GetOrCreate(character.CharacterId);
         var flags = unchecked((uint)profile.PublicFlagBitmask);
+        var bossKills = ProfileViewRules.Shows(flags, ProfileViewRules.ShowCollection)
+            ? await _bossKillsOf(character.CharacterId, ct).ConfigureAwait(false) ?? []
+            : [];
         var source = new ProfileSource(
             flags,
             character.Name,
@@ -64,9 +71,29 @@ internal sealed class ProfileViewController
             record.DeathTotalCount,
             profile.SelfIntro,
             [character.PtsP, character.PtsM, character.PtsS, character.PtsC],
-            ProfileViewRules.Shows(flags, ProfileViewRules.ShowEquipment) ? _gearOf(target) : ProfileGear.Empty);
+            ProfileViewRules.Shows(flags, ProfileViewRules.ShowEquipment) ? _gearOf(target) : ProfileGear.Empty,
+            bossKills);
         var view = ProfileViewBuilder.Build(source, _text);
-        return SendAsync(asker, Opcode.S2C_PROFILE_VIEW, ProfileViewFrames.View(view, _text));
+        await SendAsync(asker, Opcode.S2C_PROFILE_VIEW, ProfileViewFrames.View(view, _text)).ConfigureAwait(false);
+    }
+
+    public Task CoverLetterAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        if (player.Character is not { } character) return Task.CompletedTask;
+        switch (ProfileViewFrames.TryReadCoverLetter(payload.Span, out var letter))
+        {
+            case CoverLetterRead.OutOfRange:
+                return SendAsync(player, Opcode.S2C_PROFILE_COVER_LETTER_REFUSED, ProfileViewFrames.CoverLetterRefused());
+            case CoverLetterRead.Truncated:
+                Console.WriteLine($"{_logTag} [profile] cover letter request of {payload.Length} bytes not read");
+                return Task.CompletedTask;
+        }
+        var clean = ProfileViewRules.SanitizeCoverLetter(letter);
+        var profile = _profiles.GetOrCreate(character.CharacterId);
+        _profiles.Upsert(profile with { SelfIntro = _text.GetString(clean) });
+        Console.WriteLine($"{_logTag} [profile] 0x{player.PlayerEntityId:X4} cover letter of {clean.Length} bytes");
+        return SendAsync(player, Opcode.S2C_PROFILE_COVER_LETTER, ProfileViewFrames.CoverLetter(clean));
     }
 
     public Task OptionsAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)

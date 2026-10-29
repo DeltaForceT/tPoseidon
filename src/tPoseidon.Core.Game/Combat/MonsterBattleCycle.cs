@@ -238,7 +238,7 @@ public sealed class MonsterBattleCycle
                 }
 
                 var decision = MeleeApproach.Decide(
-                    reach, monster.CurrentX, monster.CurrentY, target.X, target.Y, fight.Settled, _rng);
+                    reach, monster.DestinationX, monster.DestinationY, target.X, target.Y, fight.Settled, _rng);
                 var canMove = monster.WalkSpeedOf(definition.WalkSpeed) > 0 && monster.RunSpeedOf(definition.RunSpeed) > 0 && !monster.IsRooted(now);
                 var backingOff = decision.Kind == MeleeApproachKind.BackOff;
 
@@ -316,8 +316,8 @@ public sealed class MonsterBattleCycle
         fight.NextSwingAt = now.AddMilliseconds(reach.MonsterSwingDelayMs(definition.DxLv + monster.StatDelta(MonsterStat.Dx)));
         events.Add(new MonsterBattleSwung(
             monster.EntityId,
-            monster.CurrentX,
-            monster.CurrentY,
+            monster.DestinationX,
+            monster.DestinationY,
             fight.TargetEntityId,
             target.X,
             target.Y,
@@ -345,7 +345,7 @@ public sealed class MonsterBattleCycle
             : runSpeed;
         if (geometry is null || speed <= 0) return false;
 
-        var route = WanderRoute.FindToPoint(geometry, monster.CurrentX, monster.CurrentY, decision.X, decision.Y);
+        var route = WanderRoute.FindToPoint(geometry, monster.DestinationX, monster.DestinationY, decision.X, decision.Y);
         if (route is null) return false;
 
         var travelMs = (int)Math.Ceiling(route.Length / speed * MillisecondsPerSecond);

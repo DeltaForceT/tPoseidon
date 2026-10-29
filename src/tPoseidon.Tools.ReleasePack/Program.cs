@@ -27,6 +27,14 @@ try
         packages.Add(package);
         Console.WriteLine($"{rid}: {package.Path}");
         Console.WriteLine($"{rid}: sha256 {package.Sha256}");
+
+        if (PackageBuilder.HasLauncher(rid))
+        {
+            var launcher = await builder.BuildLauncherAsync(rid, cancellation.Token).ConfigureAwait(false);
+            packages.Add(launcher);
+            Console.WriteLine($"{rid} launcher: {launcher.Path}");
+            Console.WriteLine($"{rid} launcher: sha256 {launcher.Sha256}");
+        }
     }
 
     var manifestPath = Path.Combine(builder.Output, ReleaseManifest.FileName(ReleaseManifest.FilePrefix, options.Version));

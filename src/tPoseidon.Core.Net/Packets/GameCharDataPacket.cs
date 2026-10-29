@@ -28,7 +28,7 @@ public sealed class GameCharDataPacket
     public byte[] EncodePayload()
     {
         ArgumentNullException.ThrowIfNull(Name);
-        var nameBytes = Encoding.ASCII.GetBytes(Name);
+        var nameBytes = ClientText.Encoding.GetBytes(Name);
         if (nameBytes.Length >= NameFieldBytes)
         {
             throw new InvalidOperationException(
@@ -81,7 +81,7 @@ public sealed class GameCharDataPacket
         var slice = buf.Slice(offset, fieldBytes);
         var nul = slice.IndexOf((byte)0);
         var len = nul < 0 ? fieldBytes : nul;
-        return len == 0 ? string.Empty : Encoding.ASCII.GetString(slice[..len]);
+        return len == 0 ? string.Empty : ClientText.Encoding.GetString(slice[..len]);
     }
 
     private static void WriteUInt16Le(byte[] buf, int offset, ushort value)

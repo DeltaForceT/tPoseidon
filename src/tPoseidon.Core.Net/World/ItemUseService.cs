@@ -197,6 +197,9 @@ public sealed partial class ItemUseService
                 Consume(item, definition);
                 Console.WriteLine($"{_logTag} {_remote()}   item {item.ItemIndex} used (type {definition.Type} has no effect)");
                 break;
+            case ItemUseHelper.Money:
+                await UseMoneyAsync(item, definition, stats, wireUid, ct).ConfigureAwait(false);
+                break;
             case ItemUseHelper.Potion:
                 await DrinkAsync(item, definition, stats, wireUid, ct).ConfigureAwait(false);
                 break;
@@ -295,6 +298,28 @@ public sealed partial class ItemUseService
                 await RefuseAsync($"item {item.ItemIndex}: type {definition.Type} ({ItemUseRules.HelperOf(definition.Type)}) is not implemented", ct).ConfigureAwait(false);
                 break;
         }
+    }
+
+    private async Task UseMoneyAsync(Item item, ItemParamEntry definition, StatManager stats, ulong wireUid, CancellationToken ct)
+    {
+        if (!PickupRules.MoneyFits(stats.Money, definition.Money, stats.WalletLimit))
+        {
+            await SendAsync(Opcode.S2C_ITEM_USE_REFUSED, Array.Empty<byte>(), ct).ConfigureAwait(false);
+            await RefuseAsync($"item {item.ItemIndex}: {definition.Money} galder on top of {stats.Money} passes the carried limit {stats.WalletLimit}", ct).ConfigureAwait(false);
+            return;
+        }
+
+        var playerId = _player.EntityId();
+        var block = _blocks.Next();
+        var reply = ItemUseFrames.Reply((ushort)definition.Effect, playerId);
+        stats.GrantMoney(definition.Money, StatChangeSource.Item);
+        await SendAsync(Opcode.S2C_ITEM_USE_EFFECT, ItemUseFrames.Used(wireUid, reply), block, ct).ConfigureAwait(false);
+        await _player.SendToMap(Opcode.S2C_ITEM_USE_SEEN, ItemUseFrames.Seen(playerId, (uint)item.ItemIndex, reply), block).ConfigureAwait(false);
+        await SendAsync(Opcode.S2C_MONEY, GroundItemFrames.Money(stats.Money), block, ct).ConfigureAwait(false);
+        await _player.SendToMap(Opcode.S2C_COMMAND_BLOCK_END, Array.Empty<byte>(), block).ConfigureAwait(false);
+
+        var left = Consume(item, definition);
+        Console.WriteLine($"{_logTag} {_remote()}   galder coupon {item.ItemIndex}: +{definition.Money}, now {stats.Money}, {left} left");
     }
 
     private async Task DrinkAsync(Item item, ItemParamEntry definition, StatManager stats, ulong wireUid, CancellationToken ct)

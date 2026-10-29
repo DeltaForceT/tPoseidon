@@ -182,8 +182,8 @@ public sealed class MonsterManager : IMonsterEntityProvider
             {
                 EntityId = entityId,
                 MapId = mob.MapId,
-                X = mob.CurrentX,
-                Y = mob.CurrentY,
+                X = mob.DestinationX,
+                Y = mob.DestinationY,
                 ItemIndex = item.ItemId,
                 Count = item.Count,
                 DroppedByMobEntityId = mob.EntityId,

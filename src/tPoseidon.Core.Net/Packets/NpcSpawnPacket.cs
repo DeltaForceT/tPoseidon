@@ -31,13 +31,13 @@ public sealed class NpcSpawnPacket
 
         public ushort UnknownField8 { get; init; }
 
-        public ushort SpawnX { get; init; }
+        public ushort PositionX { get; init; }
 
-        public ushort SpawnY { get; init; }
+        public ushort PositionY { get; init; }
 
-        public ushort CurrentX { get; init; }
+        public ushort DestinationX { get; init; }
 
-        public ushort CurrentY { get; init; }
+        public ushort DestinationY { get; init; }
 
         public string Name { get; init; } = string.Empty;
 
@@ -55,7 +55,7 @@ public sealed class NpcSpawnPacket
     {
         ArgumentNullException.ThrowIfNull(Name);
 
-        var nameBytes = Encoding.UTF8.GetBytes(Name);
+        var nameBytes = ClientText.Encoding.GetBytes(Name);
 
         var trailer = Trailer.Span;
         var total = 22 + nameBytes.Length + 1 + trailer.Length;
@@ -68,10 +68,10 @@ public sealed class NpcSpawnPacket
         w.WriteUInt16(UnknownField6);
         w.WriteUInt16(UnknownField8);
         w.WriteUInt32(Reserved10);
-        w.WriteUInt16(SpawnX);
-        w.WriteUInt16(SpawnY);
-        w.WriteUInt16(CurrentX);
-        w.WriteUInt16(CurrentY);
+        w.WriteUInt16(PositionX);
+        w.WriteUInt16(PositionY);
+        w.WriteUInt16(DestinationX);
+        w.WriteUInt16(DestinationY);
         w.WriteBytes(nameBytes);
         w.WriteByte(0);
         w.WriteBytes(trailer);
@@ -109,7 +109,7 @@ public sealed class NpcSpawnPacket
                 "NpcSpawn payload has no NUL terminator after name field.");
         }
 
-        var name = Encoding.UTF8.GetString(rest[..nul]);
+        var name = ClientText.Encoding.GetString(rest[..nul]);
         var trailer = rest[(nul + 1)..].ToArray();
 
         return new NpcSpawnPacket
@@ -121,10 +121,10 @@ public sealed class NpcSpawnPacket
             UnknownField6 = unk6,
             UnknownField8 = unk8,
             Reserved10 = reserved10,
-            SpawnX = sx,
-            SpawnY = sy,
-            CurrentX = cx,
-            CurrentY = cy,
+            PositionX = sx,
+            PositionY = sy,
+            DestinationX = cx,
+            DestinationY = cy,
             Name = name,
             Trailer = trailer,
         };

@@ -12,6 +12,7 @@ public sealed class UniqueItemHandler : IInterServerHandler
         InterServerOpcode.CcmdSaveBossKillInfo,
         InterServerOpcode.McmdUniqueItemCount,
         InterServerOpcode.CcmdGetLatestBossKill,
+        InterServerOpcode.CcmdBossKillHistory,
     };
 
     public const uint SharedPoolKey = 0;
@@ -37,6 +38,11 @@ public sealed class UniqueItemHandler : IInterServerHandler
         if (frame.Opcode == InterServerOpcode.CcmdGetLatestBossKill)
         {
             await LatestBossKillsAsync(session, frame, ctx, ct).ConfigureAwait(false);
+            return;
+        }
+        if (frame.Opcode == InterServerOpcode.CcmdBossKillHistory)
+        {
+            await BossKillHistoryAsync(session, frame, ctx, ct).ConfigureAwait(false);
             return;
         }
         if (frame.Opcode == InterServerOpcode.CcmdSaveBossKillInfo)
@@ -93,6 +99,35 @@ public sealed class UniqueItemHandler : IInterServerHandler
                 SourceServerIndex = 0,
                 DestServerIndex = frame.Header.SourceServerIndex,
                 CharUid = charUid,
+                RequestId = frame.Header.RequestId,
+            },
+            Body = body,
+        }, ct).ConfigureAwait(false);
+    }
+
+    private async Task BossKillHistoryAsync(MasterServerSession session, InterServerFrame frame, MasterContext ctx, CancellationToken ct)
+    {
+        InterServerOpcode opcode;
+        byte[] body;
+        try
+        {
+            var history = _store.BossKillHistory(frame.Header.CharUid);
+            (opcode, body) = (InterServerOpcode.CcmdBossKillHistoryAckOk, UniqueItemMessages.EncodeBossKillHistory(history));
+            ctx.Log($"boss kill history of 0x{frame.Header.CharUid:X16}: {history.Count}");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            ctx.Log($"boss kill history of 0x{frame.Header.CharUid:X16}: store threw {ex.GetType().Name}: {ex.Message}");
+            (opcode, body) = (InterServerOpcode.CcmdBossKillHistoryAckCancel, Array.Empty<byte>());
+        }
+        await session.SendAsync(new InterServerFrame
+        {
+            Opcode = opcode,
+            Header = new InterServerHeader
+            {
+                SourceServerIndex = 0,
+                DestServerIndex = frame.Header.SourceServerIndex,
+                CharUid = frame.Header.CharUid,
                 RequestId = frame.Header.RequestId,
             },
             Body = body,

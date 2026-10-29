@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -8,50 +9,6 @@ using tPoseidon.Hosting.GameMaster;
 
 namespace tPoseidon.Panel;
 
-public static class GmPenaltiesPage
-{
-    public static Control Build(GmKit kit)
-    {
-        ArgumentNullException.ThrowIfNull(kit);
-        var page = new StackPanel { Spacing = 10 };
-        var code = GmKit.Box("Code", 80);
-        var name = GmKit.Box("Name the player sees", 240);
-        var kind = GmKit.Box("Kind (optional)", 110);
-        page.Children.Add(GmKit.Section(
-            "Penalty kinds",
-            "A penalty kind has a code and the name the player sees at the lobby. Penalize accounts on the Players tab.",
-            GmKit.Line(
-                GmKit.Field("Code", code),
-                GmKit.Field("Name", name),
-                GmKit.Field("Kind", kind),
-                kit.Penalty("Add or rename", GmPenalties.KindName, checks =>
-                {
-                    var number = checks.Number(code, "The code", short.MinValue, short.MaxValue);
-                    var text = checks.Text(name, "The name");
-                    return (kind.Text ?? "").Trim().Length == 0 ? [number, text] : [number, text, checks.Number(kind, "The kind", short.MinValue, short.MaxValue)];
-                }, primary: true),
-                kit.Penalty("Show kinds and running penalties", GmPenalties.ListName, _ => []))));
-
-        var stepCode = GmKit.Box("Code", 80);
-        var step = GmKit.Box("Step", 60, "1");
-        var hours = GmKit.Box("Hours", 80, "72");
-        page.Children.Add(GmKit.Section(
-            "Penalty lengths",
-            "How long the first, second, third... penalty of a kind lasts. A step without a length blocks for 9999 hours.",
-            GmKit.Line(
-                GmKit.Field("Code", stepCode),
-                GmKit.Field("Step (1 = first time)", step),
-                GmKit.Field("Hours", hours),
-                kit.Penalty("Set the length", GmPenalties.TimeName, checks =>
-                {
-                    var number = checks.Number(stepCode, "The code", short.MinValue, short.MaxValue);
-                    var count = checks.Number(step, "The step", 1, short.MaxValue);
-                    return [number, count, checks.Number(hours, "The hours", 1, int.MaxValue)];
-                }))));
-        return page;
-    }
-}
-
 public static class GmAccountsPage
 {
     public static Control Build(GmKit kit, Action<string> useForLogin)
@@ -59,7 +16,6 @@ public static class GmAccountsPage
         ArgumentNullException.ThrowIfNull(kit);
         ArgumentNullException.ThrowIfNull(useForLogin);
         var model = kit.Model;
-        var page = new StackPanel { Spacing = 10 };
         var registered = new StackPanel { Spacing = 2 };
         var character = GmKit.Box("Character name", 200);
         var address = GmKit.Box("IP address", 140, GmAccounts.LocalPermitIp);
@@ -80,8 +36,7 @@ public static class GmAccountsPage
             }
         }
 
-        page.AttachedToVisualTree += async (_, _) => await ShowAsync().ConfigureAwait(true);
-        page.Children.Add(GmKit.Section(
+        var registerSection = GmKit.Section(
             "Register a GM character",
             "Makes the character its account's GM character (one per account) and allows GM login from the address. The window connects from this computer, so keep 127.0.0.1 unless you log in to the game as GM from another address. The servers may keep running.",
             GmKit.Line(
@@ -97,24 +52,43 @@ public static class GmAccountsPage
                 kit.Accounts("Unregister", GmAccounts.UnregisterName, checks => [checks.Text(character, "The character name")],
                     arguments => book => GmAccounts.Unregister(book, arguments[0]),
                     arguments => new GmConfirm($"Take GM away from {arguments[0]}?", "Its GM login addresses are removed and the account becomes a normal account.", "Unregister"),
-                    async _ => await ShowAsync().ConfigureAwait(true)))));
+                    async _ => await ShowAsync().ConfigureAwait(true))));
 
-        page.Children.Add(GmKit.Section(
+        var eagleSection = GmKit.Section(
             "GM in the game",
             "Turns the connected GM character into a GM in the game, or back into a normal character, without typing anything in the game's chat: the GM eagle appears over the character and the @ chat commands work. The character has to be in the game.",
             GmKit.Line(
                 kit.Tool("Log my GM in as GM", "game-flag", _ => ["on"], primary: true),
-                kit.Tool("Log my GM out", "game-flag", _ => ["off"]))));
+                kit.Tool("Log my GM out", "game-flag", _ => ["off"])));
+
+        var speed = GmKit.Choice(["1 (normal)", "2", "3", "4"], 110);
+        var speedSection = GmKit.Section(
+            "Speed, immortal and invisible",
+            "These change the connected GM character in the game.",
+            GmKit.Line(
+                GmKit.Field("Speed", speed),
+                kit.Tool("Set speed", "speed", _ => [Text((byte)(Math.Max(0, speed.SelectedIndex) + 1))]),
+                kit.Tool("Immortal on", "immortal", _ => ["on"]),
+                kit.Tool("Immortal off", "immortal", _ => ["off"]),
+                kit.Tool("Invisible on", "invisible", _ => ["on"]),
+                kit.Tool("Invisible off", "invisible", _ => ["off"])));
 
         var refresh = GmKit.Plain("Refresh");
         refresh.Click += async (_, _) => await ShowAsync().ConfigureAwait(true);
-        page.Children.Add(GmKit.Section(
+        var registeredSection = GmKit.Section(
             "Registered GM characters",
             null,
             registered,
-            GmKit.Line(refresh, kit.Accounts("List in the results", GmAccounts.ListName, _ => [], _ => GmAccounts.List))));
+            GmKit.Line(refresh, kit.Accounts("List in the results", GmAccounts.ListName, _ => [], _ => GmAccounts.List)));
+        var page = GmKit.Tab(
+            "Register and list GM characters, and switch your own GM character on as a GM in the game.",
+            ("Registered GMs", [registeredSection, registerSection]),
+            ("Your GM in the game", [eagleSection, speedSection]));
+        page.AttachedToVisualTree += async (_, _) => await ShowAsync().ConfigureAwait(true);
         return page;
     }
+
+    private static string Text(byte value) => value.ToString(CultureInfo.InvariantCulture);
 
     private static Border Row(GmKit kit, GmCharacterEntry entry, Action<string> useForLogin, Func<Task> reload)
     {

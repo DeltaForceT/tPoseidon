@@ -1,7 +1,10 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text;
+using System.Text.Unicode;
 using System.Xml;
 using System.Xml.Linq;
+using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.LibConfig;
 
@@ -9,6 +12,11 @@ public sealed class LibConfigXmlReader
 {
     private static readonly ConcurrentDictionary<string, Lazy<byte[]>> DecodedXmlCache =
         new(StringComparer.Ordinal);
+
+    static LibConfigXmlReader()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
 
     private readonly byte[] _decodedXmlBytes;
 
@@ -43,15 +51,21 @@ public sealed class LibConfigXmlReader
         if (Path.GetExtension(path).Equals(".dat", StringComparison.OrdinalIgnoreCase)
             && !IsPlaintextXmlFile(path))
         {
-            return LibConfigDatDecryptor.DecryptFile(path);
+            return AsUtf8(LibConfigDatDecryptor.DecryptFile(path));
         }
 
         var bytes = File.ReadAllBytes(path);
         if (Array.IndexOf(bytes, (byte)0) >= 0)
         {
-            return StripNulBytes(bytes);
+            return AsUtf8(StripNulBytes(bytes));
         }
-        return bytes;
+        return AsUtf8(bytes);
+    }
+
+    public static byte[] AsUtf8(byte[] xml)
+    {
+        ArgumentNullException.ThrowIfNull(xml);
+        return Utf8.IsValid(xml) ? xml : Encoding.UTF8.GetBytes(ClientText.Encoding.GetString(xml));
     }
 
     private static bool IsPlaintextXmlFile(string path)
@@ -1059,6 +1073,28 @@ public sealed class LibConfigXmlReader
         return new GuildGameTypeTables(rows);
     }
 
+    public GuildShopTables LoadGuildShopTables()
+    {
+        var rows = new Dictionary<int, GuildShopGood>();
+        LoadTable(GuildShopTables.Table, row =>
+        {
+            var index = ReadInt(row, "Index");
+            rows.TryAdd(index, new GuildShopGood(index, ReadInt(row, "GoodsType"), ReadInt(row, "Price")));
+        });
+        return new GuildShopTables(rows);
+    }
+
+    public MonsterMatchTables LoadMonsterMatchTables()
+    {
+        var rows = new Dictionary<int, MonsterMatchEntry>();
+        LoadTable(MonsterMatchTables.Table, row =>
+        {
+            var trigger = ReadInt(row, "TriggerId");
+            rows.TryAdd(trigger, new MonsterMatchEntry(trigger, ReadInt(row, "MonsterID"), ReadInt(row, "Point")));
+        });
+        return new MonsterMatchTables(rows);
+    }
+
     public HarconDefTables LoadHarconDefTables()
     {
         var stages = new Dictionary<int, HarconStageEntry>();
@@ -1416,6 +1452,36 @@ public sealed class LibConfigXmlReader
         return new PartyZoneTables(reEnter, bosses.ToDictionary(pair => pair.Key, pair => (IReadOnlySet<int>)pair.Value));
     }
 
+    public IReadOnlyList<BossSpawnTableEntry> LoadBossSpawnTables()
+    {
+        var zonesByTable = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+        LoadTable("MapInfoEx", row =>
+        {
+            var table = ReadString(row, "BossMonsterTable").Trim();
+            if (table.Length == 0) return;
+            if (!zonesByTable.TryGetValue(table, out var zones))
+            {
+                zones = new List<int>();
+                zonesByTable[table] = zones;
+            }
+            zones.Add(ReadInt(row, "ID"));
+        });
+        var entries = new List<BossSpawnTableEntry>();
+        LoadTablesMatching(zonesByTable.ContainsKey, (table, row) =>
+        {
+            foreach (var zone in zonesByTable[table])
+            {
+                entries.Add(new BossSpawnTableEntry(
+                    zone,
+                    ReadInt(row, "BossMonID"),
+                    ReadInt(row, "BossMonCnt"),
+                    ReadInt(row, "BossMonCheckTime"),
+                    ReadInt(row, "BossMonRegionID")));
+            }
+        });
+        return entries;
+    }
+
     public IReadOnlyList<MapMonsterTableEntry> LoadMapMonsterTables()
     {
         var entries = new List<MapMonsterTableEntry>(700);
@@ -1700,6 +1766,7 @@ public sealed class LibConfigXmlReader
         RefineIndex = ReadInt(row, "RefineIndex"),
         CompoundSlot = ReadInt(row, "CompoundSlot"),
         Mp = ReadInt(row, "MP"),
+        Money = ReadInt(row, "Money"),
         Options = ReadFlags(row, "Options"),
         Life = ReadInt(row, "Life"),
         CardNum = ReadInt(row, "CardNum"),

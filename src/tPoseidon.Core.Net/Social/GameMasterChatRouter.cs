@@ -104,6 +104,9 @@ public sealed class GameMasterChatRouter
             GameMasterChat.SummonMonster when args.Count is 1 or 2 && uint.TryParse(args[0], out var monsterType) =>
                 args.Count == 1 ? GameMasterService.SummonMonster(characterId, monsterType, 0, 1)
                     : byte.TryParse(args[1], out var monsterCount) ? GameMasterService.SummonMonster(characterId, monsterType, 0, monsterCount) : null,
+            GameMasterChat.Item when args.Count is >= 1 and <= 3 && uint.TryParse(args[0], out var itemId)
+                && (args.Count < 2 || ushort.TryParse(args[1], out _)) =>
+                PresentFromChat(characterId, itemId, args),
             GameMasterChat.CommandHelp when args.Count == 0 => GameMasterService.CommandHelp(_helpNames()),
             _ => null,
         };
@@ -115,5 +118,13 @@ public sealed class GameMasterChatRouter
         audit.Add($"[gm] audit: {who} {keyword} {string.Join(' ', args)}".TrimEnd());
         audit.AddRange(outbox.Notes.Select(note => $"[gm] audit: {keyword} {note}"));
         return new GameMasterChatOutcome(outbox, null, audit);
+    }
+
+    private GameMasterOutbox? PresentFromChat(ulong characterId, uint itemId, IReadOnlyList<string> args)
+    {
+        var count = args.Count >= 2 ? ushort.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : (ushort)1;
+        return args.Count == 3
+            ? _service.PresentItem(characterId, args[2], itemId, count, _online)
+            : GameMasterService.PresentItem(characterId, itemId, count);
     }
 }

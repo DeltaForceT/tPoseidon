@@ -12,13 +12,14 @@ public sealed class GameMasterServer
 {
     private sealed record Tool(ulong CharacterId, string Name);
 
-    private sealed record PendingReply(S2SessionContext Requester, ulong GameMaster, ushort Zone = 0);
+    private sealed record PendingReply(S2SessionContext Requester, ulong GameMaster, ushort Zone = 0, bool FromChat = false, byte[]? OrderData = null);
 
     private static readonly TimeSpan RateTickPeriod = TimeSpan.FromMilliseconds(5000);
 
     private readonly GameMasterService _gameMasters;
     private readonly GameMasterChat _chat;
     private readonly IGmAuthorityStore _authority;
+    private readonly ICharacterDirectory _directory;
     private readonly SocialRoom _room;
     private readonly GameServerLinks _games;
     private readonly Encoding _text;
@@ -39,6 +40,7 @@ public sealed class GameMasterServer
         GameMasterService gameMasters,
         GameMasterChat chat,
         IGmAuthorityStore authority,
+        ICharacterDirectory directory,
         SocialRoom room,
         GameServerLinks games,
         IGmRateEventStore rateEvents,
@@ -50,6 +52,7 @@ public sealed class GameMasterServer
         _gameMasters = gameMasters ?? throw new ArgumentNullException(nameof(gameMasters));
         _chat = chat ?? throw new ArgumentNullException(nameof(chat));
         _authority = authority ?? throw new ArgumentNullException(nameof(authority));
+        _directory = directory ?? throw new ArgumentNullException(nameof(directory));
         _room = room ?? throw new ArgumentNullException(nameof(room));
         _games = games ?? throw new ArgumentNullException(nameof(games));
         _text = text ?? throw new ArgumentNullException(nameof(text));
@@ -84,15 +87,15 @@ public sealed class GameMasterServer
         Command(dispatcher, ctx, GameMasterFrames.CharCount, (gm, p) =>
             GameMasterFrames.TryReadZone(p, out var countedZone) ? GameMasterService.CharCount(gm.CharacterId, countedZone, CountInZone) : null);
         Command(dispatcher, ctx, GameMasterFrames.ZoneCounts, (gm, _) =>
-            GameMasterService.ZoneCounts(gm.CharacterId, _room.Members.Select(member => _games.ZoneOf(member.Character.CharacterId) ?? 0)));
+            GameMasterService.ZoneCounts(gm.CharacterId, _games.Zones()));
         Command(dispatcher, ctx, GameMasterFrames.RemoveMyCampById, (gm, p) =>
             GameMasterFrames.TryReadCharacterId(p, out var campOwner) ? GameMasterService.RemoveMyCampById(gm.CharacterId, campOwner, _games.ZoneOf(campOwner) is not null) : null);
         Command(dispatcher, ctx, GameMasterFrames.SummonNpc, (gm, p) =>
             GameMasterService.SummonNpc(gm.CharacterId, p, _text));
         Command(dispatcher, ctx, GameMasterFrames.CharInfo, (gm, p) =>
             ReadStrings(p, 1) is { } subject ? GameMasterService.CharInfo(gm.CharacterId, subject[0], Online) : null);
-        Command(dispatcher, ctx, GameMasterFrames.PresentItem, (_, p) =>
-            ReadPresent(p) is { } present ? GameMasterService.PresentItem(present.Name, present.ItemId, present.Count, Online) : null);
+        Command(dispatcher, ctx, GameMasterFrames.PresentItem, (gm, p) =>
+            ReadPresent(p) is { } present ? _gameMasters.PresentItem(gm.CharacterId, present.Name, present.ItemId, present.Count, Online) : null);
         Command(dispatcher, ctx, GameMasterFrames.SummonMonster, (gm, p) =>
             GameMasterFrames.TryReadSummon(p, out var chrType, out var zone, out var count) ? GameMasterService.SummonMonster(gm.CharacterId, chrType, zone, count) : null);
         Command(dispatcher, ctx, GameMasterFrames.SummonMonsterArea, (gm, p) =>
@@ -320,6 +323,7 @@ public sealed class GameMasterServer
         foreach (var entry in outcome.Audit) _log(entry);
         if (outcome.Reply is { } reply) await TellAsync(link, chat.CharacterId, reply, ct).ConfigureAwait(false);
         if (outcome.Outbox is not { } outbox) return;
+        Expect(link, chat.CharacterId, outbox, fromChat: true);
         await DeliverAsync(outbox, chat.CharacterId, ct, subject: SubjectOf(chat.Line, chat.Name)).ConfigureAwait(false);
         if (outbox.Disconnect && _room.Find(chat.CharacterId) is { } member) await member.Context.Session.DisposeAsync().ConfigureAwait(false);
     }
@@ -339,6 +343,8 @@ public sealed class GameMasterServer
             GameMasterFrames.ReportCharInfo => _gameMasters.CharInfoReported(request.GameMaster, report.Data, _room.Find(report.CharacterId)?.Character.AccountLabel ?? string.Empty),
             GameMasterFrames.ReportNpcOnOff => _gameMasters.NpcOnOffReported(request.GameMaster, report.Data),
             GameMasterFrames.ReportNpcRefresh => GameMasterService.NpcRefreshReported(request.GameMaster, request.Zone, report.Data),
+            GameMasterFrames.ReportPresentItem when GameMasterFrames.TryReadAckResult(report.Data, out var presentResult) =>
+                _gameMasters.PresentAnswer(request.GameMaster, request.OrderData ?? Array.Empty<byte>(), presentResult),
             _ => GameMasterService.Acknowledged(request.GameMaster, report.OrderType, report.Data),
         };
         if (outbox is null)
@@ -347,14 +353,15 @@ public sealed class GameMasterServer
             return;
         }
         foreach (var note in outbox.Notes) _log($"[gm] {note}");
-        await DeliverAsync(outbox, null, ct, request.Requester).ConfigureAwait(false);
+        if (request.FromChat) await DeliverAsync(outbox, request.GameMaster, ct).ConfigureAwait(false);
+        else await DeliverAsync(outbox, null, ct, request.Requester).ConfigureAwait(false);
     }
 
-    private void Expect(S2SessionContext requester, ulong gameMaster, GameMasterOutbox outbox)
+    private void Expect(S2SessionContext requester, ulong gameMaster, GameMasterOutbox outbox, bool fromChat = false)
     {
         foreach (var order in outbox.Orders)
         {
-            if (GameMasterFrames.ReportOf(order.OrderType) is { } report) _pending[(order.CharacterId, report)] = new PendingReply(requester, gameMaster);
+            if (GameMasterFrames.ReportOf(order.OrderType) is { } report) _pending[(order.CharacterId, report)] = new PendingReply(requester, gameMaster, FromChat: fromChat, OrderData: order.Data);
         }
         foreach (var order in outbox.ZoneOrders)
         {
@@ -387,10 +394,13 @@ public sealed class GameMasterServer
             ? _tools.FirstOrDefault(pair => pair.Value?.CharacterId == characterId).Key
             : _room.Find(characterId)?.Context;
 
-    private int CountInZone(ushort zone) =>
-        _room.Members.Count(member => _games.ZoneOf(member.Character.CharacterId) == zone);
+    private int CountInZone(ushort zone) => _games.Zones().Count(held => held == zone);
 
-    private ulong? Online(string name) => _room.FindNamed(name)?.Character.CharacterId;
+    private ulong? Online(string name)
+    {
+        if (_room.FindNamed(name) is { } member) return member.Character.CharacterId;
+        return _directory.FindCharacterId(name) is { } id && _games.ZoneOf(id) is not null ? id : null;
+    }
 
     private string? OnlineName(ulong characterId) => _room.Find(characterId)?.Character.Name;
 
@@ -415,7 +425,7 @@ public sealed class GameMasterServer
 
     public bool IsGameMaster(ulong characterId) => _gameMasters.IsLoggedIn(characterId);
 
-    private bool IsOnline(ulong characterId) => _room.Find(characterId) is not null;
+    private bool IsOnline(ulong characterId) => _room.Find(characterId) is not null || _games.ZoneOf(characterId) is not null;
 
     private Task ToolConnectAsync(S2SessionContext ctx)
     {
@@ -547,6 +557,8 @@ public sealed class GameMasterServer
     {
         GameMasterFrames.LoginOk => _chat.Result(GameMasterChat.GmFlagSetText, subject),
         GameMasterFrames.TeleportToZoneFail or GameMasterFrames.TeleportToChrFail => _chat.Result(GameMasterChat.NotOnlineText, subject),
+        GameMasterFrames.PresentItemOk => GameMasterChat.ItemGivenLine,
+        GameMasterFrames.PresentItemFail => GameMasterChat.ItemRefusedLine(message.Payload.Length > 0 ? message.Payload[^1] : (byte)0),
         _ => null,
     };
 
@@ -617,7 +629,13 @@ public sealed class GameMasterServer
         }
         foreach (var order in outbox.Orders)
         {
-            await _games.SendAsync(order, ct).ConfigureAwait(false);
+            if (await _games.SendAsync(order, ct).ConfigureAwait(false)) continue;
+            _log($"[gm] order 0x{order.OrderType:X2} for 0x{order.CharacterId:X} not sent: the character is not on a game server");
+            if (GameMasterFrames.ReportOf(order.OrderType) is { } expected) _pending.TryRemove((order.CharacterId, expected), out _);
+            if (_gameMasters.NotDelivered(order.CharacterId, order) is { } failure)
+            {
+                await DeliverAsync(failure, chatOrigin, ct, replyTo, subject).ConfigureAwait(false);
+            }
         }
         foreach (var order in outbox.ZoneOrders)
         {

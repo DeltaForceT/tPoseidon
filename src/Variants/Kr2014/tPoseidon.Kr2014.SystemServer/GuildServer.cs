@@ -57,6 +57,9 @@ public sealed class GuildServer
         On(dispatcher, ctx, GuildFrames.ForceOut, (id, p) =>
             GuildFrames.ReadForceOutRequest(p) is { } entries ? _guilds.ForceOut(id, entries) : null);
         On(dispatcher, ctx, GuildFrames.Dissolve, (id, _) => _guilds.Dissolve(id));
+        On(dispatcher, ctx, GuildShopFrames.Buy, (id, p) =>
+            GuildShopFrames.ReadBuy(p) is { } goodsIndex ? _guilds.ShopBuy(id, goodsIndex) : null);
+        On(dispatcher, ctx, GuildShopFrames.HistoryRequest, (id, _) => _guilds.ShopHistory(id));
         On(dispatcher, ctx, GuildFrames.DetailByCode, (id, p) =>
             GuildFrames.ReadDetailByCodeRequest(p) is { } guildCode ? _guilds.DetailByCode(id, guildCode) : null);
         On(dispatcher, ctx, GuildFrames.DetailByCharacter, (id, p) =>
@@ -73,6 +76,7 @@ public sealed class GuildServer
             _room.Find(ctx) is { } member ? SendAsync(member, GuildGameRooms.List, _gameRooms.RoomList(RoomCaptions, LadderRank), ct) : Task.CompletedTask);
         dispatcher.Register(GuildGameRooms.Make, (_, payload, ct) => MakeRoomAsync(ctx, payload, ct));
         dispatcher.Register(GuildGameRooms.Join, (_, payload, ct) => JoinRoomAsync(ctx, payload, ct));
+        dispatcher.Register(GuildGameRooms.WatchRequest, (_, payload, ct) => WatchRoomAsync(ctx, payload, ct));
         dispatcher.Register(GuildGameRooms.InviteRequest, (_, payload, ct) => InviteAsync(ctx, payload, ct));
         dispatcher.Register(GuildGameRooms.InviteAnswer, (_, payload, ct) => AnswerAsync(ctx, payload, ct));
         dispatcher.Register(GuildGameRooms.RemoveRequest, (_, payload, ct) => RemoveAsync(ctx, payload, ct));
@@ -96,11 +100,6 @@ public sealed class GuildServer
             _log($"[guild] game room make from 0x{member.Character.CharacterId:X} not read ({payload.Length} B)");
             return;
         }
-        if (request.GameType == GuildGameOrders.MonsterMatchType)
-        {
-            _log($"[guild] game room make type {request.GameType} from 0x{member.Character.CharacterId:X}: the monster match room path is not built");
-            return;
-        }
         var result = _gameRooms.TryMake(Entrant(member), request, InLobby(member));
         if (result.Error is not null || result.Room is not { } room)
         {
@@ -113,6 +112,26 @@ public sealed class GuildServer
         await _games.SendToZoneAsync(GuildGameOrders.LobbyZone, GuildGameOrders.OrderLobbyNotice,
             GuildGameOrders.LobbyNotice(room.GameType, room.MapChoice, side.GuildName, side.Members.Count, side.AverageLevel, _text), ct).ConfigureAwait(false);
         _log($"[guild] game room {room.Key} type {room.GameType} mode {request.Mode} made by '{member.Character.Name}' (up to {room.MaxParticipants} per side, map choice {room.MapChoice}, ladder flag {room.NoLadderFlag})");
+    }
+
+    private async Task WatchRoomAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    {
+        if (_room.Find(ctx) is not { } member) return;
+        if (GuildGameRooms.ReadJoin(payload.Span, _text) is not { } request)
+        {
+            _log($"[guild] game room watch from 0x{member.Character.CharacterId:X} not read ({payload.Length} B)");
+            return;
+        }
+        var result = _gameRooms.TryWatch(request);
+        if (result.Error is not null || result.Room is not { } room)
+        {
+            _log($"[guild] game room watch {request.RoomKey} from 0x{member.Character.CharacterId:X} refused: code {result.Error}");
+            await SendAsync(member, result.ErrorOpcode, _gameRooms.Refusal(result.Error ?? 0), ct).ConfigureAwait(false);
+            return;
+        }
+        await SendAsync(member, GuildGameRooms.WatchOk, Array.Empty<byte>(), ct).ConfigureAwait(false);
+        await _games.SendOnceAsync(member.Character.CharacterId, GuildGameOrders.OrderWatchMatch, GuildGameOrders.WatchMatch(room.Key), ct).ConfigureAwait(false);
+        _log($"[guild] game room {room.Key} watched by '{member.Character.Name}'");
     }
 
     private async Task JoinRoomAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
@@ -350,7 +369,8 @@ public sealed class GuildServer
     private Task EnterMatchAsync(GuildRoomEntry room, GuildRoomSide side, CancellationToken ct) =>
         _games.SendOnceAsync(side.Master.CharacterId, GuildGameOrders.OrderEnterMatch, GuildGameOrders.EnterMatch(
             new GuildEnterMatch(room.Key, side.GuildCode, room.MapChoice, room.NoLadderFlag, string.Empty, room.GameType, side.GuildName,
-                side.Members.Select(entrant => entrant.CharacterId).ToArray(), _matches.Standing(side.GuildCode)?.League ?? GuildLeagueRecord.None), _text), ct);
+                side.Members.Select(entrant => entrant.CharacterId).ToArray(), _matches.Standing(side.GuildCode)?.League ?? GuildLeagueRecord.None,
+                room.GameType == GuildGameOrders.MonsterMatchType ? room.Settings.OutCount : (byte)0), _text), ct);
 
     private GuildGameEntrant? Entrant(SocialMember member) =>
         _guilds.GameEntrant(member.Character.CharacterId, (ushort)Math.Clamp((int)member.Character.Level, 0, ushort.MaxValue));

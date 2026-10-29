@@ -70,6 +70,8 @@ internal sealed class StartCommand
 
         public void UpdatingTables() => Console.WriteLine("Updating the database tables...");
 
+        public void RebuildingServerData() => Console.WriteLine("Rebuilding the server data from your client after the update (once, takes a minute)...");
+
         public void StartingServers() => Console.WriteLine("Starting the servers:");
 
         public void RollingBack()

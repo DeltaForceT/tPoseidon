@@ -28,7 +28,7 @@ internal sealed class GameMasterController : IDisposable
     private readonly Func<InGameSessionState, Task> _disconnect;
     private readonly Func<InGameSessionState, Task> _announceSpeed;
     private readonly Func<InGameSessionState, Task> _applyVisibility;
-    private readonly Func<InGameSessionState, uint, ushort, Task> _presentItem;
+    private readonly Func<InGameSessionState, uint, ushort, Task<uint>> _presentItem;
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
     private readonly System.Text.Encoding _text;
     private readonly string _logTag;
@@ -49,7 +49,7 @@ internal sealed class GameMasterController : IDisposable
         Func<InGameSessionState, Task> disconnect,
         Func<InGameSessionState, Task> announceSpeed,
         Func<InGameSessionState, Task> applyVisibility,
-        Func<InGameSessionState, uint, ushort, Task> presentItem,
+        Func<InGameSessionState, uint, ushort, Task<uint>> presentItem,
         Func<ushort, Opcode, byte[], Task> sendToMap,
         System.Text.Encoding text,
         string logTag)
@@ -217,9 +217,10 @@ internal sealed class GameMasterController : IDisposable
                 if (_playerById(receiverId) is not { } receiver)
                 {
                     Console.WriteLine($"{_logTag} [gm] present item {itemId} x{itemCount} for 0x{receiverId:X}: not on this server");
+                    await AcknowledgeAsync(order, GameMasterFrames.ReportPresentItem, GameMasterFrames.AckPresentNoReceiver, ct).ConfigureAwait(false);
                     return;
                 }
-                await _presentItem(receiver, itemId, itemCount).ConfigureAwait(false);
+                await AcknowledgeAsync(order, GameMasterFrames.ReportPresentItem, await _presentItem(receiver, itemId, itemCount).ConfigureAwait(false), ct).ConfigureAwait(false);
                 break;
             case GameMasterFrames.OrderOxQuestion:
                 if (_playerById(order.CharacterId) is not { } asker) return;

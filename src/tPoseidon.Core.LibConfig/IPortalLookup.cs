@@ -8,7 +8,7 @@ public interface IPortalLookup
     int MapCount { get; }
     int TotalPortals { get; }
 
-    (ushort X, ushort Y)? FindArrival(ushort fromMapId, ushort destMapId);
+    (ushort X, ushort Y) FindArrival(ushort fromMapId, ushort destMapId);
 }
 
 public sealed record PortalDestination

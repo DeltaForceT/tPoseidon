@@ -1,4 +1,5 @@
 using System.Text;
+using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Progression;
 
 namespace tPoseidon.Core.Net.World;
@@ -28,7 +29,8 @@ public sealed record ProfileSource(
     long Deaths,
     string Message,
     IReadOnlyList<short> GrowthWeights,
-    ProfileGear Gear);
+    ProfileGear Gear,
+    IReadOnlyList<BossKillHistoryRecord>? BossKills = null);
 
 public static class ProfileViewBuilder
 {
@@ -46,7 +48,7 @@ public static class ProfileViewBuilder
                 ProfileViewRules.MessageBytes(source.Message, text), source.GrowthWeights);
             if (ProfileViewRules.Shows(source.Flags, ProfileViewRules.ShowEquipment)) equipment = Equipment(source);
         }
-        return new ProfileView(source.Flags, source.Name, source.EntityId, source.FType, info, equipment);
+        return new ProfileView(source.Flags, source.Name, source.EntityId, source.FType, info, equipment, source.BossKills);
     }
 
     private static ProfileViewEquipment Equipment(ProfileSource source)

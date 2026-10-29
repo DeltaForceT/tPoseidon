@@ -37,6 +37,8 @@ public static class GameMasterToolConnection
         GameMasterFrames.CharInfoMissing,
         GameMasterFrames.SummonMonsterOk,
         GameMasterFrames.SummonMonsterFail,
+        GameMasterFrames.PresentItemOk,
+        GameMasterFrames.PresentItemFail,
         GameMasterFrames.SetIssueItemOk,
         GameMasterFrames.SetIssueItemFail,
         GameMasterFrames.OxGiveItemOk,
@@ -96,6 +98,7 @@ public static class GameMasterToolConnection
         GameMasterFrames.GameFlagFail,
         GameMasterFrames.CharInfoMissing,
         GameMasterFrames.SummonMonsterFail,
+        GameMasterFrames.PresentItemFail,
         GameMasterFrames.SetIssueItemFail,
         GameMasterFrames.OxGiveItemFail,
         GameMasterFrames.GuildInfoMissing,
@@ -191,8 +194,8 @@ public static class GameMasterToolConnection
     {
         GameMasterFrames.LoginOk => "GM login accepted",
         GameMasterFrames.TeleportToChrOk => "teleport: already there",
-        GameMasterFrames.TeleportToChrFail => "teleport refused: a character is not online",
-        GameMasterFrames.TeleportToZoneFail => "teleport refused: character not online or zone not 1..999",
+        GameMasterFrames.TeleportToChrFail => DescribeTeleportToChrFail(reply.Payload),
+        GameMasterFrames.TeleportToZoneFail => DescribeTeleportToZoneFail(reply.Payload),
         GameMasterFrames.KickOk => "kicked (with a reason: the reason was shown, the kick follows when the client confirms it)",
         GameMasterFrames.KickFail => "kick failed: not online",
         GameMasterFrames.AccountBlockOk => "account sanction changed",
@@ -213,6 +216,8 @@ public static class GameMasterToolConnection
         GameMasterFrames.CharInfoMissing => "character info: not found",
         GameMasterFrames.SummonMonsterOk => "monsters summoned",
         GameMasterFrames.SummonMonsterFail => $"summon refused (reason {(reply.Payload.Length > 0 ? reply.Payload[0] : 0)}: 1 monster type, 2 map, 4 spawn failed or map not on this game server)",
+        GameMasterFrames.PresentItemOk => "item given: it is in the character's bag",
+        GameMasterFrames.PresentItemFail => DescribePresentFail(reply.Payload),
         GameMasterFrames.SetIssueItemOk => "issue item set",
         GameMasterFrames.OxGiveItemOk => "OX items handed out",
         GameMasterFrames.GuildInfoReply => DescribeGuildInfo(reply.Payload),
@@ -255,6 +260,43 @@ public static class GameMasterToolConnection
         GameMasterEventFrames.ExpQueryReply => GameMasterEventFrames.TryReadExpPair(reply.Payload, out var expNow, out var tmNow) ? $"set with exp-now: EXP +{expNow}%, TM +{tmNow}%" : $"0x{reply.Opcode:X4} ({reply.Payload.Length} B)",
         _ => $"0x{reply.Opcode:X4} ({reply.Payload.Length} B)",
     };
+
+    private static string DescribeTeleportToZoneFail(byte[] payload)
+    {
+        var text = GameMasterToolCommands.ClientText();
+        var reader = new PacketReader(payload);
+        var name = reader.ReadNulTerminated(text);
+        var zone = reader.ReadUInt16();
+        var who = name.Length == 0 ? "the GM character" : $"'{name}'";
+        return zone is >= GameMasterFrames.FirstZone and < GameMasterFrames.ZoneLimit
+            ? $"teleport refused: {who} is not on a game server"
+            : $"teleport refused: zone {zone} is not in {GameMasterFrames.FirstZone}..{GameMasterFrames.ZoneLimit - 1}";
+    }
+
+    private static string DescribeTeleportToChrFail(byte[] payload)
+    {
+        var text = GameMasterToolCommands.ClientText();
+        var reader = new PacketReader(payload);
+        var who = reader.ReadNulTerminated(text);
+        var to = reader.ReadNulTerminated(text);
+        return $"teleport refused: {(who.Length == 0 ? "the GM character" : $"'{who}'")} or {(to.Length == 0 ? "the GM character" : $"'{to}'")} is not on a game server";
+    }
+
+    private static string DescribePresentFail(byte[] payload)
+    {
+        if (!GameMasterFrames.TryReadPresentFail(payload, GameMasterToolCommands.ClientText(), out var item, out var count, out var name, out var reason))
+        {
+            return $"item not given ({payload.Length} B)";
+        }
+        var subject = name.Length == 0 ? $"item {item} x{count}" : $"item {item} x{count} for '{name}'";
+        return reason switch
+        {
+            (byte)GameMasterFrames.AckPresentUnknownItem => $"{subject} not given: no such item in the item table",
+            (byte)GameMasterFrames.AckPresentNoReceiver or (byte)GameMasterFrames.AckPresentNotOnline => $"{subject} not given: the character is not on a game server",
+            (byte)GameMasterFrames.AckPresentNoRoom => $"{subject} not given: the bag has no room (weight or slots)",
+            var other => $"{subject} not given (reason {other})",
+        };
+    }
 
     private static string DescribeExpList(byte[] payload, bool withTime, bool withCurrent)
     {

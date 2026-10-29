@@ -69,7 +69,7 @@ public static class CharacterListBuilder
         WriteUInt64Le(entry, CharIdOffset, character.CharacterId);
         entry[SlotOffset] = character.Slot;
 
-        var nameBytes = Encoding.ASCII.GetBytes(character.Name);
+        var nameBytes = ClientText.Encoding.GetBytes(character.Name);
         if (nameBytes.Length >= NameRegionBytes)
         {
             throw new InvalidOperationException(
@@ -79,7 +79,7 @@ public static class CharacterListBuilder
 
         if (character.AccountLabel.Length > 0)
         {
-            var labelBytes = Encoding.ASCII.GetBytes(character.AccountLabel);
+            var labelBytes = ClientText.Encoding.GetBytes(character.AccountLabel);
             var labelStart = NameRegionOffset + nameBytes.Length + 1;
             var maxLabelBytes = NameRegionBytes - (nameBytes.Length + 1);
             if (labelBytes.Length >= maxLabelBytes)

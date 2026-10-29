@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>tPoseidon.Launcher</AssemblyName>
+    <RootNamespace>tPoseidon.Launcher</RootNamespace>
+    <ApplicationIcon>..\tPoseidon.Panel\Assets\tposeidon.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="..\tPoseidon.Panel\Assets\tposeidon.ico" Link="Assets\tposeidon.ico" />
+    <AvaloniaResource Include="..\tPoseidon.Panel\Assets\icon-256.png" Link="Assets\icon-256.png" />
+    <AvaloniaResource Include="..\tPoseidon.Panel\Assets\emblem-48.png" Link="Assets\emblem-48.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\tPoseidon.Hosting\tPoseidon.Hosting.csproj" />
+    <ProjectReference Include="..\tPoseidon.LauncherKit\tPoseidon.LauncherKit.csproj" />
+    <ProjectReference Include="..\tPoseidon.Ui\tPoseidon.Ui.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="tPoseidon.Launcher.Tests" />
+  </ItemGroup>
+
+</Project>

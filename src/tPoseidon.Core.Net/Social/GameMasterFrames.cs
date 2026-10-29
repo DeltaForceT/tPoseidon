@@ -43,6 +43,8 @@ public static class GameMasterFrames
     public const ushort CharInfoReply = 0x147A;
     public const ushort CharInfoMissing = 0x147B;
     public const ushort PresentItem = 0x147F;
+    public const ushort PresentItemOk = 0x150A;
+    public const ushort PresentItemFail = 0x1481;
     public const ushort RemoveMyCampById = 0x149C;
     public const ushort RemoveMyCampUnknownZone = 0x149E;
     public const ushort RemoveMyCampByName = 0x149F;
@@ -145,6 +147,7 @@ public static class GameMasterFrames
     public const ushort ReportNpcOnOff = 0x69;
     public const ushort ReportNpcRefresh = 0x6A;
     public const ushort ReportSummonNpc = 0x66;
+    public const ushort ReportPresentItem = 0x5E;
     public const int NpcOnOffAckLength = 15;
     public const uint AckOk = 0;
     public const uint AckBadMonsterType = 1;
@@ -156,6 +159,10 @@ public static class GameMasterFrames
     public const uint AckNoGameMaster = 2;
     public const uint AckSummonNpcNoGameMaster = 1;
     public const uint AckGiveFailed = 4;
+    public const uint AckPresentUnknownItem = 1;
+    public const uint AckPresentNoReceiver = 2;
+    public const uint AckPresentNotOnline = 3;
+    public const uint AckPresentNoRoom = AckGiveFailed;
     public const ushort OrderPresentItem = 0x61;
     public const ushort OrderRemoveMyCamp = 0x63;
     public const ushort OrderRemovePersonalShop = 0x65;
@@ -241,6 +248,7 @@ public static class GameMasterFrames
     public static ushort? ReportOf(ushort orderType) => orderType switch
     {
         OrderCharInfo => ReportCharInfo,
+        OrderPresentItem => ReportPresentItem,
         OrderSummonMonster => ReportSummonMonster,
         OrderSummonNpc => ReportSummonNpc,
         OrderSummonMonsterArea => ReportSummonMonster,
@@ -694,6 +702,33 @@ public static class GameMasterFrames
         speed = 0;
         if (data.Length < sizeof(uint)) return false;
         speed = new PacketReader(data).ReadUInt32();
+        return true;
+    }
+
+    public static byte[] PresentFail(uint itemId, ushort count, string name, byte reason, System.Text.Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(sizeof(uint) + sizeof(ushort) + name.Length + 2);
+        w.WriteUInt32(itemId);
+        w.WriteUInt16(count);
+        w.WriteNulTerminated(name, text);
+        w.WriteByte(reason);
+        return w.ToArray();
+    }
+
+    public static bool TryReadPresentFail(ReadOnlySpan<byte> payload, System.Text.Encoding text, out uint itemId, out ushort count, out string name, out byte reason)
+    {
+        itemId = 0;
+        count = 0;
+        name = string.Empty;
+        reason = 0;
+        if (payload.Length < sizeof(uint) + sizeof(ushort) + 2) return false;
+        var r = new PacketReader(payload);
+        itemId = r.ReadUInt32();
+        count = r.ReadUInt16();
+        name = r.ReadNulTerminated(text);
+        reason = payload[^1];
         return true;
     }
 

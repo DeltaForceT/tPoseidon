@@ -4,6 +4,7 @@ public static class GuildRules
 {
     public const int Ok = 0;
     public const int Failed = 50000;
+    public const int DepotNotEmpty = 109;
 
     public const byte NotInGuild = 0;
     public const byte Applying = 1;
@@ -70,7 +71,9 @@ public sealed record GuildDetail(
     string MasterName,
     GuildLadder Ladder,
     IReadOnlyList<GuildGrade> Grades,
-    IReadOnlyList<GuildNotice> Notices);
+    IReadOnlyList<GuildNotice> Notices,
+    int DepotTabs = 0,
+    int Coins = 0);
 
 public sealed record GuildRosterEntry(
     ulong CharacterId,

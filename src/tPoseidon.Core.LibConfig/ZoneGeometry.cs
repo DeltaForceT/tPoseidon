@@ -11,6 +11,8 @@ public sealed class ZoneGeometry
 
     public const int RegionTypePortal = 1;
     public const int RegionTypeMonsterMovement = 2;
+    public const int RegionTypeMonsterAppearance = 9;
+    public const int RegionTypeGuildSpawn = 10;
 
     public const int PointTypeEntry = 1;
     public const int PointTypeRestart = 2;
@@ -77,6 +79,27 @@ public sealed class ZoneGeometry
             if (region.Type == type && region.Id == id) return region;
         }
         return null;
+    }
+
+    public ZoneRegion? RegionContaining(int type, int x, int y)
+    {
+        foreach (var region in Regions)
+        {
+            if (region.Type != type) continue;
+            if (x >= Math.Min(region.X1, region.X2) && x < Math.Max(region.X1, region.X2)
+                && y >= Math.Min(region.Y1, region.Y2) && y < Math.Max(region.Y1, region.Y2)) return region;
+        }
+        return null;
+    }
+
+    public int CountRegionsOfType(int type)
+    {
+        var count = 0;
+        foreach (var region in Regions)
+        {
+            if (region.Type == type) count++;
+        }
+        return count;
     }
 
     public bool OverlapsRegionOfType(int type, int x1, int y1, int x2, int y2)

@@ -60,6 +60,8 @@ public sealed class GameServerLinks
 
     public ushort? ZoneOf(ulong characterId) => _whereabouts.TryGetValue(characterId, out var where) ? where.Zone : null;
 
+    public IReadOnlyList<ushort> Zones() => _whereabouts.Values.Select(where => where.Zone).ToArray();
+
     public FriendZoneInfo? ZoneInfoOf(ulong characterId)
     {
         if (_transit.TryGetValue(characterId, out var moving)) return FriendZoneInfo.Moving(moving.From, moving.To);
@@ -117,19 +119,20 @@ public sealed class GameServerLinks
         }
     }
 
-    public async Task SendAsync(PartyOrder order, CancellationToken ct)
+    public async Task<bool> SendAsync(PartyOrder order, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(order);
-        if (!_whereabouts.TryGetValue(order.CharacterId, out var where)) return;
+        if (!_whereabouts.TryGetValue(order.CharacterId, out var where)) return false;
         var key = (order.CharacterId, order.OrderType);
         if (_outstanding.TryRemove(key, out var previous))
         {
             await SendOrderAsync(where, new OfficerOrder(previous.AgencyId, NextOrderId(), SystemLinkFrames.OrderCancel, order.CharacterId, SystemLinkFrames.CancelData(previous.OrderId)), ct).ConfigureAwait(false);
         }
-        if (order.Data is null) return;
+        if (order.Data is null) return true;
         var orderId = NextOrderId();
         _outstanding[key] = (order.AgencyId, orderId);
         await SendOrderAsync(where, new OfficerOrder(order.AgencyId, orderId, order.OrderType, order.CharacterId, order.Data), ct).ConfigureAwait(false);
+        return true;
     }
 
     public async Task<ushort?> SendReportedAsync(ulong characterId, ushort orderType, byte[] data, CancellationToken ct)

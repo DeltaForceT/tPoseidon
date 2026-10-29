@@ -172,12 +172,12 @@ public sealed class MonsterEntity
     private DateTimeOffset _moveEndsAt;
     private (int X, int Y)[] _movePoints = [];
 
-    public ushort CurrentX
+    public ushort DestinationX
     {
         get { lock (_lock) return _curX; }
     }
 
-    public ushort CurrentY
+    public ushort DestinationY
     {
         get { lock (_lock) return _curY; }
     }

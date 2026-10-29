@@ -2,7 +2,7 @@ namespace tPoseidon.Core.WorldSnapshot;
 
 public sealed record WorldSnapshotDto
 {
-        public const int CurrentFormatVersion = 1;
+        public const int CurrentFormatVersion = 2;
 
     public int FormatVersion { get; init; } = CurrentFormatVersion;
 

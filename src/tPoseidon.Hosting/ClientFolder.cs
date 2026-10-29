@@ -61,7 +61,7 @@ public static class ClientFolder
             }
             catch (UnauthorizedAccessException ex)
             {
-                throw new HostingException($"Could not create {copy.Target}: {ex.Message}", "Move the client to a folder you can write to (not Program Files), or give your account write access to it.", ex);
+                throw new PlayFailure(PlayFailureReason.ClientNotWritable, $"Could not create {copy.Target}: {ex.Message}", "Move the client to a folder you can write to (not Program Files), or give your account write access to it.", ex);
             }
         }
 

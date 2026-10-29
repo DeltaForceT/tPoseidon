@@ -72,6 +72,7 @@ public sealed class PlayerMeleeTicker
                 };
             }
 
+            var (targetX, targetY) = monster.GetInterpolatedPosition(now);
             var hpBefore = monster.CurrentHp;
             monster.AddAttacker(attacker.EntityId);
             monster.ApplyDamage(outcome.Damage);
@@ -80,8 +81,8 @@ public sealed class PlayerMeleeTicker
                 TargetEntityId: monster.EntityId,
                 AttackerX: attacker.X,
                 AttackerY: attacker.Y,
-                TargetX: monster.CurrentX,
-                TargetY: monster.CurrentY,
+                TargetX: targetX,
+                TargetY: targetY,
                 Damage: outcome.Damage,
                 MobHpAfter: monster.CurrentHp,
                 HitFlags: 0,

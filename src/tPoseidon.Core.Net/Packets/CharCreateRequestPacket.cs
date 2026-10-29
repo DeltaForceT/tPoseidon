@@ -24,7 +24,7 @@ public sealed class CharCreateRequestPacket
     public byte[] EncodePayload()
     {
         ArgumentNullException.ThrowIfNull(Name);
-        var nameBytes = Encoding.ASCII.GetBytes(Name);
+        var nameBytes = ClientText.Encoding.GetBytes(Name);
         if (nameBytes.Length >= MaxNameBytes)
         {
             throw new InvalidOperationException(
@@ -66,7 +66,7 @@ public sealed class CharCreateRequestPacket
                 $"CharCreateRequest: expected exactly {FixedTailBytes} bytes after name NUL, got {afterName.Length}.");
         }
 
-        var name = Encoding.ASCII.GetString(payload[..nul]);
+        var name = ClientText.Encoding.GetString(payload[..nul]);
         var species = (ushort)(afterName[0] | (afterName[1] << 8));
         return new CharCreateRequestPacket
         {

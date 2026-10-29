@@ -68,6 +68,28 @@ public sealed class MasterUniqueItems
         }
     }
 
+    public async Task<IReadOnlyList<BossKillHistoryRecord>?> BossKillHistoryAsync(ulong charUid, CancellationToken ct)
+    {
+        if (_client() is not { IsConnected: true } client)
+        {
+            _log($"[unique] Master not connected; boss kill history of 0x{charUid:X} not read");
+            return null;
+        }
+        try
+        {
+            var reply = await client.SendAndAwaitReplyAsync(
+                Frame(client, InterServerOpcode.CcmdBossKillHistory, charUid, Array.Empty<byte>()),
+                new HashSet<InterServerOpcode> { InterServerOpcode.CcmdBossKillHistoryAckOk, InterServerOpcode.CcmdBossKillHistoryAckCancel },
+                Timeout, ct).ConfigureAwait(false);
+            return reply.Opcode == InterServerOpcode.CcmdBossKillHistoryAckOk ? UniqueItemMessages.DecodeBossKillHistory(reply.Body) : null;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            _log($"[unique] Master did not answer the boss kill history of 0x{charUid:X}");
+            return null;
+        }
+    }
+
     public async Task<IReadOnlyList<UniqueHeldItem>?> WithdrawAsync(UniqueWithdrawRequest request, CancellationToken ct)
     {
         if (_client() is not { IsConnected: true } client)

@@ -4,7 +4,7 @@ using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Social;
 
-public sealed record GuildEnterMatch(uint RoomKey, uint GuildCode, uint MapChoice, byte NoLadderFlag, string AcId, byte GameType, string GuildName, IReadOnlyList<ulong> Members, GuildLeagueRecord League);
+public sealed record GuildEnterMatch(uint RoomKey, uint GuildCode, uint MapChoice, byte NoLadderFlag, string AcId, byte GameType, string GuildName, IReadOnlyList<ulong> Members, GuildLeagueRecord League, byte ScoreGoal = 0);
 
 public sealed record GuildMatchSideResult(uint GuildCode, byte Count, ushort Kills, ushort Deaths, string Name);
 
@@ -42,6 +42,7 @@ public static class GuildGameOrders
     public const byte MonsterMatchType = 2;
 
     public const ushort OrderEnterMatch = 0xE9;
+    public const ushort OrderWatchMatch = 0xEA;
     public const ushort OrderResultNotice = 0xEE;
     public const ushort OrderLobbyNotice = 0xF0;
     public const ushort OrderStartNotice = 0xF1;
@@ -88,6 +89,16 @@ public static class GuildGameOrders
         return (roomKey, sides[0], sides[1]);
     }
 
+    public static byte[] WatchMatch(uint roomKey)
+    {
+        var w = new PacketWriter(sizeof(uint));
+        w.WriteUInt32(roomKey);
+        return w.ToArray();
+    }
+
+    public static uint? ReadWatchMatch(ReadOnlySpan<byte> data) =>
+        data.Length < sizeof(uint) ? null : new PacketReader(data).ReadUInt32();
+
     public static byte[] EnterMatch(GuildEnterMatch order, Encoding text)
     {
         ArgumentNullException.ThrowIfNull(order);
@@ -105,6 +116,7 @@ public static class GuildGameOrders
         w.WriteInt32(order.League.Battles);
         w.WriteInt32(order.League.Wins);
         w.WriteInt32(order.League.Losses);
+        w.WriteByte(order.ScoreGoal);
         return w.ToArray();
     }
 
@@ -128,7 +140,8 @@ public static class GuildGameOrders
         var members = new ulong[count];
         for (var index = 0; index < count; index++) members[index] = r.ReadUInt64();
         var league = new GuildLeagueRecord(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
-        return new GuildEnterMatch(key, guild, map, noLadderFlag, acId, gameType, guildName, members, league);
+        var scoreGoal = r.Remaining >= 1 ? r.ReadByte() : (byte)0;
+        return new GuildEnterMatch(key, guild, map, noLadderFlag, acId, gameType, guildName, members, league, scoreGoal);
     }
 
     public static byte[] LobbyNotice(byte gameType, uint mapChoice, string guildName, int count, ushort averageLevel, Encoding text)

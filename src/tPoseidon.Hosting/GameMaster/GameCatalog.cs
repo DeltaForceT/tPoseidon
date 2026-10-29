@@ -1,12 +1,13 @@
+using tPoseidon.Core.Game.PlayerShop;
 using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.Social;
 using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Hosting.GameMaster;
 
-public sealed record CatalogMonster(uint Type, string Name, int Level, bool Boss);
+public sealed record CatalogMonster(uint Type, string Name, int Level, bool Boss, string Picture = "");
 
-public sealed record CatalogNpc(uint Type, string Name);
+public sealed record CatalogNpc(uint Type, string Name, string Picture = "");
 
 public sealed record CatalogMap(ushort Id, string Name, IReadOnlySet<uint> Monsters);
 
@@ -58,18 +59,22 @@ public sealed class GameCatalog
     {
         ArgumentException.ThrowIfNullOrEmpty(libconfigPath);
         var reader = new LibConfigXmlReader(libconfigPath);
+        var characters = reader.LoadCharacterInfo();
+        var pictures = characters
+            .GroupBy(entry => entry.Id)
+            .ToDictionary(group => group.Key, group => group.First().FileName.Trim());
         var monsters = reader.LoadMonsterParamEx2()
             .Where(entry => entry.Id >= 0 && GameMasterFrames.IsSummonableMonster((uint)entry.Id) && !string.IsNullOrWhiteSpace(entry.Name))
             .GroupBy(entry => entry.Id)
             .Select(group => group.First())
-            .Select(entry => new CatalogMonster((uint)entry.Id, entry.Name.Trim(), entry.Level, entry.IsBoss))
+            .Select(entry => new CatalogMonster((uint)entry.Id, entry.Name.Trim(), entry.Level, entry.IsBoss, pictures.GetValueOrDefault(entry.Id, string.Empty)))
             .OrderBy(monster => monster.Type)
             .ToList();
-        var npcs = reader.LoadCharacterInfo()
+        var npcs = characters
             .Where(entry => NpcManager.IsValidChrType(entry.Id))
             .GroupBy(entry => entry.Id)
             .Select(group => group.First())
-            .Select(entry => new CatalogNpc((uint)entry.Id, entry.DisplayName))
+            .Select(entry => new CatalogNpc((uint)entry.Id, entry.DisplayName, entry.FileName.Trim()))
             .OrderBy(npc => npc.Type)
             .ToList();
         var pools = reader.LoadAllMonsterPoolTables();
@@ -101,11 +106,13 @@ public sealed class GameCatalog
         return Npcs.Where(npc => Matches(text, npc.Name, npc.Type));
     }
 
-    public IEnumerable<ItemName> FindItems(string text, string? table)
+    public IEnumerable<ItemName> FindItems(string text, string? table, byte? category = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         return Items.All
-            .Where(item => (table is null || item.Table == table) && Matches(text, item.Name, (uint)item.Id))
+            .Where(item => (table is null || item.Table == table)
+                && (category is null || PlayerShopSearchRules.CategoryOf(item.Definition) == category)
+                && Matches(text, item.Name, (uint)item.Id))
             .OrderBy(item => item.Id);
     }
 

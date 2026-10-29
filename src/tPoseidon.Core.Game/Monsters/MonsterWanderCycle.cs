@@ -91,7 +91,8 @@ public sealed class MonsterWanderCycle
                     continue;
                 }
 
-                var playerNear = watched.Contains(sectors.SectorOf(monster.CurrentX, monster.CurrentY));
+                var (monsterX, monsterY) = monster.GetInterpolatedPosition(now);
+                var playerNear = watched.Contains(sectors.SectorOf(monsterX, monsterY));
                 if (!playerNear && _rng.Next(PercentScale) >= MoveRatioPercent) continue;
 
                 slot.CountdownMs -= (int)elapsed.TotalMilliseconds;

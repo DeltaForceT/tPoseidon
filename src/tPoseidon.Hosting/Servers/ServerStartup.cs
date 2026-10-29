@@ -9,6 +9,8 @@ public interface IStartupObserver : IProgress<ServerStartReport>
 
     void UpdatingTables();
 
+    void RebuildingServerData();
+
     void StartingServers();
 
     void RollingBack();
@@ -45,6 +47,12 @@ public static class ServerStartup
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(observer);
         await PrepareDatabaseAsync(paths, settings, observer, ct).ConfigureAwait(false);
+
+        if (!ServerDataStep.IsCurrent(paths))
+        {
+            observer.RebuildingServerData();
+            await Task.Run(() => ServerDataStep.Run(paths, settings), ct).ConfigureAwait(false);
+        }
 
         observer.StartingServers();
         var supervisor = new ServerSupervisor(paths, settings);

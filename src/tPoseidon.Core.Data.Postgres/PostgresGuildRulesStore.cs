@@ -229,6 +229,7 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
             return 101;
         }
         if (found.Master != chief) return 102;
+        if (Scalar<bool>(conn, tx, "SELECT EXISTS (SELECT 1 FROM guild_depot_item WHERE guild_code = @g)", ("g", guild))) return GuildRules.DepotNotEmpty;
         Execute(conn, tx, """
             UPDATE characters SET guild_code = 0, guild_state = 0, is_guild_chief = FALSE
             WHERE character_id IN (SELECT char_uid FROM guild_member_standby WHERE guild_code = @g)
@@ -279,7 +280,7 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
                 g.guild_members, g.guild_intro, g.guild_notice, g.emblem_code, g.guild_join_point, g.guild_sms_point, g.guild_url, g.guild_pw,
                 g.guild_point_increase, g.guild_ranking, g.guild_ranking_point, g.guild_max_members, COALESCE(c.name, ''),
                 COALESCE(l.guild_ladder, 0), COALESCE(l.match_count, 0::smallint), COALESCE(l.win_count, 0::smallint), COALESCE(l.lose_count, 0::smallint),
-                COALESCE(l.draw_count, 0::smallint), COALESCE(l.disc_count, 0::smallint)
+                COALESCE(l.draw_count, 0::smallint), COALESCE(l.disc_count, 0::smallint), g.depot_tabs, g.guild_coin
             FROM guild g
             LEFT JOIN characters c ON c.character_id = g.master_char_uid
             LEFT JOIN guild_ladder l ON l.guild_code = g.guild_code
@@ -317,7 +318,9 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
                     LoseCount = r.GetInt16(23),
                     DrawCount = r.GetInt16(24),
                     DiscCount = r.GetInt16(25),
-                }), ("g", guild));
+                },
+                DepotTabs: (int)r.GetInt16(26),
+                Coins: r.GetInt32(27)), ("g", guild));
         if (head is not { } found) return null;
         var grades = Rows(conn, tx, "SELECT grade_code, grade_point, grade_name FROM guild_grade WHERE guild_code = @g ORDER BY grade_code",
             r => new GuildGrade { GuildCode = guildCode, GradeCode = (byte)r.GetInt16(0), GradePoint = r.GetInt32(1), GradeName = r.GetString(2) }, ("g", guild));
@@ -332,7 +335,7 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
                 NoticeContent = r.GetString(2),
                 NoticeCreatedAt = r.GetFieldValue<DateTimeOffset>(3),
             }, ("g", guild), ("n", GuildRules.NoticesShown));
-        return new GuildDetail(found.Guild, found.Max, found.MasterName, found.Ladder, grades, notices);
+        return new GuildDetail(found.Guild, found.Max, found.MasterName, found.Ladder, grades, notices, found.DepotTabs, found.Coins);
     }
 
     public IReadOnlyList<GuildRosterEntry> Members(uint guildCode)

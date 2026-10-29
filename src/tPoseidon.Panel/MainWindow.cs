@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -10,12 +11,14 @@ using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using tPoseidon.Hosting;
+using tPoseidon.LauncherKit;
 using tPoseidon.Hosting.Servers;
 
 namespace tPoseidon.Panel;
 
 public sealed class MainWindow : Window
 {
+    private const int OffscreenFloor = -30000;
     public const string ColumnLayout = "30,96,52,*,104,64,92";
     private static readonly TimeSpan ToastLength = TimeSpan.FromSeconds(7);
 
@@ -34,8 +37,20 @@ public sealed class MainWindow : Window
     private readonly Button _client = Tokens.ToolbarButton(Glyph.Client, "Client", "Launch the game client");
     private readonly Button _playAccount = new() { Height = 26, MinHeight = 0, Padding = new Thickness(6, 0), Margin = new Thickness(-4, 0, 0, 0), VerticalContentAlignment = VerticalAlignment.Center, IsVisible = false };
     private readonly MenuItem _reduce = new() { Header = "Reduce animations", ToggleType = MenuItemToggleType.CheckBox };
+    private const double BubbleIconSize = 12;
+    private const double TitleRoom = 180;
+    private readonly List<TextBlock> _toolbarLabels = [];
+    private StackPanel _toolbar = new();
+    private Grid _headerRow = new();
+    private const double BubbleIconRim = 1.5;
+    private const string BubbleToggleTip = "Quick-access bubble: when on, minimising the panel turns it into a bubble with the server tools";
+    private readonly ToggleButton _bubbleToggle = BubbleToggle();
+    private readonly List<Control> _bubbleCovered = [];
     private IDisposable? _toastTimer;
     private bool _held;
+    private bool _setupOpen;
+    private PixelPoint? _restOrigin;
+    private Size _restSize;
     private bool _begun;
     private Image? _emblem;
 
@@ -43,6 +58,7 @@ public sealed class MainWindow : Window
     {
         _host = host;
         _preferences = preferences;
+        Tools = new PanelTools(host, this, OpenSetup);
         Title = "tPoseidon Control Panel";
         Width = SplashLayout.MainWidth;
         Height = SplashLayout.MainHeight;
@@ -73,6 +89,7 @@ public sealed class MainWindow : Window
         Grid.SetRow(status, 4);
         root.Children.Add(status);
         Content = root;
+        ApplyBubbleMode();
 
         _host.ServicesRebuilt += RebuildRows;
         _host.ServicesRebuilt += ShowPlayAccount;
@@ -86,19 +103,79 @@ public sealed class MainWindow : Window
         _clock.Tick += (_, _) => OnClock();
         _clock.Start();
         Opened += (_, _) => OnOpened();
+        PositionChanged += (_, _) => RememberRestBox();
         RebuildRows();
         OnClock();
     }
 
     public event Action? FirstShown;
 
+    public event Action? BubbleModeChanged;
+
+    public PanelTools Tools { get; }
+
+    public PanelFlight? Flight { get; set; }
+
+    public PanelPreferences Preferences => _preferences;
+
+    public bool SetupOpen => _setupOpen;
+
+    public (PixelPoint Origin, Size Size)? RestBox => _restOrigin is { } origin ? (origin, _restSize) : null;
+
+    public void Reveal()
+    {
+        if (!IsVisible)
+        {
+            Show();
+        }
+
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+
+        Activate();
+    }
+
+    public void Exit() => Close();
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
         if (change.Property == WindowStateProperty)
         {
-            _motion.SetMinimized(WindowState == WindowState.Minimized);
+            var minimized = WindowState == WindowState.Minimized;
+            _motion.SetMinimized(minimized);
+            if (minimized && _preferences.BubbleEnabled)
+            {
+                Dispatcher.UIThread.Post(() => Flight?.Enter());
+            }
+            else if (!minimized && change.OldValue is WindowState.Minimized)
+            {
+                Flight?.Leave();
+            }
         }
+        else if (change.Property == BoundsProperty)
+        {
+            RememberRestBox();
+        }
+    }
+
+    private void RememberRestBox()
+    {
+        if (WindowState != WindowState.Normal || !IsVisible || Bounds.Width <= 0)
+        {
+            return;
+        }
+
+        var origin = this.PointToScreen(new Point(0, 0));
+        if (origin.X < OffscreenFloor || origin.Y < OffscreenFloor)
+        {
+            return;
+        }
+
+        _restOrigin = origin;
+        _restSize = Bounds.Size;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -119,46 +196,19 @@ public sealed class MainWindow : Window
 
     public void OpenSetup()
     {
+        Reveal();
         var window = new SetupWindow(_host.Paths);
         window.Completed += start =>
         {
             _host.Reload();
             if (start)
             {
-                _ = StartAllAsync();
+                _ = Tools.StartAllAsync();
             }
         };
+        _setupOpen = true;
+        window.Closed += (_, _) => _setupOpen = false;
         window.Show(this);
-    }
-
-    private async Task StartAllAsync()
-    {
-        if (!_host.IsSetUp)
-        {
-            OpenSetup();
-            return;
-        }
-
-        if (_host.Settings is { } settings && ServerStartup.NeedsBackupBeforeStart(settings) && !_host.AnyServerRunning())
-        {
-            var answer = await AskWindow.ShowAsync(
-                this,
-                "Back up the database first?",
-                $"This database was last used by tPoseidon {settings.LastStartedVersion}; this is {ServerStartup.CurrentVersion}. A new version can change how data is stored, and the change can't be undone without a backup.",
-                "Back up, then start",
-                "Start without a backup").ConfigureAwait(true);
-            if (answer is null)
-            {
-                return;
-            }
-
-            if (answer == true)
-            {
-                await _host.BackupAsync().ConfigureAwait(true);
-            }
-        }
-
-        await _host.StartAllAsync().ConfigureAwait(true);
     }
 
     private Border BuildHeader()
@@ -167,7 +217,7 @@ public sealed class MainWindow : Window
         header.Children.Add(new SeaHost(new HeaderSeaHandler(), _motion));
 
         var startAll = Tokens.IconButton(Glyph.Play, "Start all servers, one by one", Tokens.Accent);
-        startAll.Click += async (_, _) => await StartAllAsync().ConfigureAwait(true);
+        startAll.Click += async (_, _) => await Tools.StartAllAsync().ConfigureAwait(true);
         var stopAll = Tokens.IconButton(Glyph.Stop, "Stop all servers. Postgres keeps running", Tokens.Danger);
         stopAll.Click += async (_, _) => await _host.StopAllAsync().ConfigureAwait(true);
         var restartAll = Tokens.IconButton(Glyph.Restart, "Stop and start all servers");
@@ -191,15 +241,23 @@ public sealed class MainWindow : Window
         setup.Click += (_, _) => OpenSetup();
         var backup = new MenuItem { Header = "Back up the database" };
         backup.Click += async (_, _) => await _host.BackupAsync().ConfigureAwait(true);
+        var share = new MenuItem { Header = "Share a server file for friends..." };
+        share.Click += (_, _) => Tools.ShareServerFile();
+        var launcher = new MenuItem { Header = "Make a launcher for your players..." };
+        launcher.Click += (_, _) => Tools.MakeLauncher();
+        var channel = new MenuItem { Header = "Edit launcher news and updates..." };
+        channel.Click += (_, _) => Tools.EditLauncherChannel();
+        var publish = new MenuItem { Header = "Publish launcher update" };
+        publish.Click += async (_, _) => await _host.PublishLauncherUpdateAsync().ConfigureAwait(true);
+        var launcherDrawer = new MenuItem { Header = "Launcher", Items = { launcher, channel, publish } };
         var language = new MenuItem { Header = "Client language" };
-        var languages = LanguageChoices();
-        foreach (var choice in languages)
+        foreach (var choice in Tools.Languages)
         {
             language.Items.Add(choice.Item);
         }
 
         var folder = new MenuItem { Header = "Open the data folder" };
-        folder.Click += async (_, _) => await OpenDataFolderAsync().ConfigureAwait(true);
+        folder.Click += async (_, _) => await Tools.OpenDataFolderAsync().ConfigureAwait(true);
         var splash = new MenuItem { Header = "Replay startup splash" };
         splash.Click += (_, _) =>
         {
@@ -209,27 +267,39 @@ public sealed class MainWindow : Window
             replay.Show();
             replay.Aim();
         };
+        var exit = new MenuItem { Header = "Exit tPoseidon" };
+        exit.Click += (_, _) => Exit();
+        var firstDivider = new Separator();
+        var lastDivider = new Separator();
+        _bubbleToggle.IsCheckedChanged += (_, _) => SetBubble(_bubbleToggle.IsChecked == true);
+        _bubbleToggle.IsChecked = _preferences.BubbleEnabled;
         var contextMenu = new ContextMenu
         {
             Items =
             {
                 setup,
                 backup,
+                share,
+                launcherDrawer,
                 language,
                 folder,
-                new Separator(),
+                firstDivider,
                 _reduce,
                 splash,
+                lastDivider,
+                exit,
             },
         };
+        _bubbleCovered.AddRange([logs, security, backup, share, language, folder, firstDivider, lastDivider, exit]);
         contextMenu.Opening += (_, _) =>
         {
             backup.IsEnabled = _host.IsSetUp;
+            share.IsEnabled = _host.IsSetUp;
+            launcher.IsEnabled = _host.IsSetUp;
+            channel.IsEnabled = _host.IsSetUp;
+            publish.IsEnabled = _host.IsSetUp;
             language.IsEnabled = _host.IsSetUp;
-            foreach (var choice in languages)
-            {
-                choice.Item.Icon = string.Equals(choice.Service, _host.ClientLanguage, StringComparison.OrdinalIgnoreCase) ? Tokens.Glyphs(Glyph.Check, 12, Tokens.Accent) : null;
-            }
+            Tools.MarkLanguages();
             splash.IsEnabled = !_motion.Reduced;
         };
         menu.ContextMenu = contextMenu;
@@ -239,14 +309,23 @@ public sealed class MainWindow : Window
         right.Children.Add(startAll);
         right.Children.Add(stopAll);
         right.Children.Add(restartAll);
-        right.Children.Add(new Border { Width = 1, Height = 16, Margin = new Thickness(4, 0), Background = Tokens.BorderSubtle });
+        var divider = new Border { Width = 1, Height = 16, Margin = new Thickness(4, 0), Background = Tokens.BorderSubtle };
+        right.Children.Add(divider);
         right.Children.Add(_client);
         right.Children.Add(_playAccount);
         right.Children.Add(logs);
         right.Children.Add(security);
         right.Children.Add(gameMaster);
+        right.Children.Add(_bubbleToggle);
         right.Children.Add(menu);
-        DockPanel.SetDock(right, Dock.Right);
+        _toolbar = right;
+        foreach (var labelled in new ContentControl[] { _client, logs, security, gameMaster, _bubbleToggle })
+        {
+            if (labelled.Content is StackPanel content)
+            {
+                _toolbarLabels.AddRange(content.Children.OfType<TextBlock>());
+            }
+        }
 
         var emblem = _emblem = new Image
         {
@@ -257,6 +336,7 @@ public sealed class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
         };
         _summary.FontSize = Tokens.FontSizeCaption;
+        _summary.TextTrimming = TextTrimming.CharacterEllipsis;
         var titles = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 0 };
         var titleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         titleRow.Children.Add(new TextBlock { Text = "tPoseidon", FontWeight = FontWeight.SemiBold, FontSize = 14 });
@@ -270,14 +350,17 @@ public sealed class MainWindow : Window
         });
         titles.Children.Add(titleRow);
         titles.Children.Add(_summary);
-        var left = new StackPanel { Orientation = Orientation.Horizontal };
+        var left = new DockPanel { LastChildFill = true, ClipToBounds = true };
+        DockPanel.SetDock(emblem, Dock.Left);
         left.Children.Add(emblem);
         left.Children.Add(titles);
 
-        var dock = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 0) };
-        dock.Children.Add(right);
-        dock.Children.Add(left);
-        header.Children.Add(dock);
+        var row = _headerRow = new Grid { Margin = new Thickness(10, 0), ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        Grid.SetColumn(right, 1);
+        row.Children.Add(left);
+        row.Children.Add(right);
+        row.SizeChanged += (_, _) => FitToolbar();
+        header.Children.Add(row);
         return new Border { BorderBrush = Tokens.BorderSubtle, BorderThickness = new Thickness(0, 0, 0, 1), Child = header };
     }
 
@@ -366,22 +449,82 @@ public sealed class MainWindow : Window
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        FitToolbar();
     }
 
-    private (string Service, MenuItem Item)[] LanguageChoices()
+    private static ToggleButton BubbleToggle()
     {
-        var choices = new[]
+        var icon = new Avalonia.Controls.Shapes.Ellipse
         {
-            (ClientFolder.AutomaticService, new MenuItem { Header = "Automatic (from the game data)" }),
-            (ClientFolder.KoreanService, new MenuItem { Header = "Korean" }),
-            (ClientFolder.EnglishService, new MenuItem { Header = "English" }),
+            Width = BubbleIconSize,
+            Height = BubbleIconSize,
+            StrokeThickness = BubbleIconRim,
+            Stroke = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops = { new GradientStop(Color.Parse("#C4B5FD"), 0), new GradientStop(Color.Parse("#7DD3FC"), 0.5), new GradientStop(Color.Parse("#5EEAD4"), 1) },
+            },
+            Fill = new RadialGradientBrush
+            {
+                GradientStops = { new GradientStop(Color.Parse("#00FFFFFF"), 0.55), new GradientStop(Color.Parse("#407DD3FC"), 1) },
+            },
+            VerticalAlignment = VerticalAlignment.Center,
         };
-        foreach (var (service, item) in choices)
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        content.Children.Add(icon);
+        content.Children.Add(new TextBlock { Text = "Bubble", VerticalAlignment = VerticalAlignment.Center });
+        var toggle = new ToggleButton { Content = content, Height = 26, MinHeight = 0, Padding = new Thickness(8, 0), VerticalContentAlignment = VerticalAlignment.Center };
+        toggle.Classes.Add("chip");
+        ToolTip.SetTip(toggle, BubbleToggleTip);
+        return toggle;
+    }
+
+    private void ApplyBubbleMode()
+    {
+        foreach (var control in _bubbleCovered)
         {
-            item.Click += async (_, _) => await _host.ChooseClientLanguageAsync(service).ConfigureAwait(true);
+            control.IsVisible = !_preferences.BubbleEnabled;
         }
 
-        return choices;
+        FitToolbar();
+    }
+
+    public bool ToolbarLabelsShown => _toolbarLabels.TrueForAll(label => label.IsVisible);
+
+    private void FitToolbar()
+    {
+        var room = _headerRow.Bounds.Width - TitleRoom;
+        if (room <= 0)
+        {
+            return;
+        }
+
+        SetToolbarLabels(true);
+        _toolbar.Measure(Size.Infinity);
+        SetToolbarLabels(_toolbar.DesiredSize.Width <= room);
+    }
+
+    private void SetToolbarLabels(bool shown)
+    {
+        foreach (var label in _toolbarLabels)
+        {
+            label.IsVisible = shown;
+        }
+    }
+
+    public void SetBubble(bool enabled)
+    {
+        if (_preferences.BubbleEnabled == enabled && _bubbleToggle.IsChecked == enabled)
+        {
+            return;
+        }
+
+        _preferences.BubbleEnabled = enabled;
+        _preferences.TrySave();
+        _bubbleToggle.IsChecked = enabled;
+        ApplyBubbleMode();
+        BubbleModeChanged?.Invoke();
     }
 
     private async Task PickPlayAccountAsync()
@@ -489,23 +632,7 @@ public sealed class MainWindow : Window
     {
         _motion.SetReduced(reduced);
         _preferences.ReduceAnimations = reduced;
-        try
-        {
-            _preferences.Save();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            LogHub.Write(LogHub.PanelSource, LogLevel.Warn, $"Could not save the panel preferences to {PanelPreferences.FilePath}: {ex.Message}");
-        }
-    }
-
-    private async Task OpenDataFolderAsync()
-    {
-        Directory.CreateDirectory(_host.Paths.Root);
-        if (!await Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(_host.Paths.Root)).ConfigureAwait(true))
-        {
-            ShowToast(new PanelNotice(BannerKind.Warning, "The data folder could not be opened.", _host.Paths.Root));
-        }
+        _preferences.TrySave();
     }
 
     private static string ShortPath(string path)
@@ -583,7 +710,7 @@ public sealed class MainWindow : Window
         return ((a.X + b.X) / 2.0, (a.Y + b.Y) / 2.0, b.X - a.X);
     }
 
-    private bool Cloak(bool on) =>
+    internal bool Cloak(bool on) =>
         OperatingSystem.IsWindows() && TryGetPlatformHandle() is { } handle && NativeWindows.Cloak(handle.Handle, on);
 
     private void OnOpened()

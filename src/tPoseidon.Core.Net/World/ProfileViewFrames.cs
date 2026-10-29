@@ -1,4 +1,5 @@
 using System.Text;
+using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Progression;
 using tPoseidon.Core.Net.Packets;
 
@@ -32,12 +33,22 @@ public sealed record ProfileView(
     ushort EntityId,
     byte FType,
     ProfileViewInfo? Info,
-    ProfileViewEquipment? Equipment);
+    ProfileViewEquipment? Equipment,
+    IReadOnlyList<BossKillHistoryRecord>? Collection = null);
+
+public enum CoverLetterRead
+{
+    Accepted,
+    OutOfRange,
+    Truncated,
+}
 
 public static class ProfileViewFrames
 {
     public const int RequestSize = sizeof(ushort);
     public const int OptionsRequestSize = sizeof(uint);
+    public const int CoverLetterHeaderSize = sizeof(short);
+    public const int BossKillRecordSize = 12;
 
     public static bool TryReadRequest(ReadOnlySpan<byte> payload, out ushort entityId)
     {
@@ -54,6 +65,27 @@ public static class ProfileViewFrames
         flags = new PacketReader(payload).ReadUInt32();
         return true;
     }
+
+    public static CoverLetterRead TryReadCoverLetter(ReadOnlySpan<byte> payload, out byte[] letter)
+    {
+        letter = [];
+        if (payload.Length < CoverLetterHeaderSize) return CoverLetterRead.Truncated;
+        var length = new PacketReader(payload).ReadInt16();
+        if (length < 0 || length > ProfileViewRules.MaxMessageBytes) return CoverLetterRead.OutOfRange;
+        if (payload.Length < CoverLetterHeaderSize + length) return CoverLetterRead.Truncated;
+        letter = payload.Slice(CoverLetterHeaderSize, length).ToArray();
+        return CoverLetterRead.Accepted;
+    }
+
+    public static byte[] CoverLetter(ReadOnlySpan<byte> letter)
+    {
+        var w = new PacketWriter(CoverLetterHeaderSize + letter.Length);
+        w.WriteUInt16((ushort)letter.Length);
+        w.WriteBytes(letter);
+        return w.ToArray();
+    }
+
+    public static byte[] CoverLetterRefused() => [ProfileViewRules.CoverLetterRefusedCode];
 
     public static byte[] Options(uint flags)
     {
@@ -93,8 +125,32 @@ public static class ProfileViewFrames
         {
             WriteEquipment(w, view.Equipment ?? throw new InvalidOperationException("The equipment flag is set but the view carries no equipment."), info);
         }
-        if (ProfileViewRules.Shows(view.Flags, ProfileViewRules.ShowCollection)) w.WriteByte(0);
+        if (ProfileViewRules.Shows(view.Flags, ProfileViewRules.ShowCollection)) WriteCollection(w, view.Collection ?? []);
         return w.ToArray();
+    }
+
+    public static byte[] BossKillWindow(IReadOnlyList<BossKillHistoryRecord> records)
+    {
+        ArgumentNullException.ThrowIfNull(records);
+        var shown = records.Take(ProfileViewRules.MostCollectionRecords).ToList();
+        var w = new PacketWriter(sizeof(ushort) + shown.Count * BossKillRecordSize);
+        w.WriteUInt16((ushort)shown.Count);
+        foreach (var record in shown) WriteBossKill(w, record);
+        return w.ToArray();
+    }
+
+    private static void WriteCollection(PacketWriter w, IReadOnlyList<BossKillHistoryRecord> records)
+    {
+        var shown = records.Take(ProfileViewRules.MostCollectionRecords).ToList();
+        w.WriteByte((byte)shown.Count);
+        foreach (var record in shown) WriteBossKill(w, record);
+    }
+
+    private static void WriteBossKill(PacketWriter w, BossKillHistoryRecord record)
+    {
+        w.WriteUInt16((ushort)record.MonsterId);
+        w.WriteUInt16((ushort)Math.Clamp(record.KillCount, 0, ushort.MaxValue));
+        w.WriteInt64(record.FirstKill.ToFileTime());
     }
 
     private static void WriteEquipment(PacketWriter w, ProfileViewEquipment equipment, ProfileViewInfo info)

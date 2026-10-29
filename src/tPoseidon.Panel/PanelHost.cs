@@ -323,6 +323,27 @@ public sealed class PanelHost
         }
     }
 
+    public async Task PublishLauncherUpdateAsync()
+    {
+        if (Settings is not { } settings)
+        {
+            return;
+        }
+
+        try
+        {
+            var outcome = await Task.Run(() => UpdateChannel.Publish(Paths, settings)).ConfigureAwait(true);
+            var manifest = outcome.Manifest;
+            var summary = $"{manifest.Files.Count} files, {manifest.News.Count} news items";
+            LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Published the launcher update '{manifest.Name}': {summary}.");
+            Notify(BannerKind.Success, "Launcher update published.", $"{summary}. Folder: {Paths.Updates}");
+        }
+        catch (HostingException ex)
+        {
+            Fail(LogHub.PanelSource, ex);
+        }
+    }
+
     public void LaunchClient()
     {
         if (Settings is not { } settings)
@@ -639,6 +660,8 @@ public sealed class PanelHost
         public void CheckingDatabase(string database) => LogHub.Post(ServiceModel.DatabaseName, LogLevel.Info, $"Checking the database ({database})...");
 
         public void UpdatingTables() => LogHub.Post(ServiceModel.DatabaseName, LogLevel.Info, "Updating the database tables...");
+
+        public void RebuildingServerData() => LogHub.Post(LogHub.PanelSource, LogLevel.Info, "Rebuilding the server data from your client after the update (once, takes a minute)...");
 
         public void StartingServers() => LogHub.Post(LogHub.PanelSource, LogLevel.Info, "Starting the servers, one by one.");
 

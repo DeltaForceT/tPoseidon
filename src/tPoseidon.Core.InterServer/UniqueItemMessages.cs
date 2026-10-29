@@ -80,6 +80,32 @@ public static class UniqueItemMessages
         return kills;
     }
 
+    public const int BossKillHistoryRecordSize = 12;
+
+    public static byte[] EncodeBossKillHistory(IReadOnlyList<BossKillHistoryRecord> history)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        var shown = history.Take(byte.MaxValue).ToList();
+        var w = new PacketWriter(1 + shown.Count * BossKillHistoryRecordSize);
+        w.WriteByte((byte)shown.Count);
+        foreach (var record in shown)
+        {
+            w.WriteUInt16((ushort)record.MonsterId);
+            w.WriteUInt16((ushort)Math.Clamp(record.KillCount, 0, ushort.MaxValue));
+            w.WriteInt64(record.FirstKill.ToFileTime());
+        }
+        return w.ToArray();
+    }
+
+    public static IReadOnlyList<BossKillHistoryRecord> DecodeBossKillHistory(ReadOnlySpan<byte> body)
+    {
+        var r = new PacketReader(body);
+        var count = r.ReadByte();
+        var history = new List<BossKillHistoryRecord>(count);
+        for (var i = 0; i < count; i++) history.Add(new BossKillHistoryRecord(r.ReadUInt16(), r.ReadUInt16(), DateTimeOffset.FromFileTime(r.ReadInt64())));
+        return history;
+    }
+
     public static byte[] EncodeDutyExpire(ulong charUid, DateTimeOffset expire, DateTimeOffset now)
     {
         var w = new PacketWriter(24);

@@ -119,6 +119,9 @@ public enum InterServerOpcode : ushort
     McmdMemoryPortDeleteAckCancel = 0x105B,
 
     CcmdSaveBossKillInfo = 0x0E5B,
+    CcmdBossKillHistoryAckOk = 0x0E5C,
+    CcmdBossKillHistoryAckCancel = 0x0E5D,
+    CcmdBossKillHistory = 0x0E5E,
     CcmdUniqueDutyExpire = 0x0E7B,
     IcmdUniqueItemWithdraw = 0x105C,
     IcmdUniqueItemWithdrawAckOk = 0x105D,

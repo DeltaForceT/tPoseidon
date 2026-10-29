@@ -52,18 +52,33 @@ public sealed class AskWindow : Window
         Content = stack;
     }
 
-    public static async Task<bool?> ShowAsync(Window owner, string question, string detail, string yes, string no)
+    public static async Task<bool?> ShowAsync(Window? owner, string question, string detail, string yes, string no)
     {
         var window = new AskWindow(question, detail, yes, no);
-        await window.ShowDialog(owner).ConfigureAwait(true);
+        await window.PresentAsync(owner).ConfigureAwait(true);
         return window._answer;
     }
 
-    public static async Task<bool> ConfirmAsync(Window owner, string question, string detail, string yes)
+    public static async Task<bool> ConfirmAsync(Window? owner, string question, string detail, string yes)
     {
         var window = new AskWindow(question, detail, yes, null);
-        await window.ShowDialog(owner).ConfigureAwait(true);
+        await window.PresentAsync(owner).ConfigureAwait(true);
         return window._answer == true;
+    }
+
+    private Task PresentAsync(Window? owner)
+    {
+        if (owner is not null)
+        {
+            return ShowDialog(owner);
+        }
+
+        var closed = new TaskCompletionSource();
+        Closed += (_, _) => closed.SetResult();
+        WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        Topmost = true;
+        Show();
+        return closed.Task;
     }
 
     private void Answer(bool? answer)

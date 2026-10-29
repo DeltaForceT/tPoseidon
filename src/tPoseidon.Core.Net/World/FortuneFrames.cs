@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using System.Buffers.Binary;
 using System.Text;
 using tPoseidon.Core.Game.Fortune;
@@ -125,7 +126,7 @@ public static class FortuneFrames
     public static byte[] Rolled(FortuneRollFrame roll)
     {
         ArgumentNullException.ThrowIfNull(roll);
-        var award = Encoding.ASCII.GetBytes(roll.Award);
+        var award = ClientText.Encoding.GetBytes(roll.Award);
         var length = Math.Min(award.Length, AwardMaxLength);
         var w = new PacketWriter(1 + 2 * ResultsSize + 8 + 4 + 4 + 2 + length);
         w.WriteByte(roll.ThreeOfAKind ? (byte)1 : (byte)0);

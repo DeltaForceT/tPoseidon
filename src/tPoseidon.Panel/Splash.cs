@@ -76,10 +76,7 @@ public sealed class SplashHandler : SeaHandler
     private readonly SKPath _liquidPath = new();
     private readonly Pop[] _pops;
     private readonly SKPaint _layer = new();
-    private readonly SKPaint _bubbleFill = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
-    private readonly SKPaint _bubbleRim = new() { IsAntialias = true, Style = SKPaintStyle.Stroke };
-    private readonly SKPaint _bubbleGlow = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
-    private readonly SKPaint _drop = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
+    private readonly BubbleArt _art = new();
     private readonly SKPaint _liquid = new() { BlendMode = SKBlendMode.DstIn, IsAntialias = true, Style = SKPaintStyle.Fill, Color = SKColors.White };
     private readonly SKPaint _overlay = new() { BlendMode = SKBlendMode.SrcATop, IsAntialias = true };
     private readonly SKPaint _background = new() { Style = SKPaintStyle.Fill };
@@ -477,75 +474,6 @@ public sealed class SplashHandler : SeaHandler
         return (centerX + dx * flight + nx * offset, centerY + dy * flight + ny * offset, IconSize + (target.Size - IconSize) * flight, flight);
     }
 
-    private void DrawBubble(SKCanvas canvas, float radius, float t, float travelAngle, float speed, float alpha)
-    {
-        var wobble = MathF.Sin(t * 13) * (0.025f + 0.03f * speed);
-        var stretch = 0.1f * speed + wobble;
-        canvas.Save();
-        canvas.RotateDegrees(travelAngle);
-        canvas.Scale(1 + stretch, 1 - stretch * 0.85f);
-        canvas.RotateDegrees(-travelAngle);
-        var a = (byte)(255 * alpha);
-        using (var shader = SKShader.CreateRadialGradient(SKPoint.Empty, radius, [SKColor.Parse("#5CD6EE").WithAlpha(0), SKColor.Parse("#7FE9FF").WithAlpha(14), SKColor.Parse("#D9FBFF").WithAlpha(70)], [0, 0.72f, 1], SKShaderTileMode.Clamp))
-        {
-            _bubbleFill.Shader = shader;
-            _bubbleFill.Color = SKColors.White.WithAlpha(a);
-            canvas.DrawCircle(0, 0, radius, _bubbleFill);
-            _bubbleFill.Shader = null;
-        }
-        var rimWidth = MathF.Max(1.6f, radius * 0.016f);
-        SKColor[] hues = [SKColor.Parse("#7FE9FF").WithAlpha(190), SKColor.Parse("#C8A8FF").WithAlpha(170), SKColor.Parse("#FFD3F0").WithAlpha(170), SKColor.Parse("#A8FFE0").WithAlpha(180), SKColor.Parse("#7FE9FF").WithAlpha(190)];
-        using (var shader = SKShader.CreateSweepGradient(SKPoint.Empty, hues, [0, 0.25f, 0.5f, 0.75f, 1]))
-        {
-            canvas.Save();
-            canvas.RotateDegrees(t * 70);
-            _bubbleRim.Shader = shader;
-            _bubbleRim.StrokeWidth = rimWidth;
-            _bubbleRim.Color = SKColors.White.WithAlpha(a);
-            canvas.DrawCircle(0, 0, radius - rimWidth / 2, _bubbleRim);
-            _bubbleRim.StrokeWidth = rimWidth * 0.6f;
-            canvas.DrawCircle(wobble * radius * 0.5f, 0, radius * 0.94f, _bubbleRim);
-            _bubbleRim.Shader = null;
-            canvas.Restore();
-        }
-        var inner = new SKRect(-radius * 0.8f, -radius * 0.8f, radius * 0.8f, radius * 0.8f);
-        _bubbleGlow.StrokeWidth = MathF.Max(2, radius * 0.04f);
-        _bubbleGlow.Color = SKColors.White.WithAlpha((byte)(205 * alpha));
-        canvas.DrawArc(inner, 200, 52, false, _bubbleGlow);
-        _bubbleGlow.StrokeWidth = MathF.Max(1.4f, radius * 0.022f);
-        _bubbleGlow.Color = SKColors.White.WithAlpha((byte)(95 * alpha));
-        canvas.DrawArc(inner, 20, 34, false, _bubbleGlow);
-        canvas.Restore();
-    }
-
-    private void DrawPop(SKCanvas canvas, float x, float y, float radius, float q)
-    {
-        var fade = 1 - q;
-        for (var i = 0; i < 14; i++)
-        {
-            var angle = i * MathF.PI * 2 / 14 + 0.2f;
-            var reach = 16 + 10 * (i % 3);
-            var distance = radius * 1.04f + reach * OutCubic(q);
-            _drop.Color = (i % 2 == 0 ? SKColors.White : SKColor.Parse("#9CEBFA")).WithAlpha((byte)(230 * fade));
-            canvas.DrawCircle(x + MathF.Cos(angle) * distance, y + MathF.Sin(angle) * distance, MathF.Max(0.5f, (2.6f - (i % 3) * 0.6f) * (1 - 0.6f * q)), _drop);
-        }
-        var splash = Clamp01(q * 1.15f);
-        for (var i = 0; i < 7; i++)
-        {
-            var vx = (i - 3) * 9f;
-            var vy = -34f - (i % 3) * 12f;
-            var px = x + vx * splash;
-            var py = y + vy * splash + 70 * splash * splash;
-            _drop.Color = SKColors.White.WithAlpha((byte)(210 * (1 - splash)));
-            canvas.DrawCircle(px, py, 1.7f * (1 - 0.5f * splash), _drop);
-        }
-        _bubbleRim.Shader = null;
-        _bubbleRim.Color = SKColor.Parse("#BDF6FF").WithAlpha((byte)(150 * fade));
-        _bubbleRim.StrokeWidth = 1.3f;
-        var spread = 8 + 26 * OutCubic(q);
-        canvas.DrawOval(new SKRect(x - spread, y + 10 - spread * 0.3f, x + spread, y + 10 + spread * 0.3f), _bubbleRim);
-    }
-
     protected override void Draw(SKCanvas canvas, float width, float height)
     {
         var t = (float)(_seek ?? T);
@@ -595,11 +523,11 @@ public sealed class SplashHandler : SeaHandler
         {
             canvas.Save();
             canvas.Translate(anchor.X, anchor.Y);
-            DrawBubble(canvas, radius, t, travelAngle, speed, bubbleAlpha);
+            _art.Draw(canvas, radius, t, travelAngle, speed, bubbleAlpha);
             canvas.Restore();
         }
         if (popP > 0)
-            DrawPop(canvas, anchor.X, anchor.Y, anchor.Size * BubbleRatio, Span(t, PopAt, PopAt + 0.5f));
+            _art.DrawPop(canvas, anchor.X, anchor.Y, anchor.Size * BubbleRatio, Span(t, PopAt, PopAt + 0.5f));
     }
 }
 

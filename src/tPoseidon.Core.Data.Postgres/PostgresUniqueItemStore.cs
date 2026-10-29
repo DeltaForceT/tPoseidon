@@ -44,7 +44,7 @@ public sealed class PostgresUniqueItemStore : IUniqueItemStore
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var tx = conn.BeginTransaction();
         Execute(conn, tx, """
-            INSERT INTO bossmon (char_uid, mon_id, kill_count, latest_update) VALUES (@ch, @m, 1, @now)
+            INSERT INTO bossmon (char_uid, mon_id, kill_count, kill_date, latest_update) VALUES (@ch, @m, 1, @now, @now)
             ON CONFLICT (char_uid, mon_id) DO UPDATE SET kill_count = bossmon.kill_count + 1, latest_update = EXCLUDED.latest_update
             """, ("ch", unchecked((long)charUid)), ("m", monsterId), ("now", now));
         Execute(conn, tx, "INSERT INTO bossmon_history (char_uid, mon_id, kill_date) VALUES (@ch, @m, @now)",
@@ -62,6 +62,20 @@ public sealed class PostgresUniqueItemStore : IUniqueItemStore
         }
         tx.Commit();
         return credited;
+    }
+
+    public IReadOnlyList<BossKillHistoryRecord> BossKillHistory(ulong charUid)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand("SELECT mon_id, kill_count, kill_date FROM bossmon WHERE char_uid = @ch ORDER BY mon_id", conn);
+        cmd.Parameters.AddWithValue("ch", unchecked((long)charUid));
+        using var reader = cmd.ExecuteReader();
+        var history = new List<BossKillHistoryRecord>();
+        while (reader.Read())
+        {
+            history.Add(new BossKillHistoryRecord(reader.GetInt32(0), reader.GetInt32(1), new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(2), DateTimeKind.Utc))));
+        }
+        return history;
     }
 
     public IReadOnlyList<BossKillRecord> LatestBossKills(ulong charUid)

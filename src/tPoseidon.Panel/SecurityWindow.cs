@@ -102,12 +102,28 @@ public sealed class SecurityWindow : Window
         };
     }
 
-    public static void Toggle(InstallPaths paths)
+    public static void Open(InstallPaths paths)
     {
         if (s_instance is null)
         {
             s_instance = new SecurityWindow(paths);
             s_instance.Show();
+            return;
+        }
+
+        if (s_instance.WindowState == WindowState.Minimized)
+        {
+            s_instance.WindowState = WindowState.Normal;
+        }
+
+        s_instance.Activate();
+    }
+
+    public static void Toggle(InstallPaths paths)
+    {
+        if (s_instance is null)
+        {
+            Open(paths);
         }
         else
         {

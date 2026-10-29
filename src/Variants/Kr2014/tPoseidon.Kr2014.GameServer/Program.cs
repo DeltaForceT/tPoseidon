@@ -12,6 +12,7 @@ using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.Dialogs;
 using tPoseidon.Core.Net.Packets;
 using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Social;
 using tPoseidon.Core.Net.World;
 using tPoseidon.Kr2014.Common;
 using tPoseidon.Kr2014.GameServer;
@@ -20,12 +21,11 @@ using EnterWorldBatchSynthesizer = tPoseidon.Kr2014.GameServer.EnterWorldBatchSy
 #pragma warning disable CA1859
 
 ConsoleFileLog.EnableIfConfigured();
-System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-const int ClientTextCodePage = 949;
 var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : ServerEndpointConfig.GamePort;
 const string LogTag = "[game]";
 const string MonsterTablePrefix = "Mon_";
 const double RegenPassGapMs = 5.0;
+const long BossMinuteMs = 60000;
 const string LevelExpChartFile = "gulim14.fnt2";
 const string StatusChartFile = "gulim13.fnt2";
 const int AttackRequestMoveTypeOffset = 2;
@@ -203,6 +203,8 @@ IUniqueCharDutyInfoStore uniqueCharDutyStore = new PostgresUniqueCharDutyInfoSto
 ICharProfileStore charProfileStore = new PostgresCharProfileStore(pg.DataSource);
 
 IGuildStore guildStore = new PostgresGuildStore(pg.DataSource);
+
+IGuildDepotStore guildDepotStore = new PostgresGuildDepotStore(pg.DataSource);
 
 ICoupleStore coupleStore = new PostgresCoupleStore(pg.DataSource);
 
@@ -430,6 +432,7 @@ INpcActionScriptLookup skillShopNpcMotionCatalog;
 MoveSpeedParamEntry? playerMoveSpeeds = null;
 BeginnerRebirthInfo? beginnerRebirth = null;
 IReadOnlyList<MapMonsterTableEntry> mapMonsterTables = Array.Empty<MapMonsterTableEntry>();
+IReadOnlyList<BossSpawnTableEntry> bossSpawnTables = Array.Empty<BossSpawnTableEntry>();
 var partyZoneTables = PartyZoneTables.Empty;
 IReadOnlyList<tPoseidon.Core.Game.Items.PetComposingPresent> petComposingPresents = Array.Empty<tPoseidon.Core.Game.Items.PetComposingPresent>();
 IReadOnlyDictionary<int, int> decomposeDummySkins = new Dictionary<int, int>();
@@ -459,6 +462,7 @@ var characterPetReinforceTables = CharacterPetReinforceTables.Empty;
 var coupleTables = CoupleTables.Empty;
 var pkInfo = PkInfoTables.Empty;
 var guildGameTypes = GuildGameTypeTables.Empty;
+var monsterMatchTables = MonsterMatchTables.Empty;
 var fiestaTables = FiestaTables.Empty;
 var portalLevelBands = PortalLevelBands.Empty;
 var specialPortTables = SpecialPortTables.Empty;
@@ -512,6 +516,7 @@ try
     Console.WriteLine($"{LogTag} player move speeds from libconfig (MoveSpeedParam): run {playerMoveSpeeds?.RunSpeed}, chase {playerMoveSpeeds?.ChaseSpeed}");
     beginnerRebirth = reader.LoadBeginnerRebirthInfo();
     mapMonsterTables = reader.LoadMapMonsterTables();
+    bossSpawnTables = reader.LoadBossSpawnTables();
     partyZoneTables = reader.LoadPartyZoneTables();
     decomposeDummySkins = reader.LoadKeyedItems(tPoseidon.Core.Game.Items.DecomposeRules.DummyTable, "ItemType", "ItemId");
     equipMergeSupports = reader.LoadKeyedItems(tPoseidon.Core.Game.Items.EquipMergeRules.SupportTable, "ItemId", "SuccesRatio");
@@ -551,6 +556,7 @@ try
     coupleTables = reader.LoadCoupleTables();
     pkInfo = reader.LoadPkInfo();
     guildGameTypes = reader.LoadGuildGameTypeTables();
+    monsterMatchTables = reader.LoadMonsterMatchTables();
     fiestaTables = reader.LoadFiestaTables();
     portalLevelBands = reader.LoadPortalLevelBands();
     specialPortTables = reader.LoadSpecialPortTables();
@@ -702,19 +708,12 @@ var levelExpChart = LevelExpChart.Load(Path.Combine(variantDataRoot, LevelExpCha
 var statusChart = StatusValueChart.Load(Path.Combine(variantDataRoot, StatusChartFile));
 Console.WriteLine($"{LogTag} charts loaded: {LevelExpChartFile} (level 1 needs {levelExpChart.NextExp(LevelExpChart.FirstLevel)} exp), {StatusChartFile} (stat level 1 gives {statusChart.Value(StatusValueChart.FirstStatLevel, StatusValueChart.Hp)} HP)");
 
-INpcPointProvider npcPointProvider;
-var npcPointsCatalogPath = RepoRoot.Data("npc-points.json");
-try
-{
-    var jsonProvider = JsonNpcPointProvider.LoadFromFile(npcPointsCatalogPath);
-    Console.WriteLine($"{LogTag} loaded {jsonProvider.Count} NPC spawn points across {jsonProvider.MapCount} maps from {Path.GetFileName(npcPointsCatalogPath)}");
-    npcPointProvider = jsonProvider;
-}
-catch (FileNotFoundException)
-{
-    Console.Error.WriteLine($"{LogTag} npc-points.json not found at {LogPaths.Scrub(npcPointsCatalogPath)} — falling back to bundled Coral Town defaults");
-    npcPointProvider = InMemoryNpcPointProvider.CoralTownDefaults();
-}
+var variantMapDir = Path.Combine(variantDataRoot, "map");
+var npcPointProvider = Md3PointCatalog.Load(
+    mapInfoLookup.All.Where(map => map.NpcTable.Length > 0),
+    variantMapDir,
+    MapPointTypes.Npc);
+Console.WriteLine($"{LogTag} read {npcPointProvider.Count} NPC points from the map files");
 
 foreach (var (_, pinnedId) in tPoseidon.Core.Net.World.NpcManager.CoralTownPinnedIds())
 {
@@ -806,7 +805,6 @@ var globalItemManager = new tPoseidon.Core.Game.Items.ItemManager(itemStore, ite
     DrillLifeOf = itemId => drillTables.Drills.TryGetValue(itemId, out var drill) ? drill.DrillLife : null,
 };
 
-var variantMapDir = Path.Combine(variantDataRoot, "map");
 var zoneInitializer = new tPoseidon.Core.Net.World.ZoneInitializer(
     globalItemManager,
     monsterManager,
@@ -938,7 +936,7 @@ var shopCatalogs = new ShopCatalogs
     PriceRateByMap = shopPriceRateByMap,
     Items = itemCatalog,
 };
-var clientTextEncoding = System.Text.Encoding.GetEncoding(ClientTextCodePage);
+var clientTextEncoding = tPoseidon.Core.Common.ClientText.Encoding;
 var monsterRegenCycle = new tPoseidon.Core.Game.Monsters.MonsterRegenCycle(monsterManager, monsterCatalog);
 foreach (var mapTable in mapMonsterTables)
 {
@@ -961,6 +959,14 @@ if (monsterRegenCycle.MapIds.Count > 0)
     foreach (var placed in monsterManager.All.ToArray()) monsterManager.Remove(placed.EntityId);
 }
 Console.WriteLine($"{LogTag} monster regen configured for {monsterRegenCycle.MapIds.Count} maps from the libconfig Mon_* tables");
+var bossSpawnCycle = new tPoseidon.Core.Game.Monsters.BossSpawnCycle(monsterManager, monsterCatalog);
+foreach (var bossMap in bossSpawnTables.GroupBy(entry => entry.MapId))
+{
+    if (bossMap.Key < 0 || bossMap.Key > ushort.MaxValue || mapInfoLookup.GetById((ushort)bossMap.Key) is null) continue;
+    zoneGeometryByMap.TryGetValue((ushort)bossMap.Key, out var bossGeometry);
+    bossSpawnCycle.Configure((ushort)bossMap.Key, bossMap.ToArray(), bossGeometry);
+}
+Console.WriteLine($"{LogTag} boss spawns configured for {bossSpawnCycle.MapIds.Count} maps from the libconfig BossMon_* tables");
 Console.WriteLine($"{LogTag} world entity count: {worldEntities.Count} npcs + {monsterManager.Count} monsters");
 
 void DespawnAllMonsters()
@@ -1055,7 +1061,7 @@ var drillController = new DrillController(
     async (monsterId, mapId, x, y) =>
     {
         if (monsterManager.Spawn(monsterId, mapId, x, y) is not { } spotMonster) return false;
-        await SendToMapAsync(mapId, Opcode.NPC_SPAWN, MobSpawnFrames.Encode(spotMonster, monsterCatalog.GetById(spotMonster.MonsterParamId))).ConfigureAwait(false);
+        await SendToMapAsync(mapId, MobSpawnFrames.BirthOpcode, MobSpawnFrames.Encode(spotMonster, monsterCatalog.GetById(spotMonster.MonsterParamId), DateTimeOffset.UtcNow)).ConfigureAwait(false);
         return true;
     },
     LogTag);
@@ -1224,7 +1230,7 @@ var harcon = new HarconController(
     zoneGeometryByMap,
     mapId => mapMonsterTables.FirstOrDefault(table => table.Id == mapId).MonsterTable ?? string.Empty,
     () => liveSessions.Values.ToArray(),
-    mob => MobSpawnFrames.Encode(mob, monsterCatalog.GetById(mob.MonsterParamId)),
+    mob => MobSpawnFrames.Encode(mob, monsterCatalog.GetById(mob.MonsterParamId), DateTimeOffset.UtcNow),
     DespawnOf,
     SendToMapAsync,
     itemStore,
@@ -1241,7 +1247,7 @@ var puzzles = new PuzzleController(
     zoneGeometryByMap,
     () => liveSessions.Values.ToArray(),
     PlayerPositionAt,
-    mob => MobSpawnFrames.Encode(mob, monsterCatalog.GetById(mob.MonsterParamId)),
+    mob => MobSpawnFrames.Encode(mob, monsterCatalog.GetById(mob.MonsterParamId), DateTimeOffset.UtcNow),
     DespawnOf,
     SendToMapAsync,
     itemStore,
@@ -1267,7 +1273,7 @@ var missions = new MissionController(
     monsterManager,
     zoneGeometryByMap,
     () => liveSessions.Values.ToArray(),
-    mob => MobSpawnFrames.Encode(mob, monsterCatalog.GetById(mob.MonsterParamId)),
+    mob => MobSpawnFrames.Encode(mob, monsterCatalog.GetById(mob.MonsterParamId), DateTimeOffset.UtcNow),
     DespawnOf,
     SendToMapAsync,
     LogTag);
@@ -1306,7 +1312,12 @@ var guildGames = new GuildGameController(
     () => guildGameTypes,
     () => liveSessions.Values.ToArray(),
     SendToMapAsync,
-    fallen => RiseAfterArenaFightAsync(fallen, tPoseidon.Core.Game.Guild.GuildMatch.RespawnHpRatio),
+    RespawnInArenaAsync,
+    monsterManager,
+    zoneGeometryByMap,
+    () => monsterMatchTables,
+    mob => MobSpawnFrames.Encode(mob, monsterCatalog.GetById(mob.MonsterParamId), DateTimeOffset.UtcNow),
+    DespawnOf,
     clientTextEncoding,
     LogTag);
 
@@ -1414,6 +1425,7 @@ var profileViews = new ProfileViewController(
         ? memberGuild.GuildName
         : string.Empty,
     ProfileGearOf,
+    masterUniqueItems.BossKillHistoryAsync,
     clientTextEncoding,
     LogTag);
 
@@ -1531,6 +1543,22 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 MaxWeight = () => liveSessions.TryGetValue(ctx, out var storageWeightSt) ? storageWeightSt.PlayerMaxWt : 0,
                 Properties = StoredItemProperties,
             },
+            moveRng,
+            LogTag);
+        var guildDepot = new GuildDepotService(
+            ctx,
+            guildDepotStore,
+            itemStore,
+            itemCatalog,
+            new GuildDepotPlayer
+            {
+                Character = () => currentChar,
+                MaxWeight = () => liveSessions.TryGetValue(ctx, out var depotWeightSt) ? depotWeightSt.PlayerMaxWt : 0,
+                Properties = (itemUid, itemIndex) => itemCatalog.GetById(itemIndex) is { } depotDefinition
+                    ? itemPropertyRules.Full(depotDefinition, itemPropertyStore.ForItem(itemUid))
+                    : itemPropertyStore.ForItem(itemUid),
+            },
+            clientTextEncoding,
             moveRng,
             LogTag);
         Func<tPoseidon.Core.Game.Scripting.Lang.EventKind, long?, string?, Task>? scriptEvents = null;
@@ -2070,15 +2098,15 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 return;
             }
 
-            if (character.PositionX < 1 || character.PositionY < 1)
+            zoneGeometryByMap.TryGetValue(character.MapId, out var loginGeometry);
+            if (!tPoseidon.Core.Game.Warp.LoginPlacement.IsValid(loginGeometry, character.PositionX, character.PositionY))
             {
-                zoneGeometryByMap.TryGetValue(character.MapId, out var loginGeometry);
                 ushort loginX;
                 ushort loginY;
                 lock (moveRng) (loginX, loginY) = tPoseidon.Core.Game.Warp.RestartArrival.Pick(loginGeometry, moveRng);
                 accountStore.SetCharacterPosition(character.CharacterId, character.MapId, loginX, loginY);
                 character = accountStore.GetCharacterById(character.CharacterId) ?? character;
-                Console.WriteLine($"{LogTag} {ctx.Remote} GAME_INIT — character saved without a position starts at ({loginX},{loginY}) on map {character.MapId}");
+                Console.WriteLine($"{LogTag} {ctx.Remote} GAME_INIT — character saved at an unusable position starts at ({loginX},{loginY}) on map {character.MapId}");
             }
             if (character.CurrentHp < 1)
             {
@@ -2126,6 +2154,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 loginTitles = loginTitles with { ProfileTitleType = 0, ProfileTitleId = 0 };
                 await honorTitles.SaveProfileTitleAsync(character.CharacterId, ProfileTitle.None, innerCt).ConfigureAwait(false);
             }
+            var loginBossKills = await masterUniqueItems.BossKillHistoryAsync(character.CharacterId, innerCt).ConfigureAwait(false) ?? [];
             await EnterWorldBatchSynthesizer.SendBatchAsync(
                 ctx, character, entityId, dialogService,
                 npcScript.LoginLists(character.CharacterId),
@@ -2146,6 +2175,8 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 abilityPercents: gameMasters.Rates.AbilityPacket(),
                 petBag: petCollection.ConnectPhaseBag(character.CharacterId),
                 profileFlags: unchecked((uint)charProfileStore.GetOrCreate(character.CharacterId).PublicFlagBitmask),
+                bossKillWindow: ProfileViewFrames.BossKillWindow(loginBossKills),
+                coverLetter: ProfileViewFrames.CoverLetter(clientTextEncoding.GetBytes(charProfileStore.GetOrCreate(character.CharacterId).SelfIntro)),
                 ct: innerCt).ConfigureAwait(false);
 
             Console.WriteLine($"{LogTag} {ctx.Remote} 34-frame enter-world batch sent");
@@ -2182,7 +2213,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         ctx.Dispatcher.Register(Opcode.GAME_PHASE_2, (_, _, _) =>
         {
-            Console.WriteLine($"{LogTag} {ctx.Remote} GAME_PHASE_2 received (informational; batch already sent)");
+            Console.WriteLine($"{LogTag} {ctx.Remote} GAME_PHASE_2 received");
             return Task.CompletedTask;
         });
 
@@ -2196,10 +2227,12 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 return;
             }
             byte rk = 0x42;
+            var mobsNow = DateTimeOffset.UtcNow;
             foreach (var mob in mobs)
             {
-                if (!InViewOn(currentChar.MapId, currentChar.PositionX, currentChar.PositionY, mob.CurrentX, mob.CurrentY)) continue;
-                var spawnPayload = MobSpawnFrames.Encode(mob, monsterCatalog.GetById(mob.MonsterParamId));
+                var (mobX, mobY) = mob.GetInterpolatedPosition(mobsNow);
+                if (!InViewOn(currentChar.MapId, currentChar.PositionX, currentChar.PositionY, mobX, mobY)) continue;
+                var spawnPayload = MobSpawnFrames.Encode(mob, monsterCatalog.GetById(mob.MonsterParamId), DateTimeOffset.UtcNow);
                 await ctx.SendFrameAsync(Opcode.NPC_SPAWN, spawnPayload, randKey: rk, default).ConfigureAwait(false);
                 rk = (byte)(rk + 0x2B);
             }
@@ -2320,6 +2353,25 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         int playerPrevX = playerLastX;
         int playerPrevY = playerLastY;
 
+        async Task StopAttackForWalkAsync(InGameSessionState walker, CancellationToken stopCt)
+        {
+            if (walker.CurrentTargetEntityId == 0) return;
+            monsterManager.Get(walker.CurrentTargetEntityId)?.RemoveAttacker(walker.PlayerEntityId);
+            walker.CurrentTargetEntityId = 0;
+            walker.NextSwingAt = default;
+
+            var leaveAttack = new tPoseidon.Core.Net.PacketWriter(MeleeSwingFrames.LeaveAttackSize);
+            leaveAttack.WriteUInt16(walker.PlayerEntityId);
+            var leaveAttackPayload = leaveAttack.ToArray();
+            foreach (var watcher in liveSessions.ToArray())
+            {
+                if (watcher.Value.MapId != walker.MapId || !watcher.Value.ClientReady) continue;
+                byte rkLeave;
+                lock (moveRng) rkLeave = (byte)moveRng.Next(1, 256);
+                await watcher.Key.SendFrameAsync(Opcode.S2C_OP_0020_TBD, leaveAttackPayload, randKey: rkLeave, stopCt).ConfigureAwait(false);
+            }
+        }
+
         ctx.Dispatcher.Register(Opcode.ENTITY_MOVE, async (_, payload, moveCt) =>
         {
             if (liveSessions.TryGetValue(ctx, out var chatHeldSt) && chatHeldSt.InstantChatState is not null) return;
@@ -2374,23 +2426,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                     lock (moveRng) rkCastCancel = (byte)moveRng.Next(1, 256);
                     await ctx.SendFrameAsync(Opcode.SKILL_CAST_CANCEL, Array.Empty<byte>(), randKey: rkCastCancel, moveCt).ConfigureAwait(false);
                 }
-                if (moveSt.CurrentTargetEntityId != 0)
-                {
-                    monsterManager.Get(moveSt.CurrentTargetEntityId)?.RemoveAttacker(moveSt.PlayerEntityId);
-                    moveSt.CurrentTargetEntityId = 0;
-                    moveSt.NextSwingAt = default;
-
-                    var leaveAttack = new tPoseidon.Core.Net.PacketWriter(MeleeSwingFrames.LeaveAttackSize);
-                    leaveAttack.WriteUInt16(moveSt.PlayerEntityId);
-                    var leaveAttackPayload = leaveAttack.ToArray();
-                    foreach (var watcher in liveSessions.ToArray())
-                    {
-                        if (watcher.Value.MapId != moveSt.MapId || !watcher.Value.ClientReady) continue;
-                        byte rkLeave;
-                        lock (moveRng) rkLeave = (byte)moveRng.Next(1, 256);
-                        await watcher.Key.SendFrameAsync(Opcode.S2C_OP_0020_TBD, leaveAttackPayload, randKey: rkLeave, moveCt).ConfigureAwait(false);
-                    }
-                }
+                await StopAttackForWalkAsync(moveSt, moveCt).ConfigureAwait(false);
             }
 
             if (route is null)
@@ -2984,6 +3020,12 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 reenterStats.Resurrect(state.PlayerMaxHp, state.PlayerMaxMp, hpRatio, 0f, 0f);
                 await RestartAtAsync(state, state.MapId, reenterStats.CurrentHp, sessionCt).ConfigureAwait(false);
             };
+            state.ReenterZoneAt = async (hpRatio, arrival) =>
+            {
+                if (currentChar is null || state.Stats is not { } reenterStats) return;
+                reenterStats.Resurrect(state.PlayerMaxHp, state.PlayerMaxMp, hpRatio, 0f, 0f);
+                await RestartAtAsync(state, state.MapId, reenterStats.CurrentHp, sessionCt, arrival).ConfigureAwait(false);
+            };
             state.CouplePartnerId = CouplePartnerOf(character.CharacterId);
             var ownedSkills = new Dictionary<int, int>();
             foreach (var held in skillStore.GetForCharacter(character.CharacterId)) ownedSkills[held.SkillId] = held.SkillLevel;
@@ -3191,7 +3233,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 ? SendToOthersOnMapAsync(leaver, Opcode.S2C_PLAYER_LEFT_MAP, tPoseidon.Core.Net.World.MyCampFrames.ObjectId(leaver.PlayerEntityId))
                 : Task.CompletedTask,
             () => liveSessions.TryGetValue(ctx, out var returner) ? RestoreViewAsync(returner) : Task.CompletedTask,
-            clientTextEncoding,
+            () => liveSessions.TryGetValue(ctx, out var campShopper) ? myCamps.StartShopListAsync(campShopper) : Task.CompletedTask,
             line => Console.WriteLine($"{LogTag} {ctx.Remote} {line}"));
         ctx.Dispatcher.Register(Opcode.C2S_CASH_BOX_TAKE, (_, payload, _) =>
             liveSessions.TryGetValue(ctx, out var cashTakeSt) ? cashBox.TakeAsync(cashTakeSt, payload) : Task.CompletedTask);
@@ -3625,6 +3667,20 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
 
         ctx.Dispatcher.Register(Opcode.C2S_WAREHOUSE_MOVE, (_, payload, storageCt) => warehouse.MoveAsync(payload, storageCt));
 
+        ctx.Dispatcher.Register(Opcode.C2S_GUILD_DEPOT_TAB, (_, payload, depotCt) => guildDepot.OpenTabAsync(payload, depotCt));
+
+        ctx.Dispatcher.Register(Opcode.C2S_GUILD_DEPOT_DEPOSIT, (_, payload, depotCt) => guildDepot.DepositAsync(payload, depotCt));
+
+        ctx.Dispatcher.Register(Opcode.C2S_GUILD_DEPOT_WITHDRAW, (_, payload, depotCt) => guildDepot.WithdrawAsync(payload, depotCt));
+
+        ctx.Dispatcher.Register(Opcode.C2S_GUILD_DEPOT_HISTORY, (_, _, depotCt) => guildDepot.HistoryAsync(depotCt));
+
+        ctx.Dispatcher.Register(Opcode.C2S_GUILD_DEPOT_CLOSE, (_, _, _) =>
+        {
+            guildDepot.Leave();
+            return Task.CompletedTask;
+        });
+
         ctx.Dispatcher.Register(Opcode.C2S_SHOP_LEAVE, (_, _, _) =>
         {
             npcShop.Leave();
@@ -3987,6 +4043,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                     var portalChangeType = changeType;
                     portalSt.PickupItemEntityId = 0;
                     portalSt.PickupWalkEnd = null;
+                    await StopAttackForWalkAsync(portalSt, default).ConfigureAwait(false);
                     portalSt.PlayerMoveType = portalMoveType;
                     portalSt.PortalWalk = new PortalWalk(
                         DateTimeOffset.UtcNow.AddMilliseconds(Math.Ceiling(portalRoute.Length / portalSpeed * 1000.0)),
@@ -4102,7 +4159,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 landingToken = brokered.Token;
                 destMapId = brokered.ToZone;
                 sourceMapId = brokered.FromZone;
-                (ushort X, ushort Y)? arrival;
+                (ushort X, ushort Y) arrival;
                 if (brokered.ChangeZoneType == tPoseidon.Core.Game.Quests.NpcMoveRules.ChangeZoneType && brokered.StartX >= 1 && brokered.StartY >= 1)
                 {
                     arrival = (brokered.StartX, brokered.StartY);
@@ -4126,7 +4183,9 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                 }
                 else if (brokered.ChangeZoneType != tPoseidon.Core.Game.Warp.RestartArrival.ChangeZoneType)
                 {
-                    arrival = portalLookup?.FindArrival(sourceMapId, destMapId);
+                    arrival = portalLookup is null
+                        ? (tPoseidon.Core.LibConfig.PortalArrivalRule.FallbackX, tPoseidon.Core.LibConfig.PortalArrivalRule.FallbackY)
+                        : portalLookup.FindArrival(sourceMapId, destMapId);
                 }
                 else if (brokered.StartX >= 1 && brokered.StartY >= 1)
                 {
@@ -4137,13 +4196,8 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
                     zoneGeometryByMap.TryGetValue(destMapId, out var restartGeometry);
                     lock (moveRng) arrival = tPoseidon.Core.Game.Warp.RestartArrival.Pick(restartGeometry, moveRng);
                 }
-                if (arrival is null)
-                {
-                    Console.Error.WriteLine($"{LogTag} {ctx.Remote} 0x009C brokered warp char 0x{req.CharId:X16} {sourceMapId}->{destMapId}: no portal arrival row for this zone pair; drop");
-                    return;
-                }
-                spawnX = arrival.Value.X;
-                spawnY = arrival.Value.Y;
+                spawnX = arrival.X;
+                spawnY = arrival.Y;
                 Console.WriteLine($"{LogTag} {ctx.Remote} 0x009C brokered warp char 0x{req.CharId:X16} {sourceMapId}->{destMapId} spawn=({spawnX},{spawnY}) token=0x{brokered.Token:X8} echo=0x{req.DestPortEcho:X8}");
             }
             else
@@ -4386,8 +4440,13 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
         ctx.Dispatcher.Register(Opcode.C2S_PLAYER_SHOP_VISITS_QUERY, (_, _, _) =>
             liveSessions.TryGetValue(ctx, out var shopVisitsSt) ? playerShops.VisitsAsync(shopVisitsSt) : Task.CompletedTask);
 
-        ctx.Dispatcher.Register(Opcode.C2S_PROFILE_VIEW, (_, payload, _) =>
-            liveSessions.TryGetValue(ctx, out var profileViewSt) ? profileViews.ViewAsync(profileViewSt, payload) : Task.CompletedTask);
+        ctx.Dispatcher.Register(Opcode.C2S_PROFILE_VIEW, (_, payload, profileViewCt) =>
+            liveSessions.TryGetValue(ctx, out var profileViewSt) ? profileViews.ViewAsync(profileViewSt, payload, profileViewCt) : Task.CompletedTask);
+
+        ctx.Dispatcher.Register(Opcode.C2S_PROFILE_COVER_LETTER, (_, payload, _) =>
+            liveSessions.TryGetValue(ctx, out var coverLetterSt) ? profileViews.CoverLetterAsync(coverLetterSt, payload) : Task.CompletedTask);
+
+        ctx.Dispatcher.Register(Opcode.C2S_SECRET_MAP_MAKE, (_, payload, secretMapCt) => itemUse.MakeSecretMapAsync(payload, secretMapCt));
 
         ctx.Dispatcher.Register(Opcode.C2S_PROFILE_OPTIONS, (_, payload, _) =>
             liveSessions.TryGetValue(ctx, out var profileOptionsSt) ? profileViews.OptionsAsync(profileOptionsSt, payload) : Task.CompletedTask);
@@ -4532,14 +4591,14 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             liveSessions.TryGetValue(ctx, out var campSt14) ? myCamps.TransferNextAsync(campSt14) : Task.CompletedTask);
         ctx.Dispatcher.Register(Opcode.C2S_MYCAMP_SAVE_OBJECTS, (_, payload, _) =>
             liveSessions.TryGetValue(ctx, out var campSt15) ? myCamps.SaveObjectsAsync(campSt15, payload) : Task.CompletedTask);
-        ctx.Dispatcher.Register(Opcode.C2S_MYCAMP_ITEMS_DONE, (_, _, _) =>
-            liveSessions.TryGetValue(ctx, out var campEndSt0) ? myCamps.TransferEndAsync(campEndSt0, aborted: false) : Task.CompletedTask);
-        ctx.Dispatcher.Register(Opcode.C2S_MYCAMP_ITEMS_FINISHED, (_, _, _) =>
-            liveSessions.TryGetValue(ctx, out var campEndSt1) ? myCamps.TransferEndAsync(campEndSt1, aborted: false) : Task.CompletedTask);
-        ctx.Dispatcher.Register(Opcode.C2S_MYCAMP_ITEMS_CLOSED, (_, _, _) =>
-            liveSessions.TryGetValue(ctx, out var campEndSt2) ? myCamps.TransferEndAsync(campEndSt2, aborted: false) : Task.CompletedTask);
+        ctx.Dispatcher.Register(Opcode.C2S_MYCAMP_ITEMS_DONE, (_, payload, _) =>
+            liveSessions.TryGetValue(ctx, out var campEndSt0) ? myCamps.TransferEndAsync(campEndSt0, MyCampFrames.ReadTransferResult(payload.Span)) : Task.CompletedTask);
+        ctx.Dispatcher.Register(Opcode.C2S_MYCAMP_ITEMS_FINISHED, (_, payload, _) =>
+            liveSessions.TryGetValue(ctx, out var campEndSt1) ? myCamps.TransferEndAsync(campEndSt1, MyCampFrames.ReadTransferResult(payload.Span)) : Task.CompletedTask);
+        ctx.Dispatcher.Register(Opcode.C2S_MYCAMP_ITEMS_CLOSED, (_, payload, _) =>
+            liveSessions.TryGetValue(ctx, out var campEndSt2) ? myCamps.TransferEndAsync(campEndSt2, MyCampFrames.ReadTransferResult(payload.Span)) : Task.CompletedTask);
         ctx.Dispatcher.Register(Opcode.C2S_MYCAMP_ITEMS_ABORT, (_, _, _) =>
-            liveSessions.TryGetValue(ctx, out var campEndSt3) ? myCamps.TransferEndAsync(campEndSt3, aborted: true) : Task.CompletedTask);
+            liveSessions.TryGetValue(ctx, out var campEndSt3) ? myCamps.TransferEndAsync(campEndSt3, tPoseidon.Core.Game.MyCamp.MyCampRules.TransferOk) : Task.CompletedTask);
 
         ctx.Dispatcher.Register(Opcode.C2S_PUZZLE_START, (_, _, _) =>
             liveSessions.TryGetValue(ctx, out var puzzleSt) ? puzzles.StartAsync(puzzleSt) : Task.CompletedTask);
@@ -5592,13 +5651,14 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             await RestartAtAsync(restartSt, returnMapId, restartHp, restartCt).ConfigureAwait(false);
         });
 
-        async Task RestartAtAsync(InGameSessionState restartSt, ushort mapId, long restartHp, CancellationToken restartCt)
+        async Task RestartAtAsync(InGameSessionState restartSt, ushort mapId, long restartHp, CancellationToken restartCt, (ushort X, ushort Y)? fixedArrival = null)
         {
             byte rkRestart;
             zoneGeometryByMap.TryGetValue(mapId, out var returnGeometry);
             ushort arriveX;
             ushort arriveY;
-            lock (moveRng) (arriveX, arriveY) = tPoseidon.Core.Game.Warp.RestartArrival.Pick(returnGeometry, moveRng);
+            if (fixedArrival is { } chosenArrival) (arriveX, arriveY) = chosenArrival;
+            else lock (moveRng) (arriveX, arriveY) = tPoseidon.Core.Game.Warp.RestartArrival.Pick(returnGeometry, moveRng);
             FlushStatsToDb("restart");
             Console.WriteLine($"{LogTag} {ctx.Remote} [combat] player 0x{restartSt.PlayerEntityId:X4} restarts on map {mapId} at ({arriveX},{arriveY}), HP {restartHp}");
 
@@ -6212,12 +6272,18 @@ async Task AnnounceSpeedAsync(InGameSessionState player)
     await SendToMapAsync(player.MapId, Opcode.S2C_ENTITY_SPEED, ProgressFrames.Speed(player.PlayerEntityId, speed)).ConfigureAwait(false);
 }
 
-async Task PresentGameMasterItemAsync(InGameSessionState receiver, uint itemId, ushort count)
+async Task<uint> PresentGameMasterItemAsync(InGameSessionState receiver, uint itemId, ushort count)
 {
-    if (receiver.Character is not { } character || itemCatalog.GetById((int)itemId) is not { } definition)
+    if (receiver.Character is not { } character)
     {
-        Console.WriteLine($"{LogTag} [gm] present item {itemId} x{count}: unknown item or receiver without a character");
-        return;
+        Console.WriteLine($"{LogTag} [gm] present item {itemId} x{count}: receiver without a character");
+        return tPoseidon.Core.Net.Social.GameMasterFrames.AckPresentNoReceiver;
+    }
+    var definition = itemCatalog.GetById((int)itemId);
+    if (definition is null)
+    {
+        Console.WriteLine($"{LogTag} [gm] present item {itemId} x{count} for 0x{character.CharacterId:X}: no such item");
+        return tPoseidon.Core.Net.Social.GameMasterFrames.AckPresentUnknownItem;
     }
     var bag = itemStore.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
     var bagWeight = 0;
@@ -6231,7 +6297,7 @@ async Task PresentGameMasterItemAsync(InGameSessionState receiver, uint itemId, 
     if (!PickupRules.Fits(receiver.PlayerMaxWt, bagWeight, bag.Count, stack is not null, definition.Weight, units))
     {
         Console.WriteLine($"{LogTag} [gm] present item {itemId} x{count} for 0x{character.CharacterId:X}: bag weight {bagWeight} of {receiver.PlayerMaxWt}, {bag.Count} items");
-        return;
+        return tPoseidon.Core.Net.Social.GameMasterFrames.AckPresentNoRoom;
     }
     byte change;
     ulong itemUid;
@@ -6256,6 +6322,7 @@ async Task PresentGameMasterItemAsync(InGameSessionState receiver, uint itemId, 
         GroundItemFrames.AddedToBag(change, definition.ObjectClass, itemId, BagItemIds.OnWire(itemUid), bagCount, mixSlot),
         (byte)Random.Shared.Next(1, 256), default).ConfigureAwait(false);
     Console.WriteLine($"{LogTag} [gm] present item {itemId} x{count} for 0x{character.CharacterId:X}: bag item 0x{itemUid:X} now holds {bagCount} (change {change})");
+    return tPoseidon.Core.Net.Social.GameMasterFrames.AckOk;
 }
 
 async Task ApplyGameMasterVisibilityAsync(InGameSessionState gm)
@@ -6650,7 +6717,7 @@ async Task SummonNpcMonstersAsync(InGameSessionState player, int setId)
         {
             if (monsterManager.Spawn(monsterId, player.MapId, (ushort)summonX, (ushort)summonY, null, null, SummonedMonsterRegion) is not { } born) break;
             if (targetsSummoner) born.AddAttacker(player.PlayerEntityId);
-            await SendToMapAsync(player.MapId, Opcode.NPC_SPAWN, MobSpawnFrames.Encode(born, monsterCatalog.GetById(born.MonsterParamId))).ConfigureAwait(false);
+            await SendToMapAsync(player.MapId, MobSpawnFrames.BirthOpcode, MobSpawnFrames.Encode(born, monsterCatalog.GetById(born.MonsterParamId), DateTimeOffset.UtcNow)).ConfigureAwait(false);
         }
     }
     Console.WriteLine($"{LogTag} [npc] 0x{player.PlayerEntityId:X4} monster summon {setId} on map {player.MapId}: {string.Join(", ", summons.Select(entry => $"{entry.Count} x {entry.MonsterId}"))}");
@@ -6685,7 +6752,7 @@ async Task<uint> SummonGameMasterMonstersAsync(InGameSessionState gm, tPoseidon.
             return tPoseidon.Core.Net.Social.GameMasterFrames.AckFailed;
         }
         gmSpawnLedger.Record(gmCharacter.CharacterId, born);
-        await SendToMapAsync(mapId, Opcode.NPC_SPAWN, MobSpawnFrames.Encode(born, monsterCatalog.GetById(born.MonsterParamId))).ConfigureAwait(false);
+        await SendToMapAsync(mapId, MobSpawnFrames.BirthOpcode, MobSpawnFrames.Encode(born, monsterCatalog.GetById(born.MonsterParamId), DateTimeOffset.UtcNow)).ConfigureAwait(false);
     }
     Console.WriteLine($"{LogTag} [gm] 0x{gmCharacter.CharacterId:X} summoned {request.Count} x {request.ChrType} on map {mapId} ({request.Anchor}, radius {request.Radius})");
     return tPoseidon.Core.Net.Social.GameMasterFrames.AckOk;
@@ -6705,6 +6772,7 @@ async Task RemoveMonsterAsync(MonsterEntity target)
     monsterBattleCycle.Forget(target.EntityId);
     DropMonsterEffects(target.EntityId);
     monsterRegenCycle.Release(target);
+    bossSpawnCycle.Release(target);
     await SendToMapAsync(target.MapId, Opcode.S2C_ENTITY_DESPAWN, DespawnOf(target.EntityId)).ConfigureAwait(false);
 }
 
@@ -6907,7 +6975,7 @@ List<SectorObject> SectorObjectsOn(ushort mapId, DateTimeOffset now)
         if (mob.IsDead) continue;
         var (mobX, mobY) = mob.GetInterpolatedPosition(now);
         objects.Add(new SectorObject(mob.EntityId, mobX, mobY, true, Opcode.NPC_SPAWN,
-            () => MobSpawnFrames.Encode(mob, monsterCatalog.GetById(mob.MonsterParamId))));
+            () => MobSpawnFrames.Encode(mob, monsterCatalog.GetById(mob.MonsterParamId), DateTimeOffset.UtcNow)));
     }
     foreach (var owner in liveSessions.Values.ToArray())
     {
@@ -7125,6 +7193,21 @@ async Task RiseAfterArenaFightAsync(InGameSessionState loser, float hpRatio)
     await SendToMapAsync(loser.MapId, Opcode.S2C_RESURRECTED, PlayerRevivalFrames.Resurrected(loser.PlayerEntityId, PlayerRevivalFrames.NoReviver)).ConfigureAwait(false);
 }
 
+async Task RespawnInArenaAsync(InGameSessionState fallen, (ushort X, ushort Y)? arrival)
+{
+    if (arrival is null || fallen.ReenterZoneAt is not { } reenterAt)
+    {
+        await RiseAfterArenaFightAsync(fallen, tPoseidon.Core.Game.Guild.GuildMatch.RespawnHpRatio).ConfigureAwait(false);
+        return;
+    }
+    if (fallen.Pet is { } releasedPet)
+    {
+        fallen.Pet = null;
+        await RemovePetAsync(releasedPet).ConfigureAwait(false);
+    }
+    await reenterAt(tPoseidon.Core.Game.Guild.GuildMatch.RespawnHpRatio, arrival).ConfigureAwait(false);
+}
+
 async Task ReenterAfterDuelAsync(InGameSessionState loser)
 {
     if (loser.ReenterZone is not { } reenter) return;
@@ -7318,6 +7401,7 @@ var npcLoopTask = Task.Run(async () =>
     var corpseRemovalDelay = TimeSpan.FromMilliseconds(2000);
     var regenPassesPerTick = (int)(interval.TotalMilliseconds / RegenPassGapMs);
     var regenFillReported = false;
+    var bossMinuteAt = Environment.TickCount64;
     var corpses = new List<(ushort EntityId, ushort MapId, DateTimeOffset RemoveAt)>();
 
     async Task<bool> SendStrikeFramesAsync(
@@ -7471,7 +7555,7 @@ var npcLoopTask = Task.Run(async () =>
             case tPoseidon.Core.Game.Guardian.GuardianCastKind.Cure:
                 return await CureAsync(caster, sessions, definition, action, owner, null).ConfigureAwait(false);
             case tPoseidon.Core.Game.Guardian.GuardianCastKind.Ground:
-                return await GroundSkillAsync(caster, sessions, definition, action, (target.CurrentX, target.CurrentY), mapId, now).ConfigureAwait(false);
+                return await GroundSkillAsync(caster, sessions, definition, action, target.GetInterpolatedPosition(now), mapId, now).ConfigureAwait(false);
             case tPoseidon.Core.Game.Guardian.GuardianCastKind.ObjectHit:
                 return await ObjectTargetAsync(caster, sessions, definition, action, target, mapId, zoneGeometry, now, battleEvents).ConfigureAwait(false);
             case tPoseidon.Core.Game.Guardian.GuardianCastKind.Area:
@@ -7530,6 +7614,7 @@ var npcLoopTask = Task.Run(async () =>
             SkillHit hit;
             lock (npcLoopRng) hit = SkillActions.Resolve(definition.ActionId, action, attacker, victim, npcLoopRng, enhancer);
             var hpBefore = target.CurrentHp;
+            var (targetAtX, targetAtY) = target.GetInterpolatedPosition(now);
             target.AddAttacker(caster.PlayerEntityId);
             target.ApplyDamage(hit.Damage);
             var strike = new tPoseidon.Core.Game.Combat.PlayerStrike(
@@ -7537,8 +7622,8 @@ var npcLoopTask = Task.Run(async () =>
                 TargetEntityId: target.EntityId,
                 AttackerX: caster.PlayerX,
                 AttackerY: caster.PlayerY,
-                TargetX: target.CurrentX,
-                TargetY: target.CurrentY,
+                TargetX: targetAtX,
+                TargetY: targetAtY,
                 Damage: hit.Damage,
                 MobHpAfter: target.CurrentHp,
                 HitFlags: 0,
@@ -12155,7 +12240,7 @@ var npcLoopTask = Task.Run(async () =>
 
     IReadOnlyList<byte[]> ScrollTailStrings(tPoseidon.Core.LibConfig.SkillTableRow action) =>
         ScrollSkills.StringColumns
-            .Select(column => System.Text.Encoding.GetEncoding(ScrollSkills.TextCodePage).GetBytes(action.Columns.GetValueOrDefault(column) ?? string.Empty))
+            .Select(column => tPoseidon.Core.Common.ClientText.Encoding.GetBytes(action.Columns.GetValueOrDefault(column) ?? string.Empty))
             .ToList();
 
     async Task<bool> WideHealingAsync(
@@ -12646,7 +12731,7 @@ var npcLoopTask = Task.Run(async () =>
         {
             var speech = new tPoseidon.Core.Net.PacketWriter(3 + cast.Speech.Length * 2);
             speech.WriteUInt16(monster.EntityId);
-            speech.WriteBytes(System.Text.Encoding.GetEncoding(ScrollSkills.TextCodePage).GetBytes(cast.Speech));
+            speech.WriteBytes(tPoseidon.Core.Common.ClientText.Encoding.GetBytes(cast.Speech));
             speech.WriteByte(0);
             if (!await SendFromLoopAsync(sessions, Opcode.S2C_MONSTER_SPEECH, speech.ToArray(), MeleeSwingFrames.NoBlock, npcLoopRng, npcLoopCt).ConfigureAwait(false))
             {
@@ -14037,6 +14122,12 @@ var npcLoopTask = Task.Run(async () =>
                 .Append((Opcode.S2C_BOSS_KILLED, UniqueItemFrames.BossKilled(bossMonsterId), SwingAudience.Attacker))
                 .ToList();
             await masterUniqueItems.BossKilledAsync(bossKiller.CharacterId, bossMonsterId, npcLoopCt).ConfigureAwait(false);
+            if (await masterUniqueItems.BossKillHistoryAsync(bossKiller.CharacterId, npcLoopCt).ConfigureAwait(false) is { } refreshedBossKills)
+            {
+                attackerRewards = attackerRewards
+                    .Append((Opcode.S2C_BOSS_KILL_HISTORY, ProfileViewFrames.BossKillWindow(refreshedBossKills), SwingAudience.Attacker))
+                    .ToList();
+            }
             Console.WriteLine($"{LogTag} [unique] 0x{strike.AttackerEntityId:X4} killed boss {bossMonsterId}; boss kill sent to the Master");
         }
 
@@ -14100,6 +14191,7 @@ var npcLoopTask = Task.Run(async () =>
             if (struckMonster is not null)
             {
                 monsterRegenCycle.Release(struckMonster);
+                bossSpawnCycle.Release(struckMonster);
                 monsterManager.ReportKilled(struckMonster, strike.AttackerEntityId);
             }
         }
@@ -14216,12 +14308,47 @@ var npcLoopTask = Task.Run(async () =>
                 if (regenWatchers is null) continue;
                 foreach (var newborn in born)
                 {
-                    var newbornPayload = MobSpawnFrames.Encode(newborn, monsterCatalog.GetById(newborn.MonsterParamId));
+                    var newbornPayload = MobSpawnFrames.Encode(newborn, monsterCatalog.GetById(newborn.MonsterParamId), DateTimeOffset.UtcNow);
                     foreach (var watcher in regenWatchers)
                     {
                         try
                         {
-                            await watcher.Key.SendFrameAsync(Opcode.NPC_SPAWN, newbornPayload, (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
+                            await watcher.Key.SendFrameAsync(MobSpawnFrames.BirthOpcode, newbornPayload, (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            return;
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            liveSessions.TryRemove(watcher.Key, out _);
+                        }
+                        catch (System.IO.IOException)
+                        {
+                            liveSessions.TryRemove(watcher.Key, out _);
+                        }
+                    }
+                }
+            }
+        }
+
+        var bossClock = Environment.TickCount64;
+        if (bossClock - bossMinuteAt >= BossMinuteMs)
+        {
+            bossMinuteAt = bossClock;
+            foreach (var bossMapId in bossSpawnCycle.MapIds)
+            {
+                sessionsByMap.TryGetValue(bossMapId, out var bossWatchers);
+                foreach (var boss in bossSpawnCycle.Minute(bossMapId, bossClock))
+                {
+                    Console.WriteLine($"{LogTag} [boss] monster {boss.MonsterParamId} appeared on map {bossMapId}");
+                    if (bossWatchers is null) continue;
+                    var bossPayload = MobSpawnFrames.Encode(boss, monsterCatalog.GetById(boss.MonsterParamId), DateTimeOffset.UtcNow);
+                    foreach (var watcher in bossWatchers)
+                    {
+                        try
+                        {
+                            await watcher.Key.SendFrameAsync(MobSpawnFrames.BirthOpcode, bossPayload, (byte)npcLoopRng.Next(1, 256), npcLoopCt).ConfigureAwait(false);
                         }
                         catch (OperationCanceledException)
                         {
@@ -14850,6 +14977,7 @@ var npcLoopTask = Task.Run(async () =>
                         }
                     }
                     var hpBeforeSkill = castTarget.CurrentHp;
+                    var (castTargetAtX, castTargetAtY) = castTarget.GetInterpolatedPosition(now);
                     castTarget.AddAttacker(caster.PlayerEntityId);
                     castTarget.ApplyDamage(skillHit.Damage);
                     skillStrike = new tPoseidon.Core.Game.Combat.PlayerStrike(
@@ -14857,8 +14985,8 @@ var npcLoopTask = Task.Run(async () =>
                         TargetEntityId: castTarget.EntityId,
                         AttackerX: caster.PlayerX,
                         AttackerY: caster.PlayerY,
-                        TargetX: castTarget.CurrentX,
-                        TargetY: castTarget.CurrentY,
+                        TargetX: castTargetAtX,
+                        TargetY: castTargetAtY,
                         Damage: skillHit.Damage,
                         MobHpAfter: castTarget.CurrentHp,
                         HitFlags: 0,
@@ -15551,6 +15679,7 @@ internal sealed class InGameSessionState
     public GunOrder? GunShot { get; set; }
     public Func<tPoseidon.Core.Net.Dialogs.ZoneChangeRequest, CancellationToken, Task>? RequestZoneChange { get; set; }
     public Func<float, Task>? ReenterZone { get; set; }
+    public Func<float, (ushort X, ushort Y)?, Task>? ReenterZoneAt { get; set; }
     public tPoseidon.Core.Game.Stats.StatManager? Stats { get; set; }
     public bool IsDead
     {

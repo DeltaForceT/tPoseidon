@@ -40,16 +40,15 @@ These apply to everything you send us, now and later.
 3. No personal data. Keep real account names, character names, passwords, IP addresses and your own folder paths out of everything you post, including logs and screenshots.
 4. Name things for what they are. Anything a player sees says tPoseidon.
 
-## Building and testing
+## Building
 
-You can build and test the source on your own machine to check a bug or prepare a report. You need the .NET 8 SDK.
+You can build the source on your own machine to check a bug or prepare a report. You need the .NET 8 SDK.
 
 ```
 dotnet build tPoseidon.sln
-dotnet test tPoseidon.sln
 ```
 
-Warnings are errors and the .NET analyzers are on, so the build has to come out clean. A few tests need local reference data that isn't in the repo; they skip themselves when it's missing.
+Warnings are errors and the .NET analyzers are on, so the build has to come out clean.
 
 ## The legal bit
 

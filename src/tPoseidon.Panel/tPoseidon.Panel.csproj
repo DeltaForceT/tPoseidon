@@ -13,6 +13,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="tPoseidon.Ui" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="tPoseidon.Panel.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
@@ -24,7 +32,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\tPoseidon.Core.ClientArt\tPoseidon.Core.ClientArt.csproj" />
     <ProjectReference Include="..\tPoseidon.Hosting\tPoseidon.Hosting.csproj" />
+    <ProjectReference Include="..\tPoseidon.LauncherKit\tPoseidon.LauncherKit.csproj" />
+    <ProjectReference Include="..\tPoseidon.Ui\tPoseidon.Ui.csproj" />
   </ItemGroup>
 
 </Project>

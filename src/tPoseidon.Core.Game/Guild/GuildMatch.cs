@@ -48,6 +48,8 @@ public sealed record GuildMatchInvalid : GuildMatchEvent;
 
 public sealed record GuildMatchRespawn(IReadOnlyList<ulong> CharacterIds) : GuildMatchEvent;
 
+public sealed record GuildMatchSummonsExpired(IReadOnlyList<(MatchSummon Summon, int Team, ushort Monster)> Expired) : GuildMatchEvent;
+
 public sealed record GuildMatchKill(ulong KillerId, ulong VictimId, byte RespawnFlag);
 
 public sealed class GuildMatch
@@ -63,6 +65,9 @@ public sealed class GuildMatch
     public const int RespawnWaveGraceSeconds = 2;
     public const int RespawnMinimumSeconds = 3;
 
+    private readonly MonsterMatch? _monsters;
+    private readonly int[] _teamKills = new int[GuildGameRules.Teams];
+    private readonly int[] _teamDeaths = new int[GuildGameRules.Teams];
     private readonly List<GuildMatchSide> _sides = new();
     private readonly Dictionary<ulong, MatchFighter> _fighters = new();
     private readonly HashSet<ulong> _down = new();
@@ -72,8 +77,9 @@ public sealed class GuildMatch
 
     public const byte EventRoomLadderFlag = 2;
 
-    public GuildMatch(uint roomKey, byte gameType, ushort mapId, int timeLimitMinutes, byte noLadderFlag)
+    public GuildMatch(uint roomKey, byte gameType, ushort mapId, int timeLimitMinutes, byte noLadderFlag, MonsterMatch? monsters = null)
     {
+        _monsters = gameType == GuildGameRules.MonsterMatchType ? monsters ?? throw new ArgumentNullException(nameof(monsters)) : null;
         RoomKey = roomKey;
         GameType = gameType;
         MapId = mapId;
@@ -92,8 +98,9 @@ public sealed class GuildMatch
     public int SecondsLeft { get; private set; }
     public int ResultLeft { get; private set; }
     public MatchEnd? End { get; private set; }
-    public int[] TeamKills { get; } = new int[GuildGameRules.Teams];
-    public int[] TeamDeaths { get; } = new int[GuildGameRules.Teams];
+    public MonsterMatch? Monsters => _monsters;
+    public int[] TeamKills => _monsters?.TeamKills ?? _teamKills;
+    public int[] TeamDeaths => _monsters?.TeamDeaths ?? _teamDeaths;
     public IReadOnlyList<GuildMatchSide> Sides => _sides;
     public IReadOnlyCollection<MatchFighter> Fighters => _fighters.Values;
 
@@ -112,7 +119,7 @@ public sealed class GuildMatch
     {
         if (team < 0 || team >= _sides.Count || State != GuildMatchState.Room) return null;
         if (_fighters.TryGetValue(characterId, out var known)) return known;
-        var fighter = new MatchFighter(characterId, team);
+        var fighter = _monsters is null ? new MatchFighter(characterId, team) : _monsters.Join(characterId, team);
         _fighters[characterId] = fighter;
         return fighter;
     }
@@ -140,6 +147,7 @@ public sealed class GuildMatch
     public bool BadQuit(ulong characterId)
     {
         if (!_fighters.Remove(characterId, out var fighter)) return false;
+        _monsters?.Leave(characterId);
         if (State == GuildMatchState.Battle) _sides[fighter.Team].BadQuits++;
         _down.Remove(characterId);
         _respawns.RemoveAll(pending => pending.CharacterId == characterId);
@@ -150,18 +158,26 @@ public sealed class GuildMatch
     {
         _down.Remove(characterId);
         _respawns.RemoveAll(pending => pending.CharacterId == characterId);
+        _monsters?.Leave(characterId);
         return _fighters.Remove(characterId);
     }
 
     public GuildMatchKill? PlayerKilled(ulong victimId, ulong killerId)
     {
         if (State != GuildMatchState.Battle || !_fighters.TryGetValue(victimId, out var victim)) return null;
-        victim.Deaths++;
-        TeamDeaths[victim.Team]++;
-        if (killerId != victimId && _fighters.TryGetValue(killerId, out var killer))
+        if (_monsters is not null)
         {
-            killer.Kills++;
-            TeamKills[killer.Team]++;
+            _monsters.PlayerKilled(victimId, killerId);
+        }
+        else
+        {
+            victim.Deaths++;
+            _teamDeaths[victim.Team]++;
+            if (killerId != victimId && _fighters.TryGetValue(killerId, out var killer))
+            {
+                killer.Kills++;
+                _teamKills[killer.Team]++;
+            }
         }
         if (GameType == GuildGameRules.DeathMatch)
         {
@@ -222,6 +238,7 @@ public sealed class GuildMatch
                     Finish(instant, events);
                     break;
                 }
+                if (_monsters?.Tick(elapsedMs) is { Count: > 0 } expired) events.Add(new GuildMatchSummonsExpired(expired));
                 foreach (var _ in Seconds(elapsedMs))
                 {
                     SecondsLeft--;
@@ -284,6 +301,7 @@ public sealed class GuildMatch
 
     public MatchEnd? InstantEnd()
     {
+        if (_monsters is not null) return _monsters.InstantEnd();
         if (GameType != GuildGameRules.DeathMatch) return null;
         for (var team = 0; team < GuildGameRules.Teams; team++)
         {
@@ -297,6 +315,7 @@ public sealed class GuildMatch
 
     public MatchEnd TimeUp()
     {
+        if (_monsters is not null) return _monsters.TimeUp();
         var values = GameType == GuildGameRules.DeathMatch
             ? new[] { Standing(0), Standing(1) }
             : TeamKills;

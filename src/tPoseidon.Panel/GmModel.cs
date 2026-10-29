@@ -1,3 +1,4 @@
+using tPoseidon.Core.ClientArt;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Data.Postgres;
 using tPoseidon.Core.Net.Social;
@@ -27,6 +28,8 @@ public sealed class GmServices
 
     public required Func<GameCatalog> Catalog { get; init; }
 
+    public ClientArtLibrary? Art { get; init; }
+
     public string? SetupProblem { get; init; }
 
     public static GmServices For(InstallPaths paths)
@@ -54,6 +57,7 @@ public sealed class GmServices
             Accounts = new DatabaseGmAccountBook(settings.Database),
             Penalties = new DatabasePenaltyBook(settings.Database),
             Catalog = () => GameCatalog.For(settings),
+            Art = new ClientArtLibrary(settings.ClientFolder, message => LogHub.Post(LogHub.PanelSource, LogLevel.Warn, message)),
         };
     }
 
@@ -88,6 +92,8 @@ public sealed class GmModel : IDisposable
 
     public event Action<string>? CharacterChosen;
 
+    public event Action<string>? AccountChosen;
+
     public GmLinkState Link { get; private set; }
 
     public bool Busy => _running > 0;
@@ -95,6 +101,8 @@ public sealed class GmModel : IDisposable
     public string? Running { get; private set; }
 
     public GmToolEndpoint? Endpoint => _services.Endpoint;
+
+    public ClientArtLibrary? Art => _services.Art;
 
     public string? GameMaster => _login?.Character;
 
@@ -104,7 +112,14 @@ public sealed class GmModel : IDisposable
 
     public void Wire(string name) => _wired.Add(name);
 
-    public void Choose(string character) => CharacterChosen?.Invoke(character);
+    public void Choose(string character, string account = "")
+    {
+        CharacterChosen?.Invoke(character);
+        if (account.Length > 0)
+        {
+            AccountChosen?.Invoke(account);
+        }
+    }
 
     public Task<GameCatalog> CatalogAsync() => _catalog ??= Task.Run(_services.Catalog);
 

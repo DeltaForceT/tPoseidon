@@ -128,7 +128,7 @@ public abstract class WizardPage : StackPanel
 
     protected void RaiseState() => StateChanged?.Invoke();
 
-    protected static TextBox Box(string text, string? watermark = null, bool password = false, double width = double.NaN)
+    internal static TextBox Box(string text, string? watermark = null, bool password = false, double width = double.NaN)
     {
         var box = new TextBox { Text = text, Watermark = watermark, Height = 30, MinHeight = 0, Padding = new Thickness(9, 5), VerticalContentAlignment = VerticalAlignment.Center, Width = width };
         if (password)
@@ -152,7 +152,7 @@ public abstract class WizardPage : StackPanel
         return stack;
     }
 
-    protected static void Mark(TextBox box, bool bad)
+    internal static void Mark(TextBox box, bool bad)
     {
         if (bad)
         {
@@ -313,43 +313,12 @@ public sealed class ClientPage : WizardPage
 
 public sealed class PlayersPage : WizardPage
 {
-    private readonly SetupState _state;
-    private readonly ChoiceCard[] _cards;
-    private readonly TextBox _address = Box("");
-    private readonly TextBlock _addressLabel = new() { FontSize = Tokens.FontSizeCaption, Foreground = Tokens.TextSecondary };
-    private readonly StackPanel _addressBox = new() { Spacing = 4 };
-    private readonly Banner _ports = new();
-    private readonly Banner _error = new();
-    private PlayerAudience _audience;
+    private readonly PlayerAudienceEditor _editor;
 
     public PlayersPage(SetupState state)
     {
-        _state = state;
-        _cards =
-        [
-            new ChoiceCard("Only this computer", "You play alone, or test. The servers listen on 127.0.0.1."),
-            new ChoiceCard("Friends on my network", "Other computers in your home or office connect over the local network."),
-            new ChoiceCard("Anyone on the internet", "Players connect with your public IP or a domain name. Needs port forwarding."),
-        ];
-        for (var i = 0; i < _cards.Length; i++)
-        {
-            var audience = (PlayerAudience)i;
-            _cards[i].Chosen += () => Select(audience);
-            Children.Add(_cards[i]);
-        }
-
-        if (state.Settings.Network.Audience != PlayerAudience.Local)
-        {
-            _address.Text = state.Settings.Network.PublicAddress;
-        }
-
-        _addressBox.Children.Add(_addressLabel);
-        _addressBox.Children.Add(_address);
-        _address.TextChanged += (_, _) => { Mark(_address, false); _error.Hide(); };
-        Children.Add(_addressBox);
-        Children.Add(_error);
-        Children.Add(_ports);
-        Select(state.Settings.Network.Audience);
+        _editor = new PlayerAudienceEditor(state.Settings);
+        Children.Add(_editor);
     }
 
     public override string Title => "Who will play";
@@ -358,69 +327,9 @@ public sealed class PlayersPage : WizardPage
 
     public override string StepName => "Players";
 
-    public void Select(PlayerAudience audience)
-    {
-        var previous = _audience;
-        _audience = audience;
-        for (var i = 0; i < _cards.Length; i++)
-        {
-            _cards[i].Selected = i == (int)audience;
-        }
+    public void Select(PlayerAudience audience) => _editor.Select(audience);
 
-        _addressBox.IsVisible = audience != PlayerAudience.Local;
-        _addressLabel.Text = audience == PlayerAudience.Lan ? "Address of this computer on your network" : "Public address players connect to (your public IP or domain)";
-        var lanDefault = NetworkAddresses.DefaultLan(_state.Settings);
-        if (audience == PlayerAudience.Lan && string.IsNullOrWhiteSpace(_address.Text))
-        {
-            _address.Text = lanDefault;
-        }
-
-        if (audience == PlayerAudience.Internet && previous == PlayerAudience.Lan && _address.Text == lanDefault)
-        {
-            _address.Text = "";
-        }
-
-        _error.Hide();
-        if (audience == PlayerAudience.Local)
-        {
-            _ports.Hide();
-        }
-        else
-        {
-            var ports = ServerCatalog.PlayerFacingPorts(_state.Settings);
-            _ports.Show(
-                BannerKind.Info,
-                $"Open these TCP ports in your firewall{(audience == PlayerAudience.Internet ? " and forward them on your router" : "")}: {string.Join(", ", ports)}",
-                $"On {OsHint.Name}: {OsHint.Firewall(ports)}");
-        }
-    }
-
-    public override Task<bool> LeaveAsync()
-    {
-        var address = _address.Text?.Trim() ?? "";
-        if (_audience != PlayerAudience.Local)
-        {
-            if (address.Length == 0)
-            {
-                Mark(_address, true);
-                _error.Show(BannerKind.Error, "No address given.", _audience == PlayerAudience.Lan
-                    ? "Enter the address of this computer on your network."
-                    : "Enter your public IP address or a domain name that points to this computer.");
-                return Task.FromResult(false);
-            }
-
-            if (Uri.CheckHostName(address) == UriHostNameType.Unknown)
-            {
-                Mark(_address, true);
-                _error.Show(BannerKind.Error, $"'{address}' is not an IP address or a domain name.", "Use a form like 203.0.113.7 or play.example.org, without http:// or a port.");
-                return Task.FromResult(false);
-            }
-        }
-
-        _state.Settings.Network.Audience = _audience;
-        _state.Settings.Network.PublicAddress = _audience == PlayerAudience.Local ? NetworkAddresses.Loopback : address;
-        return Task.FromResult(true);
-    }
+    public override Task<bool> LeaveAsync() => Task.FromResult(_editor.TryApply());
 }
 
 public sealed class DatabasePage : WizardPage

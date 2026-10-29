@@ -8,27 +8,35 @@ namespace tPoseidon.Panel;
 public static class GmPickers
 {
     public const string AnyCategory = "Any category";
+    public const string AnyTable = "Any table";
     public const string AnyMap = "Any map";
 
     public static GmPicker Map(GmModel model, string idLabel = "Map id") =>
-        new(model, "maps", idLabel, (catalog, text) => catalog.FindMaps(text).Select(map => new GmPick(Text(map.Id), $"{map.Name} ({map.Id})")));
+        new(model, "maps", idLabel, (catalog, text) => catalog.FindMaps(text).Select(map => new GmPick(Text(map.Id), $"{map.Name} ({map.Id})")), false);
 
     public static GmPicker Npc(GmModel model) =>
-        new(model, "NPCs", "NPC type", (catalog, text) => catalog.FindNpcs(text).Select(npc => new GmPick(Text(npc.Type), $"{npc.Name} · type {npc.Type}")));
+        new(model, "NPCs", "NPC type", (catalog, text) => catalog.FindNpcs(text).Select(npc => new GmPick(Text(npc.Type), $"{npc.Name} · type {npc.Type}", Sprite(npc.Picture))), true);
 
     public static GmPicker Item(GmModel model)
     {
-        var category = GmKit.Choice(new[] { AnyCategory }.Concat(ItemNames.Tables), 150);
+        var category = GmKit.Choice(new[] { AnyCategory }.Concat(ItemCategories.All.Select(entry => entry.Name)), 150);
+        var table = GmKit.Choice(new[] { AnyTable }.Concat(ItemNames.Tables), 130);
         GmPicker? picker = null;
         picker = new GmPicker(
             model,
             "items",
             "Item id",
             (catalog, text) => catalog
-                .FindItems(text, category.SelectedIndex > 0 ? ItemNames.Tables[category.SelectedIndex - 1] : null)
-                .Select(item => new GmPick(Text(item.Id), $"{item.Name} · {item.Id} · {item.Table}")),
-            GmKit.Field("Category (game data table)", category));
+                .FindItems(
+                    text,
+                    table.SelectedIndex > 0 ? ItemNames.Tables[table.SelectedIndex - 1] : null,
+                    category.SelectedIndex > 0 ? ItemCategories.All[category.SelectedIndex - 1].Id : null)
+                .Select(item => new GmPick(Text(item.Id), $"{item.Name} · {item.Id} · {item.Table}", Icon(item.Definition))),
+            true,
+            GmKit.Field("Category", category),
+            GmKit.Field("Game data table", table));
         category.SelectionChanged += (_, _) => picker.Restart();
+        table.SelectionChanged += (_, _) => picker.Restart();
         return picker;
     }
 
@@ -56,8 +64,9 @@ public static class GmPickers
                 var high = int.TryParse(maximum.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var to) ? to : int.MaxValue;
                 ushort? onMap = map.SelectedIndex > 0 && map.SelectedIndex <= maps.Count ? maps[map.SelectedIndex - 1].Id : null;
                 return catalog.FindMonsters(text, low, high, onMap)
-                    .Select(monster => new GmPick(Text(monster.Type), $"{monster.Name} · Lv {monster.Level}{(monster.Boss ? " · boss" : "")} · type {monster.Type}"));
+                    .Select(monster => new GmPick(Text(monster.Type), $"{monster.Name} · Lv {monster.Level}{(monster.Boss ? " · boss" : "")} · type {monster.Type}", Sprite(monster.Picture)));
             },
+            true,
             GmKit.Field("Level", Range(minimum, maximum)),
             GmKit.Field("Lives on", map));
         minimum.TextChanged += (_, _) => picker.Restart();
@@ -65,6 +74,11 @@ public static class GmPickers
         map.SelectionChanged += (_, _) => picker.Restart();
         return picker;
     }
+
+    private static GmArt? Icon(ItemParamEntry definition) =>
+        definition.InvFileName.Length == 0 || definition.InvBundleNum < 0 ? null : GmArt.Icon(definition.InvFileName, definition.InvBundleNum);
+
+    private static GmArt? Sprite(string file) => file.Length == 0 ? null : GmArt.Sprite(file);
 
     private static StackPanel Range(TextBox minimum, TextBox maximum)
     {

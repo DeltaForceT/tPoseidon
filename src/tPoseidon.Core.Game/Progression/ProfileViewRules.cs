@@ -13,6 +13,10 @@ public static class ProfileViewRules
     public const int ResistSlots = 22;
     public const int GrowthGroups = 4;
     public const uint UnknownPlayerCode = 1;
+    public const byte CoverLetterRefusedCode = 1;
+    public const byte Apostrophe = 0x27;
+    public const byte ApostropheReplacement = 0x60;
+    public const int MostCollectionRecords = byte.MaxValue;
 
     public static bool Shows(uint flags, uint part) => (flags & part) != 0;
 
@@ -22,6 +26,16 @@ public static class ProfileViewRules
         ArgumentNullException.ThrowIfNull(encoding);
         var bytes = encoding.GetBytes(text);
         return bytes.Length > MaxMessageBytes ? [] : bytes;
+    }
+
+    public static byte[] SanitizeCoverLetter(ReadOnlySpan<byte> letter)
+    {
+        var clean = letter.ToArray();
+        for (var i = 0; i < clean.Length; i++)
+        {
+            if (clean[i] == Apostrophe) clean[i] = ApostropheReplacement;
+        }
+        return clean;
     }
 
     public static ushort StatLevelOf(int points) => (ushort)StatusValueChart.StatLevel(points);

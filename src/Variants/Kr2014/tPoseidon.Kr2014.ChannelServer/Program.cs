@@ -14,7 +14,6 @@ var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : ServerEndpo
 const string LogTag = "[channel]";
 Console.WriteLine($"{LogTag} {ServerEndpointConfig.Summary()}");
 
-System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
 var kr2014LoginIni = ServerIniLocator.TryLoad(
     ServerIniLocator.ServerKind.Login,
@@ -180,7 +179,7 @@ var host = new S2ServerHost
         ctx.Dispatcher.Register((ushort)Kr2014Opcode.C2S_KR_CHARCREATE_QUERY_0817, async (_, _, innerCt) =>
         {
             var payload = new byte[] { 0xFF, 0x00, 0x00, 0x00 };
-            Console.WriteLine($"{LogTag} {ctx.Remote} 0x0817 → 0x07F8 testing [FF 00 00 00] (slot-enable bitmask hypothesis)");
+            Console.WriteLine($"{LogTag} {ctx.Remote} 0x0817 answered with the character slot states (0x07F8)");
             await SendRawFrameAsync(ctx, (ushort)Kr2014Opcode.S2C_KR_CHARSLOT_COUPON_COUNT, randKey: 0x4D,
                 payload, innerCt);
         });
@@ -214,9 +213,9 @@ var host = new S2ServerHost
             Console.WriteLine($"{LogTag} {ctx.Remote} CharCreateRequest name='{req.Name}' species={req.SpeciesEnum} ftype={req.FType} stats=[{req.StatA},{req.StatB},{req.StatC},{req.StatD}] hair={req.Hair}");
 
             const int MaxNameChars = CharCreatedReplyPacket.MaxCharacterNameChars;
-            if (string.IsNullOrEmpty(req.Name) || req.Name.Length > MaxNameChars)
+            if (string.IsNullOrEmpty(req.Name) || tPoseidon.Core.Common.ClientText.Encoding.GetByteCount(req.Name) > MaxNameChars)
             {
-                await SendCreateFailAsync(0x3FB, $"name length {req.Name?.Length ?? 0} not in 1..{MaxNameChars}");
+                await SendCreateFailAsync(0x3FB, $"name length {(req.Name is null ? 0 : tPoseidon.Core.Common.ClientText.Encoding.GetByteCount(req.Name))} bytes not in 1..{MaxNameChars}");
                 return;
             }
 
@@ -413,7 +412,7 @@ var host = new S2ServerHost
             string text;
             try
             {
-                text = System.Text.Encoding.GetEncoding(949).GetString(bytes).TrimEnd('\0');
+                text = tPoseidon.Core.Common.ClientText.Encoding.GetString(bytes).TrimEnd('\0');
             }
             catch (System.ArgumentException)
             {

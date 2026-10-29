@@ -2,6 +2,39 @@
 
 Every release is listed here, newest first. Versions look like `0.MINOR.PATCH-beta`; [BETA.md](docs/beta/BETA.md) explains what the numbers mean. Back up your database before every update. A release that changes the database says so at the top.
 
+## 0.60.0-beta
+
+**This release changes the database.** It adds the guild depot, the guild shop and the first-kill date of bosses. The changes apply on the first start, once; `tposeidon start` warns first and offers a backup. Back up your database before you update. The first start also rebuilds the server's world data, so it takes a little longer.
+
+### Fixes from your reports
+
+- Korean text: NPC names and dialogue, monster and character names and quest names reach a Korean client as Korean instead of question marks or garbled letters. Korean game data is also read correctly when its file says UTF-8 but holds Korean text.
+- Galder coupons work: using one adds its galder, up to the server's galder limit.
+- Master Mong appears in the Coral Beach boss room. Boss rooms place their bosses from the game's own boss tables.
+- Leaving the Coral Beach boss room no longer traps your character. Warps use the original arrival rule, and a character that logs in where it cannot stand is moved to a safe place.
+- Game master window: players are looked up through the game servers, so online players are found and teleports work. Give item says what really happened, and `@item` gives an item in game.
+- Monsters keep their place when you leave a map and come back, instead of jumping back to their spawn points.
+- NPCs no longer stand on top of each other in shops such as Paradise Shop.
+- Monsters in the job change zone with the four Skill Masters no longer get stuck: a monster may step diagonally between two blocked cells, as in the original.
+- Clicking a portal stops your attack, and hits use the target's real position.
+
+### New
+
+- Guild depot: a shared storage with tabs and a history of deposits and withdrawals. `tposeidon guild-depot` sets a guild's number of tabs.
+- Guild shop: guilds spend guild coins on member items and depot tabs. `tposeidon guild-coins` shows a guild's coins or adds some.
+- Guild games: Monster Match, team respawn regions and watching a match.
+- My Camp opens with its items, and the camp tab of My Shop lists them. `tposeidon camp` lists or adds My Camp items.
+- Inspecting a player shows their boss kill list (when they share it) and their cover letter. Your own boss history window lists your boss kills with the date of the first kill. You can write a cover letter of up to 200 characters.
+- Collect all 16 Secret Cards and exchange them for the secret map in the secret tab of My View.
+- The game master window is grouped into tabs, and its item, monster and NPC pickers show icons, categories and pictures from your client.
+- New player launcher (`tposeidon-launcher-<version>-win-x64.zip`) so friends can join a server without the server package: pick the client, add a server by address or server file, log in and press Play. Make the server file in the panel (**Share a server file for friends...**) or with `tposeidon server-file`.
+- The launcher shows the server's banner, name, colour, status and news. After login it downloads the server owner's own files with a progress bar, resumes, checks them and keeps a backup you can undo; **Play** unlocks when everything is installed, and a failed download shows **Retry**. Owners put files in the `updates` folder and publish them from the panel or with `tposeidon launcher publish`. See `docs/install/launcher-updates.md`.
+- Build your own launcher: **Launcher > Make a launcher for your players...** in the panel menu. The wizard (identity, look with a live preview, connection check, links and text, build) makes `<Server name> Setup.exe`, an installer with shortcuts and an uninstaller, and a zip of the same launcher. The launcher is locked to your server, carries your name, logo, colours and links, and lets players log in and open **Options** with the settings the original client setup offered. **Use the tPoseidon look** fills everything in so you can try it at once. A progress bar shows the build, and a finished page opens the folder. For a server that only accepts players on this computer, the wizard lets you open it to other players, or build a test launcher marked `-test-this-pc` that only works on your PC.
+- **Launcher > Edit launcher news and updates...** in the panel menu: write news posts with pictures, pins and order, set the banner and a maintenance message, add the files players receive, and publish with a summary first. Every publish is kept in a history.
+- Quick-access bubble: minimise the panel and it shrinks into a bubble in the middle of the screen. The bubble shows the server state, pulses when a server fails, and opens grouped buttons for the servers, the game, your players and the panel; each tool opens in its own window. **Open the panel** brings the panel back. Turn it on or off with the **Bubble** button in the panel's top bar. While it is on, the panel keeps start, stop and restart, the game master tools and the client button, and leaves the other tools to the bubble.
+- When the panel is too narrow for every button, the top bar shows icons only, with the names in the tooltips.
+- The server rebuilds its world data by itself when the data was built by an older version.
+
 ## 0.56.0-beta
 
 No database changes.

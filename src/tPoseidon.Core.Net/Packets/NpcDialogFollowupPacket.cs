@@ -16,7 +16,7 @@ public sealed class NpcDialogFollowupPacket
     public byte[] EncodePayload()
     {
         ArgumentNullException.ThrowIfNull(Text);
-        var textBytes = Encoding.ASCII.GetBytes(Text);
+        var textBytes = ClientText.Encoding.GetBytes(Text);
 
         var payload = new byte[4 + textBytes.Length + TrailerPadBytes + 2];
         payload[0] = (byte)(EntityId & 0xFF);
@@ -42,7 +42,7 @@ public sealed class NpcDialogFollowupPacket
         var pageId = (ushort)(payload[2] | (payload[3] << 8));
         var textLen = payload.Length - 4 - TrailerPadBytes - 2;
         var text = textLen > 0
-            ? Encoding.ASCII.GetString(payload.Slice(4, textLen))
+            ? ClientText.Encoding.GetString(payload.Slice(4, textLen))
             : string.Empty;
         var trailerOffset = payload.Length - 2;
         var boundQuestId = (ushort)(payload[trailerOffset] | (payload[trailerOffset + 1] << 8));

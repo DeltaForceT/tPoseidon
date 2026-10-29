@@ -273,7 +273,7 @@ public static class QuestFrames
 
     private static void WriteText(PacketWriter w, string text)
     {
-        w.WriteBytes(Encoding.ASCII.GetBytes(text ?? string.Empty));
+        w.WriteBytes(ClientText.Encoding.GetBytes(text ?? string.Empty));
         w.WriteByte(0);
     }
 }

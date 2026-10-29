@@ -20,7 +20,7 @@ public sealed record CharacterSummary(ulong CharacterId, byte Slot, string Name,
         return new CharacterSummary(
             BinaryPrimitives.ReadUInt64LittleEndian(entry[CharacterListBuilder.CharIdOffset..]),
             entry[CharacterListBuilder.SlotOffset],
-            Encoding.ASCII.GetString(nameEnd < 0 ? nameRegion : nameRegion[..nameEnd]),
+            ClientText.Encoding.GetString(nameEnd < 0 ? nameRegion : nameRegion[..nameEnd]),
             BinaryPrimitives.ReadUInt16LittleEndian(entry[CharacterListBuilder.FirstJobSpeciesOffset..]),
             (byte)(entry[CharacterListBuilder.FTypeOffset] + FTypeWireOffset),
             entry[CharacterListBuilder.JobTierOffset],
