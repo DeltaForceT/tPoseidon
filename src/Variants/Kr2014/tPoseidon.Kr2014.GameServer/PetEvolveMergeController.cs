@@ -14,6 +14,7 @@ internal sealed class PetEvolveMergeController
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
     private readonly IItemPropertyStore _properties;
+    private readonly TimedGrantAnnouncer _timedGrants;
     private readonly int _bagCapacity;
     private readonly string _logTag;
     private readonly Random _rng = new();
@@ -26,6 +27,7 @@ internal sealed class PetEvolveMergeController
         IItemStore items,
         IItemParamLookup catalog,
         IItemPropertyStore properties,
+        TimedGrantAnnouncer timedGrants,
         int bagCapacity,
         string logTag)
     {
@@ -35,6 +37,7 @@ internal sealed class PetEvolveMergeController
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _properties = properties ?? throw new ArgumentNullException(nameof(properties));
+        _timedGrants = timedGrants ?? throw new ArgumentNullException(nameof(timedGrants));
         _bagCapacity = bagCapacity;
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
@@ -141,12 +144,13 @@ internal sealed class PetEvolveMergeController
         }
         var rows = new List<EquipUpgradeItem>
         {
-            EquipUpgradeOperations.Insert(firstDefinition.Id, firstDefinition.ObjectClass, 1, slots),
+            EquipUpgradeOperations.Insert(firstDefinition.Id, firstDefinition.ObjectClass, 1, slots, periodMinutes: _timedGrants.PeriodOf(firstDefinition.Id)),
             EquipUpgradeOperations.Delete(first),
             EquipUpgradeOperations.Delete(second),
         };
         if (await ApplyAsync(player, character.CharacterId, rows, Opcode.S2C_PET_MERGE_REFUSED, PetMergeRules.Failed).ConfigureAwait(false) is not { } applied) return;
         Store(player, applied, merged, first.ItemUid, second.ItemUid);
+        await _timedGrants.AnnounceAsync(player, applied).ConfigureAwait(false);
         await SendAsync(player, Opcode.S2C_PET_MERGE_RESULT, PetLevelUpFrames.Result(applied.Items.Select(EquipUpgradeOperations.ToBag).ToList())).ConfigureAwait(false);
         Log(player, $"pets 0x{first.ItemUid:X} and 0x{second.ItemUid:X} merged (grade {grade})");
     }

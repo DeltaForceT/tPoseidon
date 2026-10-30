@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using tPoseidon.Hosting;
 using tPoseidon.Ui;
 
 namespace tPoseidon.Launcher;

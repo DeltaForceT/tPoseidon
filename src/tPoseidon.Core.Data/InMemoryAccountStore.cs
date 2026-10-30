@@ -338,6 +338,7 @@ public sealed class InMemoryAccountStore : IAccountStore
         lock (state)
         {
             state.Authcode = authcode;
+            state.SelectedCharacterId = 0;
             state.State = 2;
             state.StateChangedAt = _clock.GetUtcNow();
             state.LatestLoginAt = state.StateChangedAt;
@@ -468,7 +469,8 @@ public sealed class InMemoryAccountStore : IAccountStore
         if (!_accountGameStates.TryGetValue(accountId, out var state)) return new LobbyAccountState(access, gameAccess, 0, null);
         lock (state)
         {
-            return new LobbyAccountState(access, gameAccess, state.State, state.LatestLoginAt);
+            var pendingJoin = state.State == 4 && state.SelectedCharacterId != 0 ? state.StateChangedAt : (DateTimeOffset?)null;
+            return new LobbyAccountState(access, gameAccess, state.State, state.LatestLoginAt, pendingJoin);
         }
     }
 
@@ -489,7 +491,7 @@ public sealed class InMemoryAccountStore : IAccountStore
         return released;
     }
 
-    public int ResetLobbyStates() => ResetStates(state => state is 2 or 3);
+    public int ResetLobbyStates() => ResetStates(state => state.State is 2 or 3);
 
     public bool EndLobbySession(uint accountId)
     {
@@ -503,7 +505,7 @@ public sealed class InMemoryAccountStore : IAccountStore
         }
     }
 
-    public int ResetWorldStates() => ResetStates(state => state != 0);
+    public int ResetWorldStates(short world, short island) => ResetStates(state => state.State == 4 && state.World == world && state.Island == island);
 
     public bool JoinGame(uint accountId, long authcode, short island)
     {
@@ -528,14 +530,14 @@ public sealed class InMemoryAccountStore : IAccountStore
         }
     }
 
-    private int ResetStates(Func<short, bool> matches)
+    private int ResetStates(Func<AccountGameState, bool> matches)
     {
         var reset = 0;
         foreach (var state in _accountGameStates.Values)
         {
             lock (state)
             {
-                if (!matches(state.State)) continue;
+                if (!matches(state)) continue;
                 state.State = 0;
                 state.SelectedCharacterId = 0;
                 state.StateChangedAt = _clock.GetUtcNow();

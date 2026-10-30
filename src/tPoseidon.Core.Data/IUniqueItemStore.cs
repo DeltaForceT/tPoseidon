@@ -82,7 +82,5 @@ public interface IUniqueItemStore
 
     IReadOnlyList<BossKillRecord> LatestBossKills(ulong charUid);
 
-    IReadOnlyList<BossKillHistoryRecord> BossKillHistory(ulong charUid);
-
     bool AddCount(int itemIndex, int units, DateTimeOffset now);
 }

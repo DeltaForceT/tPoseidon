@@ -12,6 +12,7 @@ internal sealed class EquipMergeController
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
     private readonly IItemPropertyStore _properties;
+    private readonly TimedGrantAnnouncer _timedGrants;
     private readonly Func<ItemPropertyRules> _rules;
     private readonly Func<RefineTables> _refines;
     private readonly IReadOnlyDictionary<int, int> _supports;
@@ -25,6 +26,7 @@ internal sealed class EquipMergeController
         IItemStore items,
         IItemParamLookup catalog,
         IItemPropertyStore properties,
+        TimedGrantAnnouncer timedGrants,
         Func<ItemPropertyRules> rules,
         Func<RefineTables> refines,
         IReadOnlyDictionary<int, int> supports,
@@ -38,6 +40,7 @@ internal sealed class EquipMergeController
         _rules = rules ?? throw new ArgumentNullException(nameof(rules));
         _refines = refines ?? throw new ArgumentNullException(nameof(refines));
         _supports = supports ?? throw new ArgumentNullException(nameof(supports));
+        _timedGrants = timedGrants ?? throw new ArgumentNullException(nameof(timedGrants));
         _bagCapacity = bagCapacity;
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
@@ -124,7 +127,7 @@ internal sealed class EquipMergeController
         {
             EquipUpgradeOperations.Delete(main),
             EquipUpgradeOperations.Delete(sub),
-            new(EquipUpgradeAction.Insert, 0, main.ItemIndex, main.ItemClass, 1, mixSlot, main.RefineType, main.RefineLevel, main.RefineState),
+            new(EquipUpgradeAction.Insert, 0, main.ItemIndex, main.ItemClass, 1, mixSlot, main.RefineType, main.RefineLevel, main.RefineState, _timedGrants.PeriodOf(main.ItemIndex)),
         };
         if (support is not null) rows.Add(EquipUpgradeOperations.Take(support, 1));
         player.UpgradeBusy = true;
@@ -146,6 +149,7 @@ internal sealed class EquipMergeController
         stats.GrantMoney(result.RemainMoney - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
         player.TimedItems.Forget(main.ItemUid);
         player.TimedItems.Forget(sub.ItemUid);
+        await _timedGrants.AnnounceAsync(player, result).ConfigureAwait(false);
         await SendAsync(player, (Opcode)EquipMergeFrames.Merged, EquipMergeFrames.Result(success, result.RemainMoney,
             result.Items.Select(EquipUpgradeOperations.ToBag).ToArray())).ConfigureAwait(false);
         Log(player, $"fusion of item {main.ItemIndex} {(success ? "succeeded" : "failed")} (chance {chance} %, mode {mode}, fee {cost}, support {(support is null ? "none" : support.ItemIndex.ToString(System.Globalization.CultureInfo.InvariantCulture))}): {properties.Count} properties, mix slot {mixSlot}");

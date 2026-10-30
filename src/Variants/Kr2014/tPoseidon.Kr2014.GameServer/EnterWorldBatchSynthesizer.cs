@@ -77,20 +77,7 @@ public static class EnterWorldBatchSynthesizer
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(questLists);
 
-        var charData = new GameCharDataPacket
-        {
-            CharacterId = character.CharacterId,
-            UserId = character.OwnerAccountId,
-            Slot = character.Slot,
-            Name = character.Name,
-            Species = (ushort)character.Species,
-            FTypeIndex = (byte)tPoseidon.Core.Game.Progression.StatGrowth.TypeIndexOf(character.FType),
-            StatA = character.PtsP,
-            StatB = character.PtsM,
-            StatC = character.PtsS,
-            StatD = character.PtsC,
-            Timestamp = (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-        };
+        var charData = GameCharDataPacket.For(character);
         await SendFrameAsync(ctx, Opcode.GAME_CHAR_DATA, randKey: 0x8A, charData.EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_BATCH_HEADER, randKey: 0x59,
@@ -132,8 +119,8 @@ public static class EnterWorldBatchSynthesizer
 
         await SendFrameAsync(ctx, Opcode.GAME_ENTITY_ANNOUNCE_3D1, randKey: 0x6A, tPoseidon.Core.Net.World.FortuneFrames.TitleAnnounce(entityId, fortuneTitleId), ct);
 
-        await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_377, randKey: 0x79, GameBatchFloatArrayPacket.ForBonusRateKr2014(TmBonusRate(rates)).EncodePayload(), ct);
-        await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_376, randKey: 0x25, GameBatchFloatArrayPacket.ForBonusRateKr2014(ExpBonusRate(rates)).EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_377, randKey: 0x79, GameBatchFloatArrayPacket.ForBonusRateKr2014(FixedBonusRates(rates, character.IsMember).Tm).EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_376, randKey: 0x25, GameBatchFloatArrayPacket.ForBonusRateKr2014(FixedBonusRates(rates, character.IsMember).Exp).EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.S2C_FORTUNE_APPLIED, randKey: 0x08, fortune ?? BuildBatchCounter3D7().EncodePayload(), ct);
 
@@ -191,8 +178,8 @@ public static class EnterWorldBatchSynthesizer
         await SendFrameAsync(ctx, Opcode.GAME_UNK_135, randKey: 0x28, EmptyPacket.EncodePayload(), ct);
         await SendFrameAsync(ctx, Opcode.S2C_PVP_MODE_OFF, randKey: 0xC1, EmptyPacket.EncodePayload(), ct);
 
-        await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_377, randKey: 0x8C, GameBatchFloatArrayPacket.ForBonusRateKr2014(TmBonusRate(rates)).EncodePayload(), ct);
-        await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_376, randKey: 0xD6, GameBatchFloatArrayPacket.ForBonusRateKr2014(ExpBonusRate(rates)).EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_377, randKey: 0x8C, GameBatchFloatArrayPacket.ForBonusRateKr2014(FixedBonusRates(rates, character.IsMember).Tm).EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.GAME_BATCH_CONST_376, randKey: 0xD6, GameBatchFloatArrayPacket.ForBonusRateKr2014(FixedBonusRates(rates, character.IsMember).Exp).EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_UNK_3A6, randKey: 0xA9, new HeadingVectorPacket().EncodePayload(), ct);
 
@@ -207,7 +194,7 @@ public static class EnterWorldBatchSynthesizer
         var mp = ManaStatusPacket.Of(character.CurrentMp);
         await SendFrameAsync(ctx, Opcode.S2C_MANA_STATUS, randKey: 0xF1, mp.EncodePayload(), ct);
 
-        await SendFrameAsync(ctx, Opcode.GAME_UNK_477, randKey: 0x15, new TimestampedSparsePacket0477().EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.S2C_SHADOW_WORLD_BONUS, randKey: 0x15, new TimestampedSparsePacket0477().EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.S2C_MAP_HANDOFF_ACK_4CC, randKey: 0x1D, new MapHandoffAckPacket().EncodePayload(), ct);
 
@@ -360,13 +347,8 @@ public static class EnterWorldBatchSynthesizer
         };
     }
 
-    public static (float Exp, float Tm) FixedBonusRates(ServerRates? rates) => (ExpBonusRate(rates), TmBonusRate(rates));
-
-    private static float ExpBonusRate(ServerRates? rates) =>
-        rates is null ? 0f : (float)(rates.ExpHelper.ExpPcRoom + rates.ExpHelper.ExpEvent);
-
-    private static float TmBonusRate(ServerRates? rates) =>
-        rates is null ? 0f : (float)(rates.ExpHelper.TmPcRoom + rates.ExpHelper.TmEvent);
+    public static (float Exp, float Tm) FixedBonusRates(ServerRates? rates, bool member) =>
+        rates is null ? (0f, 0f) : ((float)rates.ExpBonus(member), (float)rates.TmBonus(member));
 
     public static byte[] NpcSpawn(NpcEntity npc, ICharacterInfoLookup characterInfoCatalog)
     {
@@ -456,6 +438,7 @@ public static class EnterWorldBatchSynthesizer
         SkillShopManager? skillShops = null,
         Func<int, int, bool>? inView = null,
         NpcActivation? activation = null,
+        uint entityFlags = Kr2014.Wire.PlayerSpawnLoginPacket.DefaultEntityFlags,
         CancellationToken ct = default)
     {
         inView ??= EverywhereInView;
@@ -466,7 +449,7 @@ public static class EnterWorldBatchSynthesizer
         };
         await SendFrameAsync(ctx, Opcode.GAME_PLAYER_SPAWN_POSITION, randKey: 0xC8, spawnPos.EncodePayload(), ct);
 
-        var playerSpawn = Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(character, entityId, itemStore);
+        var playerSpawn = Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(character, entityId, itemStore, null, entityFlags: entityFlags);
         await SendFrameAsync(ctx, Opcode.S2C_PLAYER_SPAWN_POST_WARP, randKey: 0x11, playerSpawn.EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_PLAYER_PRESENCE_RESET, randKey: 0xCE, PlayerPresenceResetPacket.Zero.EncodePayload(), ct);
@@ -486,7 +469,7 @@ public static class EnterWorldBatchSynthesizer
 
         if (monsterManager is not null)
         {
-            var mobs = monsterManager.GetByMap(character.MapId);
+            var mobs = monsterManager.GetByScene(character.MapId, InstancedMaps.Contains(character.MapId) ? entityId : (ushort)0);
             byte rk = 0x42;
             var mobsNow = DateTimeOffset.UtcNow;
             foreach (var mob in mobs)
@@ -529,7 +512,7 @@ public static class EnterWorldBatchSynthesizer
         var mp = ManaStatusPacket.Of(character.CurrentMp);
         await SendFrameAsync(ctx, Opcode.S2C_MANA_STATUS, randKey: 0xF1, mp.EncodePayload(), ct);
 
-        await SendFrameAsync(ctx, Opcode.GAME_UNK_477, randKey: 0x15, new TimestampedSparsePacket0477().EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.S2C_SHADOW_WORLD_BONUS, randKey: 0x15, new TimestampedSparsePacket0477().EncodePayload(), ct);
         await SendFrameAsync(ctx, Opcode.S2C_MAP_HANDOFF_ACK_4CC, randKey: 0x1D, new MapHandoffAckPacket().EncodePayload(), ct);
 
         var speedFrame = new EntitySpeedPacket

@@ -10,14 +10,25 @@ public static class TimedItemFrames
         var w = new PacketWriter(10 + items.Count * CashBoxFrames.TimedRecordSize);
         w.WriteUInt64(ClientClock.FileTime(utcNow));
         w.WriteUInt16((ushort)items.Count);
-        foreach (var item in items)
-        {
-            w.WriteUInt64(BagItemIds.OnWire(item.ItemUid));
-            w.WriteUInt32((uint)item.ItemIndex);
-            w.WriteUInt64(ClientClock.FileTime(item.ExpiresAt));
-            w.WriteByte(0);
-        }
+        foreach (var item in items) WriteRecord(w, item);
         return w.ToArray();
+    }
+
+    public static byte[] Registered(IReadOnlyList<TimedItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        var w = new PacketWriter(sizeof(uint) + items.Count * CashBoxFrames.TimedRecordSize);
+        w.WriteUInt32((uint)items.Count);
+        foreach (var item in items) WriteRecord(w, item);
+        return w.ToArray();
+    }
+
+    private static void WriteRecord(PacketWriter w, TimedItem item)
+    {
+        w.WriteUInt64(BagItemIds.OnWire(item.ItemUid));
+        w.WriteUInt32((uint)item.ItemIndex);
+        w.WriteUInt64(ClientClock.FileTime(item.ExpiresAt));
+        w.WriteByte(0);
     }
 
     public static byte[] Clock(DateTime utcNow)

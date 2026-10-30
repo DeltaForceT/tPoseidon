@@ -67,9 +67,11 @@ var playTickets = new PlayTicketEndpoint(
 app.MapPost("/play-ticket", (Delegate)playTickets.HandleAsync);
 var launcher = LauncherEndpoints.FromEnvironment();
 app.MapGet(LauncherEndpoints.ManifestPath, (Delegate)launcher.ManifestAsync);
+app.MapGet(LauncherEndpoints.SignaturePath, (Delegate)launcher.SignatureAsync);
 app.MapGet(LauncherEndpoints.BannerPath, (Delegate)launcher.BannerAsync);
 app.MapGet(LauncherEndpoints.NewsPicturePrefix + "{name}", (HttpContext context, string name) => launcher.NewsPictureAsync(context, name));
 app.MapGet(LauncherEndpoints.FilesPrefix + "{**path}", (HttpContext context, string path) => launcher.FileAsync(context, path));
+app.MapGet(LauncherEndpoints.LauncherFilesPrefix + "{**path}", (HttpContext context, string path) => launcher.LauncherFileAsync(context, path));
 Console.WriteLine($"{LogTag} cash: {options.Cash.Mode.ToString().ToLowerInvariant()}{(options.Cash.Mode == tPoseidon.Core.Data.CashMode.Balance ? $", accounts start with {options.Cash.StartingBalance}" : "")}");
 
 Console.WriteLine($"{LogTag} listening");

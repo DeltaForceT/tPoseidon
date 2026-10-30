@@ -26,7 +26,6 @@ internal sealed class FortuneController
 {
     public const ushort FortuneProfileTitleType = 2;
     public const int NotEnoughMoney = 1;
-    public const byte TodayExchangeWithoutTable = 0;
 
     private readonly MasterFortune _master;
     private readonly Func<FortuneTables> _tables;
@@ -113,6 +112,14 @@ internal sealed class FortuneController
         if (stats.Money < fee) return NotEnoughMoney;
         await EnterAsync(player, hold, stats.Money).ConfigureAwait(false);
         return NpcScript.Silent;
+    }
+
+    public Task TodayAsync(InGameSessionState player, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        if (player.Character is not { } character) return Task.CompletedTask;
+        var cardId = FortuneToday.CardId(_tables(), (int)character.Species, character.GenTime, now);
+        return SendAsync(player, Opcode.S2C_FORTUNE_TODAY, FortuneFrames.Today(cardId));
     }
 
     public async Task ChangeAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)
@@ -267,6 +274,7 @@ internal sealed class FortuneController
 
     private async Task<bool> DealAsync(InGameSessionState player, FortuneHold hold, long money)
     {
+        if (player.Character is not { } character) return false;
         var tables = _tables();
         var nextFee = FortuneHouse.Fee(tables.FeeByUse, hold.Info.ViewCount + 1);
         if (money < nextFee)
@@ -285,7 +293,7 @@ internal sealed class FortuneController
             if (FortuneHouse.IsAnotherDay(hold.Info.UpdatedAt, DateTimeOffset.UtcNow)) hold.Info = hold.Info with { ViewCount = 0 };
         }
         var uses = (byte)Math.Clamp(hold.Info.ViewCount, 0, byte.MaxValue);
-        await SendAsync(player, Opcode.S2C_FORTUNE_CARDS, FortuneFrames.Cards(uses, TodayExchangeWithoutTable, cards)).ConfigureAwait(false);
+        await SendAsync(player, Opcode.S2C_FORTUNE_CARDS, FortuneFrames.Cards(uses, FortuneToday.Exchange(tables, (int)character.Species, character.GenTime, DateTimeOffset.UtcNow), cards)).ConfigureAwait(false);
         return true;
     }
 

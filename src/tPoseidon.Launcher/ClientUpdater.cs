@@ -63,18 +63,7 @@ public sealed class ClientUpdater
         var work = Path.Combine(clientFolder, ClientPath.WorkFolder);
         try
         {
-            var done = 0L;
-            for (var i = 0; i < plan.Changes.Count; i++)
-            {
-                var file = plan.Changes[i];
-                var number = i + 1;
-                var baseline = done;
-                var report = progress is null ? null : new InlineProgress<long>(received => progress.Report(new UpdateProgress(number, plan.Changes.Count, baseline + received, plan.Bytes, file.Path)));
-                await DownloadAsync(work, file, fileUrl(file.Path), report, ct).ConfigureAwait(false);
-                done += file.Size;
-                progress?.Report(new UpdateProgress(i + 1, plan.Changes.Count, done, plan.Bytes, file.Path));
-            }
-
+            await StageAsync(work, plan, fileUrl, progress, ct).ConfigureAwait(false);
             Swap(clientFolder, work, plan);
         }
         catch (UnauthorizedAccessException ex)
@@ -85,6 +74,31 @@ public sealed class ClientUpdater
         {
             throw new PlayFailure(PlayFailureReason.UpdateFailed, $"Could not update the client folder: {ex.Message}", "Close the game client and any program using the client folder, then try again.", ex);
         }
+    }
+
+    public async Task StageAsync(string work, UpdatePlan plan, Func<string, Uri> fileUrl, IProgress<UpdateProgress>? progress, CancellationToken ct)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(work);
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(fileUrl);
+        var done = 0L;
+        for (var i = 0; i < plan.Changes.Count; i++)
+        {
+            var file = plan.Changes[i];
+            var number = i + 1;
+            var baseline = done;
+            var report = progress is null ? null : new InlineProgress<long>(received => progress.Report(new UpdateProgress(number, plan.Changes.Count, baseline + received, plan.Bytes, file.Path)));
+            await DownloadAsync(work, file, fileUrl(file.Path), report, ct).ConfigureAwait(false);
+            done += file.Size;
+            progress?.Report(new UpdateProgress(i + 1, plan.Changes.Count, done, plan.Bytes, file.Path));
+        }
+    }
+
+    public static bool StagedFilesMatch(string work, UpdatePlan plan)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(work);
+        ArgumentNullException.ThrowIfNull(plan);
+        return plan.Changes.All(file => File.Exists(ClientPath.Resolve(work, file.Path) + ".part") && Verified(ClientPath.Resolve(work, file.Path) + ".part", file));
     }
 
     public static bool Undo(string clientFolder)
@@ -151,7 +165,7 @@ public sealed class ClientUpdater
     private static bool Verified(string path, ManifestFile file) =>
         new FileInfo(path).Length == file.Size && string.Equals(ManifestBuilder.Hash(path), file.Sha256, StringComparison.Ordinal);
 
-    private static void Swap(string clientFolder, string work, UpdatePlan plan)
+    public static void Swap(string clientFolder, string work, UpdatePlan plan)
     {
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff", CultureInfo.InvariantCulture);
         var backup = Path.Combine(clientFolder, ClientPath.BackupFolder, stamp);
@@ -197,6 +211,28 @@ public sealed class ClientUpdater
         }
 
         Directory.Delete(work, recursive: true);
+    }
+
+    public static void KeepOnlyNewestBackup(string clientFolder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(clientFolder);
+        var backups = Path.Combine(clientFolder, ClientPath.BackupFolder);
+        if (!Directory.Exists(backups))
+        {
+            return;
+        }
+
+        foreach (var old in Directory.EnumerateDirectories(backups).Order(StringComparer.Ordinal).SkipLast(1))
+        {
+            Directory.Delete(old, recursive: true);
+        }
+    }
+
+    public static bool HasBackup(string clientFolder)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(clientFolder);
+        var backups = Path.Combine(clientFolder, ClientPath.BackupFolder);
+        return Directory.Exists(backups) && Directory.EnumerateDirectories(backups).Any();
     }
 
     private static void Restore(string clientFolder, string backup, Backup record)

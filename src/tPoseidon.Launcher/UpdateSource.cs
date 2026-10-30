@@ -5,9 +5,11 @@ using tPoseidon.Hosting;
 
 namespace tPoseidon.Launcher;
 
+public sealed record ChannelManifest(LauncherManifest Manifest, byte[] Json, byte[]? Signature);
+
 public interface IUpdateSource
 {
-    Task<LauncherManifest?> GetManifestAsync(Uri url, CancellationToken ct);
+    Task<ChannelManifest?> GetManifestAsync(Uri manifestUrl, Uri signatureUrl, CancellationToken ct);
 
     Task<byte[]?> GetImageAsync(Uri url, CancellationToken ct);
 
@@ -29,17 +31,18 @@ public sealed class HttpUpdateSource : IUpdateSource
 
     public static HttpUpdateSource Create() => new(new HttpClient { Timeout = Timeout.InfiniteTimeSpan });
 
-    public async Task<LauncherManifest?> GetManifestAsync(Uri url, CancellationToken ct)
+    public async Task<ChannelManifest?> GetManifestAsync(Uri manifestUrl, Uri signatureUrl, CancellationToken ct)
     {
-        var bytes = await ReadSmallAsync(url, LauncherManifest.MaxManifestBytes, ct).ConfigureAwait(false);
+        var bytes = await ReadSmallAsync(manifestUrl, LauncherManifest.MaxManifestBytes, ct).ConfigureAwait(false);
         if (bytes is null)
         {
             return null;
         }
 
+        var signature = await ReadSmallAsync(signatureUrl, ManifestSignature.MaxSignatureBytes, ct).ConfigureAwait(false);
         try
         {
-            return LauncherManifest.Parse(bytes);
+            return new ChannelManifest(LauncherManifest.Parse(bytes), bytes, signature);
         }
         catch (InvalidDataException ex)
         {

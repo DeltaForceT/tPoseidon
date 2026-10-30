@@ -1,6 +1,7 @@
 using System.Text;
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
+using tPoseidon.Core.Game.Characters;
 
 namespace tPoseidon.Kr2014.Wire;
 
@@ -11,11 +12,22 @@ public sealed class PlayerSpawnLoginPacket
     public const int HeaderBytes = 0x16;
     public const int LookMaskOffset = 26;
     public const int LookRestBytes = 29;
+    private const int RestFixedBytes = 1 + 2 + 2 + sizeof(uint);
     public const uint EarAndTailBits = 0x60;
+    public const uint EntityStateMask = 0x7;
+    public const uint EntityStateFastMove = 0x4;
+    public const uint EntityFlagBlock = 0x8;
+    public const uint EntityFlagInvisible = 0x10;
+    public const uint EntityFlagObserver = 0x400;
+    public const uint DefaultEntityFlags = EntityFlagBlock;
+    public const uint ObserverEntityFlags = EntityFlagBlock | EntityStateFastMove | EntityFlagInvisible | EntityFlagObserver;
     public const int GmFlagsOffset = 20;
     public const byte GmEagleFlag = 0x01;
     public const byte GmEagleWingsFlag = 0x08;
     public const int CompactFooterBytes = LookMaskOffset + 4 + 2 * 4 + 4 + LookRestBytes;
+
+    public static byte GmFlagsOf(bool eagle, bool flying, bool inShop = false) =>
+        eagle && !inShop ? (byte)(GmEagleFlag | (flying ? GmEagleWingsFlag : 0)) : (byte)0;
 
     private static readonly (int Bit, byte Slot)[] LookBits =
     {
@@ -38,12 +50,13 @@ public sealed class PlayerSpawnLoginPacket
     public byte Hair { get; init; }
     public byte ClassChainId { get; init; }
     public ushort Level { get; init; } = 1;
-    public uint UnknownA { get; init; } = 8;
+    public uint EntityFlags { get; init; } = DefaultEntityFlags;
     public ushort PositionX { get; init; }
     public ushort PositionY { get; init; }
     public ushort RespawnX { get; init; }
     public ushort RespawnY { get; init; }
     public string Name { get; init; } = string.Empty;
+    public GuildTag Guild { get; init; } = new(string.Empty, string.Empty, default);
     public byte EncodedYaw { get; init; }
     public byte SpeedQuarter { get; init; }
     public uint UnknownB { get; init; } = 1;
@@ -68,10 +81,13 @@ public sealed class PlayerSpawnLoginPacket
         (ushort X, ushort Y)? position,
         byte speedQuarter = 0,
         byte gmFlags = 0,
-        byte postureCode = 0)
+        byte postureCode = 0,
+        GuildTag? guild = null,
+        uint entityFlags = DefaultEntityFlags)
     {
         ArgumentNullException.ThrowIfNull(character);
-        var speciesId = (byte)character.Species;
+        var makeUp = LookChangeRules.MakeUpOf(character, character.JobState)
+            ?? new MakeUp((ushort)character.Species, (byte)character.Species, (byte)character.Hair);
 
         var looks = new Dictionary<byte, uint>
         {
@@ -89,9 +105,9 @@ public sealed class PlayerSpawnLoginPacket
         return new PlayerSpawnLoginPacket
         {
             EntityId = entityId,
-            BodyType = speciesId,
-            Hair = (byte)character.Hair,
-            ClassChainId = speciesId,
+            BodyType = makeUp.Type,
+            Hair = makeUp.Hair,
+            ClassChainId = makeUp.Job,
             Level = character.Level,
             PositionX = position?.X ?? character.PositionX,
             PositionY = position?.Y ?? character.PositionY,
@@ -99,9 +115,11 @@ public sealed class PlayerSpawnLoginPacket
             RespawnY = position?.Y ?? character.PositionY,
             Name = character.Name,
             SpeedQuarter = speedQuarter,
-            ClassChainMirror = speciesId,
+            ClassChainMirror = makeUp.Type,
             GmFlags = gmFlags,
             PostureCode = postureCode,
+            EntityFlags = entityFlags,
+            Guild = guild ?? new GuildTag(string.Empty, string.Empty, default),
             LookItems = looks,
         };
     }
@@ -116,7 +134,9 @@ public sealed class PlayerSpawnLoginPacket
         var nameBytes = ClientText.Encoding.GetBytes(Name);
         var lookMask = LookMask;
         var overrideMask = LookOverrideMask;
-        var footerLen = LookMaskOffset + 4 + 4 * CountBits(lookMask) + 4 + 4 * CountBits(overrideMask) + LookRestBytes;
+        var guildBytes = ClientText.Encoding.GetBytes(Guild.GuildName);
+        var aliasBytes = ClientText.Encoding.GetBytes(Guild.Alias);
+        var footerLen = LookMaskOffset + 4 + 4 * CountBits(lookMask) + 4 + 4 * CountBits(overrideMask) + LookRestBytes + guildBytes.Length + aliasBytes.Length;
         var buf = new byte[HeaderBytes + nameBytes.Length + 1 + footerLen];
 
         WriteUInt16Le(buf, 0x00, EntityId);
@@ -125,7 +145,7 @@ public sealed class PlayerSpawnLoginPacket
         buf[0x06] = Hair;
         buf[0x07] = ClassChainId;
         WriteUInt16Le(buf, 0x08, Level);
-        WriteUInt32Le(buf, 0x0A, UnknownA);
+        WriteUInt32Le(buf, 0x0A, EntityFlags);
         WriteUInt16Le(buf, 0x0E, PositionX);
         WriteUInt16Le(buf, 0x10, PositionY);
         WriteUInt16Le(buf, 0x12, RespawnX);
@@ -144,7 +164,14 @@ public sealed class PlayerSpawnLoginPacket
         var at = f + LookMaskOffset;
         at = WriteLooks(buf, at, LookBits, lookMask, LookItems);
         at = WriteLooks(buf, at, LookOverrideBits, overrideMask, LookOverrides);
-        buf[at] = Hair;
+        buf[at++] = Hair;
+        Array.Copy(guildBytes, 0, buf, at, guildBytes.Length);
+        at += guildBytes.Length + 1;
+        Array.Copy(aliasBytes, 0, buf, at, aliasBytes.Length);
+        at += aliasBytes.Length + 1;
+        buf[at++] = Guild.Emblem.Template;
+        buf[at++] = Guild.Emblem.Colour;
+        WriteUInt32Le(buf, at, Guild.Emblem.Icon);
         return buf;
     }
 
@@ -166,10 +193,16 @@ public sealed class PlayerSpawnLoginPacket
         var at = f + LookMaskOffset;
         var looks = ReadLooks(payload, ref at, LookBits);
         var overrides = ReadLooks(payload, ref at, LookOverrideBits);
-        if (payload.Length - at != LookRestBytes)
+        if (payload.Length - at < LookRestBytes)
         {
             throw new InvalidPacketException(
-                $"Kr2014 PlayerSpawnLogin payload {payload.Length}B leaves {payload.Length - at}B after the look blocks, expected {LookRestBytes}B.");
+                $"Kr2014 PlayerSpawnLogin payload {payload.Length}B leaves {payload.Length - at}B after the look blocks, expected at least {LookRestBytes}B.");
+        }
+        var guild = ReadGuild(payload, at + 1, out var guildEnd);
+        if (payload.Length - guildEnd != LookRestBytes - RestFixedBytes)
+        {
+            throw new InvalidPacketException(
+                $"Kr2014 PlayerSpawnLogin payload {payload.Length}B leaves {payload.Length - guildEnd}B after the guild block.");
         }
 
         return new PlayerSpawnLoginPacket
@@ -180,7 +213,7 @@ public sealed class PlayerSpawnLoginPacket
             Hair = payload[0x06],
             ClassChainId = payload[0x07],
             Level = ReadUInt16Le(payload, 0x08),
-            UnknownA = ReadUInt32Le(payload, 0x0A),
+            EntityFlags = ReadUInt32Le(payload, 0x0A),
             PositionX = ReadUInt16Le(payload, 0x0E),
             PositionY = ReadUInt16Le(payload, 0x10),
             RespawnX = ReadUInt16Le(payload, 0x12),
@@ -192,9 +225,35 @@ public sealed class PlayerSpawnLoginPacket
             UnknownB = ReadUInt32Le(payload, f + 7),
             ClassChainMirror = ReadUInt32Le(payload, f + 21),
             GmFlags = payload[f + GmFlagsOffset],
+            Guild = guild,
             LookItems = looks,
             LookOverrides = overrides,
         };
+    }
+
+    private static GuildTag ReadGuild(ReadOnlySpan<byte> payload, int at, out int end)
+    {
+        var guildName = ReadTerminated(payload, ref at);
+        var alias = ReadTerminated(payload, ref at);
+        if (payload.Length - at < 2 + sizeof(uint))
+        {
+            throw new InvalidPacketException("Kr2014 PlayerSpawnLogin guild block has no emblem fields.");
+        }
+        var emblem = new GuildEmblem(payload[at], payload[at + 1], ReadUInt32Le(payload, at + 2));
+        end = at + 2 + sizeof(uint);
+        return new GuildTag(guildName, alias, emblem);
+    }
+
+    private static string ReadTerminated(ReadOnlySpan<byte> payload, ref int at)
+    {
+        var length = payload[at..].IndexOf((byte)0);
+        if (length < 0)
+        {
+            throw new InvalidPacketException("Kr2014 PlayerSpawnLogin guild text has no NUL terminator.");
+        }
+        var text = ClientText.Encoding.GetString(payload.Slice(at, length));
+        at += length + 1;
+        return text;
     }
 
     private static uint MaskOf((int Bit, byte Slot)[] bits, IReadOnlyDictionary<byte, uint> items)

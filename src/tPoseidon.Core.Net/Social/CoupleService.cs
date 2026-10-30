@@ -7,8 +7,17 @@ namespace tPoseidon.Core.Net.Social;
 
 public sealed record CoupleMessage(ulong To, ushort Opcode, byte[] Payload);
 
+public interface ICoupleOfflineMemos
+{
+    bool Leave(ulong ownerCharacterId, ulong senderCharacterId, string text);
+}
+
 public sealed class CoupleService
 {
+    public const string SystemServerStringTable = "SystemServerString";
+    public const string BreakUpMemoKey = "BreakUpMsg";
+    public const string CancelDivorceMemoKey = "CancelDivorce";
+
     public static IReadOnlySet<byte> BreakUpStates { get; } = new HashSet<byte>
     {
         CoupleStates.Joined, CoupleStates.CloseEnough, CoupleStates.OptionsChosen, CoupleStates.Divorced,
@@ -22,11 +31,13 @@ public sealed class CoupleService
     private readonly IReadOnlyList<int> _deleteSkills;
     private readonly Encoding _text;
     private readonly TimeProvider _time;
+    private readonly IReadOnlyDictionary<string, string> _memoTexts;
+    private readonly ICoupleOfflineMemos _offlineMemos;
     private readonly IReadOnlyDictionary<int, CoupleEventPoints> _eventPoints;
 
     public CoupleService(
         ICoupleRulesStore store, IReadOnlyList<int> deleteQuests, IReadOnlyList<int> deleteSkills, IReadOnlyDictionary<int, CoupleEventPoints> eventPoints,
-        Encoding text, TimeProvider time)
+        Encoding text, TimeProvider time, IReadOnlyDictionary<string, string> memoTexts, ICoupleOfflineMemos offlineMemos)
     {
         _eventPoints = eventPoints ?? throw new ArgumentNullException(nameof(eventPoints));
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -34,6 +45,8 @@ public sealed class CoupleService
         _deleteSkills = deleteSkills ?? throw new ArgumentNullException(nameof(deleteSkills));
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _time = time ?? throw new ArgumentNullException(nameof(time));
+        _memoTexts = memoTexts ?? throw new ArgumentNullException(nameof(memoTexts));
+        _offlineMemos = offlineMemos ?? throw new ArgumentNullException(nameof(offlineMemos));
     }
 
     public bool IsOpen(ulong characterId)
@@ -252,6 +265,12 @@ public sealed class CoupleService
             .Where(member => IsOpen(member.CharacterId))
             .Select(member => new CoupleMessage(member.CharacterId, CoupleSocialFrames.BrokenUp, Array.Empty<byte>()))
             .ToList();
+        if (deleteState == CoupleStates.CoupleDeleted && couple.Partner(characterId) is { } left)
+        {
+            var breaker = couple.Members.First(member => member.CharacterId == characterId);
+            messages.AddRange(Memo(breaker, left, BreakUpMemoKey));
+            messages.AddRange(Memo(left, breaker, BreakUpMemoKey));
+        }
         return (messages, $"couple {couple.CoupleCode} deleted with state {deleteState}");
     }
 
@@ -285,13 +304,22 @@ public sealed class CoupleService
         var stored = accept ? _store.ConfirmDivorce(couple.CoupleCode, _time.GetUtcNow()) : _store.CancelDivorce(couple.CoupleCode);
         if (!stored) return (Array.Empty<CoupleMessage>(), "store refused the answer");
         var messages = new List<CoupleMessage>();
+        var answerer = couple.Members.First(member => member.CharacterId == characterId);
+        var requester = couple.Partner(characterId)!;
         if (accept)
         {
             messages.AddRange(couple.Members
                 .Where(member => IsOpen(member.CharacterId))
                 .Select(member => new CoupleMessage(member.CharacterId, CoupleSocialFrames.DivorceDone, Array.Empty<byte>())));
+            messages.AddRange(Memo(requester, answerer, BreakUpMemoKey));
+            messages.AddRange(Memo(answerer, requester, BreakUpMemoKey));
+            messages.AddRange(Refreshed(couple.CoupleCode));
         }
-        messages.AddRange(Refreshed(couple.CoupleCode));
+        else
+        {
+            messages.AddRange(Refreshed(couple.CoupleCode));
+            messages.AddRange(Memo(answerer, requester, CancelDivorceMemoKey));
+        }
         return (messages, $"couple {couple.CoupleCode} divorce {(accept ? "confirmed" : "cancelled")}");
     }
 
@@ -305,6 +333,15 @@ public sealed class CoupleService
 
     public IReadOnlyList<CoupleMessage> Refresh(ulong characterId) =>
         _store.LoadForCharacter(characterId) is { } couple ? Refreshed(couple.CoupleCode) : Array.Empty<CoupleMessage>();
+
+    private List<CoupleMessage> Memo(CoupleMember sender, CoupleMember recipient, string textKey)
+    {
+        var messages = new List<CoupleMessage>();
+        if (!_memoTexts.TryGetValue(textKey, out var text) || !IsOpen(sender.CharacterId)) return messages;
+        if (IsOpen(recipient.CharacterId)) messages.Add(new CoupleMessage(recipient.CharacterId, CoupleSocialFrames.Memo, CoupleSocialFrames.MemoBody(sender.Name, text, _text)));
+        else _offlineMemos.Leave(recipient.CharacterId, sender.CharacterId, text);
+        return messages;
+    }
 
     private List<CoupleMessage> Refreshed(ulong coupleCode)
     {

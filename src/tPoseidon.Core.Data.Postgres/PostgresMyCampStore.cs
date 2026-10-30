@@ -11,28 +11,42 @@ public sealed class PostgresMyCampStore : IMyCampStore
         _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
     }
 
-    public bool IsInitializedForAccount(uint accountId)
+    public bool TryGrantStarterItems(uint accountId, IReadOnlyList<int> itemIndexes)
     {
+        ArgumentNullException.ThrowIfNull(itemIndexes);
         using var conn = _dataSource.OpenConnectionForActiveSchema();
-        using var cmd = new NpgsqlCommand(
-            "SELECT 1 FROM user_mycamp_log WHERE account_id = @account_id",
-            conn);
-        cmd.Parameters.AddWithValue("account_id", (long)accountId);
-        return cmd.ExecuteScalar() is not null;
-    }
-
-    public void MarkInitializedForAccount(uint accountId)
-    {
-        using var conn = _dataSource.OpenConnectionForActiveSchema();
-        using var cmd = new NpgsqlCommand(
+        using var tx = conn.BeginTransaction();
+        using (var guard = new NpgsqlCommand(
             """
             INSERT INTO user_mycamp_log (account_id, initialized_at)
             VALUES (@account_id, NOW())
             ON CONFLICT (account_id) DO NOTHING
             """,
-            conn);
-        cmd.Parameters.AddWithValue("account_id", (long)accountId);
-        cmd.ExecuteNonQuery();
+            conn,
+            tx))
+        {
+            guard.Parameters.AddWithValue("account_id", (long)accountId);
+            if (guard.ExecuteNonQuery() == 0) return false;
+        }
+
+        foreach (var itemIndex in itemIndexes)
+        {
+            using var insert = new NpgsqlCommand(
+                """
+                INSERT INTO mycamp_item (account_id, item_index, item_where, item_buy_date, sell_code)
+                VALUES (@account_id, @item_index, @item_where, NOW(), @sell_code)
+                """,
+                conn,
+                tx);
+            insert.Parameters.AddWithValue("account_id", (long)accountId);
+            insert.Parameters.AddWithValue("item_index", itemIndex);
+            insert.Parameters.AddWithValue("item_where", (short)MyCampItemWhere.New);
+            insert.Parameters.AddWithValue("sell_code", MyCampStarterSet.SellCode);
+            insert.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+        return true;
     }
 
     public MyCampSlot CreateSlotForCharacter(ulong characterId, string slotName = "")

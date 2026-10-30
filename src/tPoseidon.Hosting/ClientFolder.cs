@@ -8,6 +8,8 @@ public sealed record ClientCheck(bool Ok, string Executable, IReadOnlyList<strin
 
 public sealed record ClientFileCopy(string Source, string Target);
 
+public sealed record ClientLaunchPlan(string Service, string LibConfig, IReadOnlyList<ClientFileCopy> Copies, string Explanation);
+
 public static class ClientFolder
 {
     public const string AutomaticService = "auto";
@@ -25,11 +27,67 @@ public static class ClientFolder
         ("tahoma12.fnt", "gulim12.fnt"),
     };
 
-    public static IReadOnlyList<ClientFileCopy> MissingEnglishModeFiles(string clientFolder)
+    private static readonly (string Target, string Source)[] KoreanModeFiles =
+    {
+        ("libconfig.dat", "libconfig_eng.dat"),
+        ("libconfig.idx", "libconfig_eng.idx"),
+    };
+
+    public static ClientLaunchPlan Plan(string clientFolder, string configuredService)
     {
         var data = DataFolder(clientFolder);
+        var english = ClientFiles.Locate(Path.Combine(data, "libconfig_eng.dat"));
+        var korean = ClientFiles.Locate(Path.Combine(data, "libconfig.dat"));
+        var automatic = string.IsNullOrWhiteSpace(configuredService) || string.Equals(configuredService, AutomaticService, StringComparison.OrdinalIgnoreCase);
+        var service = automatic ? DetectService(english, korean) : configuredService;
+        var englishMode = string.Equals(service, EnglishService, StringComparison.OrdinalIgnoreCase);
+        var files = englishMode ? EnglishModeFiles : KoreanModeFiles;
+        var copies = MissingFiles(data, files);
+        var libconfigTarget = englishMode ? "libconfig_eng.dat" : "libconfig.dat";
+        var libconfig = (englishMode ? english : korean)
+            ?? copies.FirstOrDefault(copy => string.Equals(Path.GetFileName(copy.Target), libconfigTarget, StringComparison.OrdinalIgnoreCase))?.Source
+            ?? Path.Combine(data, libconfigTarget);
+        return new ClientLaunchPlan(service, libconfig, copies, Explain(automatic, englishMode, english, korean, libconfig));
+    }
+
+    public static ClientLaunchPlan Plan(HostSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return Plan(settings.ClientFolder, settings.Launch.ServiceName);
+    }
+
+    public static ClientLaunchPlan Prepare(HostSettings settings)
+    {
+        var plan = Plan(settings);
+        foreach (var copy in plan.Copies)
+        {
+            CopyFile(copy);
+        }
+
+        return plan;
+    }
+
+    public static void CopyFile(ClientFileCopy copy)
+    {
+        ArgumentNullException.ThrowIfNull(copy);
+        try
+        {
+            File.Copy(copy.Source, copy.Target, overwrite: false);
+        }
+        catch (IOException ex)
+        {
+            throw new HostingException($"Could not create {copy.Target} from {Path.GetFileName(copy.Source)}: {ex.Message}", "Close the game client and any program using the client folder, then try again.", ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            throw new PlayFailure(PlayFailureReason.ClientNotWritable, $"Could not create {copy.Target}: {ex.Message}", "Move the client to a folder you can write to (not Program Files), or give your account write access to it.", ex);
+        }
+    }
+
+    private static List<ClientFileCopy> MissingFiles(string data, (string Target, string Source)[] files)
+    {
         var copies = new List<ClientFileCopy>();
-        foreach (var (target, source) in EnglishModeFiles)
+        foreach (var (target, source) in files)
         {
             if (ClientFiles.Locate(Path.Combine(data, target)) is not null)
             {
@@ -46,26 +104,27 @@ public static class ClientFolder
         return copies;
     }
 
-    public static IReadOnlyList<ClientFileCopy> PrepareEnglishMode(string clientFolder)
+    private static string DetectService(string? english, string? korean)
     {
-        var copies = MissingEnglishModeFiles(clientFolder);
-        foreach (var copy in copies)
+        var sample = english ?? korean;
+        if (sample is null)
         {
-            try
-            {
-                File.Copy(copy.Source, copy.Target, overwrite: false);
-            }
-            catch (IOException ex)
-            {
-                throw new HostingException($"Could not create {copy.Target} from {Path.GetFileName(copy.Source)}: {ex.Message}", "Close the game client and any program using the client folder, then try again.", ex);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                throw new PlayFailure(PlayFailureReason.ClientNotWritable, $"Could not create {copy.Target}: {ex.Message}", "Move the client to a folder you can write to (not Program Files), or give your account write access to it.", ex);
-            }
+            return KoreanService;
         }
 
-        return copies;
+        var file = new FileInfo(sample);
+        var key = $"{file.FullName}|{file.Length}|{file.LastWriteTimeUtc.Ticks}";
+        return DetectedServices.GetOrAdd(key, _ => IsKoreanText(LibConfigDatDecryptor.DecryptFile(file.FullName)) ? KoreanService : EnglishService);
+    }
+
+    private static string Explain(bool automatic, bool englishMode, string? english, string? korean, string libconfig)
+    {
+        var mode = englishMode ? "English" : "Korean";
+        var file = Path.GetFileName(libconfig);
+        var chosen = automatic ? "chosen from the game data" : "set in the panel";
+        var origin = englishMode ? english : korean;
+        var copied = origin is null ? $", made as a copy of {file}" : "";
+        return $"Client mode: {mode} ({chosen}); the client and the servers read {(englishMode ? "libconfig_eng.dat" : "libconfig.dat")}{copied}.";
     }
 
     public static string DataFolder(string clientFolder) =>
@@ -77,24 +136,10 @@ public static class ClientFolder
         return LocateDirectory(data, "map") ?? Path.Combine(data, "map");
     }
 
-    public static string LibConfigFor(string clientFolder, string serviceName)
-    {
-        var data = DataFolder(clientFolder);
-        var english = ClientFiles.Locate(Path.Combine(data, "libconfig_eng.dat"));
-        var korean = ClientFiles.Locate(Path.Combine(data, "libconfig.dat"));
-        if (string.Equals(serviceName, EnglishService, StringComparison.OrdinalIgnoreCase) && english is not null)
-        {
-            return english;
-        }
+    public static string LibConfigFor(string clientFolder, string serviceName) =>
+        Plan(clientFolder, serviceName).LibConfig;
 
-        return korean ?? english ?? Path.Combine(data, "libconfig.dat");
-    }
-
-    public static string LibConfigFor(HostSettings settings)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        return LibConfigFor(settings.ClientFolder, Service(settings));
-    }
+    public static string LibConfigFor(HostSettings settings) => Plan(settings).LibConfig;
 
     public static string Service(HostSettings settings)
     {
@@ -102,24 +147,8 @@ public static class ClientFolder
         return ServiceFor(settings.ClientFolder, settings.Launch.ServiceName);
     }
 
-    public static string ServiceFor(string clientFolder, string configuredService)
-    {
-        if (!string.IsNullOrWhiteSpace(configuredService) && !string.Equals(configuredService, AutomaticService, StringComparison.OrdinalIgnoreCase))
-        {
-            return configuredService;
-        }
-
-        var data = DataFolder(clientFolder);
-        var libconfig = ClientFiles.Locate(Path.Combine(data, "libconfig_eng.dat")) ?? ClientFiles.Locate(Path.Combine(data, "libconfig.dat"));
-        if (libconfig is null)
-        {
-            return KoreanService;
-        }
-
-        var file = new FileInfo(libconfig);
-        var key = $"{file.FullName}|{file.Length}|{file.LastWriteTimeUtc.Ticks}";
-        return DetectedServices.GetOrAdd(key, _ => IsKoreanText(LibConfigDatDecryptor.DecryptFile(file.FullName)) ? KoreanService : EnglishService);
-    }
+    public static string ServiceFor(string clientFolder, string configuredService) =>
+        Plan(clientFolder, configuredService).Service;
 
     public static bool IsKoreanText(ReadOnlySpan<byte> text)
     {

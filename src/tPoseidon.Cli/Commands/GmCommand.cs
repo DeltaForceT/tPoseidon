@@ -38,6 +38,12 @@ internal static class GmCommand
             return Print(GmPenalties.Run(new DatabasePenaltyBook(settings.Database), subcommand, commandLine.Positionals.Skip(1).ToList()));
         }
 
+        if (subcommand == GmMembership.Name)
+        {
+            commandLine.RejectUnknown();
+            return Print(GmMembership.Run(new DatabaseMembershipBook(CommandSupport.LoadSettings(paths).Database), commandLine.Positionals.Skip(1).ToList()));
+        }
+
         var command = GameMasterToolCommands.Find(subcommand)
             ?? throw new CliException($"Unknown gm command '{subcommand}'. Run 'tposeidon gm --help' for the list.");
         return RunTool(paths, commandLine, prompt, command);
@@ -51,7 +57,7 @@ internal static class GmCommand
         Console.WriteLine("character through the system server and runs.");
         Console.WriteLine();
         Console.WriteLine("Commands:");
-        foreach (var line in GmAccounts.Help.Concat(GmPenalties.Help))
+        foreach (var line in GmAccounts.Help.Concat(GmPenalties.Help).Concat(GmMembership.Help))
         {
             Console.WriteLine(line);
         }
@@ -64,7 +70,7 @@ internal static class GmCommand
         }
 
         Console.WriteLine();
-        Console.WriteLine("Options for every command except register, unregister, list and the penalty commands:");
+        Console.WriteLine("Options for every command except register, unregister, list and the penalty and member commands:");
         Console.WriteLine("  --gm <character>      the registered GM character to log in as (required)");
         Console.WriteLine("  --password <secret>   the account's password (asked for when not given)");
         Console.WriteLine($"  --host <address>      system server address (default {GmToolEndpoint.LocalHost}; the tool connection is local-only by default)");

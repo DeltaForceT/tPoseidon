@@ -34,7 +34,12 @@ public static class IncomingHits
     public const uint FlagReflected = 0x01;
     public const uint FlagReduced = 0x02;
     public const uint FlagBarrier = 0x04;
-    public const uint FlagCounter = 0x08;
+    public const uint FlagWaterCounter = 0x08;
+    public const uint FlagElectricCounter = 0x10;
+    public const uint FlagFireCounter = 0x20;
+    public const uint FlagEarthCounter = 0x40;
+    public const uint FlagWindCounter = 0x80;
+    public const uint CounterFlags = FlagWaterCounter | FlagElectricCounter | FlagFireCounter | FlagEarthCounter | FlagWindCounter;
     public const uint FlagUnabsorbable = 0x1000;
     public const uint FlagUnabsorbableOther = 0x2000;
     public const uint FlagMultiHit = 0x8000;
@@ -152,7 +157,8 @@ public static class IncomingHits
                 }
                 continue;
             }
-            if (kind.CounterElement != 0 && (hit.Flags & FlagCounter) == 0)
+            var counterFlag = CounterFlagOf(kind.CounterElement);
+            if (counterFlag != 0 && (hit.Flags & counterFlag) == 0)
             {
                 counters.Add(new CounterStrike(
                     effect,
@@ -164,6 +170,18 @@ public static class IncomingHits
         }
         return new HitInterception(hit, shields, reflections, counters);
     }
+
+    public static uint CounterFlagOf(int element) => element switch
+    {
+        SkillActions.WaterElement => FlagWaterCounter,
+        SkillActions.ElectricElement => FlagElectricCounter,
+        SkillActions.FireElement => FlagFireCounter,
+        SkillActions.EarthElement => FlagEarthCounter,
+        SkillActions.WindElement => FlagWindCounter,
+        _ => 0,
+    };
+
+    public static bool IsCounterHit(uint flags) => flags is FlagWaterCounter or FlagElectricCounter or FlagFireCounter or FlagEarthCounter or FlagWindCounter;
 
     public static long SkinReduction(long damage, long casterHv, float ratio)
     {

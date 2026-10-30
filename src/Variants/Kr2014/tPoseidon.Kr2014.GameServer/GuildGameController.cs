@@ -8,6 +8,7 @@ using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.Dialogs;
 using tPoseidon.Core.Net.Social;
 using tPoseidon.Core.Net.World;
+using tPoseidon.Kr2014.Wire;
 
 internal sealed class GuildGameController : IDisposable
 {
@@ -23,9 +24,14 @@ internal sealed class GuildGameController : IDisposable
     private readonly Func<MonsterMatchTables> _monsterTables;
     private readonly Func<MonsterEntity, byte[]> _spawnFrame;
     private readonly Func<ushort, byte[]> _despawnFrame;
+    private readonly Func<InGameSessionState, IReadOnlyList<InGameSessionState>, Task> _hideFromFighters;
+    private readonly Func<GuildGameRewardTables> _rewards;
+    private readonly GuildGameRewardGranter _granter;
     private readonly object _killGate = new();
     private readonly List<(MonsterEntity Monster, ushort Killer)> _monsterKills = new();
     private readonly Dictionary<uint, HashSet<ulong>> _watchers = new();
+    private readonly HashSet<ulong> _observers = new();
+    private readonly object _observerGate = new();
     private readonly Encoding _text;
     private readonly string _logTag;
     private readonly Dictionary<uint, GuildMatch> _matches = new();
@@ -44,12 +50,14 @@ internal sealed class GuildGameController : IDisposable
     private const int FirstTrigger = 0;
     private const byte SummonFromRegion = 0;
     private const byte SummonFromTimer = 1;
+    private const byte NoPvpMode = 0;
 
     public GuildGameController(
         SystemServerLink link, Func<GuildGameTypeTables> types, Func<IReadOnlyCollection<InGameSessionState>> sessions,
         Func<ushort, Opcode, byte[], Task> sendToMap, Func<InGameSessionState, (ushort X, ushort Y)?, Task> revive,
         MonsterManager monsters, IReadOnlyDictionary<ushort, ZoneGeometry> geometry, Func<MonsterMatchTables> monsterTables,
-        Func<MonsterEntity, byte[]> spawnFrame, Func<ushort, byte[]> despawnFrame, Encoding text, string logTag)
+        Func<MonsterEntity, byte[]> spawnFrame, Func<ushort, byte[]> despawnFrame, Func<InGameSessionState, IReadOnlyList<InGameSessionState>, Task> hideFromFighters,
+        Func<GuildGameRewardTables> rewards, GuildGameRewardGranter granter, Encoding text, string logTag)
     {
         _link = link ?? throw new ArgumentNullException(nameof(link));
         _types = types ?? throw new ArgumentNullException(nameof(types));
@@ -61,6 +69,9 @@ internal sealed class GuildGameController : IDisposable
         _monsterTables = monsterTables ?? throw new ArgumentNullException(nameof(monsterTables));
         _spawnFrame = spawnFrame ?? throw new ArgumentNullException(nameof(spawnFrame));
         _despawnFrame = despawnFrame ?? throw new ArgumentNullException(nameof(despawnFrame));
+        _hideFromFighters = hideFromFighters ?? throw new ArgumentNullException(nameof(hideFromFighters));
+        _rewards = rewards ?? throw new ArgumentNullException(nameof(rewards));
+        _granter = granter ?? throw new ArgumentNullException(nameof(granter));
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
         _link.OrderReceived += OrderAsync;
@@ -108,7 +119,7 @@ internal sealed class GuildGameController : IDisposable
             match = new GuildMatch(enter.RoomKey, enter.GameType, (ushort)map, type.TimeLimit, enter.NoLadderFlag, monsterMatch);
             _matches[enter.RoomKey] = match;
         }
-        var team = match.AddSide(enter.GuildCode, enter.GuildName, order.CharacterId, enter.League);
+        var team = match.AddSide(enter.GuildCode, enter.GuildName, order.CharacterId, enter.League, enter.Ladder);
         if (team < 0)
         {
             Console.WriteLine($"{_logTag} [guild game] ORDER 0xE9 room {enter.RoomKey}: guild {enter.GuildCode} cannot take a side (state {match.State})");
@@ -144,6 +155,7 @@ internal sealed class GuildGameController : IDisposable
         if (MatchOf(order.CharacterId) is not null) return;
         if (!_watchers.TryGetValue(roomKey, out var watching)) _watchers[roomKey] = watching = new HashSet<ulong>();
         watching.Add(order.CharacterId);
+        SetObserver(order.CharacterId, true);
         await WarpAsync(watcher, match.MapId, WatcherArrival(match.MapId)).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [guild game] room {roomKey}: 0x{order.CharacterId:X} watches on map {match.MapId}");
     }
@@ -164,8 +176,39 @@ internal sealed class GuildGameController : IDisposable
         return null;
     }
 
+    public bool IsObserver(InGameSessionState st)
+    {
+        ArgumentNullException.ThrowIfNull(st);
+        if (st.Character is not { } character) return false;
+        lock (_observerGate) return _observers.Contains(character.CharacterId);
+    }
+
+    public uint EntityFlagsOf(ulong characterId)
+    {
+        lock (_observerGate) return _observers.Contains(characterId) ? PlayerSpawnLoginPacket.ObserverEntityFlags : PlayerSpawnLoginPacket.DefaultEntityFlags;
+    }
+
+    public bool HidesFrom(InGameSessionState subject, InGameSessionState viewer) =>
+        GuildGameVisibility.Hides(IsObserver(subject), IsObserver(viewer));
+
+    private void SetObserver(ulong characterId, bool observing)
+    {
+        lock (_observerGate)
+        {
+            if (observing) _observers.Add(characterId);
+            else _observers.Remove(characterId);
+        }
+    }
+
+    private void LeaveMatch(GuildMatch match, ulong characterId)
+    {
+        SetObserver(characterId, false);
+        match.Leave(characterId);
+    }
+
     private void StopWatching(ulong characterId)
     {
+        SetObserver(characterId, false);
         foreach (var room in _watchers.Keys.ToArray())
         {
             _watchers[room].Remove(characterId);
@@ -198,6 +241,7 @@ internal sealed class GuildGameController : IDisposable
             return;
         }
         if (st.Character is not { } character || MatchOf(character.CharacterId) is not { } match) return;
+        SetObserver(character.CharacterId, false);
         match.BadQuit(character.CharacterId);
         Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: 0x{st.PlayerEntityId:X4} quit (state {match.State})");
         await WarpAsync(st, GuildGameOrders.LobbyZone).ConfigureAwait(false);
@@ -212,7 +256,7 @@ internal sealed class GuildGameController : IDisposable
             return;
         }
         if (st.Character is not { } character || MatchOf(character.CharacterId) is not { } match) return;
-        match.Leave(character.CharacterId);
+        LeaveMatch(match, character.CharacterId);
         Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: 0x{st.PlayerEntityId:X4} left the room");
         await WarpAsync(st, GuildGameOrders.LobbyZone).ConfigureAwait(false);
     });
@@ -224,6 +268,7 @@ internal sealed class GuildGameController : IDisposable
         if (match.GameType <= GuildGameRules.DeathMatch)
         {
             await SendMatchAsync(match, Opcode.S2C_GUILD_GAME_KILL, GuildGameFrames.Kill(match.GameType, kill.KillerId, kill.VictimId, kill.RespawnFlag)).ConfigureAwait(false);
+            if (match.GameType == GuildGameRules.DeathMatch) await DefeatedToObserverAsync(victim, dead.CharacterId).ConfigureAwait(false);
         }
         else
         {
@@ -233,10 +278,22 @@ internal sealed class GuildGameController : IDisposable
         Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: kills {match.TeamKills[0]}/{match.TeamKills[1]}, deaths {match.TeamDeaths[0]}/{match.TeamDeaths[1]}");
     });
 
+    private async Task DefeatedToObserverAsync(InGameSessionState defeated, ulong characterId)
+    {
+        SetObserver(characterId, true);
+        defeated.PvpMode = NoPvpMode;
+        await _revive(defeated, null).ConfigureAwait(false);
+        var fighters = _sessions()
+            .Where(other => !ReferenceEquals(other, defeated) && other.MapId == defeated.MapId && other.Character is not null && !IsObserver(other))
+            .ToArray();
+        await _hideFromFighters(defeated, fighters).ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} [guild game] 0x{defeated.PlayerEntityId:X4} is defeated and watches the rest of the match");
+    }
+
     public Task EnteredZoneAsync(InGameSessionState st) => Locked(() =>
     {
         if (st.Character is not { } character) return Task.CompletedTask;
-        if (MatchOf(character.CharacterId) is { } match && st.MapId != match.MapId) match.Leave(character.CharacterId);
+        if (MatchOf(character.CharacterId) is { } match && st.MapId != match.MapId) LeaveMatch(match, character.CharacterId);
         if (WatchedRoom(character.CharacterId) is { } room && (!_matches.TryGetValue(room, out var watched) || st.MapId != watched.MapId)) StopWatching(character.CharacterId);
         return Task.CompletedTask;
     });
@@ -245,7 +302,7 @@ internal sealed class GuildGameController : IDisposable
     {
         if (st.Character is not { } character) return Task.CompletedTask;
         StopWatching(character.CharacterId);
-        if (MatchOf(character.CharacterId) is { } match) match.Leave(character.CharacterId);
+        if (MatchOf(character.CharacterId) is { } match) LeaveMatch(match, character.CharacterId);
         return Task.CompletedTask;
     });
 
@@ -329,6 +386,7 @@ internal sealed class GuildGameController : IDisposable
             var monster = _monsters.Spawn(summon.MonsterId, match.MapId,
                 (ushort)Math.Clamp(spot.X, 0, ushort.MaxValue), (ushort)Math.Clamp(spot.Y, 0, ushort.MaxValue), null, null, team + 1);
             if (monster is null) continue;
+            monster.PvpMode = GuildMatch.PvpModeOf(team);
             summon.Monsters[team] = monster.EntityId;
             await _sendToMap(match.MapId, Opcode.NPC_SPAWN, _spawnFrame(monster)).ConfigureAwait(false);
         }
@@ -413,6 +471,7 @@ internal sealed class GuildGameController : IDisposable
             case GuildMatchEnded ended:
                 var end = ended.End;
                 await ClearMonsterMatchAsync(match).ConfigureAwait(false);
+                if (end.Result == GuildGameRules.ResultDecided) await RewardBestFighterAsync(match, end).ConfigureAwait(false);
                 if (_link.IsConnected)
                 {
                     _awaitingLadder[match.RoomKey] = end;
@@ -434,7 +493,7 @@ internal sealed class GuildGameController : IDisposable
                 foreach (var fighter in match.Fighters.ToArray())
                 {
                     if (Session(fighter.CharacterId) is { } session) await WarpAsync(session, GuildGameOrders.LobbyZone).ConfigureAwait(false);
-                    match.Leave(fighter.CharacterId);
+                    LeaveMatch(match, fighter.CharacterId);
                 }
                 foreach (var watcherId in _watchers.GetValueOrDefault(match.RoomKey)?.ToArray() ?? Array.Empty<ulong>())
                 {
@@ -451,6 +510,28 @@ internal sealed class GuildGameController : IDisposable
                 break;
         }
     }
+
+    private async Task RewardBestFighterAsync(GuildMatch match, MatchEnd end)
+    {
+        var winners = match.Fighters
+            .Where(fighter => fighter.Team == GuildMatch.WinnerTeam(end) && Session(fighter.CharacterId) is not null)
+            .Select(fighter => StandingOf(fighter, Session(fighter.CharacterId)!))
+            .ToArray();
+        if (GuildGameBestFighter.Choose(match.GameType, winners) is not { } bestId || Session(bestId) is not { } best) return;
+        var average = match.AverageLadder;
+        if (_rewards().RowFor(average) is not { } row || row.Items.Count == 0 || row.Items.Any(item => item.ItemId == 0))
+        {
+            Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: best fighter 0x{bestId:X}, average ladder {average}: no reward row");
+            return;
+        }
+        var (operations, given) = _granter.Grant(bestId, row.Items);
+        if (given.Count > 0) await SendAsync(best, Opcode.S2C_GUILD_GAME_REWARD, QuestResultFrames.ItemsTaken(operations, given)).ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} [guild game] room {match.RoomKey}: best fighter 0x{bestId:X}, average ladder {average}: reward row {row.Score} gives {given.Count} of {row.Items.Count} items");
+    }
+
+    private static FighterStanding StandingOf(MatchFighter fighter, InGameSessionState session) => new(
+        fighter.CharacterId, fighter.Kills, fighter.Deaths, fighter.Score, fighter.WrongKills,
+        session.Stats?.Level ?? session.Character?.Level ?? 0, (int)Math.Min(session.Stats?.Exp ?? 0UL, int.MaxValue));
 
     private async Task LadderChangeAsync(OfficerOrder order)
     {
@@ -497,6 +578,8 @@ internal sealed class GuildGameController : IDisposable
 
     private void Forget(GuildMatch match)
     {
+        foreach (var fighter in match.Fighters) SetObserver(fighter.CharacterId, false);
+        foreach (var watcherId in _watchers.GetValueOrDefault(match.RoomKey) ?? new HashSet<ulong>()) SetObserver(watcherId, false);
         _watchers.Remove(match.RoomKey);
         _firstSummonAt.Remove(match.RoomKey);
         _boardAt.Remove(match.RoomKey);

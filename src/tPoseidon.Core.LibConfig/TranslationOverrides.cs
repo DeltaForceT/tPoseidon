@@ -27,6 +27,8 @@ public sealed class TranslationOverrides
         _byTable = byTable;
     }
 
+    public static TranslationOverrides None => Empty;
+
     public int OverriddenCellCount
     {
         get

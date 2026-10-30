@@ -8,7 +8,7 @@ One bug per post. Take personal stuff out of logs and screenshots first (real na
 [BUG] <short title, e.g. Shop NPC in the first town won't open>
 
 tPoseidon version: [tposeidon status, the panel title bar, or the release file name]
-Server OS: [Windows 11 / Linux x64 / Linux arm64 / macOS Intel / macOS Apple silicon, and which version]
+Server OS: [Windows 10 / 11, and which version]
 Client: [KR 2014 as is / KR 2014 with the tPoseidon English translation / changed some other way / running under Wine or CrossOver]
 PostgreSQL: [version, and how you installed it: installer / apt / dnf / Homebrew / Postgres.app / Docker]
 Area: [setup / login / characters / maps and warps / NPCs and shops / combat and skills / items / quests / party, guild, chat, trade / pets / crash / other]

@@ -43,6 +43,9 @@ public static class GameMasterFrames
     public const ushort CharInfoReply = 0x147A;
     public const ushort CharInfoMissing = 0x147B;
     public const ushort PresentItem = 0x147F;
+    public const byte PresentToCashBox = 1;
+    public const byte PresentToBagForHours = 2;
+    public const int PresentDeliveryLength = sizeof(byte) + sizeof(ushort);
     public const ushort PresentItemOk = 0x150A;
     public const ushort PresentItemFail = 0x1481;
     public const ushort RemoveMyCampById = 0x149C;
@@ -64,6 +67,23 @@ public static class GameMasterFrames
     public const ushort GameFlag = 0x1507;
     public const ushort GameFlagOk = 0x1508;
     public const ushort GameFlagFail = 0x1509;
+    public const ushort Fly = 0x1530;
+    public const ushort FlyOk = 0x1531;
+    public const ushort FlyFail = 0x1532;
+    public const ushort LearnSkill = 0x1533;
+    public const ushort LearnSkillOk = 0x1534;
+    public const ushort LearnSkillFail = 0x1535;
+    public const ushort SetLevel = 0x1536;
+    public const ushort SetLevelOk = 0x1537;
+    public const ushort SetLevelFail = 0x1538;
+    public const ushort MegaphoneNotice = 0x1539;
+    public const ushort MegaphoneNoticeOk = 0x153A;
+    public const ushort MegaphoneNoticeFail = 0x153B;
+    public const byte NoticeRefusedEmpty = 1;
+    public const byte NoticeRefusedTooLong = 2;
+    public const byte NoticeRefusedNotSaved = 3;
+    public const char NoticeHeaderOpen = '[';
+    public const char NoticeHeaderClose = ']';
     public const ushort SummonNpcOk = 0x14B4;
     public const ushort SummonNpcFail = 0x14B5;
     public const ushort RemoveObject = 0x14B6;
@@ -109,8 +129,9 @@ public static class GameMasterFrames
     public const ushort OxGiveItemOk = 0x14C4;
     public const ushort OxGiveItemFail = 0x14C5;
     public const ushort MusicChange = 0x024C;
-    public const ushort OxAnswerSound = 0x02E4;
+    public const ushort OxNotice = 0x0279;
     public const ushort OxTimerSound = 0x02E5;
+    public const ushort OxAnswerSound = 0x02E4;
     public const ushort GuildInfo = 0x14C6;
     public const ushort GuildInfoReply = 0x14C7;
     public const ushort GuildInfoMissing = 0x14C8;
@@ -148,6 +169,9 @@ public static class GameMasterFrames
     public const ushort ReportNpcRefresh = 0x6A;
     public const ushort ReportSummonNpc = 0x66;
     public const ushort ReportPresentItem = 0x5E;
+    public const ushort ReportSetFlight = 0x6B;
+    public const ushort ReportLearnSkill = 0x6C;
+    public const ushort ReportSetLevel = 0x6D;
     public const int NpcOnOffAckLength = 15;
     public const uint AckOk = 0;
     public const uint AckBadMonsterType = 1;
@@ -163,6 +187,18 @@ public static class GameMasterFrames
     public const uint AckPresentNoReceiver = 2;
     public const uint AckPresentNotOnline = 3;
     public const uint AckPresentNoRoom = AckGiveFailed;
+    public const uint AckPresentBoxFailed = 5;
+    public const uint AckFlightNoGmFlag = 1;
+    public const uint AckFlightNotInGame = 2;
+    public const uint AckLearnUnknownSkill = 1;
+    public const uint AckLearnBadLevel = 2;
+    public const uint AckLearnNotOnline = 3;
+    public const uint AckLearnNotHigher = 4;
+    public const uint AckLevelNotOnline = 1;
+    public const uint AckLevelInvalid = 2;
+    public const uint AckLevelLower = 3;
+    public const uint AckLevelSame = 4;
+    public const uint AckLevelNoChart = 5;
     public const ushort OrderPresentItem = 0x61;
     public const ushort OrderRemoveMyCamp = 0x63;
     public const ushort OrderRemovePersonalShop = 0x65;
@@ -183,6 +219,9 @@ public static class GameMasterFrames
     public const ushort OrderImmortal = 0x5F;
     public const ushort OrderInvisible = 0x60;
     public const ushort OrderSetGmAttribute = 0x62;
+    public const ushort OrderSetFlight = 0x72;
+    public const ushort OrderLearnSkill = 0x73;
+    public const ushort OrderSetLevel = 0x74;
 
     public const int MemoLength = 35;
     public const ushort FirstIndex = 1;
@@ -243,6 +282,9 @@ public static class GameMasterFrames
         OrderTeleportToChr,
         OrderImmortal,
         OrderInvisible,
+        OrderSetFlight,
+        OrderLearnSkill,
+        OrderSetLevel,
     };
 
     public static ushort? ReportOf(ushort orderType) => orderType switch
@@ -259,6 +301,9 @@ public static class GameMasterFrames
         OrderRemoveObject => ReportRemoveObject,
         OrderNpcOnOff => ReportNpcOnOff,
         OrderNpcRefresh => ReportNpcRefresh,
+        OrderSetFlight => ReportSetFlight,
+        OrderLearnSkill => ReportLearnSkill,
+        OrderSetLevel => ReportSetLevel,
         _ => null,
     };
 
@@ -732,27 +777,153 @@ public static class GameMasterFrames
         return true;
     }
 
-    public static byte[] Present(ulong characterId, uint itemId, ushort count)
+    public static byte[] Present(ulong characterId, uint itemId, ushort count) => Present(characterId, itemId, count, PresentDelivery.Bag);
+
+    public static byte[] Present(ulong characterId, uint itemId, ushort count, PresentDelivery delivery)
     {
-        var w = new PacketWriter(sizeof(ulong) + sizeof(uint) + sizeof(ushort));
+        var w = new PacketWriter(sizeof(ulong) + sizeof(uint) + sizeof(ushort) + PresentDeliveryLength);
         w.WriteUInt64(characterId);
         w.WriteUInt32(itemId);
         w.WriteUInt16(count);
+        if (delivery.IsCashBox || delivery.Hours != 0)
+        {
+            w.WriteByte(delivery.IsCashBox ? PresentToCashBox : PresentToBagForHours);
+            w.WriteUInt16(delivery.Hours);
+        }
         return w.ToArray();
     }
 
-    public static bool TryReadPresent(ReadOnlySpan<byte> data, out ulong characterId, out uint itemId, out ushort count)
+    public static bool TryReadPresent(ReadOnlySpan<byte> data, out ulong characterId, out uint itemId, out ushort count) =>
+        TryReadPresent(data, out characterId, out itemId, out count, out _);
+
+    public static bool TryReadPresent(ReadOnlySpan<byte> data, out ulong characterId, out uint itemId, out ushort count, out PresentDelivery delivery)
     {
         characterId = 0;
         itemId = 0;
         count = 0;
+        delivery = PresentDelivery.Bag;
         if (data.Length < sizeof(ulong) + sizeof(uint) + sizeof(ushort)) return false;
         var r = new PacketReader(data);
         characterId = r.ReadUInt64();
         itemId = r.ReadUInt32();
         count = r.ReadUInt16();
+        delivery = ReadPresentDelivery(data[(sizeof(ulong) + sizeof(uint) + sizeof(ushort))..]);
         return true;
     }
+
+    public static PresentDelivery ReadPresentDelivery(ReadOnlySpan<byte> tail)
+    {
+        if (tail.Length < PresentDeliveryLength) return PresentDelivery.Bag;
+        var hours = new PacketReader(tail[sizeof(byte)..]).ReadUInt16();
+        return tail[0] switch
+        {
+            PresentToCashBox => PresentDelivery.CashBox(hours),
+            PresentToBagForHours => PresentDelivery.BagFor(hours),
+            _ => PresentDelivery.Bag,
+        };
+    }
+
+    public static byte[] LearnSkillRequest(string name, ushort skillId, byte level, System.Text.Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(sizeof(ushort) + sizeof(byte) + name.Length + 1);
+        w.WriteUInt16(skillId);
+        w.WriteByte(level);
+        w.WriteNulTerminated(name, text);
+        return w.ToArray();
+    }
+
+    public static bool TryReadLearnSkillRequest(ReadOnlySpan<byte> data, System.Text.Encoding text, out string name, out ushort skillId, out byte level)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        name = string.Empty;
+        skillId = 0;
+        level = 0;
+        if (data.Length < sizeof(ushort) + sizeof(byte) + 1 || data[^1] != 0) return false;
+        var r = new PacketReader(data);
+        skillId = r.ReadUInt16();
+        level = r.ReadByte();
+        name = r.ReadNulTerminated(text);
+        return true;
+    }
+
+    public static byte[] LearnSkillOrder(ulong characterId, ushort skillId, byte level)
+    {
+        var w = new PacketWriter(sizeof(ulong) + sizeof(ushort) + sizeof(byte));
+        w.WriteUInt64(characterId);
+        w.WriteUInt16(skillId);
+        w.WriteByte(level);
+        return w.ToArray();
+    }
+
+    public static bool TryReadLearnSkillOrder(ReadOnlySpan<byte> data, out ulong characterId, out ushort skillId, out byte level)
+    {
+        characterId = 0;
+        skillId = 0;
+        level = 0;
+        if (data.Length < sizeof(ulong) + sizeof(ushort) + sizeof(byte)) return false;
+        var r = new PacketReader(data);
+        characterId = r.ReadUInt64();
+        skillId = r.ReadUInt16();
+        level = r.ReadByte();
+        return true;
+    }
+
+    public static byte[] SetLevelRequest(string name, ushort level, System.Text.Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(sizeof(ushort) + name.Length + 1);
+        w.WriteUInt16(level);
+        w.WriteNulTerminated(name, text);
+        return w.ToArray();
+    }
+
+    public static bool TryReadSetLevelRequest(ReadOnlySpan<byte> data, System.Text.Encoding text, out string name, out ushort level)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        name = string.Empty;
+        level = 0;
+        if (data.Length < sizeof(ushort) + 1 || data[^1] != 0) return false;
+        var r = new PacketReader(data);
+        level = r.ReadUInt16();
+        name = r.ReadNulTerminated(text);
+        return true;
+    }
+
+    public static byte[] SetLevelOrder(ulong characterId, ushort level)
+    {
+        var w = new PacketWriter(sizeof(ulong) + sizeof(ushort));
+        w.WriteUInt64(characterId);
+        w.WriteUInt16(level);
+        return w.ToArray();
+    }
+
+    public static bool TryReadSetLevelOrder(ReadOnlySpan<byte> data, out ulong characterId, out ushort level)
+    {
+        characterId = 0;
+        level = 0;
+        if (data.Length < sizeof(ulong) + sizeof(ushort)) return false;
+        var r = new PacketReader(data);
+        characterId = r.ReadUInt64();
+        level = r.ReadUInt16();
+        return true;
+    }
+
+    public const string OxTimerQuestion = "5";
+    public const char OxAnswerSeparator = ' ';
+    public const string OxAnswerCircle = "O";
+    public const string OxAnswerCross = "X";
+    public const byte OxAnswerCircleCode = 0;
+
+    public static bool IsOxTimerQuestion(string question) =>
+        string.Equals(question, OxTimerQuestion, StringComparison.OrdinalIgnoreCase);
+
+    public static string OxAnswerText(string answerWord, byte answer) =>
+        answerWord + OxAnswerSeparator + (answer == OxAnswerCircleCode ? OxAnswerCircle : OxAnswerCross);
+
+    public static byte[] OxNoticePacket(string text, System.Text.Encoding encoding) => MusicPacket(text, encoding);
 
     public static string ReadQuestion(ReadOnlySpan<byte> data, System.Text.Encoding text)
     {
@@ -1063,6 +1234,39 @@ public static class GameMasterFrames
         w.WriteUInt32Field(info.Money);
         w.WriteByte(info.Remote ? (byte)1 : (byte)0);
         return w.ToArray();
+    }
+
+    public static byte[] MegaphoneNoticeRequest(string header, string text, System.Text.Encoding encoding)
+    {
+        ArgumentNullException.ThrowIfNull(header);
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(encoding);
+        var w = new PacketWriter(header.Length * 2 + text.Length * 2 + 2);
+        w.WriteNulTerminated(header, encoding);
+        w.WriteNulTerminated(text, encoding);
+        return w.ToArray();
+    }
+
+    public static bool TryReadMegaphoneNotice(ReadOnlySpan<byte> data, System.Text.Encoding encoding, out string header, out string text)
+    {
+        ArgumentNullException.ThrowIfNull(encoding);
+        header = string.Empty;
+        text = string.Empty;
+        var headerEnd = data.IndexOf((byte)0);
+        if (headerEnd < 0) return false;
+        var rest = data[(headerEnd + 1)..];
+        var textEnd = rest.IndexOf((byte)0);
+        if (textEnd < 0) return false;
+        header = encoding.GetString(data[..headerEnd]);
+        text = encoding.GetString(rest[..textEnd]);
+        return true;
+    }
+
+    public static byte[] MegaphoneNoticeOkBody(uint waiting)
+    {
+        var body = new byte[sizeof(uint)];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(body, waiting);
+        return body;
     }
 
     public static byte[] SuperNoticeRequest(ushort colour, string text, System.Text.Encoding encoding)

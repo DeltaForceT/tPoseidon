@@ -13,6 +13,7 @@ public static class MobSpawnFrames
     private const int TrailerSize = 23;
     private const int TrailerSpeedOffset = 2;
     private const int TrailerOwnerOffset = TrailerSize - 3;
+    private const int TrailerPvpModeOffset = TrailerSize - 1;
     private const int TrailerFlagOffset = 7;
     private const byte TrailerFlag = 0x01;
     private const uint SpawnReserved = 0x00000001;
@@ -28,6 +29,7 @@ public static class MobSpawnFrames
         trailer[TrailerFlagOffset] = TrailerFlag;
         trailer[TrailerOwnerOffset] = (byte)(mob.OwnerEntityId & 0xFF);
         trailer[TrailerOwnerOffset + 1] = (byte)(mob.OwnerEntityId >> 8);
+        trailer[TrailerPvpModeOffset] = mob.PvpMode;
 
         return new NpcSpawnPacket
         {

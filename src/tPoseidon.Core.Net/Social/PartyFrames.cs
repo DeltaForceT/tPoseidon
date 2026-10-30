@@ -4,6 +4,8 @@ namespace tPoseidon.Core.Net.Social;
 
 public sealed record PartyMemberInfo(string Name, ushort Kind, ushort Zone, ushort MemberId, ushort Level, ulong CharacterId);
 
+public sealed record PartyVitals(uint Hp, uint Mp, ushort TileX, ushort TileY, ushort Level, uint MaxHp, uint MaxMp);
+
 public sealed record PartyDivisionShare(ushort MemberId, byte Percent);
 
 public static class PartyFrames
@@ -22,6 +24,8 @@ public static class PartyFrames
     public const ushort SetItemShare = 0x1B8E;
     public const ushort MemberFlagOn = 0x1B92;
     public const ushort MemberFlagOff = 0x1B93;
+    public const ushort MemberSecondFlagOn = 0x1B94;
+    public const ushort MemberSecondFlagOff = 0x1B95;
     public const ushort AskToJoin = 0x1B9A;
     public const ushort AcceptJoin = 0x1B9D;
     public const ushort RefuseJoin = 0x1BA0;
@@ -55,6 +59,7 @@ public static class PartyFrames
     public const ushort MemberKicked = 0x1B7D;
     public const ushort Renamed = 0x1B7E;
     public const ushort Division = 0x1B7F;
+    public const ushort MemberVitals = 0x1B80;
     public const ushort ChatLine = 0x1B83;
     public const ushort MasterChanged = 0x1B84;
     public const ushort MemberReturned = 0x1B85;
@@ -68,6 +73,8 @@ public static class PartyFrames
     public const ushort ItemShareChanged = 0x1B90;
     public const ushort MemberFlagRaised = 0x1B96;
     public const ushort MemberFlagCleared = 0x1B97;
+    public const ushort MemberSecondFlagRaised = 0x1B98;
+    public const ushort MemberSecondFlagCleared = 0x1B99;
     public const ushort JoinAskRelayed = 0x1B9A;
     public const ushort AskResult = 0x1B9C;
     public const ushort MasterResult = 0x1B9F;
@@ -82,6 +89,14 @@ public static class PartyFrames
     public const ushort MemberStateChanged = 0x1BAD;
     public const ushort MemberRenamed = 0x1BAF;
     public const ushort PartyBonus = 0x1BAE;
+
+    public const byte VitalsHp = 0x01;
+    public const byte VitalsMp = 0x02;
+    public const byte VitalsTileX = 0x04;
+    public const byte VitalsTileY = 0x08;
+    public const byte VitalsLevel = 0x10;
+    public const byte VitalsMaxHp = 0x20;
+    public const byte VitalsMaxMp = 0x40;
 
     public const int MemberInfoLength = 60;
     public const int MemberNameLength = 20;
@@ -299,6 +314,47 @@ public static class PartyFrames
         var w = new PacketWriter(24);
         w.WriteUInt16(memberId);
         w.WriteNulTerminated(name, encoding);
+        return w.ToArray();
+    }
+
+    public static ushort TileOf(short position) => (ushort)(position / tPoseidon.Core.LibConfig.ZoneGeometry.CellSize);
+
+    public static byte VitalsChanges(PartyVitals cached, PartyVitals live)
+    {
+        ArgumentNullException.ThrowIfNull(cached);
+        ArgumentNullException.ThrowIfNull(live);
+        byte mask = 0;
+        if (cached.Hp != live.Hp) mask |= VitalsHp;
+        if (cached.Mp != live.Mp) mask |= VitalsMp;
+        if (cached.TileX != live.TileX) mask |= VitalsTileX;
+        if (cached.TileY != live.TileY) mask |= VitalsTileY;
+        if (cached.Level != live.Level) mask |= VitalsLevel;
+        if (cached.MaxHp != live.MaxHp) mask |= VitalsMaxHp;
+        if (cached.MaxMp != live.MaxMp) mask |= VitalsMaxMp;
+        return mask;
+    }
+
+    public static byte[] MemberVitalsFor(ushort memberId, byte mask, PartyVitals vitals)
+    {
+        ArgumentNullException.ThrowIfNull(vitals);
+        var w = new PacketWriter(24);
+        w.WriteUInt16(memberId);
+        w.WriteByte(mask);
+        if ((mask & VitalsHp) != 0) w.WriteUInt32(vitals.Hp);
+        if ((mask & VitalsMp) != 0) w.WriteUInt32(vitals.Mp);
+        if ((mask & VitalsTileX) != 0) w.WriteUInt16(vitals.TileX);
+        if ((mask & VitalsTileY) != 0) w.WriteUInt16(vitals.TileY);
+        if ((mask & VitalsLevel) != 0) w.WriteUInt16(vitals.Level);
+        if ((mask & VitalsMaxHp) != 0) w.WriteUInt32(vitals.MaxHp);
+        if ((mask & VitalsMaxMp) != 0) w.WriteUInt32(vitals.MaxMp);
+        return w.ToArray();
+    }
+
+    public static byte[] LevelChangedFor(ushort memberId, uint level)
+    {
+        var w = new PacketWriter(6);
+        w.WriteUInt16(memberId);
+        w.WriteUInt32(level);
         return w.ToArray();
     }
 

@@ -6,6 +6,8 @@ public sealed record PartyMirrorEntry(ulong CharacterId, ushort MemberId);
 
 public sealed record PartyMirror(IReadOnlyList<PartyMirrorEntry> Others, ulong RecipientCharacterId, ulong MasterCharacterId, ushort PartyId);
 
+public sealed record PartyObserve(ushort ObservedMemberId, IReadOnlyList<PartyMirrorEntry> Others);
+
 public sealed record PartyQuestMember(ulong CharacterId, byte CompletionCount);
 
 public sealed record PartyQuestBegin(
@@ -49,7 +51,6 @@ public static class SystemLinkFrames
     public const ushort Died = 0x15A1;
     public const ushort Revived = 0x15A5;
     public const ushort CharacterRenamed = 0x15A6;
-    public const ushort Megaphone = 0x15A7;
     public const ushort BeginPartyQuest = 0x15B1;
     public const ushort PartyQuestBegun = 0x15B2;
     public const ushort PartyQuestNotBegun = 0x15B3;
@@ -58,6 +59,7 @@ public static class SystemLinkFrames
     public const ushort CancelPartyQuest = 0x15D5;
 
     public const ushort OrderCancel = 2;
+    public const ushort OrderObserve = 0x0B;
     public const ushort OrderShareExp = 0x0C;
     public const ushort OrderTypeBonus = 0x0D;
     public const ushort OrderNotifyPartyPlayer = 0x10;
@@ -68,6 +70,7 @@ public static class SystemLinkFrames
 
     public const int MirrorSlots = 6;
     public const int MirrorLength = 78;
+    public const int ObserveLength = 62;
     public const int QuestTallyLength = 75;
     public const int QuestRecoveryLength = 96;
     public const uint QuestCancelByMaster = 3;
@@ -111,24 +114,6 @@ public static class SystemLinkFrames
         ArgumentNullException.ThrowIfNull(text);
         var r = new PacketReader(body);
         return (r.ReadUInt64(), r.ReadNulTerminated(text), r.ReadNulTerminated(text));
-    }
-
-    public static byte[] MegaphoneFor(ulong characterId, ushort style, string message, System.Text.Encoding text)
-    {
-        ArgumentNullException.ThrowIfNull(message);
-        ArgumentNullException.ThrowIfNull(text);
-        var w = new PacketWriter(16 + message.Length);
-        w.WriteUInt64(characterId);
-        w.WriteUInt16(style);
-        w.WriteNulTerminated(message, text);
-        return w.ToArray();
-    }
-
-    public static (ulong CharacterId, ushort Style, string Message) ReadMegaphone(ReadOnlySpan<byte> body, System.Text.Encoding text)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        var r = new PacketReader(body);
-        return (r.ReadUInt64(), r.ReadUInt16(), r.ReadNulTerminated(text));
     }
 
     public static byte[] CharacterAndZone(ulong characterId, ushort zone)
@@ -227,6 +212,38 @@ public static class SystemLinkFrames
             if (characterId != 0) others.Add(new PartyMirrorEntry(characterId, memberId));
         }
         return new PartyMirror(others, r.ReadUInt64(), r.ReadUInt64(), r.ReadUInt16());
+    }
+
+    public static byte[] EncodeObserve(PartyObserve observe)
+    {
+        ArgumentNullException.ThrowIfNull(observe);
+        if (observe.Others.Count > MirrorSlots)
+        {
+            throw new ArgumentException($"A party observe order holds at most {MirrorSlots} other members.", nameof(observe));
+        }
+        var w = new PacketWriter(ObserveLength);
+        w.WriteUInt16(observe.ObservedMemberId);
+        foreach (var other in observe.Others)
+        {
+            w.WriteUInt64(other.CharacterId);
+            w.WriteUInt16(other.MemberId);
+        }
+        w.WriteZero((MirrorSlots - observe.Others.Count) * 10);
+        return w.ToArray();
+    }
+
+    public static PartyObserve DecodeObserve(ReadOnlySpan<byte> data)
+    {
+        var r = new PacketReader(data);
+        var observedMemberId = r.ReadUInt16();
+        var others = new List<PartyMirrorEntry>();
+        for (var i = 0; i < MirrorSlots; i++)
+        {
+            var characterId = r.ReadUInt64();
+            var memberId = r.ReadUInt16();
+            if (characterId != 0) others.Add(new PartyMirrorEntry(characterId, memberId));
+        }
+        return new PartyObserve(observedMemberId, others);
     }
 
     public static byte[] EncodeBeginPartyQuest(PartyQuestBegin begin)

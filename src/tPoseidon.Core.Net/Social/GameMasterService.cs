@@ -42,18 +42,24 @@ public sealed class GameMasterService
 
         public byte[] Password { get; set; } = Array.Empty<byte>();
 
+        public bool Flying { get; set; }
+
+        public ushort Index { get; init; }
+    }
+
+    private sealed class Switches
+    {
         public byte Speed { get; set; } = GameMasterFrames.NormalSpeed;
 
         public bool Immortal { get; set; }
 
         public bool Invisible { get; set; }
-
-        public ushort Index { get; init; }
     }
 
     private readonly IGmAuthorityStore _authority;
     private readonly Encoding _text;
     private readonly Dictionary<(ulong CharacterId, bool Tool), Session> _sessions = new();
+    private readonly Dictionary<ulong, Switches> _switches = new();
     private readonly object _gate = new();
     private readonly SortedDictionary<(ushort Zone, ushort ObjectId), uint> _deactivatedNpcs = new();
     private ushort _lastIndex;
@@ -65,6 +71,8 @@ public sealed class GameMasterService
     public IGuildRulesStore? GuildRules { get; init; }
 
     public IGmBlockStore? BlockRecords { get; init; }
+
+    public IMegaphoneQueueStore? MegaphoneNotices { get; init; }
 
     public GameMasterService(IGmAuthorityStore authority, Encoding text)
     {
@@ -172,6 +180,30 @@ public sealed class GameMasterService
         }
         outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.GameFlagOk, Array.Empty<byte>()));
         outbox.Notes.Add($"GM flag {(on ? "set" : "cleared")} for the GM character");
+        return outbox;
+    }
+
+    public GameMasterOutbox Fly(ulong gameMaster, bool on, bool characterOnline)
+    {
+        var outbox = new GameMasterOutbox();
+        if (!characterOnline)
+        {
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.FlyFail, new[] { (byte)GameMasterFrames.AckFlightNotInGame }));
+            outbox.Notes.Add("flying form refused: the GM character is not in the game");
+            return outbox;
+        }
+        lock (_gate)
+        {
+            if (!_sessions.TryGetValue((gameMaster, false), out var session) || !session.LoggedIn)
+            {
+                outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.FlyFail, new[] { (byte)GameMasterFrames.AckFlightNoGmFlag }));
+                outbox.Notes.Add("flying form refused: the GM flag is not set");
+                return outbox;
+            }
+            session.Flying = on;
+        }
+        outbox.Orders.Add(new PartyOrder(gameMaster, GameMasterFrames.OrderSetFlight, 0, GameMasterFrames.Toggle(on)));
+        outbox.Notes.Add($"flying form {(on ? "on" : "off")}");
         return outbox;
     }
 
@@ -291,7 +323,10 @@ public sealed class GameMasterService
         outbox.Notes.Add(rows > 0 ? $"account of '{name}' set to user authority {authority}" : $"account of '{name}' not changed: no such character");
     }
 
-    public GameMasterOutbox? PresentItem(ulong gameMaster, string name, uint itemId, ushort count, Func<string, ulong?> online)
+    public GameMasterOutbox? PresentItem(ulong gameMaster, string name, uint itemId, ushort count, Func<string, ulong?> online) =>
+        PresentItem(gameMaster, name, itemId, count, PresentDelivery.Bag, online);
+
+    public GameMasterOutbox? PresentItem(ulong gameMaster, string name, uint itemId, ushort count, PresentDelivery delivery, Func<string, ulong?> online)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(online);
@@ -303,15 +338,68 @@ public sealed class GameMasterService
             outbox.Notes.Add($"present item {itemId} x{count} to '{name}' refused: not online");
             return outbox;
         }
-        return PresentItem(receiver, itemId, count);
+        return PresentItem(receiver, itemId, count, delivery);
     }
 
-    public static GameMasterOutbox? PresentItem(ulong receiver, uint itemId, ushort count)
+    public static GameMasterOutbox? PresentItem(ulong receiver, uint itemId, ushort count) =>
+        PresentItem(receiver, itemId, count, PresentDelivery.Bag);
+
+    public static GameMasterOutbox? PresentItem(ulong receiver, uint itemId, ushort count, PresentDelivery delivery)
     {
         if (itemId == 0 || count == 0) return null;
         var outbox = new GameMasterOutbox();
-        outbox.Orders.Add(new PartyOrder(receiver, GameMasterFrames.OrderPresentItem, 0, GameMasterFrames.Present(receiver, itemId, count)));
-        outbox.Notes.Add($"present item {itemId} x{count} to 0x{receiver:X}");
+        outbox.Orders.Add(new PartyOrder(receiver, GameMasterFrames.OrderPresentItem, 0, GameMasterFrames.Present(receiver, itemId, count, delivery)));
+        outbox.Notes.Add($"present item {itemId} x{count} to 0x{receiver:X} ({delivery})");
+        return outbox;
+    }
+
+    public static GameMasterOutbox? LearnSkill(ulong gameMaster, string name, ushort skillId, byte level, Func<string, ulong?> online)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(online);
+        if (skillId == 0 || level == 0) return null;
+        if (name.Length == 0) return LearnSkill(gameMaster, skillId, level);
+        if (online(name) is not { } receiver)
+        {
+            var outbox = new GameMasterOutbox();
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.LearnSkillFail, new[] { (byte)GameMasterFrames.AckLearnNotOnline }));
+            outbox.Notes.Add($"learn skill {skillId} level {level} for '{name}' refused: not online");
+            return outbox;
+        }
+        return LearnSkill(receiver, skillId, level);
+    }
+
+    public static GameMasterOutbox? SetLevel(ulong gameMaster, string name, ushort level, Func<string, ulong?> online)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(online);
+        if (level == 0) return null;
+        if (name.Length == 0) return SetLevel(gameMaster, level);
+        if (online(name) is not { } receiver)
+        {
+            var outbox = new GameMasterOutbox();
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.SetLevelFail, new[] { (byte)GameMasterFrames.AckLevelNotOnline }));
+            outbox.Notes.Add($"set level {level} for '{name}' refused: not online");
+            return outbox;
+        }
+        return SetLevel(receiver, level);
+    }
+
+    public static GameMasterOutbox? SetLevel(ulong receiver, ushort level)
+    {
+        if (level == 0) return null;
+        var outbox = new GameMasterOutbox();
+        outbox.Orders.Add(new PartyOrder(receiver, GameMasterFrames.OrderSetLevel, 0, GameMasterFrames.SetLevelOrder(receiver, level)));
+        outbox.Notes.Add($"set level {level} for 0x{receiver:X}");
+        return outbox;
+    }
+
+    public static GameMasterOutbox? LearnSkill(ulong receiver, ushort skillId, byte level)
+    {
+        if (skillId == 0 || level == 0) return null;
+        var outbox = new GameMasterOutbox();
+        outbox.Orders.Add(new PartyOrder(receiver, GameMasterFrames.OrderLearnSkill, 0, GameMasterFrames.LearnSkillOrder(receiver, skillId, level)));
+        outbox.Notes.Add($"learn skill {skillId} level {level} for 0x{receiver:X}");
         return outbox;
     }
 
@@ -331,6 +419,9 @@ public sealed class GameMasterService
             GameMasterFrames.OrderSummonNpc => (GameMasterFrames.SummonNpcFail, (byte)0, "summon NPC"),
             GameMasterFrames.OrderRemoveObject or GameMasterFrames.OrderRemoveOwnMonsters => (GameMasterFrames.RemoveObjectFail, (byte)0, "remove object"),
             GameMasterFrames.OrderCharInfo => (GameMasterFrames.CharInfoMissing, (byte)0, "character info"),
+            GameMasterFrames.OrderLearnSkill => (GameMasterFrames.LearnSkillFail, (byte)GameMasterFrames.AckLearnNotOnline, "learn skill"),
+            GameMasterFrames.OrderSetLevel => (GameMasterFrames.SetLevelFail, (byte)GameMasterFrames.AckLevelNotOnline, "set level"),
+            GameMasterFrames.OrderSetFlight => (GameMasterFrames.FlyFail, (byte)GameMasterFrames.AckFlightNotInGame, "flying form"),
             _ => (default(ushort), (byte)0, string.Empty),
         };
         if (label.Length == 0) return null;
@@ -338,6 +429,21 @@ public sealed class GameMasterService
         var outbox = new GameMasterOutbox();
         outbox.Messages.Add(new CoupleMessage(gameMaster, failureOpcode, withReason ? new[] { reason } : Array.Empty<byte>()));
         outbox.Notes.Add($"{label} refused: the character is not on a game server");
+        return outbox;
+    }
+
+    public static GameMasterOutbox? FlyAnswer(ulong gameMaster, ReadOnlySpan<byte> order, uint result)
+    {
+        if (!GameMasterFrames.TryReadToggle(order, out var on)) return null;
+        var outbox = new GameMasterOutbox();
+        if (result == GameMasterFrames.AckOk)
+        {
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.FlyOk, GameMasterFrames.Toggle(on)));
+            outbox.Notes.Add($"flying form {(on ? "on" : "off")}: done");
+            return outbox;
+        }
+        outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.FlyFail, new[] { (byte)result }));
+        outbox.Notes.Add($"flying form: refused (reason {result})");
         return outbox;
     }
 
@@ -354,6 +460,45 @@ public sealed class GameMasterService
         outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.PresentItemFail, GameMasterFrames.PresentFail(itemId, count, string.Empty, (byte)result, _text)));
         outbox.Notes.Add($"present item {itemId} x{count}: refused (reason {result})");
         return outbox;
+    }
+
+    public GameMasterOutbox? MegaphoneNotice(ulong gameMaster, string header, string text)
+    {
+        ArgumentNullException.ThrowIfNull(header);
+        ArgumentNullException.ThrowIfNull(text);
+        var outbox = new GameMasterOutbox();
+        var refusal = NoticeRefusal(header, text);
+        if (refusal != 0)
+        {
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.MegaphoneNoticeFail, new[] { refusal }));
+            outbox.Notes.Add($"megaphone notice refused (reason {refusal})");
+            return outbox;
+        }
+        var message = NoticeLine(header, text);
+        int waiting;
+        try
+        {
+            waiting = MegaphoneNotices!.EnqueueNotice(message);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.MegaphoneNoticeFail, new[] { GameMasterFrames.NoticeRefusedNotSaved }));
+            outbox.Notes.Add($"megaphone notice not saved: {ex.GetType().Name}: {ex.Message}");
+            return outbox;
+        }
+        outbox.Messages.Add(new CoupleMessage(gameMaster, GameMasterFrames.MegaphoneNoticeOk, GameMasterFrames.MegaphoneNoticeOkBody((uint)waiting)));
+        outbox.Notes.Add($"megaphone notice queued behind {waiting}: {message}");
+        return outbox;
+    }
+
+    private static string NoticeLine(string header, string text) =>
+        $"{GameMasterFrames.NoticeHeaderOpen}{header}{GameMasterFrames.NoticeHeaderClose} {text}";
+
+    private byte NoticeRefusal(string header, string text)
+    {
+        if (MegaphoneNotices is null) return GameMasterFrames.NoticeRefusedNotSaved;
+        if (header.Length == 0 || text.Length == 0 || header.Contains(GameMasterFrames.NoticeHeaderClose)) return GameMasterFrames.NoticeRefusedEmpty;
+        return _text.GetByteCount(NoticeLine(header, text)) > MegaphoneRules.MaxMessageBytes ? GameMasterFrames.NoticeRefusedTooLong : (byte)0;
     }
 
     public GameMasterOutbox? SuperNotice(ushort colour, string text)
@@ -378,6 +523,8 @@ public sealed class GameMasterService
             GameMasterFrames.ReportSetMusic => (GameMasterFrames.SetMusicOk, GameMasterFrames.SetMusicFail, "set music"),
             GameMasterFrames.ReportRemoveObject => (GameMasterFrames.RemoveObjectOk, GameMasterFrames.RemoveObjectFail, "remove object"),
             GameMasterFrames.ReportSummonNpc => (GameMasterFrames.SummonNpcOk, GameMasterFrames.SummonNpcFail, "summon NPC"),
+            GameMasterFrames.ReportLearnSkill => (GameMasterFrames.LearnSkillOk, GameMasterFrames.LearnSkillFail, "learn skill"),
+            GameMasterFrames.ReportSetLevel => (GameMasterFrames.SetLevelOk, GameMasterFrames.SetLevelFail, "set level"),
             _ => (default(ushort), default(ushort), string.Empty),
         };
         if (label.Length == 0) return null;
@@ -1221,8 +1368,8 @@ public sealed class GameMasterService
         var outbox = new GameMasterOutbox();
         lock (_gate)
         {
-            if (!_sessions.TryGetValue((characterId, tool), out var session)) return outbox;
-            session.Speed = speed;
+            if (!_sessions.ContainsKey((characterId, tool))) return outbox;
+            SwitchesOf(characterId).Speed = speed;
         }
         outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderSuperRun, 0, GameMasterFrames.SuperRun(speed)));
         outbox.Messages.Add(new CoupleMessage(characterId, GameMasterFrames.SpeedOk, Array.Empty<byte>()));
@@ -1236,8 +1383,8 @@ public sealed class GameMasterService
         var outbox = new GameMasterOutbox();
         lock (_gate)
         {
-            if (!_sessions.TryGetValue((characterId, tool), out var session)) return outbox;
-            session.Immortal = on;
+            if (!_sessions.ContainsKey((characterId, tool))) return outbox;
+            SwitchesOf(characterId).Immortal = on;
         }
         outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderImmortal, 0, GameMasterFrames.Toggle(on)));
         outbox.Messages.Add(new CoupleMessage(characterId, GameMasterFrames.ImmortalOk, Array.Empty<byte>()));
@@ -1251,8 +1398,8 @@ public sealed class GameMasterService
         var outbox = new GameMasterOutbox();
         lock (_gate)
         {
-            if (!_sessions.TryGetValue((characterId, tool), out var session)) return outbox;
-            session.Invisible = on;
+            if (!_sessions.ContainsKey((characterId, tool))) return outbox;
+            SwitchesOf(characterId).Invisible = on;
         }
         outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderInvisible, 0, GameMasterFrames.Toggle(on)));
         outbox.Messages.Add(new CoupleMessage(characterId, GameMasterFrames.InvisibleOk, Array.Empty<byte>()));
@@ -1269,12 +1416,9 @@ public sealed class GameMasterService
             if (_sessions.TryGetValue((characterId, false), out var chat) && chat.LoggedIn)
             {
                 outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderSetGmAttribute, 0, GameMasterFrames.GmAttribute(true)));
+                if (chat.Flying) outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderSetFlight, 0, GameMasterFrames.Toggle(true)));
             }
-            foreach (var tool in new[] { false, true })
-            {
-                if (!_sessions.TryGetValue((characterId, tool), out var session) || !session.LoggedIn) continue;
-                AddActiveOrders(session, characterId, outbox);
-            }
+            if (_switches.TryGetValue(characterId, out var active)) AddActiveOrders(active, characterId, outbox);
         }
         return outbox;
     }
@@ -1294,36 +1438,51 @@ public sealed class GameMasterService
 
     public void Closed(ulong characterId, bool tool = false)
     {
-        lock (_gate) _sessions.Remove((characterId, tool));
-    }
-
-    private static void AddActiveOrders(Session session, ulong characterId, GameMasterOutbox outbox)
-    {
-        if (session.Speed != GameMasterFrames.NormalSpeed)
+        lock (_gate)
         {
-            outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderSuperRun, 0, GameMasterFrames.SuperRun(session.Speed)));
+            _sessions.Remove((characterId, tool));
+            if (!tool) _switches.Remove(characterId);
         }
-        if (session.Immortal) outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderImmortal, 0, GameMasterFrames.Toggle(true)));
-        if (session.Invisible) outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderInvisible, 0, GameMasterFrames.Toggle(true)));
     }
 
-    private static void LogOut(Session session, ulong characterId, bool tool, GameMasterOutbox outbox)
+    private Switches SwitchesOf(ulong characterId)
+    {
+        if (!_switches.TryGetValue(characterId, out var active))
+        {
+            active = new Switches();
+            _switches[characterId] = active;
+        }
+        return active;
+    }
+
+    private static void AddActiveOrders(Switches active, ulong characterId, GameMasterOutbox outbox)
+    {
+        if (active.Speed != GameMasterFrames.NormalSpeed)
+        {
+            outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderSuperRun, 0, GameMasterFrames.SuperRun(active.Speed)));
+        }
+        if (active.Immortal) outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderImmortal, 0, GameMasterFrames.Toggle(true)));
+        if (active.Invisible) outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderInvisible, 0, GameMasterFrames.Toggle(true)));
+    }
+
+    private void LogOut(Session session, ulong characterId, bool tool, GameMasterOutbox outbox)
     {
         outbox.Notes.Add($"logged out (login state {(session.LoggedIn ? 1 : 0)})");
         if (session.LoggedIn)
         {
-            if (session.Speed != GameMasterFrames.NormalSpeed)
+            if (_switches.Remove(characterId, out var active))
             {
-                outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderSuperRun, 0, GameMasterFrames.SuperRun(GameMasterFrames.NormalSpeed)));
+                if (active.Speed != GameMasterFrames.NormalSpeed)
+                {
+                    outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderSuperRun, 0, GameMasterFrames.SuperRun(GameMasterFrames.NormalSpeed)));
+                }
+                if (active.Immortal) outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderImmortal, 0, GameMasterFrames.Toggle(false)));
+                if (active.Invisible) outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderInvisible, 0, GameMasterFrames.Toggle(false)));
             }
-            if (session.Immortal) outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderImmortal, 0, GameMasterFrames.Toggle(false)));
-            if (session.Invisible) outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderInvisible, 0, GameMasterFrames.Toggle(false)));
             if (!tool) outbox.Orders.Add(new PartyOrder(characterId, GameMasterFrames.OrderSetGmAttribute, 0, GameMasterFrames.GmAttribute(false)));
         }
         session.LoggedIn = false;
         session.Password = Array.Empty<byte>();
-        session.Speed = GameMasterFrames.NormalSpeed;
-        session.Immortal = false;
-        session.Invisible = false;
+        session.Flying = false;
     }
 }

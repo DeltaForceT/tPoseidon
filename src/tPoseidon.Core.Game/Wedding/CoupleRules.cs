@@ -38,10 +38,14 @@ public sealed record MarriageOptionChoice(
 {
     public int Fee => DressRow is null ? 0 : RingRow.Fee + DressRow.Fee;
 
+    public (int ItemId, int Count)? RingCoupon => RingRow.ReqId != 0 ? (RingRow.ReqId, RingRow.ReqNum) : null;
+
+    public (int ItemId, int Count)? DressCoupon => DressRow is { ReqId: not 0 } ? (DressRow.ReqId, DressRow.ReqNum) : null;
+
     public IEnumerable<(int ItemId, int Count)> Coupons()
     {
-        if (RingRow.ReqId != 0) yield return (RingRow.ReqId, RingRow.ReqNum);
-        if (DressRow is { ReqId: not 0 }) yield return (DressRow.ReqId, DressRow.ReqNum);
+        if (RingCoupon is { } ring) yield return ring;
+        if (DressCoupon is { } dress) yield return dress;
     }
 }
 

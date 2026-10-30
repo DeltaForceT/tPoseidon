@@ -12,6 +12,7 @@ using CharCreatedReplyPacket = tPoseidon.Kr2014.Wire.CharCreatedReplyPacket;
 ConsoleFileLog.EnableIfConfigured();
 var port = args.Length > 0 && int.TryParse(args[0], out var p) ? p : ServerEndpointConfig.ChannelPort;
 const string LogTag = "[channel]";
+const byte SecondPasswordRandKey = 0x4D;
 Console.WriteLine($"{LogTag} {ServerEndpointConfig.Summary()}");
 
 
@@ -44,6 +45,7 @@ ISkillStore skillStore = new PostgresSkillStore(pg.DataSource);
 IMyCampStore myCampStore = new PostgresMyCampStore(pg.DataSource);
 var deletedCharStore = new PostgresDeletedCharStore(pg.DataSource);
 var safetyPasswordStore = new PostgresSafetyPasswordStore(pg.DataSource);
+var secondPasswords = new tPoseidon.Core.Net.Social.SecondPasswordService(safetyPasswordStore, tPoseidon.Core.Common.ClientText.Encoding, TimeProvider.System);
 var gmBlockStore = new PostgresGmBlockStore(pg.DataSource);
 var characterCreationManager = new tPoseidon.Core.Game.Characters.CharacterCreationManager(
     accountStore, itemStore, skillStore, myCampStore);
@@ -55,7 +57,7 @@ var LoginServerPort = ServerEndpointConfig.LoginPort;
 
 var channelSessions = new System.Collections.Concurrent.ConcurrentDictionary<uint, S2SessionContext>();
 var handedOff = new System.Collections.Concurrent.ConcurrentDictionary<S2SessionContext, byte>();
-var worldStatesReset = accountStore.ResetWorldStates();
+var worldStatesReset = accountStore.ResetWorldStates(ChannelLogin.World, ChannelLogin.Island);
 Console.WriteLine($"{LogTag} channel start: {worldStatesReset} account(s) still marked logged in set to 0, as the KR LoginServer restart does");
 
 var host = new S2ServerHost
@@ -157,6 +159,10 @@ var host = new S2ServerHost
             sessionUsername = account.Username;
             ctx.Guard.LoginSucceeded(intro.Username);
 
+            foreach (var info in secondPasswords.InfoAtLogin(account.AccountId))
+            {
+                await SendRawFrameAsync(ctx, info.Opcode, randKey: SecondPasswordRandKey, info.Payload, innerCt);
+            }
             var characters = accountStore.GetCharactersForAccount(account.AccountId);
             var charListPayload = CharacterListBuilder.Build(characters, itemStore).EncodePayload();
             await SendFrameAsync(ctx, Opcode.CHAR_LIST, randKey: 0xB3, charListPayload, innerCt);
@@ -324,7 +330,7 @@ var host = new S2ServerHost
             }
 
             var clientIp = ctx.Remote?.Address ?? System.Net.IPAddress.None;
-            accountStore.TransitionToWorldSelected(sessionAccountId.Value, clientIp, world: 1, island: ChannelLogin.Island, selectedCharUid: selectedCharUid);
+            accountStore.TransitionToWorldSelected(sessionAccountId.Value, clientIp, world: ChannelLogin.World, island: ChannelLogin.Island, selectedCharUid: selectedCharUid);
             handedOff[ctx] = 0;
 
             var sessionToken = accountStore.IssueSessionToken(sessionAccountId.Value, TimeSpan.FromMinutes(5));
@@ -350,7 +356,6 @@ var host = new S2ServerHost
 
             var sessionParam = new SessionParam1Packet
             {
-                BaseBytes = SessionParam1Packet.SnapshotBytes,
                 SelectedCharUid = selectedCharUid,
                 IpAddress = LocalHostIp,
                 LoginPort = LoginServerPort,
@@ -360,6 +365,19 @@ var host = new S2ServerHost
                 sessionParam.EncodePayload(), innerCt);
 
             Console.WriteLine($"{LogTag} {ctx.Remote} sent 3-frame handoff bundle (uid=0x{selectedCharUid:X16}, GameServer={LocalHostIp}:{GameServerPort}, account={sessionAccountId.Value} state=4 token=0x{sessionToken.Value:X8})");
+        });
+
+        ctx.Dispatcher.Register(tPoseidon.Core.Net.Social.SecondPasswordFrames.Envelope, async (_, payload, innerCt) =>
+        {
+            if (sessionAccountId is null)
+            {
+                Console.Error.WriteLine($"{LogTag} {ctx.Remote} second password request before channel-intro auth; closing");
+                return;
+            }
+            foreach (var reply in secondPasswords.Handle(sessionAccountId.Value, payload.Span))
+            {
+                await SendRawFrameAsync(ctx, reply.Opcode, randKey: SecondPasswordRandKey, reply.Payload, innerCt);
+            }
         });
 
         ctx.Dispatcher.Register(Opcode.C2S_CHAR_DELETE, async (_, payload, innerCt) =>
@@ -382,9 +400,11 @@ var host = new S2ServerHost
                 return;
             }
             Console.WriteLine($"{LogTag} {ctx.Remote} CharDelete request uid=0x{charId:X16} (second password digest {request.SecondPasswordDigest.Length} chars)");
-            if (safetyPasswordStore.Find(sessionAccountId.Value) is not null)
+            if (!secondPasswords.PermitsCharacterDelete(sessionAccountId.Value, request.SecondPasswordDigest))
             {
-                Console.Error.WriteLine($"{LogTag} {ctx.Remote} CharDelete uid=0x{charId:X16} refused: account {sessionAccountId.Value} has a second password and its verification is not implemented");
+                Console.Error.WriteLine($"{LogTag} {ctx.Remote} CharDelete uid=0x{charId:X16} refused: the second password does not match");
+                var refusal = tPoseidon.Core.Net.Social.SecondPasswordFrames.RefusedReply(tPoseidon.Core.Net.Social.SecondPasswordCodes.WrongPassword);
+                await SendRawFrameAsync(ctx, refusal.Opcode, randKey: SecondPasswordRandKey, refusal.Payload, innerCt);
                 return;
             }
             var snapshot = accountStore.GetCharacterById(charId);

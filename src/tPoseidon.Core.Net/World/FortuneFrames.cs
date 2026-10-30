@@ -56,6 +56,13 @@ public static class FortuneFrames
         return w.ToArray();
     }
 
+    public static byte[] Today(int cardId)
+    {
+        var w = new PacketWriter(sizeof(int));
+        w.WriteInt32(cardId);
+        return w.ToArray();
+    }
+
     public static byte[] Cards(byte usesToday, byte todayExchange, IReadOnlyList<FortuneCard> cards)
     {
         ArgumentNullException.ThrowIfNull(cards);

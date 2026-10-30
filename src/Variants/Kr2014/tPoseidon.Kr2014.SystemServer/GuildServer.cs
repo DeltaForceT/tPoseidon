@@ -20,10 +20,13 @@ public sealed class GuildServer
     private readonly GuildGameRooms _gameRooms;
     private readonly IGuildMatchStore _matches;
     private readonly TimeProvider _time;
+    private readonly int _coinsPerWin;
 
     public GuildServer(GuildService guilds, IGuildMatchStore matches, TimeProvider time, SocialRoom room, GameServerLinks games, Encoding text, Action<string> log,
-        bool allowSmallGuildGameTeams = false)
+        bool allowSmallGuildGameTeams = false, int coinsPerWin = GuildCoinRules.DefaultPerWin)
     {
+        if (!GuildCoinRules.IsValid(coinsPerWin)) throw new ArgumentOutOfRangeException(nameof(coinsPerWin));
+        _coinsPerWin = coinsPerWin;
         _guilds = guilds ?? throw new ArgumentNullException(nameof(guilds));
         _matches = matches ?? throw new ArgumentNullException(nameof(matches));
         _time = time ?? throw new ArgumentNullException(nameof(time));
@@ -57,8 +60,16 @@ public sealed class GuildServer
         On(dispatcher, ctx, GuildFrames.ForceOut, (id, p) =>
             GuildFrames.ReadForceOutRequest(p) is { } entries ? _guilds.ForceOut(id, entries) : null);
         On(dispatcher, ctx, GuildFrames.Dissolve, (id, _) => _guilds.Dissolve(id));
+        On(dispatcher, ctx, GuildFrames.NoticeAdd, (id, p) =>
+            GuildFrames.ReadNoticeAddRequest(p, _text) is { } content ? _guilds.AddNotice(id, content) : null);
+        On(dispatcher, ctx, GuildFrames.NoticeDelete, (id, p) =>
+            GuildFrames.ReadNoticeDeleteRequest(p) is { } noticeCode ? _guilds.DeleteNotice(id, noticeCode) : null);
+        On(dispatcher, ctx, GuildFrames.Chat, (id, p) =>
+            GuildFrames.ReadChat(p, _text) is { } message ? _guilds.Chat(id, message) : null);
         On(dispatcher, ctx, GuildShopFrames.Buy, (id, p) =>
             GuildShopFrames.ReadBuy(p) is { } goodsIndex ? _guilds.ShopBuy(id, goodsIndex) : null);
+        On(dispatcher, ctx, GuildEmblemFrames.Register, (id, p) =>
+            GuildEmblemFrames.ReadRegister(p) is { } emblem ? _guilds.EmblemRegister(id, emblem) : null);
         On(dispatcher, ctx, GuildShopFrames.HistoryRequest, (id, _) => _guilds.ShopHistory(id));
         On(dispatcher, ctx, GuildFrames.DetailByCode, (id, p) =>
             GuildFrames.ReadDetailByCodeRequest(p) is { } guildCode ? _guilds.DetailByCode(id, guildCode) : null);
@@ -346,13 +357,14 @@ public sealed class GuildServer
         var error = _matches.Insert(record);
         _log($"[guild] game room {result.RoomKey} stored (error {error}): guild {make.GuildCode} {settled.Make.Outcome} ladder {settled.Make.GetLadder:+0;-0;0} -> {settled.Make.TotalLadder}, "
             + $"guild {challenge.GuildCode} {settled.Challenge.Outcome} ladder {settled.Challenge.GetLadder:+0;-0;0} -> {settled.Challenge.TotalLadder}"
-            + (over ? $", daily limit of {GuildLadderRules.DailyMatchLimit} matches reached" : string.Empty));
+            + (over ? $", daily limit of {GuildLadderRules.DailyMatchLimit} matches reached" : string.Empty)
+            + (record.Make.GuildCoins + record.Challenge.GuildCoins > 0 ? $", guild coins awarded: {record.Make.GuildCoins} / {record.Challenge.GuildCoins}" : string.Empty));
         return settled;
     }
 
-    private static GuildMatchSideRecord SideRecord(GuildMatchSideResult side, GuildLadderSideChange change) => new(
+    private GuildMatchSideRecord SideRecord(GuildMatchSideResult side, GuildLadderSideChange change) => new(
         side.GuildCode, side.Count, (byte)Math.Min(side.Kills, byte.MaxValue), (byte)Math.Min(side.Deaths, byte.MaxValue),
-        change.GetLadder, change.TotalLadder, NoGuildValue, change.Outcome);
+        change.GetLadder, change.TotalLadder, NoGuildValue, change.Outcome, GuildCoinRules.Award(change.Outcome, _coinsPerWin));
 
     private static DateTimeOffset ToMinute(DateTimeOffset time) =>
         new(time.Year, time.Month, time.Day, time.Hour, time.Minute, 0, time.Offset);
@@ -370,7 +382,7 @@ public sealed class GuildServer
         _games.SendOnceAsync(side.Master.CharacterId, GuildGameOrders.OrderEnterMatch, GuildGameOrders.EnterMatch(
             new GuildEnterMatch(room.Key, side.GuildCode, room.MapChoice, room.NoLadderFlag, string.Empty, room.GameType, side.GuildName,
                 side.Members.Select(entrant => entrant.CharacterId).ToArray(), _matches.Standing(side.GuildCode)?.League ?? GuildLeagueRecord.None,
-                room.GameType == GuildGameOrders.MonsterMatchType ? room.Settings.OutCount : (byte)0), _text), ct);
+                room.GameType == GuildGameOrders.MonsterMatchType ? room.Settings.OutCount : (byte)0, GuildLadderRules.Rating(_matches.Standing(side.GuildCode))), _text), ct);
 
     private GuildGameEntrant? Entrant(SocialMember member) =>
         _guilds.GameEntrant(member.Character.CharacterId, (ushort)Math.Clamp((int)member.Character.Level, 0, ushort.MaxValue));
@@ -473,7 +485,7 @@ public sealed class GuildServer
         }
         foreach (var order in messages.Orders)
         {
-            await _games.SendOnceAsync(order.CharacterId, SystemLinkFrames.OrderGuildName, GuildFrames.NameOrderFor(order.GuildName, order.Alias, _text), ct)
+            await _games.SendOnceAsync(order.CharacterId, SystemLinkFrames.OrderGuildName, GuildFrames.NameOrderFor(order.GuildName, order.Alias, order.Emblem, _text), ct)
                 .ConfigureAwait(false);
         }
     }

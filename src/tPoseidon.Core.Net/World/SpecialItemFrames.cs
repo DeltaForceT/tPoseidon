@@ -6,6 +6,11 @@ namespace tPoseidon.Core.Net.World;
 
 public readonly record struct MegaphoneRequest(ulong WireMicrophoneUid, byte[] Name, byte[] Text);
 
+public readonly record struct MegaphoneShout(string Name, string Text, int ItemIndex, byte ItemClass)
+{
+    public string Line => Name + Text;
+}
+
 public readonly record struct FriendFinderTarget(short X, short Y, ushort Map);
 
 public static class SpecialItemFrames

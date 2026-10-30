@@ -78,10 +78,17 @@ internal sealed class RecycleController
     public async Task RecycleMyCampItemsAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)
     {
         ArgumentNullException.ThrowIfNull(player);
-        if (player.Recycle != RecycleKind.MyCamp || player.Character is not { } character) return;
+        if (player.Character is not { } character) return;
+        if (player.Recycle != RecycleKind.MyCamp)
+        {
+            Log(player, "my camp recycle without an open window");
+            await SendAsync(player, Opcode.S2C_RECYCLE_MYCAMP_RESULT, RecycleFrames.MyCampRefused(RecycleRules.MyCampExchangeFailed)).ConfigureAwait(false);
+            return;
+        }
         if (!RecycleFrames.TryReadMyCampItems(payload.Span, out var request))
         {
             Log(player, $"my camp recycle of {payload.Length} bytes not read");
+            await SendAsync(player, Opcode.S2C_RECYCLE_MYCAMP_RESULT, RecycleFrames.MyCampRefused(RecycleRules.MyCampExchangeFailed)).ConfigureAwait(false);
             return;
         }
         _shop().TryGetValue(RecycleRules.MyCampRecycleType, out var row);
@@ -95,7 +102,11 @@ internal sealed class RecycleController
                 return;
             }
         }
-        if (request.Entries.Count == 0 || row is null) return;
+        if (request.Entries.Count == 0 || row is null)
+        {
+            await SendAsync(player, Opcode.S2C_RECYCLE_MYCAMP_RESULT, RecycleFrames.MyCampRefused(RecycleRules.MyCampExchangeFailed)).ConfigureAwait(false);
+            return;
+        }
         var seen = new HashSet<ulong>();
         var owned = request.Entries.All(entry =>
             seen.Add(entry.ItemUid)
@@ -114,6 +125,7 @@ internal sealed class RecycleController
         if (!joins && bag.Count >= PickupRules.BagCapacity)
         {
             Log(player, "my camp recycle HasAcceptableSpace refused");
+            await SendAsync(player, Opcode.S2C_RECYCLE_MYCAMP_RESULT, RecycleFrames.MyCampRefused(RecycleRules.MyCampExchangeFailed)).ConfigureAwait(false);
             return;
         }
         if (!owned || _myCamp.BulkDeleteItems(request.Entries.Select(entry => entry.ItemUid)) != request.Entries.Count)
@@ -142,10 +154,17 @@ internal sealed class RecycleController
     public async Task RecycleItemsAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)
     {
         ArgumentNullException.ThrowIfNull(player);
-        if (player.Recycle != RecycleKind.Inventory || player.Character is not { } character) return;
+        if (player.Character is not { } character) return;
+        if (player.Recycle != RecycleKind.Inventory)
+        {
+            Log(player, "item recycle without an open window");
+            await SendAsync(player, Opcode.S2C_RECYCLE_ITEMS_RESULT, RecycleFrames.ItemsRefused()).ConfigureAwait(false);
+            return;
+        }
         if (!RecycleFrames.TryReadItems(payload.Span, out var request))
         {
             Log(player, $"item recycle of {payload.Length} bytes not read");
+            await SendAsync(player, Opcode.S2C_RECYCLE_ITEMS_RESULT, RecycleFrames.ItemsRefused()).ConfigureAwait(false);
             return;
         }
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
@@ -169,6 +188,7 @@ internal sealed class RecycleController
             if (type is null || !shop.TryGetValue(type.Value, out var row) || row.CouponCount <= 0)
             {
                 Log(player, $"item {held.ItemIndex} cannot be recycled (type {type?.ToString() ?? "none"})");
+                await SendAsync(player, Opcode.S2C_RECYCLE_ITEMS_RESULT, RecycleFrames.ItemsRefused()).ConfigureAwait(false);
                 return;
             }
             coupons += row.CouponCount;
@@ -234,10 +254,17 @@ internal sealed class RecycleController
     public async Task ExchangeCouponsAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)
     {
         ArgumentNullException.ThrowIfNull(player);
-        if (player.Recycle != RecycleKind.CouponExchange || player.Character is not { } character) return;
+        if (player.Character is not { } character) return;
+        if (player.Recycle != RecycleKind.CouponExchange)
+        {
+            Log(player, "coupon exchange without an open window");
+            await SendAsync(player, Opcode.S2C_RECYCLE_COUPON_EXCHANGED, RecycleFrames.CouponExchangeRefused()).ConfigureAwait(false);
+            return;
+        }
         if (!RecycleFrames.TryReadCouponExchange(payload.Span, out var request))
         {
             Log(player, $"coupon exchange of {payload.Length} bytes not read");
+            await SendAsync(player, Opcode.S2C_RECYCLE_COUPON_EXCHANGED, RecycleFrames.CouponExchangeRefused()).ConfigureAwait(false);
             return;
         }
         _changes().TryGetValue((int)request.ResultItemId, out var row);
@@ -250,6 +277,7 @@ internal sealed class RecycleController
         if (refusal is not null || source is null || row is null)
         {
             Log(player, $"coupon exchange refused: {refusal} (item {request.SourceItemId} x{request.SourceCount} for {request.ResultItemId})");
+            await SendAsync(player, Opcode.S2C_RECYCLE_COUPON_EXCHANGED, RecycleFrames.CouponExchangeRefused()).ConfigureAwait(false);
             return;
         }
         var operations = new List<BagOperation>(2);

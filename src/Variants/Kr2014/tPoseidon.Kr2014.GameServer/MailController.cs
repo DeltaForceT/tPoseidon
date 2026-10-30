@@ -262,7 +262,7 @@ internal sealed class MailController
                 item.Change == PostItemChange.Stacked ? QuestResultFrames.StackChanged : QuestResultFrames.Created,
                 item.ItemClass, (uint)item.ItemIndex, BagItemIds.OnWire(item.ItemUid), item.Total, item.ItemSlot)).ToList();
             player.Mail.Box[postUid] = row with { PostState = PostRules.Read };
-            await SendAsync(player, PostFrames.Taken, PostFrames.TakenBody(postUid, operations)).ConfigureAwait(false);
+            await SendAsync(player, PostFrames.Taken, PostFrames.TakenBody(postUid, operations, TrackTimed(player, operations))).ConfigureAwait(false);
             Console.WriteLine($"{_logTag} [mail] 0x{player.PlayerEntityId:X4} takes post {postUid}: {operations.Count} items, money {received.MoneyChange:+#;-#;0}");
         }
         finally
@@ -270,6 +270,18 @@ internal sealed class MailController
             Volatile.Write(ref player.Mail.Busy, 0);
         }
         await SyncAsync(player).ConfigureAwait(false);
+    }
+
+    private Dictionary<ulong, DateTimeOffset> TrackTimed(InGameSessionState player, IReadOnlyList<BagOperation> operations)
+    {
+        var expiries = new Dictionary<ulong, DateTimeOffset>();
+        foreach (var operation in operations)
+        {
+            if (_items.FindByUid(BagItemIds.Stored(operation.ItemUid)) is not { } stored || !tPoseidon.Core.Game.Items.TimedItemRules.IsTimed(stored)) continue;
+            player.TimedItems.Track(new tPoseidon.Core.Game.Items.TimedItem(stored.ItemUid, stored.ItemIndex, stored.BreakedAt));
+            expiries[operation.ItemUid] = stored.BreakedAt;
+        }
+        return expiries;
     }
 
     private async Task TakeGiftAsync(InGameSessionState player, Character character, PostListRow row, IReadOnlyList<Item> bag)
@@ -295,7 +307,7 @@ internal sealed class MailController
         var operations = result.Value!.Select(item => new BagOperation(
             QuestResultFrames.Created, item.ItemClass, (uint)item.ItemIndex, BagItemIds.OnWire(item.ItemUid), item.Count)).ToList();
         player.Mail.Box[row.PostUid] = row with { PostState = PostRules.Read };
-        await SendAsync(player, PostFrames.Taken, PostFrames.TakenBody(row.PostUid, operations)).ConfigureAwait(false);
+        await SendAsync(player, PostFrames.Taken, PostFrames.TakenBody(row.PostUid, operations, TrackTimed(player, operations))).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [mail] 0x{player.PlayerEntityId:X4} takes gift {row.PostUid}: {operations.Count} items");
     }
 

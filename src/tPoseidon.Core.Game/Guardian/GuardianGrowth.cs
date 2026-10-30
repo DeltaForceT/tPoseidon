@@ -12,8 +12,17 @@ public static class GuardianGrowth
     public const short MaxLevel = 200;
     public const int MaxTableLevel = 400;
     public const int HitExpType = 1;
+    public const int ShadowKillExpType = 2;
+    public const float LowLevelMonsterFactor = 0.25f;
 
     public static int Gain(int baseExp, float ratio) => baseExp <= 0 ? 0 : (int)(baseExp * ratio);
+
+    public static int ShadowKillGain(int monsterMaxHp, int monsterLevel, int guardianLevel, float ratio)
+    {
+        if (monsterMaxHp <= 0 || guardianLevel <= 0) return 0;
+        var factor = monsterLevel < guardianLevel ? (float)monsterLevel / guardianLevel * LowLevelMonsterFactor : 1f;
+        return (int)(monsterMaxHp * factor * ratio);
+    }
 
     public static int Threshold(IReadOnlyDictionary<int, int> nextExpByLevel, int level)
     {

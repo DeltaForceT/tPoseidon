@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net.NetworkInformation;
 using Npgsql;
 using tPoseidon.Hosting.Processes;
 
@@ -8,48 +9,103 @@ public static class DatabaseBackup
 {
     private static readonly string[] PostgresAppBin = { "/Applications/Postgres.app/Contents/Versions/latest/bin" };
 
-    public static string LocatePgDump() =>
-        FindPgDump()
-        ?? throw new HostingException(
-            "pg_dump was not found.",
-            "It comes with PostgreSQL: add PostgreSQL's bin folder to PATH, or install the PostgreSQL client tools (see docs/install/postgresql.md).",
-            null);
+    public static BackupTool Locate(HostSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var target = TargetOf(settings);
+        var choice = BackupToolChooser.Choose(FindPgDump(), () => FindContainer(target));
+        return choice.Tool
+            ?? throw new HostingException(
+                "No way to back up the database was found.",
+                BackupToolChooser.NoToolHint(target.Host, target.Port, choice.Docker),
+                null);
+    }
 
     public static string RestoreHint(string backupFile) =>
         "Restore it into an empty database with: pg_restore --clean --if-exists -d <database> " + Path.GetFileName(backupFile);
 
-    public static string Run(InstallPaths paths, HostSettings settings, string pgDump)
+    public static string Run(InstallPaths paths, HostSettings settings, BackupTool tool)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(tool);
         Directory.CreateDirectory(paths.Backups);
         var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
         var target = Path.Combine(paths.Backups, $"tposeidon-{stamp}.dump");
-        var connection = new NpgsqlConnectionStringBuilder(settings.Database.Connection);
-        var arguments = new List<string>
-        {
-            "--format=custom",
-            "--file=" + target,
-            "--host=" + connection.Host,
-            "--port=" + connection.Port.ToString(CultureInfo.InvariantCulture),
-            "--username=" + connection.Username,
-            "--no-password",
-            connection.Database ?? throw new HostingException("The saved connection has no database name. Run tposeidon setup again."),
-        };
-        var environment = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (!string.IsNullOrEmpty(connection.Password))
-        {
-            environment["PGPASSWORD"] = connection.Password;
-        }
-
-        var result = ToolRunner.Capture(pgDump, arguments, environment);
+        var source = TargetOf(settings);
+        var environment = BackupArguments.Environment(source);
+        var result = tool.Container is { } endpoint
+            ? Stream(tool.Executable, BackupArguments.Container(source, endpoint), environment, target)
+            : ToolRunner.Capture(tool.Executable, BackupArguments.Local(source, target), environment);
         if (result.ExitCode != 0)
         {
             throw new HostingException($"pg_dump failed (exit {result.ExitCode}).", result.Output, null);
         }
 
+        SigningKeyStore.BackupTo(paths, target);
         return target;
     }
+
+    private static ToolResult Stream(string executable, IReadOnlyList<string> arguments, IReadOnlyDictionary<string, string> environment, string file)
+    {
+        ToolResult result;
+        using (var output = File.Create(file))
+        {
+            result = ToolRunner.CaptureTo(executable, arguments, environment, output);
+        }
+
+        if (result.ExitCode != 0)
+        {
+            File.Delete(file);
+        }
+
+        return result;
+    }
+
+    private static BackupTarget TargetOf(HostSettings settings)
+    {
+        var connection = new NpgsqlConnectionStringBuilder(settings.Database.Connection);
+        return new BackupTarget(
+            connection.Host ?? "",
+            connection.Port,
+            connection.Username ?? "",
+            connection.Database ?? throw new HostingException("The saved connection has no database name. Run tposeidon setup again."),
+            connection.Password);
+    }
+
+    private static DockerLookup FindContainer(BackupTarget target)
+    {
+        var docker = ToolRunner.FindOnPath("docker");
+        if (docker is null)
+        {
+            return DockerLookup.NotInstalled;
+        }
+
+        ToolResult listing;
+        try
+        {
+            listing = ToolRunner.Capture(docker, ["ps", "--format", DockerPorts.PsFormat]);
+        }
+        catch (HostingException ex)
+        {
+            return DockerLookup.Unavailable(docker, ex.Summary);
+        }
+
+        if (listing.ExitCode != 0)
+        {
+            return DockerLookup.Unavailable(docker, listing.Output);
+        }
+
+        return DockerPorts.Find(listing.Output, target.Host, target.Port, LocalAddresses()) is { } endpoint
+            ? DockerLookup.Match(docker, endpoint)
+            : DockerLookup.NoMatch(docker);
+    }
+
+    private static List<string> LocalAddresses() =>
+        NetworkInterface.GetAllNetworkInterfaces()
+            .SelectMany(adapter => adapter.GetIPProperties().UnicastAddresses)
+            .Select(address => address.Address.ToString())
+            .ToList();
 
     public static string? FindPgDump()
     {

@@ -15,4 +15,7 @@ public readonly record struct PlayerStrike(
     DateTimeOffset NextSwingAtUtc,
     int MonsterParamId,
     long MobMaxHp,
-    long MobHpBefore = 0);
+    long MobHpBefore = 0,
+    int ElementMask = 0,
+    ushort MobBars = 0,
+    bool MobBoss = false);

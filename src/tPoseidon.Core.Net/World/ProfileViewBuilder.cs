@@ -9,9 +9,12 @@ public sealed record ProfileGear(
     IReadOnlyList<int> Table,
     IReadOnlyList<short> Points,
     IReadOnlyList<int> Resists,
-    IReadOnlyList<ProfileViewWorn> Worn)
+    IReadOnlyList<ProfileViewWorn> Worn,
+    IReadOnlyList<int>? AbilityShares = null)
 {
     public static ProfileGear Empty { get; } = new([], [], [], [], []);
+
+    public int AbilityShareOf(int stat) => AbilityShares is { } shares && stat < shares.Count ? shares[stat] : 0;
 }
 
 public sealed record ProfileSource(
@@ -55,7 +58,7 @@ public static class ProfileViewBuilder
     {
         var gear = source.Gear;
         var totals = gear.Totals.Select(ProfileViewRules.Total).ToArray();
-        var bonuses = gear.Totals.Select((total, stat) => ProfileViewRules.Bonus(total, gear.Table[stat])).ToArray();
+        var bonuses = gear.Totals.Select((total, stat) => ProfileViewRules.Bonus(total, gear.Table[stat], gear.AbilityShareOf(stat))).ToArray();
         var levels = gear.Points.Select(points => ProfileViewRules.StatLevelOf(points)).ToArray();
         var remainders = gear.Points.Select(points => ProfileViewRules.RemainderOf(points)).ToArray();
         var resists = gear.Resists.Select(resist => (short)Math.Clamp(resist, short.MinValue, short.MaxValue)).ToArray();

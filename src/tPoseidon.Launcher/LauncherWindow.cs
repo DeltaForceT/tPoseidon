@@ -36,6 +36,7 @@ public sealed class LauncherWindow : Window
     private readonly Button _importServer = Small("Import file...");
     private readonly Button _removeServer = Small("Remove");
     private readonly Button _undo = Small("Undo last update");
+    private readonly Button _goBack = Small("Go back to the earlier launcher");
     private readonly StackPanel _addForm = new() { Spacing = 8, IsVisible = false };
     private readonly TextBox _newName = Field("Name (optional)");
     private readonly TextBox _newAddress = Field("Server address, for example 203.0.113.7");
@@ -68,6 +69,7 @@ public sealed class LauncherWindow : Window
     private readonly TextBlock _serverNote = new() { Foreground = Tokens.TextSecondary, TextWrapping = TextWrapping.Wrap, MaxWidth = 520 };
     private readonly Ellipse _statusDot = new() { Width = 9, Height = 9, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _statusText = new() { FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _trustText = new() { VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
     private readonly StackPanel _news = new() { Spacing = 8 };
     private readonly Image _headerLogo = new() { Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center };
     private bool _loading;
@@ -149,6 +151,8 @@ public sealed class LauncherWindow : Window
 
     internal Button UndoButton => _undo;
 
+    internal Button GoBackButton => _goBack;
+
     internal Button SettingsButton => _settingsButton;
 
     internal TextBox AccountBox => _account;
@@ -183,6 +187,8 @@ public sealed class LauncherWindow : Window
 
     internal TextBlock StatusText => _statusText;
 
+    internal TextBlock TrustText => _trustText;
+
     internal Ellipse StatusDot => _statusDot;
 
     internal StackPanel NewsList => _news;
@@ -193,6 +199,16 @@ public sealed class LauncherWindow : Window
 
     internal async Task PrimaryAsync()
     {
+        if (_model.LauncherUpdate == LauncherUpdateState.Ready)
+        {
+            if (_model.RestartForLauncherUpdate())
+            {
+                Close();
+            }
+
+            return;
+        }
+
         switch (_model.Session)
         {
             case SessionState.SignedOut:
@@ -262,6 +278,20 @@ public sealed class LauncherWindow : Window
 
     private static IBrush TextOn(Color c) =>
         (0.299 * c.R) + (0.587 * c.G) + (0.114 * c.B) > 150 ? Tokens.OnAccent : Brushes.White;
+
+    private void ShowTrust()
+    {
+        var shown = !_model.Locked && _model.Trust != ChannelTrust.Unknown;
+        _trustText.IsVisible = shown;
+        if (!shown)
+        {
+            return;
+        }
+
+        var signed = _model.Trust == ChannelTrust.Verified;
+        _trustText.Text = signed ? "Signed updates" : "Unsigned updates";
+        _trustText.Foreground = signed ? Tokens.Success : Tokens.Warning;
+    }
 
     private static string StatusLabel(ChannelStatus status) => status switch
     {
@@ -347,6 +377,7 @@ public sealed class LauncherWindow : Window
         var status = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         status.Children.Add(_statusDot);
         status.Children.Add(_statusText);
+        status.Children.Add(_trustText);
         overlay.Children.Add(status);
         overlay.Children.Add(_serverNote);
 
@@ -439,6 +470,11 @@ public sealed class LauncherWindow : Window
             card.Children.Add(Section("Updates"));
             card.Children.Add(Row(Tokens.Caption("Put back the files the last update replaced."), _undo));
         }
+        else
+        {
+            card.Children.Add(Section("Launcher"));
+            card.Children.Add(Row(Tokens.Caption("Install the launcher version that was here before the last update."), _goBack));
+        }
 
         card.Children.Add(_options);
         card.Children.Add(close);
@@ -513,6 +549,13 @@ public sealed class LauncherWindow : Window
             if (_model.UndoLastUpdate())
             {
                 await RefreshChannelAsync().ConfigureAwait(true);
+            }
+        };
+        _goBack.Click += (_, _) =>
+        {
+            if (_model.GoBackToEarlierLauncher())
+            {
+                Close();
             }
         };
         _play.Click += async (_, _) => await PrimaryAsync().ConfigureAwait(true);
@@ -610,6 +653,7 @@ public sealed class LauncherWindow : Window
         _statusDot.Fill = StatusBrush(_model.Status);
         _statusText.Text = StatusLabel(_model.Status);
         _statusText.Foreground = StatusBrush(_model.Status);
+        ShowTrust();
         var onAccent = TextOn(color);
         foreach (var (key, brush) in new (string, IBrush)[] { ("ButtonBackground", accent), ("ButtonBackgroundPointerOver", new SolidColorBrush(Blend(color, Colors.White, 0.18))), ("ButtonBackgroundPressed", accent), ("ButtonBackgroundDisabled", Tokens.Surface3) })
         {
@@ -750,9 +794,11 @@ public sealed class LauncherWindow : Window
             _account.Text = _model.Account;
         }
 
-        _signIn.IsEnabled = !_model.NeedsSetup && _model.Session == SessionState.SignedOut;
-        _play.IsEnabled = !_model.Busy && !_model.NeedsSetup && _model.Status != ChannelStatus.Maintenance;
-        _play.Content = _model.Session switch
+        var restartNeeded = _model.LauncherUpdate == LauncherUpdateState.Ready;
+        _signIn.IsEnabled = !_model.NeedsSetup && _model.Session == SessionState.SignedOut && !restartNeeded;
+        _play.IsEnabled = !_model.Busy && (restartNeeded || (!_model.NeedsSetup && _model.Status != ChannelStatus.Maintenance));
+        _goBack.IsEnabled = _model.CanGoBackToEarlierLauncher;
+        _play.Content = restartNeeded ? "Restart to update" : _model.Session switch
         {
             SessionState.Working => "Please wait...",
             SessionState.UpdateFailed => "Retry",

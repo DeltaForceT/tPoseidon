@@ -17,6 +17,26 @@ public sealed class PostgresCashShopStore : ICashShopStore
         return LoadGoods(conn, null, goodsCode);
     }
 
+    public short? ShopPeriodHours(int itemIndex)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand(
+            """
+            SELECT l.limit_use
+            FROM shop_goods_item i
+            JOIN shop_goods g ON g.goods_code = i.goods_code AND g.goods_issell
+            JOIN shop_goods_limit gl ON gl.goods_code = i.goods_code
+            JOIN shop_limit l ON l.limit_code = gl.limit_code AND l.limit_flag = @flag AND l.limit_use > 0
+            WHERE i.item_index = @item
+            ORDER BY gl.default_display DESC, g.goods_code, gl.limit_code
+            LIMIT 1
+            """,
+            conn);
+        cmd.Parameters.AddWithValue("flag", (short)ChargedItemRules.TimedFlag);
+        cmd.Parameters.AddWithValue("item", itemIndex);
+        return cmd.ExecuteScalar() is short hours ? hours : null;
+    }
+
     public long Balance(uint accountId, long startingBalance)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();

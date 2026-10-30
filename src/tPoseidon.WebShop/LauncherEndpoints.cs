@@ -9,6 +9,8 @@ public sealed class LauncherEndpoints
     public const string UpdatesVariable = "MT_UPDATES_DIR";
     public const string ManifestPath = "/launcher/manifest.json";
     public const string FilesPrefix = "/launcher/files/";
+    public const string SignaturePath = "/launcher/manifest.sig";
+    public const string LauncherFilesPrefix = "/launcher/launcher-files/";
     public const string BannerPath = "/launcher/banner";
     public const string NewsPicturePrefix = "/launcher/news-picture/";
 
@@ -33,6 +35,20 @@ public sealed class LauncherEndpoints
         context.Response.Headers.CacheControl = "no-cache";
         context.Response.ContentType = "application/json";
         await context.Response.Body.WriteAsync(manifest.Json, context.RequestAborted).ConfigureAwait(false);
+    }
+
+    public async Task SignatureAsync(HttpContext context)
+    {
+        var path = _updates is null ? null : Path.Combine(_updates, ManifestSignature.SignatureFile);
+        if (path is null || !File.Exists(path))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        context.Response.Headers.CacheControl = "no-cache";
+        context.Response.ContentType = "application/json";
+        await context.Response.SendFileAsync(path, context.RequestAborted).ConfigureAwait(false);
     }
 
     public async Task BannerAsync(HttpContext context)
@@ -75,7 +91,15 @@ public sealed class LauncherEndpoints
         await context.Response.SendFileAsync(path, context.RequestAborted).ConfigureAwait(false);
     }
 
-    public async Task FileAsync(HttpContext context, string relative)
+    public Task FileAsync(HttpContext context, string relative) =>
+        ServeAsync(context, relative, manifest => manifest.Files, file => file.Group is null
+            ? Path.Combine(_updates!, ManifestBuilder.ClientFolder)
+            : Path.Combine(_updates!, ManifestBuilder.PacksFolder, file.Group));
+
+    public Task LauncherFileAsync(HttpContext context, string relative) =>
+        ServeAsync(context, relative, manifest => manifest.Launcher?.Files ?? [], _ => Path.Combine(_updates!, ManifestBuilder.LauncherFolder));
+
+    private async Task ServeAsync(HttpContext context, string relative, Func<LauncherManifest, IReadOnlyList<ManifestFile>> list, Func<ManifestFile, string> sourceOf)
     {
         if (_updates is null || !ClientPath.TryNormalize(relative, out var normalized))
         {
@@ -83,17 +107,14 @@ public sealed class LauncherEndpoints
             return;
         }
 
-        var listed = LoadManifest()?.Manifest.Files.FirstOrDefault(file => string.Equals(file.Path, normalized, StringComparison.Ordinal));
+        var listed = LoadManifest() is { } loaded ? list(loaded.Manifest).FirstOrDefault(file => string.Equals(file.Path, normalized, StringComparison.Ordinal)) : null;
         if (listed is null)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
 
-        var source = listed.Group is null
-            ? Path.Combine(_updates, ManifestBuilder.ClientFolder)
-            : Path.Combine(_updates, ManifestBuilder.PacksFolder, listed.Group);
-        var path = ClientPath.Resolve(source, listed.Path);
+        var path = ClientPath.Resolve(sourceOf(listed), listed.Path);
         var info = new FileInfo(path);
         if (!info.Exists)
         {

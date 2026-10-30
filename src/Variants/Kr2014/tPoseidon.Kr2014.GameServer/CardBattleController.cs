@@ -116,20 +116,21 @@ internal sealed class CardBattleController : IDisposable
             Console.WriteLine($"{_logTag} [cardbattle] 0x{winner.PlayerEntityId:X4} cannot take {string.Join(", ", taken)} from 0x{opponent.PlayerEntityId:X4}: bag full");
             return false;
         }
+        var gained = new List<BagOperation>(taken.Count);
+        var lost = new List<BagOperation>(taken.Count);
         foreach (var itemId in taken)
         {
-            foreach (var removal in Take(opponent.Character!.CharacterId, itemId))
-            {
-                await SendAsync(opponent, Opcode.S2C_ITEM_OPERATION, QuestResultFrames.ItemOperation(removal)).ConfigureAwait(false);
-            }
+            lost.AddRange(Take(opponent.Character!.CharacterId, itemId));
             Console.WriteLine($"{_logTag} [cardbattle] 0x{opponent.PlayerEntityId:X4} loses card {itemId}");
             if (status.OverDistance) continue;
             if (Grant(winner.Character!.CharacterId, itemId) is { } change)
             {
-                await SendAsync(winner, Opcode.S2C_ITEM_OPERATION, QuestResultFrames.ItemOperation(change)).ConfigureAwait(false);
+                gained.Add(change);
                 Console.WriteLine($"{_logTag} [cardbattle] 0x{winner.PlayerEntityId:X4} takes card {itemId} from 0x{opponent.PlayerEntityId:X4}");
             }
         }
+        await SendAsync(winner, Opcode.S2C_CARD_SNATCH_GAINED, CardBattleFrames.SnatchOperations(gained)).ConfigureAwait(false);
+        await SendAsync(opponent, Opcode.S2C_CARD_SNATCH_LOST, CardBattleFrames.SnatchOperations(lost)).ConfigureAwait(false);
         return true;
     }
 

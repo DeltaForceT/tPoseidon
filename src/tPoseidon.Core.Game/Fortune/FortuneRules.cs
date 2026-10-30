@@ -52,6 +52,8 @@ public static class FortuneRules
         ["HV"] = 11,
     };
 
+    public static bool TryGetStatSlot(string name, out int slot) => StatSlotByName.TryGetValue(name, out slot);
+
     public static FortuneBonus Parse(string award)
     {
         ArgumentNullException.ThrowIfNull(award);

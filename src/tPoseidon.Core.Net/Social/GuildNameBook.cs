@@ -1,4 +1,5 @@
 using System.Text;
+using tPoseidon.Core.Data;
 
 namespace tPoseidon.Core.Net.Social;
 
@@ -13,13 +14,12 @@ public sealed class GuildNameBook
         link.OrderReceived += ApplyAsync;
     }
 
-    public event Func<ulong, string, string, Task>? Changed;
+    public event Func<ulong, GuildTag, Task>? Changed;
 
     public Task ApplyAsync(OfficerOrder order, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(order);
         if (order.OrderType != SystemLinkFrames.OrderGuildName || Changed is not { } changed) return Task.CompletedTask;
-        var (guildName, alias) = GuildFrames.ReadNameOrder(order.Data, _text);
-        return changed(order.CharacterId, guildName, alias);
+        return changed(order.CharacterId, GuildFrames.ReadNameOrder(order.Data, _text));
     }
 }

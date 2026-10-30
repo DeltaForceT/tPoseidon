@@ -24,6 +24,15 @@ public sealed class MonsterEntity
     private ushort _curY;
 
     public const int StatCount = 12;
+    public const int FullStatPercent = 100;
+
+    private int _statScalePercent = FullStatPercent;
+
+    public int StatScalePercent
+    {
+        get => Volatile.Read(ref _statScalePercent);
+        set => Volatile.Write(ref _statScalePercent, value);
+    }
 
     private int[] _statDeltas = new int[StatCount];
 
@@ -44,10 +53,12 @@ public sealed class MonsterEntity
     public required ushort SpawnY { get; init; }
     public required long MaxHp { get; init; }
     public Func<long>? DamageLimit { get; init; }
+    public IMonsterDamageObserver? DamageObserver { get; init; }
     public required int Level { get; init; }
 
     public ushort SpawnPointId { get; init; }
     public int RegionId { get; init; }
+    public ushort InstanceKey { get; init; }
     public bool IsBoss { get; init; }
     public MonsterAType Atype { get; init; } = MonsterAType.HarconMonster;
     public int AiViewRange { get; init; }
@@ -305,6 +316,9 @@ public sealed class MonsterEntity
 
     public const ushort NoOwner = 0;
 
+    public byte PvpMode { get; set; }
+
+    private readonly Dictionary<ushort, long> _damageByAttacker = new();
     private ushort _ownerEntityId;
     private long _hpWhenOwned;
 
@@ -327,6 +341,27 @@ public sealed class MonsterEntity
         }
     }
 
+    public void RecordDamage(ushort attackerEntityId, long amount)
+    {
+        if (amount <= 0) return;
+        lock (_lock)
+        {
+            _damageByAttacker[attackerEntityId] = _damageByAttacker.GetValueOrDefault(attackerEntityId) + amount;
+        }
+    }
+
+    public IReadOnlyList<ushort> TopAttackers(int most)
+    {
+        lock (_lock)
+        {
+            return _damageByAttacker
+                .OrderByDescending(entry => entry.Value)
+                .Take(most)
+                .Select(entry => entry.Key)
+                .ToArray();
+        }
+    }
+
     public bool ReleaseOwner(ushort ownerEntityId)
     {
         lock (_lock)
@@ -339,7 +374,53 @@ public sealed class MonsterEntity
 
     public bool IsDead
     {
-        get { lock (_lock) return _hp <= 0; }
+        get { lock (_lock) return DeadLocked; }
+    }
+
+    public BossLife? Boss { get; private set; }
+
+    public ushort HpBarsField => (ushort)(Boss?.BarsLeft ?? 0);
+
+    public void AttachBoss(BossLifeProfile profile, BossEventOutbox events, Func<int, int> elementCodeOf)
+    {
+        ArgumentNullException.ThrowIfNull(elementCodeOf);
+        Boss = new BossLife(profile, events, (index, amount) => AddResistLoss(elementCodeOf(index), -amount));
+    }
+
+    public void RecordElementDamage(int elementIndex, long damage)
+    {
+        lock (_lock) Boss?.RecordElementDamage(elementIndex, damage);
+    }
+
+    public bool TickBoss(long nowMs, int elapsedMs, bool engaged, int mapMonsterCount, int childCount, bool evenRoll)
+    {
+        lock (_lock)
+        {
+            if (Boss is not { } boss) return false;
+            boss.RefillWhenIdle(elapsedMs, engaged);
+            return boss.TickSummon(this, nowMs, elapsedMs, engaged, mapMonsterCount, childCount, evenRoll);
+        }
+    }
+
+    public bool Guarded
+    {
+        get { lock (_lock) return Boss?.Guarded ?? false; }
+    }
+
+    public void TickBossTimers(int elapsedMs, bool engaged, bool castsSkills, Func<int> roll)
+    {
+        ArgumentNullException.ThrowIfNull(roll);
+        lock (_lock) Boss?.TickTimers(this, elapsedMs, engaged, _hp < MaxHp, castsSkills, roll);
+    }
+
+    private bool DeadLocked => _hp <= 0 && (Boss?.Exhausted ?? true);
+
+    private long ApplyBossDamage(BossLife boss, long amount)
+    {
+        var actual = Math.Min(amount, _hp + boss.BarsLeft * MaxHp);
+        boss.Absorb(ref _hp, MaxHp, actual, this);
+        if (DeadLocked) boss.ReportDeath(this);
+        return actual;
     }
 
     public void InitHp(long initialHp)
@@ -360,12 +441,32 @@ public sealed class MonsterEntity
     {
         if (amount <= 0) return 0;
         if (DamageLimit is { } limit) amount = Math.Min(amount, limit());
+        long actual;
+        lock (_lock)
+        {
+            if (DeadLocked) return 0;
+            if (Boss is { } boss)
+            {
+                if (boss.Guarded) return 0;
+                actual = ApplyBossDamage(boss, amount);
+            }
+            else
+            {
+                actual = Math.Min(amount, _hp);
+                _hp -= actual;
+            }
+        }
+        DamageObserver?.Damaged(this, actual);
+        return actual;
+    }
+
+    public long Heal(long amount)
+    {
         lock (_lock)
         {
             if (_hp <= 0) return 0;
-            var actual = Math.Min(amount, _hp);
-            _hp -= actual;
-            return actual;
+            _hp = Math.Min(_hp + amount, MaxHp);
+            return _hp;
         }
     }
 }

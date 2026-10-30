@@ -1,7 +1,9 @@
 namespace tPoseidon.Core.LibConfig;
 
-public readonly record struct MapKindEntry(int Id, int Type, int Class, int Option = 0)
+public readonly record struct MapKindEntry(int Id, int Type, int Class, int Option = 0, int ParallelZoneType = 0, int WorldMapRegion = 0)
 {
+    public const int PerPlayerInstanceZoneType = 1;
+
     public const int TownType = 1;
     public const int SecondReturnType = 2;
     public const int NoReturnClass = 3;
@@ -17,6 +19,8 @@ public readonly record struct MapKindEntry(int Id, int Type, int Class, int Opti
     public bool IsReturnMapAtLogin => (Type == TownType || Type == SecondReturnType) && Class != NoReturnClass;
 
     public bool IsReturnMapOnArrival => IsReturnMapAtLogin && Class != NoReturnOnArrivalClass;
+
+    public bool IsPerPlayerInstance => ParallelZoneType == PerPlayerInstanceZoneType;
 
     public bool AllowsLoverMove => Class != NoLoverMoveClass && (Option & NoLoverMoveOption) == 0;
 

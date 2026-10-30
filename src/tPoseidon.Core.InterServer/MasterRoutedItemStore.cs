@@ -278,6 +278,28 @@ public sealed class MasterRoutedItemStore : IItemStore
         }
     }
 
+    public bool SetBreakedAt(ulong itemUid, DateTimeOffset breakedAt)
+    {
+        try
+        {
+            var w = new PacketWriter(16);
+            w.WriteUInt64(itemUid);
+            w.WriteInt64(breakedAt.UtcTicks);
+            var reply = Invoke(0, ItemStoreSubOp.SetBreakedAt, w.ToArray(), out var ok);
+            if (!ok)
+            {
+                _log($"item SetBreakedAt item 0x{itemUid:X16}: master CANCEL; using local fallback");
+                return _fallback.SetBreakedAt(itemUid, breakedAt);
+            }
+            return reply.Length > 0 && reply[0] == 1;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log($"item SetBreakedAt item 0x{itemUid:X16}: master failed ({ex.GetType().Name}); using local fallback");
+            return _fallback.SetBreakedAt(itemUid, breakedAt);
+        }
+    }
+
     private byte[] Invoke(ulong charUid, ItemStoreSubOp subOp, byte[] body, out bool ok)
     {
         if (!_client.IsConnected)

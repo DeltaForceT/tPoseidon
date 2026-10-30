@@ -585,7 +585,7 @@ public sealed class PartyService
         return outbox;
     }
 
-    public PartyOutbox SetMemberFlag(ulong characterId, ulong subjectCharacterId, bool raised)
+    public PartyOutbox SetMemberFlag(ulong characterId, ulong subjectCharacterId, bool raised, bool second = false)
     {
         var outbox = new PartyOutbox();
         lock (_gate)
@@ -593,8 +593,15 @@ public sealed class PartyService
             if (subjectCharacterId == 0) return outbox;
             if (!_online.TryGetValue(characterId, out var member) || member.Party is not { } party) return outbox;
             var subject = party.Online.Find(m => m.CharacterId == subjectCharacterId);
-            Broadcast(outbox, party, raised ? PartyFrames.MemberFlagRaised : PartyFrames.MemberFlagCleared,
-                PartyFrames.MemberFlagFor(raised, subjectCharacterId), except: subject);
+            var opcode = (raised, second) switch
+            {
+                (true, false) => PartyFrames.MemberFlagRaised,
+                (false, false) => PartyFrames.MemberFlagCleared,
+                (true, true) => PartyFrames.MemberSecondFlagRaised,
+                (false, true) => PartyFrames.MemberSecondFlagCleared,
+            };
+            Broadcast(outbox, party, opcode, PartyFrames.MemberFlagFor(raised, subjectCharacterId), except: subject);
+            if (!raised && subject is not null) EnterZone(outbox, subject, subject.Zone);
         }
         return outbox;
     }
@@ -948,20 +955,27 @@ public sealed class PartyService
         {
             _zones[characterId] = zone;
             if (!_online.TryGetValue(characterId, out var member)) return outbox;
-            member.Zone = zone;
-            if (member.Party is not { } party) return outbox;
-            Broadcast(outbox, party, PartyFrames.MemberZone, PartyFrames.ZoneFor(member.MemberId, zone), except: null);
-            outbox.Order(new PartyOrder(member.CharacterId, SystemLinkFrames.OrderNotifyPartyPlayer, party.Id, MirrorFor(party, member)));
-            if (party.Quest is { } quest && quest.Members.Find(m => m.CharacterId == member.CharacterId) is { } runner)
-            {
-                outbox.Order(new PartyOrder(member.CharacterId, SystemLinkFrames.OrderRecoverQuest, party.Id, SystemLinkFrames.EncodeQuestRecovery(new PartyQuestRecovery(
-                    member.CharacterId, quest.PartyUid, quest.QuestId, quest.MonsterId, quest.TeamKills, quest.TargetCount,
-                    quest.StartMs, quest.LimitMs, runner.CompletionCount, quest.Members.Select(m => (m.CharacterId, m.Kills)).ToArray()))));
-                outbox.Order(TallyOrder(party, quest, member.CharacterId));
-            }
-            RecomputeShare(outbox, party);
+            EnterZone(outbox, member, zone);
         }
         return outbox;
+    }
+
+    private static void EnterZone(PartyOutbox outbox, Member member, ushort zone)
+    {
+        member.Zone = zone;
+        member.Dead = false;
+        if (member.Party is not { } party) return;
+        Broadcast(outbox, party, PartyFrames.MemberZone, PartyFrames.ZoneFor(member.MemberId, zone), except: null);
+        outbox.Order(new PartyOrder(member.CharacterId, SystemLinkFrames.OrderNotifyPartyPlayer, party.Id, MirrorFor(party, member)));
+        if (party.Quest is { } quest && quest.Members.Find(m => m.CharacterId == member.CharacterId) is { } runner)
+        {
+            outbox.Order(new PartyOrder(member.CharacterId, SystemLinkFrames.OrderRecoverQuest, party.Id, SystemLinkFrames.EncodeQuestRecovery(new PartyQuestRecovery(
+                member.CharacterId, quest.PartyUid, quest.QuestId, quest.MonsterId, quest.TeamKills, quest.TargetCount,
+                quest.StartMs, quest.LimitMs, runner.CompletionCount, quest.Members.Select(m => (m.CharacterId, m.Kills)).ToArray()))));
+            outbox.Order(TallyOrder(party, quest, member.CharacterId));
+        }
+        RefreshObserve(outbox, party);
+        RecomputeShare(outbox, party);
     }
 
     public PartyOutbox ZoneLeft(ulong characterId)
@@ -1056,6 +1070,20 @@ public sealed class PartyService
         return outbox;
     }
 
+    public PartyOutbox LevelChanged(ulong characterId, uint level)
+    {
+        var outbox = new PartyOutbox();
+        lock (_gate)
+        {
+            if (!_online.TryGetValue(characterId, out var member) || member.Party is not { } party) return outbox;
+            member.Level = (ushort)level;
+            Recompute(outbox, party);
+            RecomputeShare(outbox, party);
+            Broadcast(outbox, party, PartyFrames.LevelChanged, PartyFrames.LevelChangedFor(member.MemberId, level), except: null);
+        }
+        return outbox;
+    }
+
     public PartyOutbox MemberRenamed(ulong characterId, string newName)
     {
         ArgumentNullException.ThrowIfNull(newName);
@@ -1078,7 +1106,11 @@ public sealed class PartyService
         {
             if (!_online.TryGetValue(characterId, out var member) || member.Dead == dead) return outbox;
             member.Dead = dead;
-            if (member.Party is { } party) RecomputeShare(outbox, party);
+            if (member.Party is { } party)
+            {
+                if (!dead) RefreshObserve(outbox, party);
+                RecomputeShare(outbox, party);
+            }
         }
         return outbox;
     }
@@ -1132,6 +1164,22 @@ public sealed class PartyService
             {
                 outbox.Add(new PartyMessage(member.CharacterId, PartyFrames.PartyBonus, PartyBonusTables.BonusFor(type, expBonus)));
             }
+        }
+    }
+
+    private static void RefreshObserve(PartyOutbox outbox, Party party)
+    {
+        foreach (var member in party.Online)
+        {
+            var others = party.Online
+                .Where(other => other.MemberId != member.MemberId && other.Zone == member.Zone)
+                .Select(other => new PartyMirrorEntry(other.CharacterId, other.MemberId))
+                .Take(SystemLinkFrames.MirrorSlots)
+                .ToArray();
+            var data = others.Length == 0
+                ? null
+                : SystemLinkFrames.EncodeObserve(new PartyObserve(member.MemberId, others));
+            outbox.Order(new PartyOrder(member.CharacterId, SystemLinkFrames.OrderObserve, party.Id, data));
         }
     }
 

@@ -21,7 +21,7 @@ public static class GuildMatchOutcome
     public const byte Disconnect = 4;
 }
 
-public sealed record GuildMatchSideRecord(uint GuildCode, byte JoinUsers, byte Kills, byte Deaths, short GetLadder, int TotalLadder, int GuildValue, byte Outcome);
+public sealed record GuildMatchSideRecord(uint GuildCode, byte JoinUsers, byte Kills, byte Deaths, short GetLadder, int TotalLadder, int GuildValue, byte Outcome, int GuildCoins);
 
 public sealed record GuildMatchRecord(
     DateTimeOffset Begin,
@@ -33,6 +33,27 @@ public sealed record GuildMatchRecord(
     short EtcNum,
     GuildMatchSideRecord Make,
     GuildMatchSideRecord Challenge);
+
+public static class GuildCoinRules
+{
+    public const string PerWinVariable = "MT_GUILD_COINS_PER_WIN";
+    public const int DefaultPerWin = 100;
+    public const int MaxPerWin = 100_000;
+
+    public static int Award(byte outcome, int coinsPerWin) => outcome == GuildMatchOutcome.Win ? coinsPerWin : 0;
+
+    public static bool IsValid(int coinsPerWin) => coinsPerWin is >= 0 and <= MaxPerWin;
+
+    public static int FromEnvironment(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return DefaultPerWin;
+        if (!int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var coins) || !IsValid(coins))
+        {
+            throw new InvalidOperationException($"{PerWinVariable} must be a whole number from 0 to {MaxPerWin} (got '{value}').");
+        }
+        return coins;
+    }
+}
 
 public static class GuildMatchStoreErrors
 {

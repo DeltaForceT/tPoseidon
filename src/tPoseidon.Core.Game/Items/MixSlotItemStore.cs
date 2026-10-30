@@ -51,4 +51,6 @@ public sealed class MixSlotItemStore : IItemStore
     public ushort AdjustStack(ulong itemUid, int delta) => _inner.AdjustStack(itemUid, delta);
 
     public bool SetStack(ulong itemUid, ushort stack) => _inner.SetStack(itemUid, stack);
+
+    public bool SetBreakedAt(ulong itemUid, DateTimeOffset breakedAt) => _inner.SetBreakedAt(itemUid, breakedAt);
 }

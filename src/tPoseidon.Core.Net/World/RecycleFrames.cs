@@ -12,6 +12,8 @@ public static class RecycleFrames
     public const ushort Refused = 0;
     public const ushort ItemRefusalCode = 1;
     public const ushort ItemRefusalKind = 0;
+    public const ushort CouponExchangeRefusalCode = 1;
+    public const ushort CouponExchangeRefusalKind = 1;
     public const int ItemRequestHeaderSize = 8;
     public const int ItemEntrySize = 14;
     public const int MyCampEntrySize = 12;
@@ -95,6 +97,15 @@ public static class RecycleFrames
         w.WriteUInt16(Refused);
         w.WriteUInt16(ItemRefusalCode);
         w.WriteUInt16(ItemRefusalKind);
+        return w.ToArray();
+    }
+
+    public static byte[] CouponExchangeRefused()
+    {
+        var w = new PacketWriter(6);
+        w.WriteUInt16(Refused);
+        w.WriteUInt16(CouponExchangeRefusalCode);
+        w.WriteUInt16(CouponExchangeRefusalKind);
         return w.ToArray();
     }
 

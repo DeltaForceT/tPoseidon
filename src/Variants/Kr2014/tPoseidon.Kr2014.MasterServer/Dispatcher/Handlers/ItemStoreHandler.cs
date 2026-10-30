@@ -147,6 +147,16 @@ public sealed class ItemStoreHandler : IInterServerHandler
                 return payload.ToArray();
             }
 
+            case ItemStoreSubOp.SetBreakedAt:
+            {
+                var reader = new PacketReader(body);
+                var itemUid = reader.ReadUInt64();
+                var stored = _items.SetBreakedAt(itemUid, new DateTimeOffset(reader.ReadInt64(), TimeSpan.Zero));
+                var payload = new PacketWriter(1);
+                payload.WriteByte((byte)(stored ? 1 : 0));
+                return payload.ToArray();
+            }
+
             case ItemStoreSubOp.UnassignFromCharacter:
             {
                 var reader = new PacketReader(body);

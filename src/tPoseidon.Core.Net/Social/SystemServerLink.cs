@@ -157,6 +157,7 @@ public sealed class SystemServerLink
                 var mirror = SystemLinkFrames.DecodeMirror(order.Data);
                 _mirrors[mirror.RecipientCharacterId] = (order.OrderId, mirror);
                 break;
+            case SystemLinkFrames.OrderObserve:
             case SystemLinkFrames.OrderUpdateQuest:
             case SystemLinkFrames.OrderCancelQuest:
             case SystemLinkFrames.OrderShareExp:

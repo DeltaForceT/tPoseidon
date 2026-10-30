@@ -1,6 +1,7 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Combat;
 using tPoseidon.Core.Game.Skills;
+using tPoseidon.Core.Game.Skills.Effects;
 
 namespace tPoseidon.Core.Net.World;
 
@@ -43,6 +44,7 @@ public static class SkillFrames
     public const int CompletedSize = 3;
     public const int EffectHeaderSize = 14;
     public const int HitResultSize = 30;
+    public const int MonsterHitRecordSize = 32;
     public const int PositionTailSize = 10;
     public const int MonsterHpSize = 9;
     public const int DeathSize = 3;
@@ -92,6 +94,13 @@ public static class SkillFrames
         w.WriteUInt16(skillId);
         w.WriteByte(level);
         w.WriteUInt16(points);
+        return w.ToArray();
+    }
+
+    public static byte[] QuestSkillRemoved(int skillId)
+    {
+        var w = new PacketWriter(sizeof(uint));
+        w.WriteUInt32((uint)skillId);
         return w.ToArray();
     }
 
@@ -251,6 +260,15 @@ public static class SkillFrames
         w.WriteInt32(hit.Flags);
         w.WriteInt32(0);
         w.WriteInt32(0);
+        return w.ToArray();
+    }
+
+    public static byte[] MonsterHitRecord(ushort monsterEntityId, ushort attackerEntityId, SkillHit hit)
+    {
+        var w = new PacketWriter(MonsterHitRecordSize);
+        w.WriteUInt16(monsterEntityId);
+        w.WriteUInt16(attackerEntityId);
+        w.WriteBytes(HitResult(monsterEntityId, hit).AsSpan(sizeof(ushort)));
         return w.ToArray();
     }
 
@@ -446,7 +464,10 @@ public static class SkillFrames
         {
             frames.Add(new(Opcode.S2C_OP_016D_TBD, ownerTaken, MeleeSwingFrames.NoBlock, SwingAudience.Everyone));
         }
-        AppendVictim(frames, strike, HitResult(strike.TargetEntityId, hit), MeleeSwingFrames.NoBlock, additions);
+        var counterRecord = IncomingHits.IsCounterHit((uint)hit.Flags)
+            ? MonsterHitRecord(strike.TargetEntityId, strike.AttackerEntityId, hit)
+            : null;
+        AppendVictim(frames, strike, HitResult(strike.TargetEntityId, hit), MeleeSwingFrames.NoBlock, additions, counterRecord);
         return frames;
     }
 
@@ -605,9 +626,13 @@ public static class SkillFrames
         return frames;
     }
 
-    private static void AppendVictim(List<SwingFrame> frames, PlayerStrike strike, byte[] hitResult, ushort blockId, SwingAdditions additions)
+    private static void AppendVictim(List<SwingFrame> frames, PlayerStrike strike, byte[] hitResult, ushort blockId, SwingAdditions additions, byte[]? monsterHitRecord = null)
     {
         frames.Add(new(Opcode.S2C_OP_002A_TBD, hitResult, blockId, SwingAudience.Everyone));
+        if (monsterHitRecord is not null)
+        {
+            frames.Add(new(Opcode.S2C_MONSTER_HIT_RECORD, monsterHitRecord, blockId, SwingAudience.Everyone));
+        }
         if (strike.Killed)
         {
             frames.Add(new(Opcode.S2C_OP_002B_TBD, Death(strike.TargetEntityId), blockId, SwingAudience.Everyone));
@@ -679,13 +704,13 @@ public static class SkillFrames
         return w.ToArray();
     }
 
-    public static byte[] MonsterHpUpdate(ushort monsterEntityId, long hp)
+    public static byte[] MonsterHpUpdate(ushort monsterEntityId, long hp, ushort bars = 0, bool boss = false)
     {
         var w = new PacketWriter(MonsterHpSize);
         w.WriteUInt16(monsterEntityId);
         w.WriteUInt32Field(Math.Max(0L, hp));
-        w.WriteUInt16(0);
-        w.WriteByte(0);
+        w.WriteUInt16(bars);
+        w.WriteByte(boss ? (byte)1 : (byte)0);
         return w.ToArray();
     }
 
@@ -694,8 +719,8 @@ public static class SkillFrames
         var w = new PacketWriter(MonsterHpSize);
         w.WriteUInt16(strike.TargetEntityId);
         w.WriteUInt32Field(Math.Max(0L, strike.MobHpAfter));
-        w.WriteUInt16(0);
-        w.WriteByte(0);
+        w.WriteUInt16(strike.MobBars);
+        w.WriteByte(strike.MobBoss ? (byte)1 : (byte)0);
         return w.ToArray();
     }
 

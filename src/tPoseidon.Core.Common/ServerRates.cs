@@ -70,18 +70,20 @@ public sealed class ServerRates
     public CombatSection Combat { get; init; } = new();
     public CadenceSection Cadence { get; init; } = new();
 
-    public long ScaleExp(long baseExp)
+    public double ExpBonus(bool member) => (member ? ExpHelper.ExpPcRoom : 0.0) + ExpHelper.ExpEvent;
+
+    public double TmBonus(bool member) => (member ? ExpHelper.TmPcRoom : 0.0) + ExpHelper.TmEvent;
+
+    public long ScaleExp(long baseExp, bool member)
     {
         if (baseExp <= 0) return 0;
-        var bonus = 1.0 + ExpHelper.ExpPcRoom + ExpHelper.ExpEvent;
-        return RoundToLong(baseExp * bonus * Global.ExpRate);
+        return RoundToLong(baseExp * (1.0 + ExpBonus(member)) * Global.ExpRate);
     }
 
-    public long ScaleTmxp(long baseTmxp)
+    public long ScaleTmxp(long baseTmxp, bool member)
     {
         if (baseTmxp <= 0) return 0;
-        var bonus = 1.0 + ExpHelper.TmPcRoom + ExpHelper.TmEvent;
-        return RoundToLong(baseTmxp * bonus * Global.TmxpRate);
+        return RoundToLong(baseTmxp * (1.0 + TmBonus(member)) * Global.TmxpRate);
     }
 
     public long ScaleGalder(long baseGalder)

@@ -26,6 +26,10 @@ public sealed class GmServices
 
     public IGmPenaltyBook? Penalties { get; init; }
 
+    public IMyCampGifts? Camp { get; init; }
+
+    public IMembershipStore? Membership { get; init; }
+
     public required Func<GameCatalog> Catalog { get; init; }
 
     public ClientArtLibrary? Art { get; init; }
@@ -56,6 +60,8 @@ public sealed class GmServices
             Endpoint = GmToolEndpoint.For(settings, paths),
             Accounts = new DatabaseGmAccountBook(settings.Database),
             Penalties = new DatabasePenaltyBook(settings.Database),
+            Camp = new DatabaseGmCampGifts(settings.Database),
+            Membership = new DatabaseMembershipBook(settings.Database),
             Catalog = () => GameCatalog.For(settings),
             Art = new ClientArtLibrary(settings.ClientFolder, message => LogHub.Post(LogHub.PanelSource, LogLevel.Warn, message)),
         };
@@ -200,11 +206,27 @@ public sealed class GmModel : IDisposable
             : Fail(title, Link.Message);
     }
 
+    public Task<GmOutcome?> MembershipAsync(string title, IReadOnlyList<string> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        return _services.Membership is { } book
+            ? RunAsync(title, () => Task.Run(() => (GmOutcome?)GmMembership.Run(book, arguments)))
+            : Fail(title, Link.Message);
+    }
+
     public Task<GmOutcome?> AccountsAsync(string title, Func<IGmAccountBook, GmOutcome> action)
     {
         ArgumentNullException.ThrowIfNull(action);
         return _services.Accounts is { } book
             ? RunAsync(title, () => Task.Run(() => (GmOutcome?)action(book)))
+            : Fail(title, Link.Message);
+    }
+
+    public Task<GmOutcome?> CampAsync(string title, Func<IMyCampGifts, GmOutcome> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        return _services.Camp is { } gifts
+            ? RunAsync(title, () => Task.Run(() => (GmOutcome?)action(gifts)))
             : Fail(title, Link.Message);
     }
 

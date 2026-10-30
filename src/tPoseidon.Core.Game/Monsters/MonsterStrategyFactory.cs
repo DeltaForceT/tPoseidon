@@ -24,6 +24,18 @@ public static class MonsterStrategyFactory
         };
     }
 
+    public static ShadowAiStrategy? CreateShadow(int aiType)
+    {
+        return aiType switch
+        {
+            0 => new NonresidentMonsterTargetOnlyStrategy(),
+            1 => new NonresidentMonsterTargetNearStrategy(),
+            2 => new NonresidentMonsterTargetNearPosStrategy(),
+            3 => new NonresidentMonsterTargetSkillStrategy(),
+            _ => null,
+        };
+    }
+
     public static MonsterAType FromByte(byte atype)
     {
         return atype switch

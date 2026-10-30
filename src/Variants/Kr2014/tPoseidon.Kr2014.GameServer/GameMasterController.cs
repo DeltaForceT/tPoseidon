@@ -1,4 +1,7 @@
+using tPoseidon.Core.LibConfig;
+using tPoseidon.Core.Net.World;
 using tPoseidon.Core.Common;
+using tPoseidon.Core.Game.Quiz;
 using tPoseidon.Core.Game.Warp;
 using tPoseidon.Core.Net.Dialogs;
 using tPoseidon.Core.Net.Packets;
@@ -24,11 +27,12 @@ internal sealed class GameMasterController : IDisposable
     private readonly SystemServerLink _link;
     private readonly Func<ulong, InGameSessionState?> _playerById;
     private readonly Func<InGameSessionState, Task> _respawnToViewers;
+    private readonly Func<InGameSessionState, Opcode, byte[], Task> _sendToViewers;
     private readonly GameMasterChat _chat;
     private readonly Func<InGameSessionState, Task> _disconnect;
     private readonly Func<InGameSessionState, Task> _announceSpeed;
     private readonly Func<InGameSessionState, Task> _applyVisibility;
-    private readonly Func<InGameSessionState, uint, ushort, Task<uint>> _presentItem;
+    private readonly Func<InGameSessionState, uint, ushort, tPoseidon.Core.Net.Social.PresentDelivery, Task<uint>> _presentItem;
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
     private readonly System.Text.Encoding _text;
     private readonly string _logTag;
@@ -39,17 +43,22 @@ internal sealed class GameMasterController : IDisposable
 
     public Func<IReadOnlyList<InGameSessionState>>? Players { get; init; }
 
-    public Func<(float Exp, float Tm)>? FixedBonusRates { get; init; }
+    public IReadOnlyDictionary<string, string>? WordStrings { get; init; }
+
+    public Func<ushort, ZoneGeometry?>? GeometryOf { get; init; }
+
+    public Func<bool, (float Exp, float Tm)>? FixedBonusRates { get; init; }
 
     public GameMasterController(
         SystemServerLink link,
         Func<ulong, InGameSessionState?> playerById,
         Func<InGameSessionState, Task> respawnToViewers,
+        Func<InGameSessionState, Opcode, byte[], Task> sendToViewers,
         GameMasterChat chat,
         Func<InGameSessionState, Task> disconnect,
         Func<InGameSessionState, Task> announceSpeed,
         Func<InGameSessionState, Task> applyVisibility,
-        Func<InGameSessionState, uint, ushort, Task<uint>> presentItem,
+        Func<InGameSessionState, uint, ushort, tPoseidon.Core.Net.Social.PresentDelivery, Task<uint>> presentItem,
         Func<ushort, Opcode, byte[], Task> sendToMap,
         System.Text.Encoding text,
         string logTag)
@@ -57,6 +66,7 @@ internal sealed class GameMasterController : IDisposable
         _link = link ?? throw new ArgumentNullException(nameof(link));
         _playerById = playerById ?? throw new ArgumentNullException(nameof(playerById));
         _respawnToViewers = respawnToViewers ?? throw new ArgumentNullException(nameof(respawnToViewers));
+        _sendToViewers = sendToViewers ?? throw new ArgumentNullException(nameof(sendToViewers));
         _chat = chat ?? throw new ArgumentNullException(nameof(chat));
         _disconnect = disconnect ?? throw new ArgumentNullException(nameof(disconnect));
         _announceSpeed = announceSpeed ?? throw new ArgumentNullException(nameof(announceSpeed));
@@ -73,7 +83,14 @@ internal sealed class GameMasterController : IDisposable
     public static byte SpawnFlagsOf(InGameSessionState player)
     {
         ArgumentNullException.ThrowIfNull(player);
-        return player.GameMasterAttribute ? PlayerSpawnLoginPacket.GmEagleFlag : (byte)0;
+        return PlayerSpawnLoginPacket.GmFlagsOf(player.GameMasterAttribute, player.GameMasterFlying, player.InMyShop);
+    }
+
+    public async Task RequestFlightAsync(InGameSessionState player, bool flying, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        if (await SetFlightAsync(player, flying).ConfigureAwait(false) == GameMasterFrames.AckOk) return;
+        await player.SendFrameAsync(Opcode.S2C_GM_FLIGHT_REFUSED, Array.Empty<byte>(), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
     }
 
     public static bool IsCommand(string line) => GameMasterChat.IsCommand(line);
@@ -136,13 +153,19 @@ internal sealed class GameMasterController : IDisposable
         }
     }
 
-    private async Task SendRateSlotsAsync(InGameSessionState player, CancellationToken ct)
+    private Task SendRateSlotsAsync(InGameSessionState player, CancellationToken ct) => SendRateSlotsAsync(player, expFirst: false, ct);
+
+    public async Task SendRateSlotsAsync(InGameSessionState player, bool expFirst, CancellationToken ct)
     {
-        var fixedRates = FixedBonusRates?.Invoke() ?? (0f, 0f);
+        var fixedRates = FixedBonusRates?.Invoke(player.Character?.IsMember == true) ?? (0f, 0f);
+        var tm = (Opcode.GAME_BATCH_CONST_377, GameBatchFloatArrayPacket.ForRateSlotsKr2014(fixedRates.Tm, Rates.TmSlotRate, player.GuildBonusRatio).EncodePayload());
+        var exp = (Opcode.GAME_BATCH_CONST_376, GameBatchFloatArrayPacket.ForRateSlotsKr2014(fixedRates.Exp, Rates.ExpSlotRate, player.GuildBonusRatio).EncodePayload());
         try
         {
-            await player.SendFrameAsync(Opcode.GAME_BATCH_CONST_377, GameBatchFloatArrayPacket.ForRateSlotsKr2014(fixedRates.Tm, Rates.TmSlotRate).EncodePayload(), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
-            await player.SendFrameAsync(Opcode.GAME_BATCH_CONST_376, GameBatchFloatArrayPacket.ForRateSlotsKr2014(fixedRates.Exp, Rates.ExpSlotRate).EncodePayload(), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+            foreach (var (opcode, payload) in expFirst ? new[] { exp, tm } : new[] { tm, exp })
+            {
+                await player.SendFrameAsync(opcode, payload, (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+            }
         }
         catch (Exception ex) when (ex is ObjectDisposedException or IOException or System.Net.Sockets.SocketException)
         {
@@ -178,6 +201,24 @@ internal sealed class GameMasterController : IDisposable
         }
     }
 
+    private async Task JudgeOxPlayersAsync(ushort mapId, byte answer, CancellationToken ct)
+    {
+        if (GeometryOf?.Invoke(mapId) is not { } geometry) return;
+        foreach (var player in Players?.Invoke() ?? Array.Empty<InGameSessionState>())
+        {
+            if (player.MapId != mapId) continue;
+            switch (OxQuizRules.Judge(OxQuizRules.FloorAt(geometry, player.PlayerX, player.PlayerY), answer))
+            {
+                case OxVerdict.Right:
+                    await player.SendFrameAsync((Opcode)GameMasterFrames.OxAnswerSound, Array.Empty<byte>(), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+                    break;
+                case OxVerdict.Wrong when player is { RequestZoneChange: { } sendOut, Character: { } character }:
+                    await sendOut(new ZoneChangeRequest(RestartArrival.NormalizeReturnMap(character.Home), TeleportArrival.ChangeZoneType, null, OxQuizRules.WrongSideDelay), ct).ConfigureAwait(false);
+                    break;
+            }
+        }
+    }
+
     private Task AcknowledgeAsync(OfficerOrder order, ushort report, uint result, CancellationToken ct) =>
         _link.ReportAsync(order with { OrderType = report, Data = GameMasterFrames.AckResult(result) }, ct);
 
@@ -207,25 +248,53 @@ internal sealed class GameMasterController : IDisposable
             case GameMasterFrames.OrderSetGmAttribute:
                 await SetGmAttributeAsync(order).ConfigureAwait(false);
                 break;
+            case GameMasterFrames.OrderLearnSkill when GameMasterFrames.TryReadLearnSkillOrder(order.Data, out var learnerId, out var learnedSkill, out var learnedLevel):
+                var learnResult = _playerById(learnerId) is { GrantSkill: { } grantSkill }
+                    ? await grantSkill(learnedSkill, learnedLevel, ct).ConfigureAwait(false)
+                    : GameMasterFrames.AckLearnNotOnline;
+                Console.WriteLine($"{_logTag} [gm] skill {learnedSkill} level {learnedLevel} for 0x{learnerId:X}: {(learnResult == GameMasterFrames.AckOk ? "granted" : $"refused ({learnResult})")}");
+                await AcknowledgeAsync(order, GameMasterFrames.ReportLearnSkill, learnResult, ct).ConfigureAwait(false);
+                break;
+            case GameMasterFrames.OrderSetLevel when GameMasterFrames.TryReadSetLevelOrder(order.Data, out var levelledId, out var targetLevel):
+                var levelResult = _playerById(levelledId) is { SetLevel: { } setLevel }
+                    ? await setLevel(targetLevel, ct).ConfigureAwait(false)
+                    : GameMasterFrames.AckLevelNotOnline;
+                Console.WriteLine($"{_logTag} [gm] level {targetLevel} for 0x{levelledId:X}: {(levelResult == GameMasterFrames.AckOk ? "set" : $"refused ({levelResult})")}");
+                await AcknowledgeAsync(order, GameMasterFrames.ReportSetLevel, levelResult, ct).ConfigureAwait(false);
+                break;
+            case GameMasterFrames.OrderSetFlight when GameMasterFrames.TryReadToggle(order.Data, out var flying):
+                if (_playerById(order.CharacterId) is not { } flyer)
+                {
+                    await AcknowledgeAsync(order, GameMasterFrames.ReportSetFlight, GameMasterFrames.AckFlightNotInGame, ct).ConfigureAwait(false);
+                    return;
+                }
+                var flightResult = await SetFlightAsync(flyer, flying).ConfigureAwait(false);
+                Console.WriteLine($"{_logTag} [gm] 0x{order.CharacterId:X} flying form {(flying ? "on" : "off")}: {(flightResult == GameMasterFrames.AckOk ? "done" : $"refused ({flightResult})")}");
+                await AcknowledgeAsync(order, GameMasterFrames.ReportSetFlight, flightResult, ct).ConfigureAwait(false);
+                break;
             case GameMasterFrames.OrderSuperRun when GameMasterFrames.TryReadSuperRun(order.Data, out var speed):
                 if (_playerById(order.CharacterId) is not { } runner) return;
                 runner.GameMasterSpeed = Math.Clamp(speed, (uint)GameMasterFrames.NormalSpeed, (uint)GameMasterFrames.MaxSpeed);
                 Console.WriteLine($"{_logTag} [gm] 0x{order.CharacterId:X} speed x{runner.GameMasterSpeed}");
                 await _announceSpeed(runner).ConfigureAwait(false);
                 break;
-            case GameMasterFrames.OrderPresentItem when GameMasterFrames.TryReadPresent(order.Data, out var receiverId, out var itemId, out var itemCount):
+            case GameMasterFrames.OrderPresentItem when GameMasterFrames.TryReadPresent(order.Data, out var receiverId, out var itemId, out var itemCount, out var delivery):
                 if (_playerById(receiverId) is not { } receiver)
                 {
                     Console.WriteLine($"{_logTag} [gm] present item {itemId} x{itemCount} for 0x{receiverId:X}: not on this server");
                     await AcknowledgeAsync(order, GameMasterFrames.ReportPresentItem, GameMasterFrames.AckPresentNoReceiver, ct).ConfigureAwait(false);
                     return;
                 }
-                await AcknowledgeAsync(order, GameMasterFrames.ReportPresentItem, await _presentItem(receiver, itemId, itemCount).ConfigureAwait(false), ct).ConfigureAwait(false);
+                await AcknowledgeAsync(order, GameMasterFrames.ReportPresentItem, await _presentItem(receiver, itemId, itemCount, delivery).ConfigureAwait(false), ct).ConfigureAwait(false);
                 break;
             case GameMasterFrames.OrderOxQuestion:
-                if (_playerById(order.CharacterId) is not { } asker) return;
-                Console.WriteLine($"{_logTag} [gm] OX question on map {asker.MapId}: \"{GameMasterFrames.ReadQuestion(order.Data, _text)}\"");
-                await _sendToMap(asker.MapId, (Opcode)GameMasterFrames.OxTimerSound, Array.Empty<byte>()).ConfigureAwait(false);
+                if (_playerById(order.CharacterId) is not { } asker || !ItemGiveFrames.OxMaps.Contains(asker.MapId)) return;
+                var question = GameMasterFrames.ReadQuestion(order.Data, _text);
+                Console.WriteLine($"{_logTag} [gm] OX question on map {asker.MapId}: \"{question}\"");
+                if (GameMasterFrames.IsOxTimerQuestion(question))
+                    await _sendToMap(asker.MapId, (Opcode)GameMasterFrames.OxTimerSound, Array.Empty<byte>()).ConfigureAwait(false);
+                else
+                    await _sendToMap(asker.MapId, (Opcode)GameMasterFrames.OxNotice, GameMasterFrames.OxNoticePacket(question, _text)).ConfigureAwait(false);
                 break;
             case GameMasterFrames.OrderOxGiveItem when GameMasterFrames.TryReadOxGift(order.Data, out var giftItem, out var giftCount):
                 if (World is null) return;
@@ -238,9 +307,15 @@ internal sealed class GameMasterController : IDisposable
                 await AcknowledgeAsync(order, GameMasterFrames.ReportOxGiveItem, giftResult, ct).ConfigureAwait(false);
                 break;
             case GameMasterFrames.OrderOxAnswer when order.Data.Length >= 1:
-                if (_playerById(order.CharacterId) is not { } revealer) return;
+                if (_playerById(order.CharacterId) is not { } revealer || !ItemGiveFrames.OxMaps.Contains(revealer.MapId)) return;
+                if (WordStrings is null || !WordStrings.TryGetValue(WordStringTable.Answer, out var answerWord))
+                {
+                    Console.WriteLine($"{_logTag} [gm] OX answer {order.Data[0]} on map {revealer.MapId}: no {WordStringTable.Answer} text in the libconfig");
+                    return;
+                }
                 Console.WriteLine($"{_logTag} [gm] OX answer {order.Data[0]} on map {revealer.MapId}");
-                await _sendToMap(revealer.MapId, (Opcode)GameMasterFrames.OxAnswerSound, Array.Empty<byte>()).ConfigureAwait(false);
+                await _sendToMap(revealer.MapId, (Opcode)GameMasterFrames.OxNotice, GameMasterFrames.OxNoticePacket(GameMasterFrames.OxAnswerText(answerWord, order.Data[0]), _text)).ConfigureAwait(false);
+                await JudgeOxPlayersAsync(revealer.MapId, order.Data[0], ct).ConfigureAwait(false);
                 break;
             case GameMasterFrames.OrderCharInfo when GameMasterFrames.TryReadCharacterId(order.Data, out var subjectId):
                 var info = _playerById(subjectId) is { Character: { } subject } subjectState
@@ -366,6 +441,14 @@ internal sealed class GameMasterController : IDisposable
         }
     }
 
+    private async Task<uint> SetFlightAsync(InGameSessionState player, bool flying)
+    {
+        if (!player.GameMasterAttribute) return GameMasterFrames.AckFlightNoGmFlag;
+        player.GameMasterFlying = flying;
+        await _sendToViewers(player, Opcode.S2C_GM_FLIGHT, GameMasterFlightFrames.Changed(player.PlayerEntityId, flying)).ConfigureAwait(false);
+        return GameMasterFrames.AckOk;
+    }
+
     private async Task SetGmAttributeAsync(OfficerOrder order)
     {
         if (!GameMasterFrames.TryReadGmAttribute(order.Data, out var on))
@@ -379,7 +462,9 @@ internal sealed class GameMasterController : IDisposable
             return;
         }
         player.GameMasterAttribute = on;
+        if (!on) player.GameMasterFlying = false;
         Console.WriteLine($"{_logTag} [gm] 0x{order.CharacterId:X} GM attribute {(on ? "set" : "cleared")}");
+        if (player.SwapGmSkills is { } swapSkills) await swapSkills(on, CancellationToken.None).ConfigureAwait(false);
         if (player.Character is not null) await _respawnToViewers(player).ConfigureAwait(false);
     }
 }

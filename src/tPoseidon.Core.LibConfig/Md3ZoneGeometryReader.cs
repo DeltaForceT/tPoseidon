@@ -16,7 +16,9 @@ public static class Md3ZoneGeometryReader
 
     private const int LayerHeaderSize = 20;
     private const int AttributeLayerType = 1;
+    private const int SecondaryLayerType = 2;
     private const int GroundLayerType = 3;
+    private const int HeightLayerType = 4;
     private const int RegionRecordSize = 32;
     private const int PointRecordSize = 24;
 
@@ -47,6 +49,10 @@ public static class Md3ZoneGeometryReader
         var offset = HeaderSize;
         byte[]? attributes = null;
         byte[]? groundTypes = null;
+        byte[]? secondaryCells = null;
+        byte[]? heights = null;
+        var heightCellsX = 0;
+        var secondaryCellsX = 0;
         var groundCellsX = 0;
         var cellsX = 0;
         var cellsY = 0;
@@ -73,6 +79,14 @@ public static class Md3ZoneGeometryReader
                 cellsX = width;
                 cellsY = height;
             }
+            else if (secondaryCells is null
+                && type == SecondaryLayerType
+                && cellWidth == ZoneGeometry.CellSize
+                && cellHeight == ZoneGeometry.CellSize)
+            {
+                secondaryCells = data.Slice(offset, bodyLength).ToArray();
+                secondaryCellsX = width;
+            }
             else if (groundTypes is null
                 && type == GroundLayerType
                 && cellWidth == ZoneGeometry.CellSize
@@ -80,6 +94,14 @@ public static class Md3ZoneGeometryReader
             {
                 groundTypes = data.Slice(offset, bodyLength).ToArray();
                 groundCellsX = width;
+            }
+            else if (heights is null
+                && type == HeightLayerType
+                && cellWidth == ZoneGeometry.CellSize
+                && cellHeight == ZoneGeometry.CellSize)
+            {
+                heights = data.Slice(offset, bodyLength).ToArray();
+                heightCellsX = width;
             }
 
             offset += bodyLength;
@@ -126,6 +148,8 @@ public static class Md3ZoneGeometryReader
             CellsY = cellsY,
             CellAttributes = attributes,
             GroundTypes = groundTypes is not null && groundCellsX == cellsX && groundTypes.Length == attributes.Length ? groundTypes : Array.Empty<byte>(),
+            SecondaryCells = secondaryCells is not null && secondaryCellsX == cellsX && secondaryCells.Length == attributes.Length ? secondaryCells : Array.Empty<byte>(),
+            Heights = heights is not null && heightCellsX == cellsX && heights.Length == attributes.Length ? heights : Array.Empty<byte>(),
             Regions = regions,
             Points = points,
         };

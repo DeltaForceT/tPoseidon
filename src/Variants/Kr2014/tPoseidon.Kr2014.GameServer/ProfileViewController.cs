@@ -11,7 +11,6 @@ internal sealed class ProfileViewController
     private readonly Func<ushort, ushort, InGameSessionState?> _playerOnMap;
     private readonly Func<ulong, string> _guildNameOf;
     private readonly Func<InGameSessionState, ProfileGear> _gearOf;
-    private readonly Func<ulong, CancellationToken, Task<IReadOnlyList<BossKillHistoryRecord>?>> _bossKillsOf;
     private readonly Encoding _text;
     private readonly string _logTag;
     private readonly Random _rng = new();
@@ -23,7 +22,6 @@ internal sealed class ProfileViewController
         Func<ushort, ushort, InGameSessionState?> playerOnMap,
         Func<ulong, string> guildNameOf,
         Func<InGameSessionState, ProfileGear> gearOf,
-        Func<ulong, CancellationToken, Task<IReadOnlyList<BossKillHistoryRecord>?>> bossKillsOf,
         Encoding text,
         string logTag)
     {
@@ -32,7 +30,6 @@ internal sealed class ProfileViewController
         _playerOnMap = playerOnMap ?? throw new ArgumentNullException(nameof(playerOnMap));
         _guildNameOf = guildNameOf ?? throw new ArgumentNullException(nameof(guildNameOf));
         _gearOf = gearOf ?? throw new ArgumentNullException(nameof(gearOf));
-        _bossKillsOf = bossKillsOf ?? throw new ArgumentNullException(nameof(bossKillsOf));
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
@@ -53,18 +50,16 @@ internal sealed class ProfileViewController
         var profile = _profiles.GetOrCreate(character.CharacterId);
         var record = _pk.GetOrCreate(character.CharacterId);
         var flags = unchecked((uint)profile.PublicFlagBitmask);
-        var bossKills = ProfileViewRules.Shows(flags, ProfileViewRules.ShowCollection)
-            ? await _bossKillsOf(character.CharacterId, ct).ConfigureAwait(false) ?? []
-            : [];
+        var bossKills = ProfileViewRules.Shows(flags, ProfileViewRules.ShowCollection) ? target.BossKills : [];
         var source = new ProfileSource(
             flags,
             character.Name,
             target.PlayerEntityId,
             (byte)StatGrowth.TypeIndexOf(character.FType),
-            (byte)character.Species,
+            tPoseidon.Core.Game.Characters.LookChangeRules.BodyTypeOf(character),
             stats.Level,
             stats.TmLevel,
-            (byte)character.Species,
+            tPoseidon.Core.Game.Characters.LookChangeRules.HighestJobOf(character),
             _guildNameOf(character.CharacterId),
             target.ProfileTitle,
             record.KillTotalCount,

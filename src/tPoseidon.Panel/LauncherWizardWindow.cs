@@ -80,6 +80,7 @@ public sealed class LauncherWizardWindow : Window
     private readonly TextBlock _finishedFiles = new() { Foreground = Tokens.TextSecondary, TextWrapping = TextWrapping.Wrap };
     private readonly Button _openFolder = new() { Content = "Open the folder", Height = 34, MinHeight = 0, Padding = new Thickness(20, 0), FontWeight = FontWeight.SemiBold, VerticalContentAlignment = VerticalAlignment.Center };
     private readonly Button _buildAgain = Small("Build again");
+    private readonly Button _useForUpdates = Small("Hand it out as an update");
     private readonly Button _closeFinished = Small("Close");
     private readonly StackPanel _nav = new() { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
     private string _finishedFolder = "";
@@ -199,6 +200,8 @@ public sealed class LauncherWizardWindow : Window
     public StackPanel FinishedView => _finished;
 
     public Button BuildAgainButton => _buildAgain;
+
+    public Button UseForUpdatesButton => _useForUpdates;
 
     public Border PreviewButton => _previewButton;
 
@@ -402,7 +405,8 @@ public sealed class LauncherWizardWindow : Window
         _progressPanel.IsVisible = true;
         try
         {
-            var request = _design.ToRequest(_version);
+            _design.PublicKey = _server is null ? null : SigningKeyStore.EnsureCreated(_server.Paths).PublicKey;
+            var request = _design.ToRequest(_version, DateTimeOffset.UtcNow);
             var progress = new Progress<LauncherBuildProgress>(ShowProgress);
             _lastBuild = await Task.Run(() => LauncherBuilder.Build(request, LauncherKitFiles.Locate(_kitFolder), outputFolder, progress)).ConfigureAwait(true);
             ShowProgress(new LauncherBuildProgress(LauncherBuildStep.Done, LauncherBuilder.Finished));
@@ -447,6 +451,7 @@ public sealed class LauncherWizardWindow : Window
             ? "It only works on this computer. Do not give it to players."
             : "Give the installer to your players, or add the zip to your client pack.";
         _finishedFiles.Text = $"Installer: {result.SetupPath}{Environment.NewLine}Zip: {result.ZipPath}";
+        _useForUpdates.IsVisible = _server is not null;
         SetFinished(true);
     }
 
@@ -464,6 +469,26 @@ public sealed class LauncherWizardWindow : Window
         foreach (var button in _stepButtons.Values)
         {
             button.IsEnabled = !finished;
+        }
+    }
+
+    public async Task<bool> UseForUpdatesAsync()
+    {
+        if (_server is null || _lastBuild is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var import = await Task.Run(() => LauncherUpdatePackage.Import(_server.Paths, _lastBuild.ZipPath)).ConfigureAwait(true);
+            _banner.Show(import.Info.TestOnThisComputer ? BannerKind.Warning : BannerKind.Success, import.Info.TestOnThisComputer ? "This test launcher was added to the updates" : "The launcher is ready to go out as an update", import.Info.TestOnThisComputer ? LauncherUpdatePackage.TestLauncherWarning : "Press Publish in the launcher updates window to send it to your players.");
+            return true;
+        }
+        catch (HostingException ex)
+        {
+            _banner.Show(BannerKind.Error, ex.Summary, ex.Hint);
+            return false;
         }
     }
 
@@ -560,7 +585,7 @@ public sealed class LauncherWizardWindow : Window
         _finished.Children.Add(_finishedTitle);
         _finished.Children.Add(_finishedBody);
         _finished.Children.Add(_finishedFiles);
-        _finished.Children.Add(RowOf(_openFolder, _buildAgain, _closeFinished));
+        _finished.Children.Add(RowOf(_openFolder, _useForUpdates, _buildAgain, _closeFinished));
         middle.Children.Add(_finished);
         _nav.Children.Add(_back);
         _nav.Children.Add(_next);
@@ -716,6 +741,7 @@ public sealed class LauncherWizardWindow : Window
         _back.Click += (_, _) => GoBack();
         _build.Click += async (_, _) => await ChooseFolderAndBuildAsync().ConfigureAwait(true);
         _openFolder.Click += async (_, _) => await OpenFinishedFolderAsync().ConfigureAwait(true);
+        _useForUpdates.Click += async (_, _) => await UseForUpdatesAsync().ConfigureAwait(true);
         _buildAgain.Click += (_, _) =>
         {
             SetFinished(false);

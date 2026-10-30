@@ -13,11 +13,8 @@ public readonly record struct DropSource(
 
 public static class MonsterDropBatch
 {
-    public const int FirstHiddenDropper = 16000;
-    public const int LastHiddenDropper = 16999;
-
     public static bool DropsHidden(int monsterTypeId) =>
-        monsterTypeId is >= FirstHiddenDropper and <= LastHiddenDropper;
+        ShadowActors.IsMonster(monsterTypeId);
 
     public static IReadOnlyList<FieldItem> Items(
         DropSource source,

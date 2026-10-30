@@ -2,9 +2,7 @@ namespace tPoseidon.Core.Data;
 
 public interface IMyCampStore
 {
-    bool IsInitializedForAccount(uint accountId);
-
-    void MarkInitializedForAccount(uint accountId);
+    bool TryGrantStarterItems(uint accountId, IReadOnlyList<int> itemIndexes);
 
     MyCampSlot CreateSlotForCharacter(ulong characterId, string slotName = "");
 

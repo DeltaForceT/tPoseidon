@@ -22,6 +22,12 @@ public static class ServerDataStep
         ArgumentNullException.ThrowIfNull(settings);
         var libconfig = ClientFolder.LibConfigFor(settings);
         var mapFolder = ClientFolder.MapFolder(settings.ClientFolder);
+        var clientExecutable = Path.Combine(settings.ClientFolder, settings.ClientExecutable);
+        if (!RunningClient.IsRunning(clientExecutable))
+        {
+            ShadowSanctuaryClientData.Apply(libconfig, clientExecutable);
+        }
+
         var builder = paths.AppExecutable(SnapshotBuilderAssembly);
         if (!File.Exists(builder))
         {
@@ -65,7 +71,22 @@ public static class ServerDataStep
             throw new HostingException($"Building the world snapshot failed (exit {result.ExitCode}):{Environment.NewLine}{result.Output}");
         }
 
-        File.WriteAllText(Path.Combine(paths.ServerData, DataVersionFile), DataVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        File.WriteAllText(Path.Combine(paths.ServerData, DataVersionFile), Stamp(libconfig));
+    }
+
+    public static bool IsCurrent(InstallPaths paths, HostSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        ArgumentNullException.ThrowIfNull(settings);
+        var stamp = Path.Combine(paths.ServerData, DataVersionFile);
+        if (!IsCurrent(paths))
+        {
+            return false;
+        }
+
+        var lines = File.ReadAllLines(stamp);
+        var libconfig = ClientFolder.LibConfigFor(settings);
+        return lines.Length > 1 && File.Exists(libconfig) && string.Equals(lines[1].Trim(), LibConfigHash(libconfig), StringComparison.Ordinal);
     }
 
     public static bool IsCurrent(InstallPaths paths)
@@ -73,7 +94,17 @@ public static class ServerDataStep
         ArgumentNullException.ThrowIfNull(paths);
         var stamp = Path.Combine(paths.ServerData, DataVersionFile);
         return File.Exists(stamp)
-            && int.TryParse(File.ReadAllText(stamp).Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var version)
+            && File.ReadLines(stamp).FirstOrDefault() is { } first
+            && int.TryParse(first.Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var version)
             && version == DataVersion;
+    }
+
+    private static string Stamp(string libconfig) =>
+        DataVersion.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\n" + LibConfigHash(libconfig) + "\n";
+
+    private static string LibConfigHash(string libconfig)
+    {
+        using var stream = File.OpenRead(libconfig);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
     }
 }

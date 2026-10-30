@@ -256,6 +256,8 @@ public sealed class MainWindow : Window
             language.Items.Add(choice.Item);
         }
 
+        var guildCoins = new MenuItem { Header = "Guild coins per win..." };
+        guildCoins.Click += (_, _) => Tools.EditGuildCoins();
         var folder = new MenuItem { Header = "Open the data folder" };
         folder.Click += async (_, _) => await Tools.OpenDataFolderAsync().ConfigureAwait(true);
         var splash = new MenuItem { Header = "Replay startup splash" };
@@ -282,6 +284,7 @@ public sealed class MainWindow : Window
                 share,
                 launcherDrawer,
                 language,
+                guildCoins,
                 folder,
                 firstDivider,
                 _reduce,
@@ -290,7 +293,7 @@ public sealed class MainWindow : Window
                 exit,
             },
         };
-        _bubbleCovered.AddRange([logs, security, backup, share, language, folder, firstDivider, lastDivider, exit]);
+        _bubbleCovered.AddRange([logs, security, backup, share, folder, firstDivider, lastDivider, exit]);
         contextMenu.Opening += (_, _) =>
         {
             backup.IsEnabled = _host.IsSetUp;
@@ -298,6 +301,7 @@ public sealed class MainWindow : Window
             launcher.IsEnabled = _host.IsSetUp;
             channel.IsEnabled = _host.IsSetUp;
             publish.IsEnabled = _host.IsSetUp;
+            guildCoins.IsEnabled = _host.IsSetUp;
             language.IsEnabled = _host.IsSetUp;
             Tools.MarkLanguages();
             splash.IsEnabled = !_motion.Reduced;

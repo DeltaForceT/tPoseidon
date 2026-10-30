@@ -17,6 +17,12 @@ public sealed class GameMasterChatRouter
 
     public Func<ulong, string, GameMasterOutbox?>? InstantChatRemover { get; set; }
 
+    public Func<string, int, int, bool>? CampItemGiver { get; set; }
+
+    public Func<string, bool, bool>? MemberSetter { get; set; }
+
+    public IReadOnlySet<int>? KnownCampItems { get; set; }
+
     public GameMasterChatRouter(
         GameMasterService service,
         IGmAuthorityStore authority,
@@ -74,6 +80,29 @@ public sealed class GameMasterChatRouter
             return new GameMasterChatOutcome(dropped, GameMasterChat.NotAllowedLine, audit);
         }
 
+        if (command.Name == GameMasterChat.CampItem && CampItemGiver is { } campGiver
+            && args.Count is >= 1 and <= 3
+            && int.TryParse(args[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var campItemId) && MyCampGifts.IsItemIndex(campItemId)
+            && TryCampCount(args, out var campCount))
+        {
+            var target = args.Count == 3 ? args[2] : characterName;
+            var reply = KnownCampItems is { } known && !known.Contains(campItemId) ? GameMasterChat.CampItemUnknownLine
+                : campGiver(target, campItemId, campCount) ? GameMasterChat.CampItemGivenLine
+                : GameMasterChat.CampItemNoCharacterLine;
+            audit.Add($"[gm] audit: {who} {keyword} {campItemId} x{campCount} for {target}: {reply}");
+            return new GameMasterChatOutcome(null, reply, audit);
+        }
+
+        if (command.Name == GameMasterChat.Member && MemberSetter is { } memberSetter
+            && args.Count == 2 && GameMasterChat.TryParseSwitch(args[1], out var member))
+        {
+            var reply = memberSetter(args[0], member)
+                ? (member ? GameMasterChat.MemberOnLine : GameMasterChat.MemberOffLine)
+                : GameMasterChat.MemberNoCharacterLine;
+            audit.Add($"[gm] audit: {who} {keyword} {(member ? "on" : "off")} for {args[0]}: {reply}");
+            return new GameMasterChatOutcome(null, reply, audit);
+        }
+
         GameMasterOutbox? outbox = command.Name switch
         {
             GameMasterChat.Logout => _service.Logout(characterId),
@@ -93,6 +122,12 @@ public sealed class GameMasterChatRouter
                 _service.Immortal(characterId, false, immortal),
             GameMasterChat.Invisible when args.Count == 1 && GameMasterChat.TryParseSwitch(args[0], out var invisible) =>
                 _service.Invisible(characterId, false, invisible),
+            GameMasterChat.LearnSkill when args.Count is 2 or 3 && ushort.TryParse(args[0], out var skillId) && byte.TryParse(args[1], out var skillLevel) =>
+                GameMasterService.LearnSkill(characterId, args.Count == 3 ? args[2] : string.Empty, skillId, skillLevel, _online),
+            GameMasterChat.SetLevel when args.Count is 1 or 2 && ushort.TryParse(args[0], out var targetLevel) =>
+                GameMasterService.SetLevel(characterId, args.Count == 2 ? args[1] : string.Empty, targetLevel, _online),
+            GameMasterChat.Fly when args.Count == 1 && GameMasterChat.TryParseSwitch(args[0], out var flying) =>
+                _service.Fly(characterId, flying, true),
             GameMasterChat.SuperNotice when args.Count == 1 => _service.SuperNotice(0, args[0]),
             GameMasterChat.SuperNotice when args.Count == 2 && ushort.TryParse(args[0], out var scrolls) => _service.SuperNotice(scrolls, args[1]),
             GameMasterChat.Block when args.Count is 2 or 3 && int.TryParse(args[1], out var days) =>
@@ -107,6 +142,9 @@ public sealed class GameMasterChatRouter
             GameMasterChat.Item when args.Count is >= 1 and <= 3 && uint.TryParse(args[0], out var itemId)
                 && (args.Count < 2 || ushort.TryParse(args[1], out _)) =>
                 PresentFromChat(characterId, itemId, args),
+            GameMasterChat.CashItem when args.Count is >= 1 and <= 4 && uint.TryParse(args[0], out var boxItemId)
+                && (args.Count < 2 || ushort.TryParse(args[1], out _)) =>
+                CashItemFromChat(characterId, boxItemId, args),
             GameMasterChat.CommandHelp when args.Count == 0 => GameMasterService.CommandHelp(_helpNames()),
             _ => null,
         };
@@ -120,11 +158,31 @@ public sealed class GameMasterChatRouter
         return new GameMasterChatOutcome(outbox, null, audit);
     }
 
+    private static bool TryCampCount(IReadOnlyList<string> args, out int count)
+    {
+        count = MyCampGifts.MinCount;
+        return args.Count < 2
+            || (int.TryParse(args[1], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out count) && MyCampGifts.IsCount(count));
+    }
+
     private GameMasterOutbox? PresentFromChat(ulong characterId, uint itemId, IReadOnlyList<string> args)
     {
         var count = args.Count >= 2 ? ushort.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : (ushort)1;
         return args.Count == 3
             ? _service.PresentItem(characterId, args[2], itemId, count, _online)
             : GameMasterService.PresentItem(characterId, itemId, count);
+    }
+
+    private GameMasterOutbox? CashItemFromChat(ulong characterId, uint itemId, IReadOnlyList<string> args)
+    {
+        var count = args.Count >= 2 ? ushort.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : (ushort)1;
+        var hasHours = args.Count >= 3 && ushort.TryParse(args[2], out _);
+        var hours = hasHours ? ushort.Parse(args[2], System.Globalization.CultureInfo.InvariantCulture) : (ushort)0;
+        var nameAt = hasHours ? 3 : 2;
+        if (args.Count > nameAt + 1) return null;
+        var delivery = PresentDelivery.CashBox(hours);
+        return args.Count > nameAt
+            ? _service.PresentItem(characterId, args[nameAt], itemId, count, delivery, _online)
+            : GameMasterService.PresentItem(characterId, itemId, count, delivery);
     }
 }

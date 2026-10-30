@@ -54,10 +54,11 @@ IniFile? masterIni = null;
 
 var expectedSiblingPasswords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 var uniqueItemControl = false;
+var megaphoneDelay = MegaphoneRules.DefaultDelayMilliseconds;
 if (masterIni is not null)
 {
     var maxClient = masterIni.GetInt("MaxClient", -1);
-    var megaphoneDelay = masterIni.GetInt("MegaphoneDelay", -1);
+    megaphoneDelay = MegaphoneRules.DelayFromIni(masterIni.GetInt(MegaphoneRules.DelayKey, -1));
     var controlUniqueItem = masterIni.GetBool("bControlUniqueItem", false);
     uniqueItemControl = controlUniqueItem;
     var userCountDelay = masterIni.GetInt("UserCountDelay", -1);
@@ -104,6 +105,8 @@ IEquipStatusUpgradeStore? equipUpgradeStore = null;
 IItemRechargeStore? itemRechargeStore = null;
 IUniqueItemStore? uniqueItemStore = null;
 ISoulStore? soulStore = null;
+IShadowBonusStore? shadowBonusStore = null;
+IMegaphoneQueueStore megaphoneStore = new InMemoryMegaphoneQueueStore();
 try
 {
     var pg = await PostgresStoreBootstrap.InitializeAsync().ConfigureAwait(false);
@@ -128,6 +131,8 @@ try
     itemRechargeStore = new PostgresItemRechargeStore(pg.DataSource);
     uniqueItemStore = new PostgresUniqueItemStore(pg.DataSource);
     soulStore = new PostgresSoulStore(pg.DataSource);
+    shadowBonusStore = new PostgresShadowBonusStore(pg.DataSource);
+    megaphoneStore = new PostgresMegaphoneQueueStore(pg.DataSource);
     Log($"postgres bootstrap OK; cXxxStore family backed by Postgres impls");
 }
 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -189,6 +194,10 @@ if (gmBlockStore is not null)
 {
     dispatcher.Register(GmBlockHandler.Requests, new GmBlockHandler(gmBlockStore));
 }
+if (shadowBonusStore is not null)
+{
+    dispatcher.Register(ShadowHandler.Requests, new ShadowHandler(shadowBonusStore));
+}
 if (soulSeedStore is not null && guardianStore is not null)
 {
     dispatcher.Register(SoulSeedHandler.Requests, new SoulSeedHandler(soulSeedStore, guardianStore));
@@ -218,6 +227,11 @@ if (occupationStore is not null)
 {
     dispatcher.Register(new[] { InterServerOpcode.CcmdChangeOccupation, InterServerOpcode.TpJobQuestState, InterServerOpcode.CcmdUpdateOccupationIndex }, new ChangeOccupationHandler(occupationStore));
 }
+
+var megaphonePacer = new MegaphonePacer(megaphoneStore, new tPoseidon.Kr2014.MasterServer.MegaphoneDelivery(host), TimeProvider.System, megaphoneDelay, Log);
+dispatcher.Register(MegaphoneHandler.Requests, new MegaphoneHandler(megaphonePacer));
+var interruptedMegaphones = new MegaphoneRecovery(megaphoneStore, itemStore, Log).Run();
+Log($"megaphone queue: delay {megaphoneDelay} ms{(megaphonePacer.Enabled ? string.Empty : " (delivery off)")}, {interruptedMegaphones} interrupted by the restart");
 
 host.OnFrame = dispatcher.HandleAsync;
 
@@ -265,6 +279,9 @@ else
     Log($"unique item duty loop off (bControlUniqueItem {(uniqueItemControl ? "on" : "off")}, store {(uniqueItemStore is null ? "missing" : "ready")})");
 }
 
+using var megaphoneStop = new CancellationTokenSource();
+var megaphoneTask = RunMegaphonePacerAsync(megaphonePacer, megaphoneStop.Token);
+
 var stop = new TaskCompletionSource();
 Console.CancelKeyPress += (_, e) =>
 {
@@ -274,6 +291,15 @@ Console.CancelKeyPress += (_, e) =>
 await stop.Task.ConfigureAwait(false);
 Log("shutdown requested; closing broker");
 await uniqueDutyStop.CancelAsync().ConfigureAwait(false);
+await megaphoneStop.CancelAsync().ConfigureAwait(false);
+try
+{
+    await megaphoneTask.ConfigureAwait(false);
+}
+catch (OperationCanceledException)
+{
+    Log("megaphone pacer stopped");
+}
 if (uniqueDutyTask is not null)
 {
     try
@@ -283,5 +309,14 @@ if (uniqueDutyTask is not null)
     catch (OperationCanceledException)
     {
         Log("unique item duty loop stopped");
+    }
+}
+
+static async Task RunMegaphonePacerAsync(MegaphonePacer pacer, CancellationToken ct)
+{
+    using var timer = new PeriodicTimer(MegaphonePacer.TickInterval);
+    while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+    {
+        await pacer.TickAsync(ct).ConfigureAwait(false);
     }
 }

@@ -9,9 +9,12 @@ public sealed class MaterialExchange
 {
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
+    private readonly ItemManager? _periods;
+    private readonly List<TimedItem> _timedGranted = new();
 
-    public MaterialExchange(IItemStore items, IItemParamLookup catalog)
+    public MaterialExchange(IItemStore items, IItemParamLookup catalog, ItemManager? periods = null)
     {
+        _periods = periods;
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
     }
@@ -96,9 +99,18 @@ public sealed class MaterialExchange
         {
             var created = _items.GrantToCharacter(characterId, itemId, itemClass, SlotKind.Inventory,
                 EquipmentRules.FirstFreeBagPosition(_items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory)), pieceCount);
+            if (_periods is not null) created = _periods.StampPeriod(created, TimedItemPeriods.MinutesOf(definition, _periods.TimerMinutes));
+            if (TimedItemRules.IsTimed(created)) _timedGranted.Add(new TimedItem(created.ItemUid, created.ItemIndex, created.BreakedAt));
             operations.Add(new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(created.ItemUid), created.Stack, created.ItemSlot));
         }
         return operations;
+    }
+
+    public IReadOnlyList<TimedItem> TakeTimedGrants()
+    {
+        var granted = _timedGranted.ToList();
+        _timedGranted.Clear();
+        return granted;
     }
 
     private BagOperation Take(Item held, int count)

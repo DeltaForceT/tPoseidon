@@ -13,7 +13,8 @@ public readonly record struct PlayerMeleeAttacker(
     long Ac,
     long Lk,
     DateTimeOffset NextSwingAt,
-    int CriticalBonus = 0);
+    int CriticalBonus = 0,
+    IReadOnlyList<int>? ElementAttack = null);
 
 public sealed class PlayerMeleeTicker
 {
@@ -61,6 +62,18 @@ public sealed class PlayerMeleeTicker
                 attacker.CriticalBonus,
                 cannotEvade?.Invoke(monster.EntityId) == true);
             _armedByAttacker[attacker.EntityId] = outcome.ArmedNext;
+            if (monster.Guarded) outcome = outcome with { Damage = 0, Result = MeleeResolution.ResultBlock };
+            var elementMask = 0;
+            if (outcome.Damage > 0 && definition is not null)
+            {
+                var elemental = ElementalAttack.Apply(
+                    outcome.Damage,
+                    attacker.ElementAttack ?? Array.Empty<int>(),
+                    element => Skills.SkillActions.ResistOf(definition, element) - monster.ResistLoss(element),
+                    definition.PhysicalR - monster.ResistLoss(Skills.SkillActions.NoElement));
+                outcome = outcome with { Damage = elemental.Damage };
+                elementMask = elemental.ElementMask;
+            }
             if (outcome.Damage > 0 && halvesHits?.Invoke(monster.EntityId) == true)
             {
                 var halved = (long)(outcome.Damage * HardenedShare);
@@ -75,6 +88,10 @@ public sealed class PlayerMeleeTicker
             var (targetX, targetY) = monster.GetInterpolatedPosition(now);
             var hpBefore = monster.CurrentHp;
             monster.AddAttacker(attacker.EntityId);
+            if (monster.Boss is not null && definition is not null)
+            {
+                BossMeleeTally.Record(monster, outcome.Damage, attacker.ElementAttack ?? Array.Empty<int>(), definition);
+            }
             monster.ApplyDamage(outcome.Damage);
             strikes.Add(new PlayerStrike(
                 AttackerEntityId: attacker.EntityId,
@@ -84,9 +101,10 @@ public sealed class PlayerMeleeTicker
                 TargetX: targetX,
                 TargetY: targetY,
                 Damage: outcome.Damage,
-                MobHpAfter: monster.CurrentHp,
+                MobHpAfter: monster.CurrentHp, MobBars: monster.HpBarsField, MobBoss: MonsterVampiricHeal.IsBossFlagged(monster.Atype),
                 HitFlags: 0,
                 HitKind: outcome.Result,
+                ElementMask: elementMask,
                 Killed: monster.IsDead,
                 NextSwingAtUtc: now,
                 MonsterParamId: monster.MonsterParamId,

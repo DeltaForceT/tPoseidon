@@ -1,4 +1,6 @@
+using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.PlayerShop;
+using tPoseidon.Core.Game.Skills;
 using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.Social;
 using tPoseidon.Core.Net.World;
@@ -6,6 +8,8 @@ using tPoseidon.Core.Net.World;
 namespace tPoseidon.Hosting.GameMaster;
 
 public sealed record CatalogMonster(uint Type, string Name, int Level, bool Boss, string Picture = "");
+
+public sealed record CatalogSkill(int Id, string Name, int MaxLevel, string IconFile, int IconBundle);
 
 public sealed record CatalogNpc(uint Type, string Name, string Picture = "");
 
@@ -18,7 +22,7 @@ public sealed record ChatCommandHelp(string Name, string Keyword, string Argumen
 
 public sealed class GameCatalog
 {
-    private GameCatalog(string? source, string? problem, ItemNames items, IReadOnlyList<CatalogMonster> monsters, IReadOnlyList<CatalogNpc> npcs, IReadOnlyList<CatalogMap> maps)
+    private GameCatalog(string? source, string? problem, ItemNames items, IReadOnlyList<CatalogMonster> monsters, IReadOnlyList<CatalogNpc> npcs, IReadOnlyList<CatalogMap> maps, IReadOnlyList<CatalogSkill> skills, IReadOnlyList<MyCampItemEntry> campItems)
     {
         Source = source;
         Problem = problem;
@@ -26,6 +30,8 @@ public sealed class GameCatalog
         Monsters = monsters;
         Npcs = npcs;
         Maps = maps;
+        Skills = skills;
+        CampItems = campItems;
         ChatCommands = GameMasterChat.Commands.Select(command => new ChatCommandHelp(command.Name, command.Keyword, command.Arguments, command.Description)).ToList();
     }
 
@@ -41,10 +47,14 @@ public sealed class GameCatalog
 
     public IReadOnlyList<CatalogMap> Maps { get; }
 
+    public IReadOnlyList<CatalogSkill> Skills { get; }
+
+    public IReadOnlyList<MyCampItemEntry> CampItems { get; }
+
     public IReadOnlyList<ChatCommandHelp> ChatCommands { get; }
 
     public static GameCatalog Empty(string problem) =>
-        new(null, problem, new ItemNames(Array.Empty<(string, ItemParamEntry)>()), Array.Empty<CatalogMonster>(), Array.Empty<CatalogNpc>(), Array.Empty<CatalogMap>());
+        new(null, problem, new ItemNames(Array.Empty<(string, ItemParamEntry)>()), Array.Empty<CatalogMonster>(), Array.Empty<CatalogNpc>(), Array.Empty<CatalogMap>(), Array.Empty<CatalogSkill>(), Array.Empty<MyCampItemEntry>());
 
     public static GameCatalog For(HostSettings settings)
     {
@@ -85,7 +95,20 @@ public sealed class GameCatalog
             .Select(map => new CatalogMap(map.Id, map.Name.Trim(), MonstersOf(map, pools)))
             .OrderBy(map => map.Id)
             .ToList();
-        return new GameCatalog(libconfigPath, null, ItemNames.Load(libconfigPath), monsters, npcs, maps);
+        var skills = reader.LoadSkillParam2()
+            .Where(entry => entry.Id > 0 && !string.IsNullOrWhiteSpace(entry.Name))
+            .GroupBy(entry => entry.Id)
+            .Select(group => group.First())
+            .Select(entry => new CatalogSkill(entry.Id, entry.Name.Trim(), Math.Min(entry.MaxSkillLevel, SkillDefinition.HighestLevel), entry.IconFile, entry.IconBundle))
+            .OrderBy(skill => skill.Id)
+            .ToList();
+        var campItems = reader.LoadMyCampItems()
+            .Where(entry => MyCampGifts.IsItemIndex(entry.Id) && entry.Name.Length > 0)
+            .GroupBy(entry => entry.Id)
+            .Select(group => group.First())
+            .OrderBy(entry => entry.Id)
+            .ToList();
+        return new GameCatalog(libconfigPath, null, ItemNames.Load(libconfigPath), monsters, npcs, maps, skills, campItems);
     }
 
     public string? MapName(int id) => Maps.FirstOrDefault(map => map.Id == id)?.Name;
@@ -114,6 +137,18 @@ public sealed class GameCatalog
                 && (category is null || PlayerShopSearchRules.CategoryOf(item.Definition) == category)
                 && Matches(text, item.Name, (uint)item.Id))
             .OrderBy(item => item.Id);
+    }
+
+    public IEnumerable<CatalogSkill> FindSkills(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return Skills.Where(skill => Matches(text, skill.Name, (uint)skill.Id));
+    }
+
+    public IEnumerable<MyCampItemEntry> FindCampItems(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return CampItems.Where(item => Matches(text, item.Name, (uint)item.Id));
     }
 
     public IEnumerable<CatalogMap> FindMaps(string text)

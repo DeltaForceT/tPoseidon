@@ -109,6 +109,44 @@ public static class MyCampFrames
         return w.ToArray();
     }
 
+    public const int TimerNoticeBufferBytes = 1024;
+    public const int TimerNoticeMinimumFreeBytes = 12;
+    public const int TimerNoticeEntryBytes = 14;
+
+    public static IReadOnlyList<byte[]> TimerNotices(IReadOnlyList<MyCampTimerNotice> notices)
+    {
+        ArgumentNullException.ThrowIfNull(notices);
+        var frames = new List<byte[]>();
+        var pending = new List<MyCampTimerNotice>();
+        var free = TimerNoticeBufferBytes - sizeof(ushort);
+        foreach (var notice in notices)
+        {
+            if (free <= TimerNoticeMinimumFreeBytes)
+            {
+                frames.Add(TimerNoticeFrame(pending));
+                pending.Clear();
+                free = TimerNoticeBufferBytes - sizeof(ushort);
+            }
+            pending.Add(notice);
+            free -= TimerNoticeEntryBytes;
+        }
+        if (pending.Count > 0) frames.Add(TimerNoticeFrame(pending));
+        return frames;
+    }
+
+    private static byte[] TimerNoticeFrame(IReadOnlyList<MyCampTimerNotice> notices)
+    {
+        var w = new PacketWriter(sizeof(ushort) + notices.Count * TimerNoticeEntryBytes);
+        w.WriteUInt16((ushort)notices.Count);
+        foreach (var notice in notices)
+        {
+            w.WriteUInt64(notice.ItemUid);
+            w.WriteUInt16(notice.ItemIndex);
+            w.WriteUInt32(notice.Minutes);
+        }
+        return w.ToArray();
+    }
+
     public static byte[] Items(IReadOnlyList<MyCampItemRecord> records)
     {
         ArgumentNullException.ThrowIfNull(records);
@@ -189,6 +227,14 @@ public static class MyCampFrames
 
     public static byte ReadTransferResult(ReadOnlySpan<byte> payload) =>
         payload.Length > 0 ? payload[0] : MyCampRules.TransferFailed;
+
+    public static bool TryReadWarehouseRequest(ReadOnlySpan<byte> payload, out ushort entityId)
+    {
+        entityId = 0;
+        if (payload.Length < sizeof(ushort)) return false;
+        entityId = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(payload);
+        return true;
+    }
 
     public static bool TryReadOpen(ReadOnlySpan<byte> payload, Encoding text, out MyCampOpenRequest request)
     {

@@ -5,6 +5,8 @@ public enum GuildShopGoodsType
     MemberExpansion = 1,
     Depot = 2,
     DepotExpansion = 3,
+    Emblem = 4,
+    EmblemPackage = 5,
 }
 
 public static class GuildShopErrors
@@ -15,12 +17,14 @@ public static class GuildShopErrors
     public const int PurchasePending = 3;
     public const int NotFoundGoods = 4;
     public const int MemberMaxOver = 5;
+    public const int EmblemCountOver = 6;
     public const int EnabledDepot = 7;
     public const int DepotMaxOver = 8;
     public const int NotYetBuyDepot = 9;
+    public const int EmblemPackageOwned = 102;
 }
 
-public readonly record struct GuildShopState(int Coins, int MaxMembers, int DepotTabs);
+public readonly record struct GuildShopState(int Coins, int MaxMembers, int DepotTabs, byte EmblemPurchase = GuildEmblemPurchase.None);
 
 public readonly record struct GuildShopDecision(int Error, GuildShopState After);
 
@@ -52,6 +56,12 @@ public static class GuildShopRules
                 : state.DepotTabs >= GuildDepotRules.MaxTabs
                     ? (GuildShopErrors.DepotMaxOver, state)
                     : (GuildShopErrors.None, state with { DepotTabs = state.DepotTabs + 1 }),
+            GuildShopGoodsType.Emblem => state.EmblemPurchase != GuildEmblemPurchase.None
+                ? (GuildShopErrors.EmblemCountOver, state)
+                : (GuildShopErrors.None, state with { EmblemPurchase = GuildEmblemPurchase.OneEmblem }),
+            GuildShopGoodsType.EmblemPackage => state.EmblemPurchase == GuildEmblemPurchase.Package
+                ? (GuildShopErrors.EmblemPackageOwned, state)
+                : (GuildShopErrors.None, state with { EmblemPurchase = GuildEmblemPurchase.Package }),
             _ => (GuildShopErrors.NotFoundGoods, state),
         };
         if (error != GuildShopErrors.None) return new GuildShopDecision(error, state);
@@ -75,4 +85,8 @@ public interface IGuildShopStore
     IReadOnlyList<GuildShopHistoryEntry> History(ulong guildCode);
 
     int? AddCoins(ulong guildCode, int amount);
+
+    GuildEmblemState? EmblemOf(ulong guildCode);
+
+    GuildEmblemDecision? RegisterEmblem(ulong guildCode, Func<GuildEmblemState, GuildEmblemDecision> decide);
 }

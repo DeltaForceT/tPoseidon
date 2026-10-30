@@ -5,6 +5,8 @@ namespace tPoseidon.Core.InterServer;
 
 public static class EquipStatusUpgradeMessages
 {
+    private const long NoExpiryTicks = 0;
+
     public static byte[] EncodeRequest(EquipStatusUpgrade upgrade)
     {
         ArgumentNullException.ThrowIfNull(upgrade);
@@ -28,7 +30,7 @@ public static class EquipStatusUpgradeMessages
     public static byte[] EncodeResult(EquipStatusUpgradeResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        var w = new PacketWriter(8 + result.Items.Count * 24);
+        var w = new PacketWriter(8 + result.Items.Count * 36);
         w.WriteInt64(result.RemainMoney);
         WriteItems(w, result.Items);
         return w.ToArray();
@@ -65,6 +67,8 @@ public static class EquipStatusUpgradeMessages
             w.WriteInt16(item.RefineType);
             w.WriteByte(item.RefineLevel);
             w.WriteByte(item.RefineState);
+            w.WriteInt32(item.PeriodMinutes);
+            w.WriteInt64(item.BreakedAt?.UtcTicks ?? NoExpiryTicks);
         }
     }
 
@@ -74,8 +78,19 @@ public static class EquipStatusUpgradeMessages
         var items = new List<EquipUpgradeItem>(count);
         for (var i = 0; i < count; i++)
         {
-            items.Add(new EquipUpgradeItem((EquipUpgradeAction)r.ReadByte(), r.ReadUInt64(), r.ReadInt32(), r.ReadByte(), r.ReadUInt16(),
-                r.ReadByte(), r.ReadInt16(), r.ReadByte(), r.ReadByte()));
+            var action = (EquipUpgradeAction)r.ReadByte();
+            var uid = r.ReadUInt64();
+            var index = r.ReadInt32();
+            var itemClass = r.ReadByte();
+            var itemCount = r.ReadUInt16();
+            var slot = r.ReadByte();
+            var refineType = r.ReadInt16();
+            var refineLevel = r.ReadByte();
+            var refineState = r.ReadByte();
+            var period = r.ReadInt32();
+            var ticks = r.ReadInt64();
+            items.Add(new EquipUpgradeItem(action, uid, index, itemClass, itemCount, slot, refineType, refineLevel, refineState, period,
+                ticks == NoExpiryTicks ? null : new DateTimeOffset(ticks, TimeSpan.Zero)));
         }
         return items;
     }

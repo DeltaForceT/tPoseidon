@@ -73,9 +73,14 @@ public sealed partial class ItemUseService
         }
 
         var operations = new List<BagOperation>(grants.Count + removals);
-        foreach (var grant in grants) operations.Add(Grant(character.CharacterId, grant));
+        var timedGrants = new List<Item>();
+        foreach (var grant in grants) operations.Add(Grant(character.CharacterId, grant, timedGrants));
         operations.Add(TakeOne(openedBox.Item, openedBox.Definition));
         if (heldKey is { } usedKey) operations.Add(TakeOne(usedKey.Item, usedKey.Definition));
+        if (_player.TimedItemsGranted is { } announce)
+        {
+            foreach (var timed in timedGrants) await announce(TimedItemPeriods.Registered([timed]), ct).ConfigureAwait(false);
+        }
         await SendAsync(Opcode.S2C_KEYBOX_CLOSED, Array.Empty<byte>(), ct).ConfigureAwait(false);
         await SendAsync(Opcode.S2C_KEYBOX_RESULT, KeyBoxFrames.Results(operations), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_remote()}   key box {openedBox.Item.ItemIndex} opened with present {choice.PresentId}: {string.Join(", ", grants.Select(grant => $"{grant.ItemId} x{grant.Count}"))}");
@@ -89,7 +94,7 @@ public sealed partial class ItemUseService
 
     private static KeyBoxItem KeyBoxItemOf(Item item, ItemParamEntry definition) => new(item.ItemIndex, definition.Effect, item.Stack);
 
-    private BagOperation Grant(ulong characterId, PresentGrant grant)
+    private BagOperation Grant(ulong characterId, PresentGrant grant, List<Item>? timedGrants = null)
     {
         var given = _catalog.GetById(grant.ItemId)!;
         var count = (ushort)Math.Clamp(grant.Count, PresentRolls.SmallestCount, ushort.MaxValue);
@@ -102,6 +107,7 @@ public sealed partial class ItemUseService
             return new BagOperation(QuestResultFrames.StackChanged, given.ObjectClass, (uint)grant.ItemId, BagItemIds.OnWire(stack.ItemUid), total);
         }
         var minted = _itemManager.GrantRewardItem(characterId, grant.ItemId, count, itemClassOverride: given.ObjectClass);
+        if (timedGrants is not null && TimedItemRules.IsTimed(minted)) timedGrants.Add(minted);
         return new BagOperation(QuestResultFrames.Created, given.ObjectClass, (uint)grant.ItemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);
     }
 

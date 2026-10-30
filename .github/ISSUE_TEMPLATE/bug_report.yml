@@ -26,7 +26,7 @@ body:
     attributes:
       label: tPoseidon version
       description: "From `tposeidon status`, the panel title bar, or the release file name."
-      placeholder: 0.60.0-beta
+      placeholder: 0.75.0-beta
     validations:
       required: true
 
@@ -36,10 +36,6 @@ body:
       label: Server operating system
       options:
         - Windows 10 / 11 (x64)
-        - Linux x64
-        - Linux arm64
-        - macOS Intel (x64)
-        - macOS Apple silicon (arm64)
         - Other (say below)
     validations:
       required: true

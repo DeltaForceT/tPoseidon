@@ -5,6 +5,8 @@ public sealed record SkillParam2Entry
     public required int Id { get; init; }
     public int Type { get; init; }
     public string Name { get; init; } = string.Empty;
+    public string IconFile { get; init; } = string.Empty;
+    public int IconBundle { get; init; }
     public int SkillOption { get; init; }
     public bool LevelUp { get; init; }
     public int MaxSkillLevel { get; init; }

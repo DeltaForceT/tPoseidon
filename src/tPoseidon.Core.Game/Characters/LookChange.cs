@@ -39,6 +39,19 @@ public static class LookChangeRules
         };
     }
 
+    public static byte HighestJobOf(Character character)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        if (character.Job3 != 0) return character.Job3;
+        return character.Job2 != 0 ? character.Job2 : (byte)character.Species;
+    }
+
+    public static ushort BodyTypeOf(Character character)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        return MakeUpOf(character, character.JobState)?.Type ?? (ushort)character.Species;
+    }
+
     public static ushort[] Looks(Character character)
     {
         ArgumentNullException.ThrowIfNull(character);

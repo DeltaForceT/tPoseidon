@@ -18,9 +18,6 @@ public static class BrokerAckFamily
             case InterServerOpcode.QcmdCompleteQuest:
                 okReply = InterServerOpcode.QcmdCompleteQuestAckOk;
                 return true;
-            case InterServerOpcode.CcmdMegaphone:
-                okReply = InterServerOpcode.CcmdMegaphoneAckOk;
-                return true;
             default:
                 okReply = default;
                 return false;

@@ -280,15 +280,17 @@ internal sealed class CoupleController
             return;
         }
         var dressItemId = choice.Dress?.ItemId ?? 0;
-        var operations = new List<BagOperation>();
-        foreach (var (itemId, count) in choice.Coupons()) operations.AddRange(Take(character.CharacterId, itemId, count));
+        var ringCoupon = choice.RingCoupon is { } ringTake ? Take(character.CharacterId, ringTake.ItemId, ringTake.Count) : [];
+        var dressCoupon = choice.DressCoupon is { } dressTake ? Take(character.CharacterId, dressTake.ItemId, dressTake.Count) : [];
         if (choice.Fee > 0) stats.GrantMoney(-choice.Fee, tPoseidon.Core.Game.Stats.StatChangeSource.Marriage);
         if (!_store.SetMarriageOptions(couple.CoupleCode, choice.Ring.ItemId, dressItemId, (short)choice.Title.Index, DateTimeOffset.UtcNow))
         {
             Log(st, $"marriage options of couple {couple.CoupleCode} not stored");
             return;
         }
-        if (operations.Count > 0) await SendAsync(st, Opcode.S2C_ITEM_ADDED, QuestResultFrames.ItemOperations(operations)).ConfigureAwait(false);
+        await SendAsync(st, Opcode.S2C_MARRIAGE_OPTION_DONE, CoupleFrames.OptionDone(FirstOperation(ringCoupon), FirstOperation(dressCoupon))).ConfigureAwait(false);
+        var otherStacks = ringCoupon.Skip(1).Concat(dressCoupon.Skip(1)).ToList();
+        if (otherStacks.Count > 0) await SendAsync(st, Opcode.S2C_ITEM_ADDED, QuestResultFrames.ItemOperations(otherStacks)).ConfigureAwait(false);
         await _link.SendAsync(CoupleSocialFrames.LinkMarriageOption,
             CoupleSocialFrames.MarriageOption(couple.CoupleCode, (ushort)choice.Ring.ItemId, (ushort)dressItemId, (byte)choice.Title.Index), default).ConfigureAwait(false);
         Log(st, $"couple {couple.CoupleCode} options: ring {choice.Ring.ItemId}, dress {dressItemId}, title {choice.Title.Index}, fee {choice.Fee} (coupon 0x{request.CouponWireUid:X})");
@@ -552,6 +554,8 @@ internal sealed class CoupleController
 
     private int HeldCount(ulong characterId, int itemId) =>
         _items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory).Where(item => item.ItemIndex == itemId).Sum(item => item.Stack);
+
+    private static BagOperation? FirstOperation(List<BagOperation> operations) => operations.Count > 0 ? operations[0] : null;
 
     private List<BagOperation> Take(ulong characterId, int itemId, int count)
     {

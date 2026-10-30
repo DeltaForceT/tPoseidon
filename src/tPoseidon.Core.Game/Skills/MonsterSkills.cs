@@ -25,6 +25,8 @@ public static class MonsterSkills
     public const int FluentWaist = 1240;
     public const int Destruction = 1294;
     public const int Vampiric = 1460;
+    public const int Unshield = 1081;
+    public const int DarkSlow = 1322;
     public const int Poison = 1464;
     public const int PoisonDo = 1465;
     public const int FreeMotionScroll = 1398;
@@ -102,7 +104,7 @@ public static class MonsterSkills
 
     public static bool IsObject(int actionId) =>
         actionId is DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
-            or Destruction or Vampiric or Poison or Charging or Warp;
+            or Destruction or Vampiric or Poison or Charging or Warp or Unshield or DarkSlow;
 
     public static long ChargingPower(long pushed, long casterHp, float ratio) =>
         WireLimits.Saturate(unchecked((pushed + ChargingDistanceBase) * casterHp) * (double)ratio / ChargingDivisor);

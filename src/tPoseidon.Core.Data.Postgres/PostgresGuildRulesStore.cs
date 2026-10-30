@@ -280,7 +280,8 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
                 g.guild_members, g.guild_intro, g.guild_notice, g.emblem_code, g.guild_join_point, g.guild_sms_point, g.guild_url, g.guild_pw,
                 g.guild_point_increase, g.guild_ranking, g.guild_ranking_point, g.guild_max_members, COALESCE(c.name, ''),
                 COALESCE(l.guild_ladder, 0), COALESCE(l.match_count, 0::smallint), COALESCE(l.win_count, 0::smallint), COALESCE(l.lose_count, 0::smallint),
-                COALESCE(l.draw_count, 0::smallint), COALESCE(l.disc_count, 0::smallint), g.depot_tabs, g.guild_coin
+                COALESCE(l.draw_count, 0::smallint), COALESCE(l.disc_count, 0::smallint), g.depot_tabs, g.guild_coin,
+                g.icon_purchase, g.icon_times, g.icon_background, g.icon_color, g.icon_item, g.icon_changed_at
             FROM guild g
             LEFT JOIN characters c ON c.character_id = g.master_char_uid
             LEFT JOIN guild_ladder l ON l.guild_code = g.guild_code
@@ -320,7 +321,12 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
                     DiscCount = r.GetInt16(25),
                 },
                 DepotTabs: (int)r.GetInt16(26),
-                Coins: r.GetInt32(27)), ("g", guild));
+                Coins: r.GetInt32(27),
+                Emblem: new GuildEmblemState(
+                    new GuildEmblem((byte)r.GetInt16(30), (byte)r.GetInt16(31), (uint)r.GetInt64(32)),
+                    (byte)r.GetInt16(28),
+                    (uint)r.GetInt32(29),
+                    r.IsDBNull(33) ? null : r.GetFieldValue<DateTimeOffset>(33))), ("g", guild));
         if (head is not { } found) return null;
         var grades = Rows(conn, tx, "SELECT grade_code, grade_point, grade_name FROM guild_grade WHERE guild_code = @g ORDER BY grade_code",
             r => new GuildGrade { GuildCode = guildCode, GradeCode = (byte)r.GetInt16(0), GradePoint = r.GetInt32(1), GradeName = r.GetString(2) }, ("g", guild));
@@ -335,7 +341,7 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
                 NoticeContent = r.GetString(2),
                 NoticeCreatedAt = r.GetFieldValue<DateTimeOffset>(3),
             }, ("g", guild), ("n", GuildRules.NoticesShown));
-        return new GuildDetail(found.Guild, found.Max, found.MasterName, found.Ladder, grades, notices, found.DepotTabs, found.Coins);
+        return new GuildDetail(found.Guild, found.Max, found.MasterName, found.Ladder, grades, notices, found.DepotTabs, found.Coins, found.Emblem);
     }
 
     public IReadOnlyList<GuildRosterEntry> Members(uint guildCode)
@@ -392,6 +398,42 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
         var cmd = new NpgsqlCommand(sql, conn, tx);
         foreach (var (name, value) in parameters) cmd.Parameters.AddWithValue(name, value);
         return cmd;
+    }
+
+    public GuildResult<GuildNotice> AddNotice(ulong characterId, uint guildCode, string content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        long guild = guildCode;
+        var created = Row(conn, tx, """
+            INSERT INTO guild_notice (guild_code, char_uid, notice_content) VALUES (@g, @c, @t)
+            RETURNING notice_code, notice_created_at
+            """, r => new GuildNotice
+            {
+                NoticeCode = r.GetInt64(0),
+                GuildCode = guildCode,
+                CharacterId = characterId,
+                NoticeContent = content,
+                NoticeCreatedAt = r.GetFieldValue<DateTimeOffset>(1),
+            }, ("g", guild), ("c", (long)characterId), ("t", content));
+        if (created is null) return GuildResult.Fail<GuildNotice>(GuildRules.Failed);
+        Execute(conn, tx, """
+            DELETE FROM guild_notice WHERE guild_code = @g AND notice_code NOT IN (
+                SELECT notice_code FROM guild_notice WHERE guild_code = @g
+                ORDER BY notice_created_at DESC, notice_code DESC LIMIT @n)
+            """, ("g", guild), ("n", GuildRules.NoticesShown));
+        tx.Commit();
+        return GuildResult.Ok(created);
+    }
+
+    public int DeleteNotice(uint guildCode, long noticeCode)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        var removed = Execute(conn, tx, "DELETE FROM guild_notice WHERE guild_code = @g AND notice_code = @n", ("g", (long)guildCode), ("n", noticeCode));
+        tx.Commit();
+        return removed == 1 ? GuildRules.Ok : GuildRules.NoticeNotFound;
     }
 
     private static int Execute(NpgsqlConnection conn, NpgsqlTransaction tx, string sql, params (string Name, object Value)[] parameters)

@@ -12,6 +12,7 @@ public enum PlayFailureReason
     ClientRunning,
     ServerBusy,
     UpdateFailed,
+    UpdatesNotTrusted,
 }
 
 public sealed class PlayFailure : HostingException

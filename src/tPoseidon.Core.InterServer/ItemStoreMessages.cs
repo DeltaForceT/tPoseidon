@@ -17,6 +17,7 @@ public enum ItemStoreSubOp : byte
     UnassignFromCharacter = 0x09,
     AssignToCharacter = 0x0A,
     SetStack = 0x0B,
+    SetBreakedAt = 0x0C,
 }
 
 public static class ItemStoreWire

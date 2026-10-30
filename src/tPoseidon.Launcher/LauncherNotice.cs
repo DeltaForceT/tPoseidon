@@ -27,6 +27,7 @@ public sealed record LauncherNotice(BannerKind Kind, string Title, string? Detai
             PlayFailureReason.ClientNotWritable => Error("The client folder cannot be changed", detail),
             PlayFailureReason.ServerBusy => Error("The server is busy", "Too many requests from your connection. Wait a moment and try again."),
             PlayFailureReason.UpdateFailed => Error("The update could not be applied", detail),
+            PlayFailureReason.UpdatesNotTrusted => Error("The server's updates cannot be trusted", detail),
             PlayFailureReason.ClientRunning => Error("The game client is already running", "Close it, then press Play again."),
             _ => throw new ArgumentOutOfRangeException(nameof(exception), failure.Reason, "Unknown play failure."),
         };

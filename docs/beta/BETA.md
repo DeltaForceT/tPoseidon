@@ -8,7 +8,7 @@ A lot of the game works. What we don't know yet is how it holds up with real pla
 
 ## Stages
 
-**Closed beta.** A small group of invited testers. We want to know three things: does setup work on Windows, Linux and macOS, can you play from character creation onward, and does updating ever lose data. Expect frequent builds, sometimes a few a week.
+**Closed beta.** A small group of invited testers. We want to know three things: does setup work on Windows, can you play from character creation onward, and does updating ever lose data. Expect frequent builds, sometimes a few a week.
 
 **Open beta.** Anyone can download it. We slow down on new features and spend the time on bugs, performance, and making hosting easier. Fewer builds, and each one gets proper release notes.
 
@@ -45,7 +45,7 @@ To update:
 
 ## Version numbers
 
-They look like `0.MINOR.PATCH-beta`, for example `0.60.0-beta`, shown as v0.60 Beta. A higher number is a newer release, and a release that changes the database says so at the top of its notes.
+They look like `0.MINOR.PATCH-beta`, for example `0.75.0-beta`, shown as v0.75 Beta. A higher number is a newer release, and a release that changes the database says so at the top of its notes.
 
 You'll find the version in `tposeidon status`, the control panel's title bar and the release file name. Put it in every bug report.
 
@@ -57,8 +57,8 @@ For now, expect:
 
 - some systems missing or half done (the release notes say what's in);
 - text, positions or timings that don't quite match the original yet;
-- the control panel is packaged for Windows, Linux and macOS but has only been tried on Windows; the `tposeidon` command works everywhere;
-- Linux and macOS less tested than Windows.
+- Windows packages only; Linux and macOS come with version 1.0, after we have tested them ourselves;
+- if the client closes right after Play or shows `?????` for names, check **Client language** in the panel (settings menu, "..." menu or bubble) and the panel log line that starts with "Client mode": it says which of `data/libconfig.dat` and `data/libconfig_eng.dat` the client and the servers use. From 0.75 you only need one of the two files.
 
 ## How fixes reach you
 

@@ -2,6 +2,7 @@ using System.Text;
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.CardBattle;
+using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Social;
 
@@ -14,6 +15,15 @@ public readonly record struct CardBattleStatusOrder(ulong CharacterId, ushort Cl
 
 public static class CardBattleFrames
 {
+    public const int MaxSnatchOperations = 3;
+
+    public static byte[] SnatchOperations(IReadOnlyList<BagOperation> operations)
+    {
+        ArgumentNullException.ThrowIfNull(operations);
+        if (operations.Count > MaxSnatchOperations) throw new ArgumentOutOfRangeException(nameof(operations));
+        return QuestResultFrames.ItemOperations(operations);
+    }
+
     public const ushort MakeBattle = 0x1F41;
     public const ushort MakeRefused = 0x1F43;
     public const ushort Ask = 0x1F44;

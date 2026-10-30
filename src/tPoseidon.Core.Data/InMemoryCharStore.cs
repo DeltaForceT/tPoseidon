@@ -159,6 +159,8 @@ public sealed class InMemoryCharStore : ICharStore
         CharAuthority = src.CharAuthority,
         GuildState = src.GuildState,
         IsGuildChief = src.IsGuildChief,
+        IsMember = src.IsMember,
+        BossKills = src.BossKills,
         GenTime = src.GenTime,
     };
 }

@@ -54,11 +54,36 @@ internal sealed class StartCommand
             return;
         }
 
+        if (_commandLine.NoBackup)
+        {
+            Console.WriteLine($"This database was last used by tPoseidon {settings.LastStartedVersion}; this is {VersionCommand.Current}. Starting without a backup (--no-backup).");
+            return;
+        }
+
         Console.WriteLine($"This database was last used by tPoseidon {settings.LastStartedVersion}; this is {VersionCommand.Current}.");
         Console.WriteLine("A new version can change how data is stored, and the change can't be undone without a backup.");
-        if (_prompt.Confirm("Back up the database first?", defaultValue: true))
+        if (!_prompt.Confirm("Back up the database first?", defaultValue: true))
+        {
+            return;
+        }
+
+        try
         {
             BackupCommand.Backup(_paths, settings);
+        }
+        catch (HostingException ex)
+        {
+            Console.WriteLine("The database could not be backed up:");
+            Console.WriteLine(ex.Message);
+            if (!_prompt.Interactive)
+            {
+                throw new CliException("The servers were not started because the backup failed. Run 'tposeidon start --no-backup' to start without a backup.", ex);
+            }
+
+            if (!_prompt.Confirm("Start without a backup?", defaultValue: false))
+            {
+                throw new CliException("The servers were not started. Fix the backup, or run 'tposeidon start --no-backup' to start without one.", ex);
+            }
         }
     }
 

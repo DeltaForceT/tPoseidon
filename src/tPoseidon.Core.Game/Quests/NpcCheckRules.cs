@@ -1,3 +1,5 @@
+using tPoseidon.Core.Data;
+
 namespace tPoseidon.Core.Game.Quests;
 
 public static class NpcCheckRules
@@ -10,6 +12,12 @@ public static class NpcCheckRules
     public const int SkillLevelLow = 2;
     public const int SkillMissing = 3;
     public const int RandomMoveZones = 5;
+
+    public static int Job(Character character, int jobTypeFlag1, int jobTypeFlag2)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        return Job(OccupationRules.CurrentJobOf(character), jobTypeFlag1, jobTypeFlag2);
+    }
 
     public static int Job(int job, int jobTypeFlag1, int jobTypeFlag2)
     {

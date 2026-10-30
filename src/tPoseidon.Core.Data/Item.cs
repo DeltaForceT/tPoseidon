@@ -32,6 +32,9 @@ public sealed record Item
 
     public const byte RareClass = 2;
 
+    public static DateTimeOffset BreakedAfter(byte itemClass, int periodMinutes, DateTimeOffset now) =>
+        periodMinutes > 0 && itemClass == RareClass ? now.AddMinutes(periodMinutes) : NeverBreaks;
+
     public static readonly DateTimeOffset NeverBreaks = new(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
     public int WeightUnits => ItemClass == RareClass ? 1 : Stack;

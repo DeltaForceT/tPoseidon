@@ -18,6 +18,18 @@ public sealed class ItemManager
 
     public Func<int, int?>? DrillLifeOf { get; set; }
 
+    public IReadOnlyDictionary<int, int> TimerMinutes { get; set; } = new Dictionary<int, int>();
+
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
+
+    public Item StampPeriod(Item item, int minutes)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (minutes <= 0 || item.ItemClass != Item.RareClass) return item;
+        var expiresAt = Clock.GetUtcNow().AddMinutes(minutes);
+        return _itemStore.SetBreakedAt(item.ItemUid, expiresAt) ? item with { BreakedAt = expiresAt } : item;
+    }
+
     public ushort NewStack(int itemIndex, ushort stack) =>
         DrillLifeOf?.Invoke(itemIndex) is int life && life > 0 ? (ushort)Math.Min(life, ushort.MaxValue) : stack;
 
@@ -67,7 +79,8 @@ public sealed class ItemManager
         int itemIndex,
         ushort stack,
         byte slotKind = SlotKind.Inventory,
-        byte? itemClassOverride = null)
+        byte? itemClassOverride = null,
+        int? periodMinutes = null)
     {
         var occupiedSlots = new HashSet<byte>(
             _itemStore.GetForCharacterBySlotKind(characterId, slotKind)
@@ -84,6 +97,7 @@ public sealed class ItemManager
             slotKind: slotKind,
             slotPosition: freeSlot,
             stack: NewStack(itemIndex, stack));
+        granted = StampPeriod(granted, periodMinutes ?? TimedItemPeriods.MinutesOf(_itemCatalog.GetById(itemIndex), TimerMinutes));
         ItemGranted?.Invoke(new ItemGrantedEvent
         {
             CharacterId = characterId,

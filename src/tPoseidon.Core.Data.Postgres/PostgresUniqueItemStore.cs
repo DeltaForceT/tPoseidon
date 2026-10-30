@@ -64,20 +64,6 @@ public sealed class PostgresUniqueItemStore : IUniqueItemStore
         return credited;
     }
 
-    public IReadOnlyList<BossKillHistoryRecord> BossKillHistory(ulong charUid)
-    {
-        using var conn = _dataSource.OpenConnectionForActiveSchema();
-        using var cmd = new NpgsqlCommand("SELECT mon_id, kill_count, kill_date FROM bossmon WHERE char_uid = @ch ORDER BY mon_id", conn);
-        cmd.Parameters.AddWithValue("ch", unchecked((long)charUid));
-        using var reader = cmd.ExecuteReader();
-        var history = new List<BossKillHistoryRecord>();
-        while (reader.Read())
-        {
-            history.Add(new BossKillHistoryRecord(reader.GetInt32(0), reader.GetInt32(1), new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(2), DateTimeKind.Utc))));
-        }
-        return history;
-    }
-
     public IReadOnlyList<BossKillRecord> LatestBossKills(ulong charUid)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();

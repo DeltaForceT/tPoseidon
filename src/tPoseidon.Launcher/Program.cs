@@ -14,6 +14,11 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        if (LauncherSwap.TryRun(args, new ProcessSwapHost(), out var swapped))
+        {
+            return swapped == SwapResult.Failed ? 1 : 0;
+        }
+
         AppDomain.CurrentDomain.UnhandledException += (_, e) => WriteCrash(e.ExceptionObject);
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         return 0;
@@ -21,6 +26,17 @@ public static class Program
 
     public static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<App>().UsePlatformDetect().WithInterFont();
+
+    internal static LauncherSelfUpdater? SelfUpdaterFor(Branding? branding, ClientUpdater updater)
+    {
+        if (branding?.Spec.LauncherVersion is not { } version || Environment.ProcessPath is not { } executable)
+        {
+            return null;
+        }
+
+        HelperCopy.RemoveFinished();
+        return new LauncherSelfUpdater(AppContext.BaseDirectory, version, Path.GetFileName(executable), updater, new ProcessSwapHost());
+    }
 
     private static void WriteCrash(object error)
     {
@@ -64,7 +80,8 @@ public sealed class App : Application
         var path = LauncherSettings.PathFor(branding);
         var settings = LauncherSettings.Load(path, out var problem);
         IClientSetupStore? setup = OperatingSystem.IsWindows() ? new RegistryClientSetupStore() : null;
-        var model = new LauncherModel(settings, path, new HttpTicketService(), new LocalClientHost(), new ClientUpdater(HttpUpdateSource.Create(), TimeSpan.FromSeconds(2)), branding, setup);
+        var updater = new ClientUpdater(HttpUpdateSource.Create(), TimeSpan.FromSeconds(2));
+        var model = new LauncherModel(settings, path, new HttpTicketService(), new LocalClientHost(), updater, branding, setup, Program.SelfUpdaterFor(branding, updater));
         var startupFile = args.FirstOrDefault(arg => arg.EndsWith(ServerFile.Extension, StringComparison.OrdinalIgnoreCase));
         if (startupFile is not null)
         {

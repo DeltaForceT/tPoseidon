@@ -202,12 +202,20 @@ public static class MeleeSwingFrames
             ? payload
             : throw new InvalidPacketException($"The {what} payload must be exactly {size} bytes, got {payload.Length}.");
 
-    private static byte[] Swing(PlayerStrike strike)
+    public static IReadOnlyList<SwingFrame> EncodeBlockedGunShot(ushort attackerEntityId, ushort x, ushort y) => new[]
+    {
+        new SwingFrame(Opcode.S2C_OP_001B_TBD, Swing(attackerEntityId, x, y), NoBlock, SwingAudience.Everyone),
+        new SwingFrame(Opcode.S2C_GUN_LINE_BLOCKED, Array.Empty<byte>(), NoBlock, SwingAudience.Attacker),
+    };
+
+    private static byte[] Swing(PlayerStrike strike) => Swing(strike.AttackerEntityId, strike.AttackerX, strike.AttackerY);
+
+    private static byte[] Swing(ushort attackerEntityId, ushort x, ushort y)
     {
         var w = new PacketWriter(SwingSize);
-        w.WriteUInt16(strike.AttackerEntityId);
-        w.WriteUInt16(strike.AttackerX);
-        w.WriteUInt16(strike.AttackerY);
+        w.WriteUInt16(attackerEntityId);
+        w.WriteUInt16(x);
+        w.WriteUInt16(y);
         w.WriteByte(SwingMotion);
         return w.ToArray();
     }
@@ -234,7 +242,7 @@ public static class MeleeSwingFrames
         w.WriteInt32Field(strike.Damage);
         w.WriteInt32(DeathTypeNormal);
         w.WriteInt32(result);
-        w.WriteInt32(0);
+        w.WriteInt32(strike.ElementMask);
         w.WriteInt32(0);
         w.WriteInt32(PlayerHitPresentation);
         w.WriteInt32(0);
@@ -246,8 +254,8 @@ public static class MeleeSwingFrames
         var w = new PacketWriter(MonsterHpSize);
         w.WriteUInt16(strike.TargetEntityId);
         w.WriteUInt32Field(Math.Max(0L, strike.MobHpAfter));
-        w.WriteUInt16(0);
-        w.WriteByte(0);
+        w.WriteUInt16(strike.MobBars);
+        w.WriteByte(strike.MobBoss ? (byte)1 : (byte)0);
         return w.ToArray();
     }
 

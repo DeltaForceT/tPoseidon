@@ -1,12 +1,14 @@
 using System.Text;
 using tPoseidon.Core.Common;
+using tPoseidon.Core.Data;
+using tPoseidon.Core.Game.Progression;
 
 namespace tPoseidon.Core.Net.Packets;
 
 [WireOpcode((ushort)Opcode.GAME_CHAR_DATA)]
 public sealed class GameCharDataPacket
 {
-    public const int PayloadSize = 69;
+    public const int PayloadSize = 73;
     public const int NameFieldBytes = 16;
 
     public ulong CharacterId { get; init; }
@@ -24,6 +26,25 @@ public sealed class GameCharDataPacket
     public byte StatD { get; init; } = 1;
 
         public ulong Timestamp { get; init; }
+
+    public static GameCharDataPacket For(Character character)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        return new GameCharDataPacket
+        {
+            CharacterId = character.CharacterId,
+            UserId = character.OwnerAccountId,
+            Slot = character.Slot,
+            Name = character.Name,
+            Species = (ushort)character.Species,
+            FTypeIndex = (byte)StatGrowth.TypeIndexOf(character.FType),
+            StatA = character.PtsP,
+            StatB = character.PtsM,
+            StatC = character.PtsS,
+            StatD = character.PtsC,
+            Timestamp = (ulong)character.GenTime.ToUnixTimeSeconds(),
+        };
+    }
 
     public byte[] EncodePayload()
     {

@@ -63,6 +63,8 @@ public sealed class LauncherDesign
 
     public bool TestOnThisComputer { get; private set; }
 
+    public string? PublicKey { get; set; }
+
     public bool IsLocalOnly => _audience == PlayerAudience.Local;
 
     public bool NeedsReachableAddress => IsLocalOnly && !TestOnThisComputer;
@@ -167,13 +169,13 @@ public sealed class LauncherDesign
             Discord,
             Welcome,
             Language,
-            null,
+            PublicKey,
             TestOnThisComputer).Validated();
     }
 
-    public LauncherBuildRequest ToRequest(string version)
+    public LauncherBuildRequest ToRequest(string version, DateTimeOffset builtAt)
     {
-        var spec = ToSpec();
+        var spec = ToSpec() with { LauncherVersion = LauncherVersions.WithBuild(version, builtAt) };
         return new LauncherBuildRequest(spec, Logo!, Background, Icon!, version);
     }
 

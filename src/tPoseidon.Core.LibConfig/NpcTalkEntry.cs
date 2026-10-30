@@ -11,6 +11,7 @@ public sealed record NpcTalkEntry
         public string MsgTable { get; init; } = string.Empty;
 
     public int TeleportId { get; init; }
+    public int TimerId { get; init; }
 
     public int BossPartyZone { get; init; }
 

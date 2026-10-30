@@ -71,6 +71,7 @@ var variantDataRoot = Environment.GetEnvironmentVariable("MT_VARIANT_DATA_ROOT")
     ?? Path.GetFullPath(RepoRoot.Data("variants", "Kr2014"));
 var libConfigPath = new[]
 {
+    Environment.GetEnvironmentVariable("MT_LIBCONFIG_PATH") ?? "",
     Path.Combine(variantDataRoot, "libconfig.dat"),
     Path.Combine(variantDataRoot, "libconfig_eng.dat"),
     RepoRoot.Data("libconfig_kr_en.xml"),
@@ -79,20 +80,24 @@ var guildShopTables = libConfigPath is null
     ? tPoseidon.Core.LibConfig.GuildShopTables.Empty
     : new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadGuildShopTables();
 Log($"guild shop from libconfig: {guildShopTables.Goods.Count} goods (GuildShopGoodsTable)");
+var guildEmblemItems = new tPoseidon.Core.Data.Postgres.PostgresItemStore(postgres.DataSource);
+var guildEmblemProperties = new tPoseidon.Core.Data.Postgres.PostgresItemPropertyStore(postgres.DataSource);
 var guildServer = new tPoseidon.Kr2014.SystemServer.GuildServer(
     new tPoseidon.Core.Net.Social.GuildService(
         new tPoseidon.Core.Data.Postgres.PostgresGuildRulesStore(postgres.DataSource),
         new tPoseidon.Core.Data.Postgres.PostgresGuildShopStore(postgres.DataSource),
         guildShopTables,
         tPoseidon.Core.Common.ClientText.Encoding,
-        TimeProvider.System),
+        TimeProvider.System,
+        (characterId, itemUid) => tPoseidon.Core.Game.Guild.GuildEmblemIcon.Resolve(guildEmblemItems, guildEmblemProperties, characterId, itemUid)),
     new tPoseidon.Core.Data.Postgres.PostgresGuildMatchStore(postgres.DataSource),
     TimeProvider.System,
     socialRoom,
     gameLinks,
     tPoseidon.Core.Common.ClientText.Encoding,
     Log,
-    (systemIni?.GetInt("GuildGameTestMode", 0) ?? 0) != 0);
+    (systemIni?.GetInt("GuildGameTestMode", 0) ?? 0) != 0,
+    tPoseidon.Core.Data.GuildCoinRules.FromEnvironment(Environment.GetEnvironmentVariable(tPoseidon.Core.Data.GuildCoinRules.PerWinVariable)));
 
 if (libConfigPath is not null)
 {
@@ -109,7 +114,14 @@ var coupleService = new CoupleService(
     coupleTables.DeleteSkillIds,
     coupleTables.EventPoints,
     tPoseidon.Core.Common.ClientText.Encoding,
-    TimeProvider.System);
+    TimeProvider.System,
+    libConfigPath is null
+        ? new Dictionary<string, string>()
+        : new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadNameStringTable(CoupleService.SystemServerStringTable),
+    new tPoseidon.Core.Net.Social.FriendOfflineCoupleMemos(
+        friendStore,
+        systemIni?.GetInt("FriendOfflineSMSLimitCount", tPoseidon.Core.Data.FriendRules.OfflineMessageLimit) ?? tPoseidon.Core.Data.FriendRules.OfflineMessageLimit,
+        tPoseidon.Core.Common.ClientText.Encoding));
 friendServer.ZoneInfoOf = gameLinks.ZoneInfoOf;
 friendServer.OrderFriendGame = gameLinks.SendReportedAsync;
 friendServer.OrderPlayerGame = gameLinks.SendOnceAsync;
@@ -193,10 +205,68 @@ var gameMasterChat = new GameMasterChat(
     gameMasterReader?.LoadNameStringTable(GameMasterChat.ResultTable) ?? new Dictionary<string, string>(),
     gameMasterReader?.LoadNameStringTable(GameMasterChat.HelpTable) ?? new Dictionary<string, string>());
 MasterServerClient? masterClient = null;
+
+async Task MasterFrameAsync(InterServerFrame frame, CancellationToken ct)
+{
+    if (frame.Opcode == InterServerOpcode.SysCmdCheckValidity)
+    {
+        if (masterClient is { IsConnected: true } checker)
+        {
+            await checker.SendAsync(new InterServerFrame
+            {
+                Opcode = InterServerOpcode.SysCmdCheckValidityAckOk,
+                Header = new InterServerHeader
+                {
+                    SourceServerIndex = ServerIdentity.System1.ServerIndex,
+                    DestServerIndex = 0,
+                    CharUid = 0,
+                    RequestId = 0,
+                },
+                Body = [],
+            }, ct).ConfigureAwait(false);
+        }
+        return;
+    }
+    if (frame.Opcode != InterServerOpcode.SysCmdMegaphoneMessage) return;
+    var post = MegaphoneMessages.DecodePost(frame.Body, tPoseidon.Core.Common.ClientText.Encoding);
+    var shout = tPoseidon.Core.Net.World.SpecialItemFrames.MegaphoneShouted(post.Kind, post.Message, tPoseidon.Core.Common.ClientText.Encoding);
+    var sent = 0;
+    foreach (var member in socialRoom.Members)
+    {
+        try
+        {
+            var attempts = await tPoseidon.Kr2014.SystemServer.MegaphoneBroadcast.SendWithRetryAsync(
+                token => member.Context.SendFrameAsync(tPoseidon.Core.Net.World.SpecialItemFrames.MegaphoneShout, shout, (byte)Random.Shared.Next(1, 256), token), ct).ConfigureAwait(false);
+            sent++;
+            if (attempts > 1) Log($"[megaphone] delivered to 0x{member.Character.CharacterId:X} after {attempts} attempts");
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or IOException or System.Net.Sockets.SocketException)
+        {
+            Log($"[megaphone] not delivered to 0x{member.Character.CharacterId:X}: {ex.Message}");
+        }
+    }
+    Log($"[megaphone] {post.Code} shown to {sent} player(s): {post.Message}");
+    if (masterClient is { IsConnected: true } master)
+    {
+        await master.SendAsync(new InterServerFrame
+        {
+            Opcode = InterServerOpcode.SysCmdMegaphoneMessageAckOk,
+            Header = new InterServerHeader
+            {
+                SourceServerIndex = ServerIdentity.System1.ServerIndex,
+                DestServerIndex = 0,
+                CharUid = frame.Header.CharUid,
+                RequestId = 0,
+            },
+            Body = MegaphoneMessages.EncodeAck(post.Code),
+        }, ct).ConfigureAwait(false);
+    }
+}
 var gameMasterService = new GameMasterService(postgres.GmAuthority, tPoseidon.Core.Common.ClientText.Encoding)
     {
         Friends = new tPoseidon.Core.Data.Postgres.PostgresFriendStore(postgres.DataSource),
         Guilds = new tPoseidon.Core.Data.Postgres.PostgresGuildStore(postgres.DataSource),
+        MegaphoneNotices = new tPoseidon.Core.Data.Postgres.PostgresMegaphoneQueueStore(postgres.DataSource),
         GuildRules = new tPoseidon.Core.Data.Postgres.PostgresGuildRulesStore(postgres.DataSource),
         BlockRecords = new MasterRoutedGmBlockStore(
             () => masterClient,
@@ -319,21 +389,6 @@ gameLinks.OnRenamed = async (characterId, _, newName, ct) =>
     await friendServer.RenamedAsync(characterId, newName, ct).ConfigureAwait(false);
     await partyServer.RenamedAsync(characterId, newName, ct).ConfigureAwait(false);
 };
-gameLinks.OnMegaphone = async (_, style, message, ct) =>
-{
-    var shout = tPoseidon.Core.Net.World.SpecialItemFrames.MegaphoneShouted(style, message, tPoseidon.Core.Common.ClientText.Encoding);
-    foreach (var member in socialRoom.Members)
-    {
-        try
-        {
-            await member.Context.SendFrameAsync(tPoseidon.Core.Net.World.SpecialItemFrames.MegaphoneShout, shout, (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is ObjectDisposedException or IOException or System.Net.Sockets.SocketException)
-        {
-            Log($"[megaphone] not delivered to 0x{member.Character.CharacterId:X}: {ex.Message}");
-        }
-    }
-};
 gameLinks.OnCoupleMessage = coupleServer.LinkMessageAsync;
 gameLinks.OnReport = async (report, ct) =>
 {
@@ -344,16 +399,37 @@ gameLinks.OnReport = async (report, ct) =>
     await gameMasterServer.ReportAsync(report, ct).ConfigureAwait(false);
     await chatServer.ReportAsync(report, ct).ConfigureAwait(false);
 };
-gameLinks.OnLevelChanged = angelServer.LevelChangedAsync;
+gameLinks.OnLevelChanged = async (characterId, level, ct) =>
+{
+    await angelServer.LevelChangedAsync(characterId, level, ct).ConfigureAwait(false);
+    await partyServer.LevelChangedAsync(characterId, level, ct).ConfigureAwait(false);
+};
 gameLinks.OnGuildMatchResult = guildServer.MatchResultAsync;
 gameLinks.OnGuildRoomInvalid = guildServer.RoomInvalidAsync;
 gameLinks.OnGameMasterChat = gameMasterServer.ChatAsync;
 gameMasterServer.InstantChatRemover = chatServer.RemoveRoomOf;
+var campGifts = new tPoseidon.Core.Data.MyCampGifts(
+    new tPoseidon.Core.Data.Postgres.PostgresMyCampStore(postgres.DataSource),
+    new tPoseidon.Core.Data.Postgres.PostgresCharacterDirectory(postgres.DataSource),
+    new tPoseidon.Core.Data.Postgres.PostgresCharStore(postgres.DataSource));
+gameMasterServer.CampItemGiver = (characterName, itemIndex, count) =>
+{
+    if (campGifts.Find(characterName) is not { } owner) return false;
+    campGifts.Give(owner, itemIndex, count);
+    return true;
+};
+var membership = new tPoseidon.Core.Data.Postgres.PostgresMembershipStore(postgres.DataSource);
+gameMasterServer.MemberSetter = membership.SetMemberOfCharacter;
+if (libConfigPath is not null)
+{
+    gameMasterServer.KnownCampItems = new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadMyCampItems().Select(entry => entry.Id).ToHashSet();
+}
 gameLinks.OnLinked = gameMasterServer.GameServerLinkedAsync;
 var gameLinkTasks = new[] { ServerEndpointConfig.GamePort, ServerEndpointConfig.GameAltPort }
     .Select(gamePort => gameLinks.RunAsync(ServerEndpointConfig.MasterHost, gamePort, stopCts.Token))
     .ToArray();
 var rankJobTask = rankServer.RunJobAsync(stopCts.Token);
+var guildRankJobTask = new tPoseidon.Kr2014.SystemServer.GuildRankJob(new tPoseidon.Core.Data.Postgres.PostgresGuildStore(postgres.DataSource), Log).RunAsync(stopCts.Token);
 var partyExpiryTask = partyServer.ExpireOfflineMembersAsync(partyRules.OfflineMemberKeepTime / 10, stopCts.Token);
 var gameMasterRateTask = gameMasterServer.RunRateEventsAsync(stopCts.Token);
 Log($"listening on {ServerEndpointConfig.ClientBindAddress}:{port}");
@@ -367,7 +443,7 @@ try
         ServerIdentity.System1,
         Log,
         stopCts.Token,
-        onBrokeredFrame: null,
+        onBrokeredFrame: MasterFrameAsync,
         password: meshPassword).ConfigureAwait(false);
 }
 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -381,6 +457,7 @@ try
     await partyExpiryTask.ConfigureAwait(false);
     await gameMasterRateTask.ConfigureAwait(false);
     await rankJobTask.ConfigureAwait(false);
+    await guildRankJobTask.ConfigureAwait(false);
     await Task.WhenAll(gameLinkTasks).ConfigureAwait(false);
 }
 catch (OperationCanceledException)

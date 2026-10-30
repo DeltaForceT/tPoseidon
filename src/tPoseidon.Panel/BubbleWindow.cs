@@ -35,6 +35,7 @@ public sealed class BubbleWindow : Window
     private const double StaggerShare = 0.1;
     private const double PulseGrowth = 0.5;
     private const double PulseStrength = 0.65;
+    private const double MaxFrameSeconds = 0.05;
     private static readonly TimeSpan FrameStep = TimeSpan.FromMilliseconds(16);
     private static readonly TimeSpan ExpandLength = TimeSpan.FromMilliseconds(240);
     private static readonly TimeSpan CollapseLength = TimeSpan.FromMilliseconds(150);
@@ -60,6 +61,10 @@ public sealed class BubbleWindow : Window
     private readonly ScaleTransform _pulseScale = new();
     private readonly Motion _motion = Motion.Shared;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly BodyDynamics _dynamics = new();
+    private readonly MatrixTransform _bodyTransform = new();
+    private readonly DispatcherTimer _physics = new() { Interval = FrameStep };
+    private TimeSpan _physicsLast;
     private DispatcherTimer? _tween;
     private DispatcherTimer? _pulseTimer;
     private IDisposable? _noteTimer;
@@ -105,6 +110,7 @@ public sealed class BubbleWindow : Window
         ApplyLayout();
         Refresh();
 
+        _physics.Tick += (_, _) => AdvanceBody();
         _face.Scaled += OnFaceScaled;
         _host.ServicesRebuilt += Refresh;
         _host.ServiceChanged += OnServiceChanged;
@@ -301,6 +307,7 @@ public sealed class BubbleWindow : Window
         _face.Scaled -= OnFaceScaled;
         _face.SetRunning(false);
         _tween?.Stop();
+        _physics.Stop();
         _pulseTimer?.Stop();
         _noteTimer?.Dispose();
         _alertTimer?.Dispose();
@@ -326,6 +333,11 @@ public sealed class BubbleWindow : Window
 
     private void OnMotionChanged()
     {
+        if (_motion.Reduced)
+        {
+            ResetBody();
+        }
+
         _face.SetRunning(IsVisible);
         if (_alerting)
         {
@@ -376,6 +388,7 @@ public sealed class BubbleWindow : Window
         _body.Background = Brushes.Transparent;
         _body.Child = layers;
         _body.Cursor = new Cursor(StandardCursorType.Hand);
+        _body.RenderTransform = _bodyTransform;
         _body.PointerPressed += OnBodyPressed;
         _body.PointerMoved += OnBodyMoved;
         _body.PointerReleased += OnBodyReleased;
@@ -629,7 +642,21 @@ public sealed class BubbleWindow : Window
             Collapse();
         }
 
-        await tool.Run(button).ConfigureAwait(true);
+        button.BeginBusy();
+        try
+        {
+            await tool.Run(button).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            LogHub.Write(LogHub.PanelSource, LogLevel.Error, $"The quick access button \"{tool.Id}\" failed: {ex.Message}");
+            button.EndBusy();
+            button.Fail();
+            return;
+        }
+
+        button.EndBusy();
+        button.Confirm();
     }
 
     private void OnBodyPressed(object? sender, PointerPressedEventArgs e)
@@ -641,6 +668,8 @@ public sealed class BubbleWindow : Window
 
         _pressed = true;
         _dragging = false;
+        _dynamics.Pressed = true;
+        WakeBody();
         _dragLast = this.PointToScreen(e.GetPosition(this));
         e.Pointer.Capture(_body);
     }
@@ -661,6 +690,8 @@ public sealed class BubbleWindow : Window
         }
 
         _dragging = true;
+        _dynamics.Dragging = true;
+        _dynamics.Move(dx / Scale, dy / Scale);
         _anchor = new PixelPoint(_anchor.X + dx, _anchor.Y + dy);
         _dragLast = current;
         Position = BubblePlacement.WindowPosition(_anchor, Scale, CurrentSize, _onRight, _onBottom);
@@ -674,15 +705,54 @@ public sealed class BubbleWindow : Window
         }
 
         _pressed = false;
+        _dynamics.Pressed = false;
         e.Pointer.Capture(null);
         if (_dragging)
         {
             _dragging = false;
+            _dynamics.Dragging = false;
             Settle();
             return;
         }
 
         ToggleExpanded();
+    }
+
+    private void WakeBody()
+    {
+        if (_motion.Reduced || _physics.IsEnabled)
+        {
+            return;
+        }
+
+        _physicsLast = _clock.Elapsed;
+        _physics.Start();
+    }
+
+    private void AdvanceBody()
+    {
+        var now = _clock.Elapsed;
+        _dynamics.Step(Math.Min((now - _physicsLast).TotalSeconds, MaxFrameSeconds));
+        _physicsLast = now;
+        ApplyBody();
+        if (_dynamics.IsAtRest)
+        {
+            _physics.Stop();
+        }
+    }
+
+    private void ApplyBody()
+    {
+        var deform = _dynamics.Deform;
+        var scale = _dynamics.PressScale;
+        _bodyTransform.Matrix = new Matrix(deform.M11 * scale, deform.M12 * scale, deform.M12 * scale, deform.M22 * scale, 0, 0);
+    }
+
+    private void ResetBody()
+    {
+        _physics.Stop();
+        _dynamics.Reset();
+        ApplyBody();
     }
 
     private void Settle()
@@ -691,67 +761,5 @@ public sealed class BubbleWindow : Window
         ApplyLayout();
         _preferences.RememberBubble(_anchor);
         _preferences.TrySave();
-    }
-}
-
-public sealed class BubbleButton : Border
-{
-    private const double GlyphSize = 22;
-
-    private readonly GlyphView _glyph;
-
-    public BubbleButton(BubbleTool tool)
-    {
-        Tool = tool ?? throw new ArgumentNullException(nameof(tool));
-        Width = BubbleWindow.ButtonSize;
-        Height = BubbleWindow.ButtonSize;
-        CornerRadius = new CornerRadius(BubbleWindow.ButtonSize / 2);
-        Background = Tokens.Surface2;
-        BorderBrush = Tokens.BorderSubtle;
-        BorderThickness = new Thickness(1);
-        Cursor = new Cursor(StandardCursorType.Hand);
-        _glyph = Tokens.Glyphs(tool.Glyph, GlyphSize, ToneFor(tool));
-        Child = _glyph;
-        ToolTip.SetTip(this, tool.Tip);
-        PointerEntered += (_, _) => Highlight(true);
-        PointerExited += (_, _) => Highlight(false);
-        PointerReleased += OnReleased;
-    }
-
-    public event Action? Pressed;
-
-    public BubbleTool Tool { get; }
-
-    public void Press() => Pressed?.Invoke();
-
-    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
-    {
-        base.OnPropertyChanged(change);
-        if (change.Property == IsEnabledProperty)
-        {
-            Opacity = IsEnabled ? 1 : 0.4;
-        }
-    }
-
-    private static IBrush ToneFor(BubbleTool tool) =>
-        tool.Id switch
-        {
-            BubbleCatalog.StartAll => Tokens.Accent,
-            BubbleCatalog.StopAll or BubbleCatalog.Exit => Tokens.Danger,
-            _ => Tokens.TextPrimary,
-        };
-
-    private void Highlight(bool on)
-    {
-        Background = on && IsEnabled ? Tokens.Surface3 : Tokens.Surface2;
-        BorderBrush = on && IsEnabled ? Tokens.Accent : Tokens.BorderSubtle;
-    }
-
-    private void OnReleased(object? sender, PointerReleasedEventArgs e)
-    {
-        if (IsEnabled && e.InitialPressMouseButton == MouseButton.Left && new Rect(Bounds.Size).Contains(e.GetPosition(this)))
-        {
-            Press();
-        }
     }
 }

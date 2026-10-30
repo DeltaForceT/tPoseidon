@@ -44,5 +44,6 @@ public static class ProfileViewRules
 
     public static uint Total(long value) => tPoseidon.Core.Common.WireLimits.Int32FieldUnsigned(value);
 
-    public static uint Bonus(long total, long table) => unchecked((uint)tPoseidon.Core.Common.WireLimits.SaturateInt32(total - table));
+    public static uint Bonus(long total, long table, long abilityShare = 0) =>
+        unchecked((uint)tPoseidon.Core.Common.WireLimits.SaturateInt32(total - table - abilityShare));
 }

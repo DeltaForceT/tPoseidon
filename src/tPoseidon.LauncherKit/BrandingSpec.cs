@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using tPoseidon.Core.Common.Launcher;
 using tPoseidon.Hosting;
 
 namespace tPoseidon.LauncherKit;
@@ -18,7 +19,8 @@ public sealed record BrandingSpec(
     string? Welcome,
     string Language,
     string? PublicKey,
-    bool TestOnThisComputer = false)
+    bool TestOnThisComputer = false,
+    string? LauncherVersion = null)
 {
     public const string FormatName = "tposeidon-branding";
     public const int CurrentVersion = 1;
@@ -81,14 +83,15 @@ public sealed record BrandingSpec(
             document.Welcome,
             document.Language ?? "",
             document.PublicKey,
-            document.TestOnThisComputer == true).Validated();
+            document.TestOnThisComputer == true,
+            document.LauncherVersion).Validated();
     }
 
     public string ToJson()
     {
         var valid = Validated();
         return JsonSerializer.Serialize(
-            new Document(FormatName, CurrentVersion, valid.ServerName, valid.Address, valid.WebUrl, valid.WindowTitle, valid.AccentColor, valid.Logo, valid.Background, valid.Icon, valid.Website, valid.Discord, valid.Welcome, valid.Language, valid.PublicKey, valid.TestOnThisComputer ? true : null),
+            new Document(FormatName, CurrentVersion, valid.ServerName, valid.Address, valid.WebUrl, valid.WindowTitle, valid.AccentColor, valid.Logo, valid.Background, valid.Icon, valid.Website, valid.Discord, valid.Welcome, valid.Language, valid.PublicKey, valid.TestOnThisComputer ? true : null, valid.LauncherVersion),
             JsonOptions);
     }
 
@@ -123,6 +126,17 @@ public sealed record BrandingSpec(
             throw new HostingException("The public key is too long.");
         }
 
+        if (publicKey is not null && !ManifestSignature.IsPublicKey(publicKey))
+        {
+            throw new HostingException("The public key is not a P-256 key.", "Build the launcher again with the control panel.", null);
+        }
+
+        var version = string.IsNullOrWhiteSpace(LauncherVersion) ? null : LauncherVersion.Trim();
+        if (version is { Length: > LauncherManifest.MaxVersionLength })
+        {
+            throw new HostingException("The launcher version is too long.");
+        }
+
         if (TestOnThisComputer && !string.Equals(server.Address, NetworkAddresses.Loopback, StringComparison.Ordinal))
         {
             throw new HostingException($"A test launcher only works with {NetworkAddresses.Loopback}.", "Use the address 127.0.0.1, or build a real launcher for players.", null);
@@ -142,7 +156,8 @@ public sealed record BrandingSpec(
             server.Note,
             Language,
             publicKey,
-            TestOnThisComputer);
+            TestOnThisComputer,
+            version);
     }
 
     private static string PictureName(string? name, string role, string[] extensions)
@@ -189,5 +204,6 @@ public sealed record BrandingSpec(
         string? Welcome,
         string? Language,
         string? PublicKey,
-        bool? TestOnThisComputer);
+        bool? TestOnThisComputer,
+        string? LauncherVersion);
 }

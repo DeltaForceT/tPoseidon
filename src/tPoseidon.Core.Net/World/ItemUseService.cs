@@ -21,6 +21,7 @@ public sealed record ItemUsePlayer
     public required Func<int> MaxWeight { get; init; }
     public Func<ItemParamEntry, CancellationToken, Task<bool>>? StarTears { get; init; }
     public Func<int, CancellationToken, Task<bool>>? Disguise { get; init; }
+    public Func<IReadOnlyList<TimedItem>, CancellationToken, Task>? TimedItemsGranted { get; init; }
     public Func<Item, ulong, CancellationToken, Task<bool>>? PlantSeed { get; init; }
     public Func<int, Task>? SeedEvent { get; init; }
     public Func<Item, ItemParamEntry, CancellationToken, Task<bool>>? SoulPotion { get; init; }
@@ -438,6 +439,7 @@ public sealed partial class ItemUseService
         foreach (var extra in alsoTaken) Consume(extra, _catalog.GetById(extra.ItemIndex) ?? definition);
 
         var operations = new List<BagOperation>(grants.Count);
+        var timedGrants = new List<Item>();
         foreach (var grant in grants)
         {
             var given = _catalog.GetById(grant.ItemId)!;
@@ -453,9 +455,11 @@ public sealed partial class ItemUseService
             else
             {
                 var minted = _itemManager.GrantRewardItem(characterId, grant.ItemId, count, itemClassOverride: given.ObjectClass);
+                if (TimedItemRules.IsTimed(minted)) timedGrants.Add(minted);
                 operations.Add(new BagOperation(QuestResultFrames.Created, given.ObjectClass, (uint)grant.ItemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot));
             }
         }
+        if (timedGrants.Count > 0 && _player.TimedItemsGranted is { } announce) await announce(TimedItemPeriods.Registered(timedGrants), ct).ConfigureAwait(false);
         await SendAsync(Opcode.S2C_PRESENT_OPENED, ItemUseFrames.PresentOpened((uint)box.ItemIndex, operations), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_remote()}   gift box {box.ItemIndex} opened: {string.Join(", ", grants.Select(grant => $"{grant.ItemId} x{grant.Count}"))}");
     }

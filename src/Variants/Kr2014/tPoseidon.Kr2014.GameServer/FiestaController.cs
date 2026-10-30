@@ -2,6 +2,7 @@ using System.Text;
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Fiesta;
+using tPoseidon.Core.Game.Party;
 using tPoseidon.Core.Game.Warp;
 using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net;
@@ -151,6 +152,9 @@ internal sealed class FiestaController
         var entry = st.Character is { } character ? EntryOf(st, character.CharacterId) : new FiestaEntryRecord(0, null);
         return PortalClickRules.Check(click, _mapClass, _portalBands(), _tables().Slots, entry, now);
     }
+
+    public PartyFollowRefusal? PortalFollowRefusal(PortalRegionClick click, DateTime now) =>
+        PortalClickRules.FollowRefusal(click, _mapClass, _portalBands(), _tables().Slots, now);
 
     private FiestaEntryRecord EntryOf(InGameSessionState st, ulong characterId)
     {

@@ -11,8 +11,8 @@ public static class EquipUpgradeOperations
     public static EquipUpgradeItem Take(Item item, ushort count) =>
         item.Stack > count ? Update(item, (ushort)(item.Stack - count), item.ItemSlot) : Delete(item);
 
-    public static EquipUpgradeItem Insert(int itemIndex, byte itemClass, ushort count, byte slot, short refineType = 0, byte refineLevel = 0) =>
-        new(EquipUpgradeAction.Insert, 0, itemIndex, itemClass, count, slot, refineType, refineLevel, 0);
+    public static EquipUpgradeItem Insert(int itemIndex, byte itemClass, ushort count, byte slot, short refineType = 0, byte refineLevel = 0, int periodMinutes = 0) =>
+        new(EquipUpgradeAction.Insert, 0, itemIndex, itemClass, count, slot, refineType, refineLevel, 0, periodMinutes);
 
     public static BagOperation ToBag(EquipUpgradeItem row)
     {

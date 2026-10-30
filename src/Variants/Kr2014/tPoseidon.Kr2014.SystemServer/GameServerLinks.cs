@@ -44,7 +44,6 @@ public sealed class GameServerLinks
 
     public Func<ulong, string, string, CancellationToken, Task>? OnRenamed { get; set; }
 
-    public Func<ulong, ushort, string, CancellationToken, Task>? OnMegaphone { get; set; }
 
     public System.Text.Encoding Text { get; init; } = System.Text.Encoding.UTF8;
 
@@ -267,11 +266,6 @@ public sealed class GameServerLinks
             var (characterId, oldName, newName) = SystemLinkFrames.ReadCharacterRenamed(payload.Span, Text);
             _log($"[game-link] 0x{characterId:X} renamed '{oldName}' to '{newName}'");
             if (OnRenamed is not null) await OnRenamed(characterId, oldName, newName, ct).ConfigureAwait(false);
-        });
-        link.Dispatcher.Register(SystemLinkFrames.Megaphone, async (opcode, payload, ct) =>
-        {
-            var (characterId, style, message) = SystemLinkFrames.ReadMegaphone(payload.Span, Text);
-            if (OnMegaphone is not null) await OnMegaphone(characterId, style, message, ct).ConfigureAwait(false);
         });
     }
 

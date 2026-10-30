@@ -36,6 +36,8 @@ public sealed class InstallPaths
 
     public string Updates => Path.Combine(Root, "updates");
 
+    public string SigningKey => Path.Combine(Root, "launcher-signing-key.json");
+
     public string LauncherHistory => Path.Combine(Root, "launcher-history.json");
 
     public string ServerData => Path.Combine(Root, "server-data");

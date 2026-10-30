@@ -254,6 +254,7 @@ public sealed class PostgresAccountStore : IAccountStore
         using var cmd = new NpgsqlCommand(
             @"UPDATE accounts SET
                 acc_game_authcode         = @code,
+                acc_game_selected_char_uid = NULL,
                 acc_game_state            = 2,
                 acc_game_state_changed_at = NOW(),
                 acc_game_latest_ip        = @ip,
@@ -397,7 +398,9 @@ public sealed class PostgresAccountStore : IAccountStore
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var cmd = new NpgsqlCommand(
-            "SELECT account_access, acc_game_access, acc_game_state, acc_game_latest_login_at FROM accounts WHERE account_id = @id", conn);
+            @"SELECT account_access, acc_game_access, acc_game_state, acc_game_latest_login_at,
+                     CASE WHEN acc_game_state = 4 AND acc_game_selected_char_uid IS NOT NULL THEN acc_game_state_changed_at END
+                FROM accounts WHERE account_id = @id", conn);
         cmd.Parameters.AddWithValue("id", (long)accountId);
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
@@ -405,7 +408,8 @@ public sealed class PostgresAccountStore : IAccountStore
             reader.GetInt16(0),
             reader.GetInt16(1),
             reader.GetInt16(2),
-            reader.IsDBNull(3) ? null : reader.GetFieldValue<DateTimeOffset>(3));
+            reader.IsDBNull(3) ? null : reader.GetFieldValue<DateTimeOffset>(3),
+            reader.IsDBNull(4) ? null : reader.GetFieldValue<DateTimeOffset>(4));
     }
 
     public PenaltyNotice? FindRunningPenalty(uint accountId)
@@ -456,7 +460,7 @@ public sealed class PostgresAccountStore : IAccountStore
         return cmd.ExecuteNonQuery() == 1;
     }
 
-    public int ResetWorldStates()
+    public int ResetWorldStates(short world, short island)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var cmd = new NpgsqlCommand(
@@ -468,7 +472,9 @@ public sealed class PostgresAccountStore : IAccountStore
                 acc_game_selected_char_uid = NULL,
                 acc_game_playtime_minutes  = acc_game_playtime_minutes
                                              + GREATEST(0, EXTRACT(EPOCH FROM (NOW() - acc_game_latest_login_at))::int / 60)
-              WHERE acc_game_state <> 0", conn);
+              WHERE acc_game_state = 4 AND acc_game_latest_world = @w AND acc_game_latest_island = @i", conn);
+        cmd.Parameters.AddWithValue("w", world);
+        cmd.Parameters.AddWithValue("i", island);
         return cmd.ExecuteNonQuery();
     }
 

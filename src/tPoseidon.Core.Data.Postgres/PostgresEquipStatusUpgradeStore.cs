@@ -43,7 +43,8 @@ public sealed class PostgresEquipStatusUpgradeStore : IEquipStatusUpgradeStore
                     applied.Add(item);
                     break;
                 default:
-                    applied.Add(item with { ItemUid = Insert(conn, tx, upgrade.CharacterId, item) });
+                    var breakedAt = Item.BreakedAfter(item.ItemClass, item.PeriodMinutes, DateTimeOffset.UtcNow);
+                    applied.Add(item with { ItemUid = Insert(conn, tx, upgrade.CharacterId, item, breakedAt), BreakedAt = breakedAt > Item.NeverBreaks ? breakedAt : null });
                     break;
             }
         }
@@ -67,7 +68,7 @@ public sealed class PostgresEquipStatusUpgradeStore : IEquipStatusUpgradeStore
         return cmd.ExecuteScalar() is int index && index == item.ItemIndex;
     }
 
-    private static ulong Insert(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId, EquipUpgradeItem item)
+    private static ulong Insert(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId, EquipUpgradeItem item, DateTimeOffset breakedAt)
     {
         long uid;
         using (var insert = new NpgsqlCommand("""
@@ -78,7 +79,7 @@ public sealed class PostgresEquipStatusUpgradeStore : IEquipStatusUpgradeStore
         {
             insert.Parameters.AddWithValue("i", item.ItemIndex);
             insert.Parameters.AddWithValue("c", (short)item.ItemClass);
-            insert.Parameters.AddWithValue("b", Item.NeverBreaks);
+            insert.Parameters.AddWithValue("b", breakedAt.UtcDateTime);
             insert.Parameters.AddWithValue("rt", item.RefineType);
             insert.Parameters.AddWithValue("rl", (short)item.RefineLevel);
             insert.Parameters.AddWithValue("rs", (short)item.RefineState);

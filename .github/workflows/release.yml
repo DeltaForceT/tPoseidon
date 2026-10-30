@@ -45,14 +45,14 @@ jobs:
           echo "VERSION=$version" >> "$GITHUB_ENV"
           echo "TITLE=$title" >> "$GITHUB_ENV"
 
-      - name: Package for every system
+      - name: Package for Windows
         run: >
           dotnet run --configuration Release --project src/tPoseidon.Tools.ReleasePack --
-          --version "$VERSION" --rid all --output artifacts/release
+          --version "$VERSION" --rid win-x64 --output artifacts/release
 
       - name: Write the checksums
         working-directory: artifacts/release
-        run: sha256sum *.zip *.tar.gz > "tposeidon-$VERSION-SHA256SUMS.txt"
+        run: sha256sum *.zip > "tposeidon-$VERSION-SHA256SUMS.txt"
 
       - name: Extract the release notes
         run: |

@@ -18,6 +18,8 @@ public sealed class LibConfigXmlReader
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
 
+    public static Func<byte[], byte[]>? Supplement { get; set; }
+
     private readonly byte[] _decodedXmlBytes;
 
     private readonly TranslationOverrides _overrides;
@@ -27,6 +29,19 @@ public sealed class LibConfigXmlReader
         ArgumentException.ThrowIfNullOrEmpty(xmlOrDatPath);
         _decodedXmlBytes = GetOrLoadDecodedXmlBytes(xmlOrDatPath);
         _overrides = TranslationOverrides.ForLibConfigSource(xmlOrDatPath);
+    }
+
+    private LibConfigXmlReader(byte[] decodedXmlBytes, TranslationOverrides overrides)
+    {
+        _decodedXmlBytes = decodedXmlBytes;
+        _overrides = overrides;
+    }
+
+    public static LibConfigXmlReader FromDecodedXml(byte[] utf8Xml, TranslationOverrides overrides)
+    {
+        ArgumentNullException.ThrowIfNull(utf8Xml);
+        ArgumentNullException.ThrowIfNull(overrides);
+        return new LibConfigXmlReader(utf8Xml, overrides);
     }
 
     private static byte[] GetOrLoadDecodedXmlBytes(string xmlOrDatPath)
@@ -40,10 +55,18 @@ public sealed class LibConfigXmlReader
         var lazy = DecodedXmlCache.GetOrAdd(
             cacheKey,
             _ => new Lazy<byte[]>(
-                () => DecodeXmlBytes(absolutePath),
+                () => Supplemented(DecodeXmlBytes(absolutePath)),
                 LazyThreadSafetyMode.ExecutionAndPublication));
 
         return lazy.Value;
+    }
+
+    private static byte[] Supplemented(byte[] decoded) => Supplement is { } supplement ? supplement(decoded) : decoded;
+
+    public static byte[] DecodeFile(string xmlOrDatPath)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(xmlOrDatPath);
+        return DecodeXmlBytes(Path.GetFullPath(xmlOrDatPath));
     }
 
     private static byte[] DecodeXmlBytes(string path)
@@ -222,6 +245,27 @@ public sealed class LibConfigXmlReader
         return entries;
     }
 
+    public IReadOnlyList<RandomResultTable> LoadRandomResultTables()
+    {
+        var tables = new List<RandomResultTable>();
+        LoadTable("RandomResultItemInfo", row =>
+        {
+            var entries = new List<RandomResultEntry>(RandomResultTable.Slots);
+            var low = 0;
+            for (var slot = 0; slot < RandomResultTable.Slots; slot++)
+            {
+                var item = ReadInt(row, $"Item{slot}");
+                if (item == 0) continue;
+                var count = (short)ReadInt(row, $"Cnt{slot}");
+                var high = low + RandomResultTable.WeightOf(ReadFloat(row, $"Rate{slot}"));
+                entries.Add(new RandomResultEntry(item, count == 0 ? 1 : count, low, high));
+                low = high;
+            }
+            tables.Add(new RandomResultTable(ReadInt(row, "ID"), entries));
+        });
+        return tables;
+    }
+
     public IReadOnlyList<MonsterQuestResultEntry> LoadMonsterQuestResultTables() =>
         LoadResultTables(MonsterQuestResultEntry.TablePrefixes);
 
@@ -322,6 +366,7 @@ public sealed class LibConfigXmlReader
                 MapName = mapName,
                 MsgTable = ReadString(row, "MsgTable"),
                 TeleportId = ReadInt(row, "TeleportId"),
+                TimerId = ReadInt(row, "TimerID"),
                 BossPartyZone = ReadInt(row, "BossPartyZone"),
                 NpcMoveId = ReadInt(row, "NpcMoveId"),
                 ItemStatIds = new[] { ReadInt(row, "ItemStatID1"), ReadInt(row, "ItemStatID2") },
@@ -394,6 +439,8 @@ public sealed class LibConfigXmlReader
                 CommonName = Translate("CharacterInfo", id, "CommonName", ReadString(row, "CommonName")),
                 CommonNameEng = Translate("CharacterInfo", id, "CommonName_Eng", ReadString(row, "CommonName_Eng")),
                 FileName = ReadString(row, "FileName"),
+                PartName = ReadString(row, "PartName"),
+                PivotFileName = ReadString(row, "PivotFileName"),
                 WalkSpeed = ReadFloat(row, "WalkSpeed"),
                 RunSpeed = ReadFloat(row, "RunSpeed"),
                 MinAtkRange = ReadInt(row, "MinAtkRange"),
@@ -415,6 +462,15 @@ public sealed class LibConfigXmlReader
         return entries;
     }
 
+    public IReadOnlyList<SpeedItemParamEntry> LoadSpeedItemParam()
+    {
+        var entries = new List<SpeedItemParamEntry>(64);
+        LoadTable(SpeedItemParamEntry.TableName, row => entries.Add(new SpeedItemParamEntry(
+            ReadInt(row, "ItemId"),
+            ReadFloat(row, "AddSpeedRatio"))));
+        return entries;
+    }
+
     public IReadOnlyList<MapKindEntry> LoadMapKinds()
     {
         var entries = new List<MapKindEntry>(700);
@@ -422,7 +478,9 @@ public sealed class LibConfigXmlReader
             ReadInt(row, "ID"),
             ReadInt(row, "Type"),
             ReadInt(row, "Class"),
-            ReadFlags(row, "Option"))));
+            ReadFlags(row, "Option"),
+            ReadInt(row, "PZType"),
+            ReadInt(row, "WMRegion"))));
         return entries;
     }
 
@@ -561,6 +619,16 @@ public sealed class LibConfigXmlReader
         return new SpecialPortTables(advanced, random);
     }
 
+    public GuildRankBonusTable LoadGuildRankBonusTable()
+    {
+        var ratios = new Dictionary<int, float>();
+        LoadTablesNamed(new HashSet<string>(StringComparer.Ordinal) { GuildRankBonusTable.TableName }, (_, row) =>
+        {
+            ratios[ReadInt(row, "Rank")] = ReadFloat(row, "Ratio");
+        });
+        return new GuildRankBonusTable(ratios);
+    }
+
     public FortuneTables LoadFortuneTables()
     {
         var cards = new Dictionary<int, FortuneCardEntry>();
@@ -568,9 +636,12 @@ public sealed class LibConfigXmlReader
         var fees = new Dictionary<int, int>();
         var rules = new Dictionary<string, float>(StringComparer.Ordinal);
         var titles = new List<FortuneTitleRule>();
+        var todayExchange = new Dictionary<int, int>();
+        var todayWeekday = new Dictionary<int, float>();
         var names = new HashSet<string>(StringComparer.Ordinal)
         {
             FortuneTables.CardTable, FortuneTables.FeeTable, FortuneTables.RuleTable, FortuneTables.TitleTable,
+            FortuneTables.TodayCardTable, FortuneTables.TodayWeekTable,
         };
         LoadTablesNamed(names, (table, row) =>
         {
@@ -596,6 +667,12 @@ public sealed class LibConfigXmlReader
                 case FortuneTables.RuleTable:
                     rules[ReadString(row, "RuleName")] = ReadFloat(row, "Value");
                     break;
+                case FortuneTables.TodayCardTable:
+                    todayExchange[ReadInt(row, "ID")] = ReadInt(row, "Num");
+                    break;
+                case FortuneTables.TodayWeekTable:
+                    todayWeekday[ReadInt(row, "ID")] = ReadFloat(row, "Value");
+                    break;
                 default:
                     titles.Add(new FortuneTitleRule(
                         ReadInt(row, "Index"),
@@ -606,7 +683,12 @@ public sealed class LibConfigXmlReader
                     break;
             }
         });
-        return new FortuneTables(cards, fees, rules, titles.OrderBy(rule => rule.Index).ToArray()) { CardOrder = cardOrder };
+        return new FortuneTables(cards, fees, rules, titles.OrderBy(rule => rule.Index).ToArray())
+        {
+            CardOrder = cardOrder,
+            TodayExchangeByCard = todayExchange,
+            TodayWeekdayValue = todayWeekday,
+        };
     }
 
     public SoulSeedTables LoadSoulSeedTables()
@@ -852,6 +934,13 @@ public sealed class LibConfigXmlReader
         return new PetRetrainTables(materials, locks, curve);
     }
 
+    public IReadOnlyDictionary<string, string> LoadWordStrings()
+    {
+        var words = new Dictionary<string, string>(StringComparer.Ordinal);
+        LoadTable(WordStringTable.TableName, row => words.TryAdd(ReadString(row, "Name"), ReadString(row, "String")));
+        return words;
+    }
+
     public CharacterPetReinforceTables LoadCharacterPetReinforceTables()
     {
         var rows = new Dictionary<(int, int), CharacterPetReinforceEntry>();
@@ -1073,6 +1162,20 @@ public sealed class LibConfigXmlReader
         return new GuildGameTypeTables(rows);
     }
 
+    public GuildGameRewardTables LoadGuildGameRewardTables()
+    {
+        var rows = new List<GuildGameRewardEntry>();
+        LoadTable(GuildGameRewardTables.Table, row =>
+        {
+            var types = Math.Min(ReadInt(row, "ItemTypeCount"), GuildGameRewardTables.ItemColumns);
+            var items = Enumerable.Range(0, types)
+                .Select(column => (ReadInt(row, $"ItemID_{column:D2}"), ReadInt(row, $"ItemCount_{column:D2}")))
+                .ToArray();
+            rows.Add(new GuildGameRewardEntry(ReadInt(row, "Score"), ReadInt(row, "IconNo"), items));
+        });
+        return new GuildGameRewardTables(rows.OrderBy(row => row.Score).ToArray());
+    }
+
     public GuildShopTables LoadGuildShopTables()
     {
         var rows = new Dictionary<int, GuildShopGood>();
@@ -1179,6 +1282,71 @@ public sealed class LibConfigXmlReader
         {
             ShopOfNpc = shopOfNpc,
         };
+    }
+
+    public ShadowAiTable LoadShadowAi()
+    {
+        var entries = new List<ShadowAiEntry>();
+        LoadTable(ShadowAiTable.TableName, row => entries.Add(new ShadowAiEntry(ReadInt(row, "MonID"), ReadInt(row, "TargetID"), ReadInt(row, "AIType"))));
+        return new ShadowAiTable(entries);
+    }
+
+    public ScenarioTables LoadScenarioTables()
+    {
+        var tablesOfMap = new Dictionary<int, IReadOnlyList<string>>();
+        var steps = new Dictionary<string, List<ScenarioStep>>(StringComparer.Ordinal);
+        LoadTablesMatching(
+            name => name == ScenarioTables.MapTable || name.StartsWith(ScenarioTables.StepTablePrefix, StringComparison.Ordinal),
+            (table, row) =>
+            {
+                if (table == ScenarioTables.MapTable)
+                {
+                    tablesOfMap.TryAdd(
+                        ReadInt(row, "MapID"),
+                        Enumerable.Range(0, ScenarioTables.TableSlots).Select(slot => ReadString(row, $"ScenarioTable{slot}")).ToArray());
+                    return;
+                }
+                if (!steps.TryGetValue(table, out var list))
+                {
+                    list = new List<ScenarioStep>();
+                    steps[table] = list;
+                }
+                list.Add(new ScenarioStep(
+                    ReadInt(row, "ID"), ReadInt(row, "Time"), ReadInt(row, "RegionID"), ReadInt(row, "Monster"),
+                    ReadInt(row, "Result"), ReadInt(row, "ResultValue"), ReadInt(row, "Condition"), ReadInt(row, "Value"),
+                    ReadInt(row, "CheckMonster"), ReadInt(row, "AllMapSkill"),
+                    ReadRawString(row, "Comment"), ReadRawString(row, "SkillComment")));
+            });
+        return new ScenarioTables(
+            tablesOfMap,
+            steps.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<ScenarioStep>)pair.Value.OrderBy(step => step.Id).ToArray(), StringComparer.Ordinal));
+    }
+
+    public IReadOnlyList<ShadowTimerEntry> LoadShadowTimers()
+    {
+        var timers = new List<ShadowTimerEntry>();
+        LoadTable(ShadowTimerEntry.TableName, row =>
+        {
+            if (ReadInt(row, "SubType") != ShadowTimerEntry.ShadowSubType) return;
+            timers.Add(new ShadowTimerEntry(
+                ReadInt(row, "TimerID"), ReadString(row, "Comment"),
+                ReadInt(row, "In_Hour"), ReadInt(row, "In_Minute"),
+                ReadInt(row, "Out_Hour"), ReadInt(row, "Out_Minute"), ReadInt(row, "WMRegion")));
+        });
+        return timers;
+    }
+
+    public ShadowEventTables LoadShadowEventTables()
+    {
+        var counts = new Dictionary<int, int>();
+        LoadTable(ScenarioTables.MapTable, row => counts.TryAdd(ReadInt(row, "MapID"), ReadInt(row, "HarconHPCt")));
+        var rewards = new List<ShadowRewardEntry>();
+        LoadTable(ShadowEventTables.RewardTable, row => rewards.Add(new ShadowRewardEntry(
+            ReadInt(row, "ID"), ReadString(row, "Scenario"), ReadInt(row, "No"),
+            ReadInt(row, "AP"), ReadInt(row, "AC"), ReadInt(row, "DX"), ReadInt(row, "MA"), ReadInt(row, "MD"),
+            ReadInt(row, "DA"), ReadInt(row, "LK"), ReadInt(row, "DP"), ReadInt(row, "HV"), ReadInt(row, "MonRdecr"),
+            ReadInt(row, "Group"), ReadString(row, "Title"), ReadString(row, "Comment"), ReadInt(row, "Time"))));
+        return new ShadowEventTables(counts, rewards);
     }
 
     public PkInfoTables LoadPkInfo()
@@ -1423,7 +1591,13 @@ public sealed class LibConfigXmlReader
     public PartyZoneTables LoadPartyZoneTables()
     {
         var reEnter = new Dictionary<int, int>();
-        LoadTable(PartyZoneTables.InfoTable, row => reEnter.TryAdd(ReadInt(row, "ID"), ReadInt(row, "limitMinutesReEnter")));
+        var closings = new Dictionary<int, PartyZoneClosing>();
+        LoadTable(PartyZoneTables.InfoTable, row =>
+        {
+            var zone = ReadInt(row, "ID");
+            reEnter.TryAdd(zone, ReadInt(row, "limitMinutesReEnter"));
+            closings.TryAdd(zone, new PartyZoneClosing(ReadInt(row, "closingSeconds"), ReadInt(row, "closingDestZoneID")));
+        });
         var bossTables = new Dictionary<string, List<int>>(StringComparer.Ordinal);
         LoadTable("MapInfoEx", row =>
         {
@@ -1449,7 +1623,54 @@ public sealed class LibConfigXmlReader
                 ids.Add(ReadInt(row, "BossMonID"));
             }
         });
-        return new PartyZoneTables(reEnter, bosses.ToDictionary(pair => pair.Key, pair => (IReadOnlySet<int>)pair.Value));
+        return new PartyZoneTables(reEnter, bosses.ToDictionary(pair => pair.Key, pair => (IReadOnlySet<int>)pair.Value), closings);
+    }
+
+    public IReadOnlyList<BossGiveItemEntry> LoadBossGiveItems()
+    {
+        var entries = new List<BossGiveItemEntry>();
+        LoadTable(BossGiveItemEntry.TableName, row =>
+        {
+            var slots = new BossGiveItemSlot[BossGiveItemEntry.SlotCount];
+            for (var i = 0; i < slots.Length; i++)
+            {
+                slots[i] = new BossGiveItemSlot(ReadInt(row, $"GiveItemID_{i}"), ReadFloat(row, $"GiveItemRate_{i}"));
+            }
+            var entry = new BossGiveItemEntry { MonsterId = ReadInt(row, "ID"), Slots = slots };
+            if (entry.FilledSlots > 0) entries.Add(entry);
+        });
+        return entries;
+    }
+
+    public IReadOnlyList<BossLifeEntry> LoadBossLives()
+    {
+        var entries = new List<BossLifeEntry>();
+        LoadTable(BossLifeEntry.TableName, row => entries.Add(new BossLifeEntry
+        {
+            MonsterId = ReadInt(row, "ID"),
+            LifeCount = ReadInt(row, "LifeCnt"),
+            ResistGrowthMin = ReadInt(row, "MinIncreaseProR"),
+            ResistGrowthMax = ReadInt(row, "MaxIncreaseProR"),
+            NotEarthQuake = ReadBool(row, "NotEarthQuake"),
+            SummonIntervalMs = ReadInt(row, "SummonTime"),
+            SummonLeftLife = ReadInt(row, "SummonLeftLife"),
+            SummonTotalCount = ReadInt(row, "SummonTotalCnt"),
+            SummonMin = ReadInt(row, "SummonMin"),
+            SummonMax = ReadInt(row, "SummonMax"),
+            SummonBType = ReadInt(row, "SummonBType"),
+            SummonMonsters = Enumerable.Range(0, BossLifeEntry.SummonSlotCount).Select(slot => ReadInt(row, $"SummonMon_{slot}")).ToArray(),
+            Heals = Enumerable.Range(0, BossLifeEntry.HealSlotCount)
+                .Select(slot => new BossHealEntry(ReadInt(row, $"HealLeftLife_{slot}"), ReadInt(row, $"HealLevel_{slot}"), ReadInt(row, $"HealTime_{slot}")))
+                .ToArray(),
+            Skills = Enumerable.Range(0, BossLifeEntry.SkillSlotCount)
+                .Select(slot => new BossSkillEntry(
+                    ReadInt(row, $"SkillID_{slot}"), ReadInt(row, $"SkillLevel_{slot}"), ReadInt(row, $"SkillLeftLife_{slot}"), ReadInt(row, $"SkillTime_{slot}")))
+                .Where(skill => skill.SkillId != 0)
+                .ToArray(),
+            SummonSpeech = ReadString(row, "Speech_1"),
+            ResistGrowthSpeech = ReadString(row, "Speech_RChange"),
+        }));
+        return entries;
     }
 
     public IReadOnlyList<BossSpawnTableEntry> LoadBossSpawnTables()
@@ -1754,6 +1975,10 @@ public sealed class LibConfigXmlReader
         BundleNum = ReadInt(row, "BundleNum"),
         InvFileName = ReadString(row, "InvFileName"),
         InvBundleNum = ReadInt(row, "InvBundleNum"),
+        EquipFileName = ReadString(row, "EquipFileName"),
+        PartFileName = ReadString(row, "PartFileName"),
+        PivotId = ReadInt(row, "PivotID"),
+        HideHat = ReadFlags(row, "HideHat"),
         Effect = ReadInt(row, "Effect"),
         ExistType = ReadInt(row, "ExistType"),
         Hp = ReadInt(row, "HP"),
@@ -1814,6 +2039,17 @@ public sealed class LibConfigXmlReader
         return entries;
     }
 
+    public IReadOnlyList<MyCampItemEntry> LoadMyCampItems()
+    {
+        var entries = new List<MyCampItemEntry>(1100);
+        LoadTable(MyCampItemEntry.TableName, row => entries.Add(new MyCampItemEntry(
+            ReadInt(row, "ID"),
+            ReadString(row, "Name").Trim(),
+            ReadString(row, "InvFileName").Trim(),
+            ReadInt(row, "InvBundleNum"))));
+        return entries;
+    }
+
     public IReadOnlyList<SkillParam2Entry> LoadSkillParam2()
     {
         var entries = new List<SkillParam2Entry>(320);
@@ -1822,6 +2058,8 @@ public sealed class LibConfigXmlReader
             Id = ReadInt(row, "ID"),
             Type = ReadInt(row, "Type"),
             Name = ReadString(row, "Name"),
+            IconFile = ReadString(row, "FileName").Trim(),
+            IconBundle = ReadInt(row, "BundleNum"),
             SkillOption = ReadFlags(row, "SkillOption"),
             AffectionRel = ReadFlags(row, "AffectionRel"),
             InvocationCondition = ReadInt(row, "ESAIC"),
@@ -2412,7 +2650,11 @@ public sealed class LibConfigXmlReader
         {
             if (string.Equals(ReadString(row, "RuleName"), RefineSeedRule, StringComparison.Ordinal)) seed = ReadFloat(row, "Value");
         });
-        return new RefineTables { LevelRows = levels, Materials = materials, Supports = supports, CostDiscount = discount ?? 0, RefineSeed = seed };
+        var repairs = new List<RepairRow>();
+        LoadTable("RepairInfo", row => repairs.Add(new RepairRow(
+            ReadInt(row, "RefineLv"), ReadInt(row, "Type"), ReadInt(row, "SubType"),
+            ReadInt(row, "RepairId"), ReadInt(row, "RepairCnt"), ReadInt(row, "NeoEquip") != 0)));
+        return new RefineTables { LevelRows = levels, Materials = materials, Supports = supports, Repairs = repairs, CostDiscount = discount ?? 0, RefineSeed = seed };
     }
 
     public ItemPropertyTables LoadItemPropertyTables()
@@ -2444,6 +2686,13 @@ public sealed class LibConfigXmlReader
     {
         var curve = ReadString(row, name + "Import");
         return curve.Length == 0 ? null : new RandomStatRange(ReadInt(row, name + "Min"), ReadInt(row, name + "Max"), curve);
+    }
+
+    public IReadOnlyDictionary<int, int> LoadGeneralTimerItems()
+    {
+        var minutes = new Dictionary<int, int>();
+        LoadTable("GeneralTimerItem", row => minutes.TryAdd(ReadInt(row, "ItemID"), ReadInt(row, "Minute")));
+        return minutes;
     }
 
     public DrillTables LoadDrillTables()
@@ -2867,6 +3116,11 @@ public sealed class LibConfigXmlReader
     private static string ReadString(IReadOnlyDictionary<string, string> row, string field)
     {
         return row.TryGetValue(field, out var v) ? v.Trim() : string.Empty;
+    }
+
+    private static string ReadRawString(IReadOnlyDictionary<string, string> row, string field)
+    {
+        return row.TryGetValue(field, out var v) ? v : string.Empty;
     }
 
     private static float ReadFloat(IReadOnlyDictionary<string, string> row, string field)

@@ -7,6 +7,8 @@ namespace tPoseidon.Panel;
 public static class GmWorldPage
 {
     public const string TimeFormat = "yyyy-MM-dd HH:mm";
+    public const int MegaphoneNoticeHeaderBytes = 19;
+    public const int MegaphoneNoticeTextBytes = 200;
 
     public static Control Build(GmKit kit)
     {
@@ -26,6 +28,18 @@ public static class GmWorldPage
                     var shade = checks.Number(colour, "The colour", 0, ushort.MaxValue);
                     return [shade, checks.Text(notice, "The notice")];
                 }, arguments => new GmConfirm("Send this notice to everyone?", arguments[1], "Send"), primary: true)));
+
+        var megaphoneHeader = GmKit.Box("Header", 120, "GM");
+        var megaphoneNotice = GmKit.Lines("Megaphone notice text");
+        var megaphoneSection = GmKit.Section(
+            "Megaphone notice",
+            "Queues an operator notice in the megaphone queue. Every connected player sees it on the megaphone bar as [header] text, after the shouts already waiting. The whole line is at most 300 bytes.",
+            megaphoneNotice,
+            GmKit.Line(
+                GmKit.Field("Header", megaphoneHeader),
+                kit.Tool("Queue notice", "megaphone-notice", checks =>
+                    [checks.Text(megaphoneHeader, "The header", MegaphoneNoticeHeaderBytes), checks.Text(megaphoneNotice, "The notice", MegaphoneNoticeTextBytes)],
+                    arguments => new GmConfirm("Queue this notice on the megaphone?", $"[{arguments[0]}] {arguments[1]}", "Queue"), primary: true)));
 
         var question = GmKit.Box("Question", 360);
         var answer = GmKit.Box("Answer", 70, "1");
@@ -106,7 +120,7 @@ public static class GmWorldPage
 
         return GmKit.Tab(
             "Announce to the server, run the OX quiz, work on the map your GM stands on, and plan EXP and ability events.",
-            ("Announce", [noticeSection]),
+            ("Announce", [noticeSection, megaphoneSection]),
             ("OX quiz", [oxSection]),
             ("Map", [mapSection]),
             ("Events", [expSection, expNowSection, abilitySection]));

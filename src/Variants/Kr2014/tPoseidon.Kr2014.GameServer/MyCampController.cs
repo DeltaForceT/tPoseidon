@@ -86,6 +86,7 @@ internal sealed class MyCampController : IDisposable
         };
         if (request.WithChat) shell.SetChat(request.Chat.Title, request.Chat.MaxGuests, request.Chat.HasPassword, request.Chat.Password);
         shell.LoadLayout(Records(shell, guest: false));
+        shell.Timers.Load(TimedItems(shell));
         lock (_byOwner) _byOwner[character.CharacterId] = shell;
         await _sendToOthersOnMap(st, Opcode.S2C_PLAYER_LEFT_MAP, MyCampFrames.ObjectId(st.PlayerEntityId)).ConfigureAwait(false);
         st.MyCampReturn = (st.MapId, st.PlayerX, st.PlayerY);
@@ -105,6 +106,20 @@ internal sealed class MyCampController : IDisposable
         shell.Ready = true;
         await SendAsync(st, Opcode.S2C_MYCAMP_OWNER_READY, Array.Empty<byte>()).ConfigureAwait(false);
         await _showPlayers(st).ConfigureAwait(false);
+    });
+
+    public Task TickAsync(DateTimeOffset now) => Locked(async () =>
+    {
+        MyCampShell[] shells;
+        lock (_byOwner) shells = _byOwner.Values.Where(shell => shell.Timers.Count > 0).ToArray();
+        foreach (var shell in shells)
+        {
+            if (Session(shell.OwnerId) is not { } owner) continue;
+            foreach (var frame in MyCampFrames.TimerNotices(shell.Timers.Tick(now)))
+            {
+                await SendAsync(owner, Opcode.S2C_MYCAMP_ITEM_TIMER_NOTICE, frame).ConfigureAwait(false);
+            }
+        }
     });
 
     public Task TransferNextAsync(InGameSessionState st) => Locked(async () =>
@@ -427,6 +442,20 @@ internal sealed class MyCampController : IDisposable
         _store.ReplaceDeco(shell.SlotCode, placed);
     }
 
+    private List<(ulong ItemUid, ushort ItemIndex, DateTimeOffset Limit)> TimedItems(MyCampShell shell)
+    {
+        var items = _store.GetItemsForAccount(shell.AccountId).ToDictionary(item => item.ItemUid);
+        var timed = new List<(ulong, ushort, DateTimeOffset)>();
+        foreach (var record in shell.Layout.Values.Where(record => record.State != MyCampRules.StateInventory))
+        {
+            if (items.TryGetValue(record.ItemUid, out var item) && MyCampTimerRules.LimitOf(item.ItemFlag, item.ItemUseDate, item.ItemUseTime) is { } limit)
+            {
+                timed.Add((record.ItemUid, record.ItemIndex, limit));
+            }
+        }
+        return timed;
+    }
+
     private List<MyCampItemRecord> Records(MyCampShell shell, bool guest) => Records(shell.AccountId, shell.SlotCode, guest);
 
     private List<MyCampItemRecord> Records(uint accountId, ulong? slotCode, bool guest)
@@ -468,6 +497,11 @@ internal sealed class MyCampController : IDisposable
     {
         lock (_byOwner) return _byOwner.GetValueOrDefault(ownerId);
     }
+
+    public bool IsWarehouseRequestOfOwner(InGameSessionState st, ReadOnlyMemory<byte> payload) =>
+        ShellOfOwner(st) is not null
+        && MyCampFrames.TryReadWarehouseRequest(payload.Span, out var entityId)
+        && entityId == st.PlayerEntityId;
 
     private MyCampShell? ShellOfOwner(InGameSessionState st) =>
         st.Character is { } character && Shell(character.CharacterId) is { } shell && st.MapId == shell.ShellZone ? shell : null;

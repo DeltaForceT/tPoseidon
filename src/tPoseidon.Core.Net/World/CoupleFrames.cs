@@ -7,6 +7,7 @@ namespace tPoseidon.Core.Net.World;
 public static class CoupleFrames
 {
     public const int OptionRequestSize = sizeof(ulong) + sizeof(uint) + 2 * sizeof(ushort);
+    public const int MaxCouponOperationSize = 24;
 
     public static byte[] SkillLearned(ushort ringItemIndex)
     {
@@ -45,6 +46,25 @@ public static class CoupleFrames
         var r = new PacketReader(payload);
         request = new MarriageOptionRequest(r.ReadUInt64(), (int)r.ReadUInt32(), r.ReadUInt16(), r.ReadUInt16());
         return true;
+    }
+
+    public static byte[] OptionDone(BagOperation? ring, BagOperation? dress)
+    {
+        var w = new PacketWriter(2 * (sizeof(byte) + MaxCouponOperationSize));
+        WriteCoupon(w, ring);
+        WriteCoupon(w, dress);
+        return w.ToArray();
+    }
+
+    private static void WriteCoupon(PacketWriter w, BagOperation? coupon)
+    {
+        if (coupon is not { } operation)
+        {
+            w.WriteByte(0);
+            return;
+        }
+        w.WriteByte(1);
+        w.WriteBytes(QuestResultFrames.ItemOperation(operation));
     }
 
     public static byte[] OptionRefused(uint code)

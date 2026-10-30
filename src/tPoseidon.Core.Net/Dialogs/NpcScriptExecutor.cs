@@ -20,6 +20,7 @@ public sealed record NpcScriptCatalogs
     public required IQuestResultTables QuestResults { get; init; }
     public required IMonsterQuestInfoLookup MonsterQuests { get; init; }
     public required IMonsterQuestResultTables MonsterQuestResults { get; init; }
+    public IRandomResultTables RandomResults { get; init; } = InMemoryRandomResultLookup.Empty;
     public IMonsterQuestResultTables PartyQuestResults { get; init; } = new InMemoryMonsterQuestResultLookup(Array.Empty<MonsterQuestResultEntry>());
     public required INpcMsgLookup NpcMessages { get; init; }
     public required IItemParamLookup Items { get; init; }
@@ -58,6 +59,7 @@ public sealed record NpcScriptPlayer
     public required Func<CancellationToken, Task<int>> OpenRefine { get; init; }
     public required Func<bool, CancellationToken, Task<int>> OpenGrowth { get; init; }
     public Func<byte, CancellationToken, Task<bool>>? SetJobQuestState { get; init; }
+    public Func<int, int, int, CancellationToken, Task<bool>>? GrantQuestSkill { get; init; }
     public Func<CancellationToken, Task<int>>? OpenCashBox { get; init; }
     public Func<QuestClear, CancellationToken, Task>? QuestCleared { get; init; }
     public Func<CancellationToken, Task<int>>? CheckAwaken { get; init; }
@@ -69,6 +71,7 @@ public sealed record NpcScriptPlayer
     public Func<CancellationToken, Task<int>>? AwakenReset { get; init; }
     public Func<CancellationToken, Task<int>>? OpenItemRecycle { get; init; }
     public Func<ushort, CancellationToken, Task<int>>? TakeIssuedItem { get; init; }
+    public Func<IReadOnlyList<TimedItem>, CancellationToken, Task>? TimedItemsGranted { get; init; }
     public Func<CancellationToken, Task<int>>? OpenMyCampRecycle { get; init; }
     public Func<CancellationToken, Task<int>>? OpenCouponExchange { get; init; }
     public Func<CancellationToken, Task<int>>? OpenSlotExtend { get; init; }
@@ -103,6 +106,8 @@ public sealed record QuestLoginLists(byte[] Normal, byte[] Monster, byte[] JobCh
 public interface IJobQuests
 {
     Task<int> CheckAsync(SkillShopEntity shop, int tier, CancellationToken ct);
+
+    int CheckSkillQuest(int questId, int skillId);
 
     Task<int> AcceptAsync(SkillShopEntity shop, IReadOnlyList<ushort> args, Func<ushort, CancellationToken, Task> sendPage, CancellationToken ct);
 
@@ -145,6 +150,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
     public const int HistoryCap = 99;
     public const int WithEquippedItemCheck = 5;
 
+    private readonly List<TimedItem> _timedGranted = new();
     private readonly S2SessionContext _ctx;
     private readonly NpcScriptCatalogs _catalogs;
     private readonly NpcScriptStores _stores;
@@ -160,6 +166,8 @@ public sealed partial class NpcScriptExecutor : IJobQuests
     private NpcEntity? _npc;
     private NpcTalkEntry? _talk;
     private ushort _npcEntityId;
+
+    private bool IsMember => _player.Character()?.IsMember == true;
 
     public NpcScriptExecutor(
         S2SessionContext ctx,
@@ -676,7 +684,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
                 break;
             case NpcScriptOperation.CheckJob:
                 result = _talk is { } jobTalk && _player.Character() is { } jobCharacter
-                    ? NpcCheckRules.Job(jobCharacter.JobTier, jobTalk.JobTypeFlag1, jobTalk.JobTypeFlag2)
+                    ? NpcCheckRules.Job(jobCharacter, jobTalk.JobTypeFlag1, jobTalk.JobTypeFlag2)
                     : NpcScript.Refused;
                 break;
             case NpcScriptOperation.SkillCheckSlot:
@@ -713,7 +721,44 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         await FinishAsync(result, args, questId, ct).ConfigureAwait(false);
     }
 
+    public async Task ParamCallAsync(NpcParamScriptRequest request, CancellationToken ct)
+    {
+        if (!IsEngagedWith(request.NpcEntityId))
+        {
+            Console.WriteLine($"{_logTag} {_ctx.Remote}   parameter script function {request.FunctionId} for 0x{request.NpcEntityId:X4} ignored: not talking to it");
+            return;
+        }
+        Console.WriteLine($"{_logTag} {_ctx.Remote}   parameter script function {request.FunctionId} with {request.Parameters.Count} parameters, args [{string.Join(",", request.Args)}]");
+        if (NpcScript.Classify(request.FunctionId).Operation == NpcScriptOperation.Exit)
+        {
+            await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
+            Close();
+            return;
+        }
+        if (request.FunctionId == SkillQuestRules.CheckFunction)
+        {
+            var skillQuestResult = CheckSkillQuest(request.NumberAt(SkillQuestRules.QuestParameter), request.NumberAt(SkillQuestRules.SkillParameter));
+            Console.WriteLine($"{_logTag} {_ctx.Remote}   skill quest check: result {skillQuestResult}");
+            await FinishAsync(skillQuestResult, request.Args, questId: 0, ct).ConfigureAwait(false);
+            return;
+        }
+        Console.WriteLine($"{_logTag} {_ctx.Remote}   parameter script function {request.FunctionId} is not served; refused");
+        await SendAsync(Opcode.S2C_NPC_DIALOG_REFUSED, Array.Empty<byte>(), ct).ConfigureAwait(false);
+    }
+
     public Task<int> CheckAsync(SkillShopEntity shop, int tier, CancellationToken ct) => Task.FromResult(CheckJobQuest(shop, tier));
+
+    public int CheckSkillQuest(int questId, int skillId) =>
+        SkillQuestRules.Check(
+            questId,
+            _player.Skills().TryGetValue(skillId, out var skillLevel) ? skillLevel : null,
+            IsSkillQuestListed(questId),
+            () => QuestOf(questId, QuestTypes.Normal) is { } quest && CharacterId is ulong characterId
+                ? HoldsRequiredItems(characterId, quest, QuestTypes.Skill)
+                : null);
+
+    private bool IsSkillQuestListed(int questId) =>
+        IsActive(QuestTypes.Skill, questId) || IsActive(QuestTypes.SkillGroup, questId) || IsActive(QuestTypes.JobChange, questId);
 
     private int CheckJobQuest(SkillShopEntity shop, int tier)
     {
@@ -764,7 +809,11 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         var required = QuestTurnIn.Required(quest, _catalogs.Items);
         var bag = _stores.Items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory);
         if (!QuestTurnIn.HoldsAll(bag, required) || RequiredItemEquipped(characterId, required)) return NpcScript.Refused;
-        var rewards = Rewards(row?.RowItems(), row?.Type ?? 0);
+        if (Rewards(row?.RowItems(), row?.Type ?? 0, row?.RandomTables().ToList()) is not { } rewards)
+        {
+            Console.WriteLine($"{_logTag} {_ctx.Remote}   quest {questId}: random reward table missing; refused");
+            return NpcScript.Refused;
+        }
         if (!Fits(bag, required, rewards)) return 2;
         if (Arg(args, entry.CompletionCount < QuestRules.MaxCountOf(quest) ? 1 : 3) is not ushort message) return NpcScript.Refused;
 
@@ -773,12 +822,14 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         operations.AddRange(GrantRewards(characterId, rewards));
         operations.AddRange(taken);
         var rates = _player.Rates();
-        var exp = Math.Max(0, rates.ScaleExp(quest.Exp));
-        var tmExp = Math.Max(0, rates.ScaleTmxp(quest.Tmxp));
+        var member = IsMember;
+        var exp = Math.Max(0, rates.ScaleExp(quest.Exp, member));
+        var tmExp = Math.Max(0, rates.ScaleTmxp(quest.Tmxp, member));
         await _player.GrantProgress(exp, tmExp, ct).ConfigureAwait(false);
         await SendAsync(Opcode.S2C_QUEST_RESULT, QuestResultFrames.QuestResult(
             operations, rewards.Select(reward => ((uint)reward.ItemIndex, (ushort)reward.Count)).ToList(),
             exp, tmExp, 0, 0, 0, 0, 0), ct).ConfigureAwait(false);
+        await FlushTimedGrantsAsync(ct).ConfigureAwait(false);
         var stateStored = _player.SetJobQuestState is { } setState
             && await setState((byte)shop.ChangeJob, ct).ConfigureAwait(false);
         RecordCompletion(characterId, QuestTypes.JobChange, questId, entry.CompletionCount, monster: 0, kills: 0, clearTimeMs: 0);
@@ -1152,25 +1203,43 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         if (QuestOf(questId, type) is not { } quest) return NpcScript.Refused;
         if (_stores.Quests.FindActive(characterId, type, questId, monsterId: 0) is not { } entry) return NpcScript.Refused;
         if (type == QuestTypes.Scenario && !QuestRules.IsLevelValid(quest, Level)) return 4;
-        var row = QuestRules.ResultRow(_catalogs.QuestResults.RowsOf(quest.ResultTable), entry.CompletionCount);
-        if (type == QuestTypes.Normal && (row is { Skill: not 0 } || quest.SrcSkill0 != 0 || quest.Options == QuestRules.UserChoiceOption))
-        {
-            Console.WriteLine($"{_logTag} {_ctx.Remote}   quest {questId}: skill or user-choice rewards are not implemented; refused");
-            return NpcScript.Refused;
-        }
-        if (row is not null && row.RandomTables().Any())
-        {
-            Console.WriteLine($"{_logTag} {_ctx.Remote}   quest {questId}: random reward tables are not implemented; refused");
-            return NpcScript.Refused;
-        }
+        var rows = _catalogs.QuestResults.RowsOf(quest.ResultTable);
         var required = QuestTurnIn.Required(quest, _catalogs.Items);
         var bag = _stores.Items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory);
+        QuestResultEntry? row;
+        if (type != QuestTypes.Scenario && quest.Options == QuestRules.UserChoiceOption)
+        {
+            if (QuestTurnIn.UserChoiceOf(bag, required) is not { } choice) return NpcScript.Refused;
+            required = new[] { choice.Item };
+            row = QuestRules.UserChoiceRow(rows, choice.Index);
+        }
+        else
+        {
+            row = QuestRules.ResultRow(rows, entry.CompletionCount);
+        }
+        var rewardSkill = type != QuestTypes.Scenario && row is { Skill: not 0 } skillRow ? skillRow : null;
+        if (rewardSkill is not null)
+        {
+            if (_player.GrantQuestSkill is null) return NpcScript.Refused;
+            if (_player.Skills().ContainsKey(rewardSkill.Skill)) return NpcScript.Refused;
+            if (!QuestRules.HoldsSourceSkill(quest, _player.Skills())) return NpcScript.Refused;
+        }
         if (!QuestTurnIn.HoldsAll(bag, required)) return NpcScript.Refused;
         if (RequiredItemEquipped(characterId, required)) return args.Count == WithEquippedItemCheck ? 5 : NpcScript.Refused;
 
-        var rewards = Rewards(row?.RowItems(), row?.Type ?? 0);
+        if (Rewards(row?.RowItems(), row?.Type ?? 0, row?.RandomTables().ToList()) is not { } rewards)
+        {
+            Console.WriteLine($"{_logTag} {_ctx.Remote}   quest {questId}: random reward table missing; refused");
+            return NpcScript.Refused;
+        }
         if (!Fits(bag, required, rewards)) return 2;
         if (Arg(args, entry.CompletionCount < QuestRules.MaxCountOf(quest) ? 1 : 3) is not ushort message) return NpcScript.Refused;
+
+        if (rewardSkill is not null && !await _player.GrantQuestSkill!(QuestRules.SwappedOutSkill(quest, _player.Skills()), rewardSkill.Skill, rewardSkill.SkillLv, ct).ConfigureAwait(false))
+        {
+            Console.WriteLine($"{_logTag} {_ctx.Remote}   quest {questId}: skill {rewardSkill.Skill} level {rewardSkill.SkillLv} could not be granted; refused");
+            return NpcScript.Refused;
+        }
 
         var taken = TakeItems(bag, required);
         var operations = new List<BagOperation>();
@@ -1178,8 +1247,9 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         operations.AddRange(taken);
 
         var rates = _player.Rates();
-        var exp = Math.Max(0, rates.ScaleExp(quest.Exp + (row?.Exp ?? 0)));
-        var tmExp = Math.Max(0, rates.ScaleTmxp(quest.Tmxp + (row?.Tmxp ?? 0)));
+        var member = IsMember;
+        var exp = Math.Max(0, rates.ScaleExp(quest.Exp + (row?.Exp ?? 0), member));
+        var tmExp = Math.Max(0, rates.ScaleTmxp(quest.Tmxp + (row?.Tmxp ?? 0), member));
         var gelder = Math.Max(0, rates.ScaleGalder(row?.Gelder ?? 0));
         var rewardList = rewards.Select(reward => ((uint)reward.ItemIndex, (ushort)reward.Count)).ToList();
 
@@ -1190,6 +1260,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
             await SendAsync(Opcode.S2C_QUEST_RESULT_MANIFEST, QuestResultFrames.Result(
                 operations, rewardList, exp, tmExp, (uint)questId,
                 (ushort)Math.Clamp(row?.Count ?? 0, 0, ushort.MaxValue), gelder), ct).ConfigureAwait(false);
+            await FlushTimedGrantsAsync(ct).ConfigureAwait(false);
         }
         else
         {
@@ -1197,7 +1268,8 @@ public sealed partial class NpcScriptExecutor : IJobQuests
             await _player.GrantProgress(exp, tmExp, ct).ConfigureAwait(false);
             await SendAsync(Opcode.S2C_QUEST_RESULT, QuestResultFrames.QuestResult(
                 operations, rewardList, exp, tmExp, (ushort)questId, entry.CompletionCount,
-                gelder, 0, 0), ct).ConfigureAwait(false);
+                gelder, (ushort)(rewardSkill?.Skill ?? 0), (ushort)(rewardSkill?.SkillLv ?? 0)), ct).ConfigureAwait(false);
+            await FlushTimedGrantsAsync(ct).ConfigureAwait(false);
         }
         RecordCompletion(characterId, type, questId, entry.CompletionCount, monster: 0, kills: 0, clearTimeMs: 0);
         var historyType = type == QuestTypes.Scenario ? QuestFrames.HistoryOfScenario : QuestFrames.HistoryOfNormal;
@@ -1328,10 +1400,12 @@ public sealed partial class NpcScriptExecutor : IJobQuests
                 QuestFrames.PartyHistoryFor((uint)questId, completions), NextRandKey(), ct).ConfigureAwait(false);
         }
         var rates = _player.Rates();
-        var exp = Math.Max(0, rates.ScaleExp(PartyQuests.Catalog.RewardFor(quest.Exp, item.MemberCount, item.OwnKills, item.TargetCount, completions)));
-        var tmExp = Math.Max(0, rates.ScaleTmxp(PartyQuests.Catalog.RewardFor(quest.Tmxp, item.MemberCount, item.OwnKills, item.TargetCount, completions)));
+        var member = IsMember;
+        var exp = Math.Max(0, rates.ScaleExp(PartyQuests.Catalog.RewardFor(quest.Exp, item.MemberCount, item.OwnKills, item.TargetCount, completions), member));
+        var tmExp = Math.Max(0, rates.ScaleTmxp(PartyQuests.Catalog.RewardFor(quest.Tmxp, item.MemberCount, item.OwnKills, item.TargetCount, completions), member));
         await _ctx.SendFrameAsync(Social.PartyQuestFrames.Rewarded,
             QuestResultFrames.PartyQuestResult(operations, exp, tmExp, (uint)questId), NextRandKey(), ct).ConfigureAwait(false);
+        await FlushTimedGrantsAsync(ct).ConfigureAwait(false);
         await _player.GrantProgress(exp, tmExp, ct).ConfigureAwait(false);
         await PartyQuests.FinishAsync(characterId, (uint)questId, ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   party quest {questId} rewarded: exp {exp}, TM {tmExp}, completion {completions}, {operations.Count} bag changes");
@@ -1419,12 +1493,11 @@ public sealed partial class NpcScriptExecutor : IJobQuests
             if (entry.Kills < 1 || entry.Kills < target) return NpcScript.Refused;
         }
         var row = MonsterQuests.ResultRow(_catalogs.MonsterQuestResults.RowsOf(quest.ResultTable), entry.Grade);
-        if (row is not null && row.RandomTables().Any())
+        if (Rewards(row?.RowItems(), row?.Type ?? 0, row?.RandomTables().ToList()) is not { } rewards)
         {
-            Console.WriteLine($"{_logTag} {_ctx.Remote}   monster quest {questId}: random reward tables are not implemented; refused");
+            Console.WriteLine($"{_logTag} {_ctx.Remote}   monster quest {questId}: random reward table missing; refused");
             return NpcScript.Refused;
         }
-        var rewards = Rewards(row?.RowItems(), row?.Type ?? 0);
         var bag = _stores.Items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory);
         if (!Fits(bag, Array.Empty<RequiredItem>(), rewards)) return 2;
         var messageArg = entry.Count < MonsterQuests.MaxCountOf(quest)
@@ -1439,9 +1512,10 @@ public sealed partial class NpcScriptExecutor : IJobQuests
 
         var operations = GrantRewards(characterId, rewards);
         var rates = _player.Rates();
+        var member = IsMember;
         var grade = grades[entry.Grade];
-        var exp = Math.Max(0, rates.ScaleExp(grade.Exp));
-        var tmExp = Math.Max(0, rates.ScaleTmxp(Math.Max(0, grade.Tmxp)));
+        var exp = Math.Max(0, rates.ScaleExp(grade.Exp, member));
+        var tmExp = Math.Max(0, rates.ScaleTmxp(Math.Max(0, grade.Tmxp), member));
         var gelder = Math.Max(0, rates.ScaleGalder(row?.Gelder ?? 0));
         await GrantMoneyAsync(gelder, ct).ConfigureAwait(false);
         await _player.GrantProgress(exp, tmExp, ct).ConfigureAwait(false);
@@ -1449,6 +1523,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
             operations,
             rewards.Select(reward => ((uint)reward.ItemIndex, (ushort)reward.Count)).ToList(),
             exp, tmExp, (ushort)questId, gelder), ct).ConfigureAwait(false);
+        await FlushTimedGrantsAsync(ct).ConfigureAwait(false);
 
         RecordCompletion(characterId, QuestTypes.Monster, questId, entry.Count, entry.Monster, entry.Kills, entry.ClearTimeMs);
         if (HistoryLoaded(QuestFrames.HistoryOfMonster))
@@ -1501,6 +1576,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         Console.WriteLine($"{_logTag} {_ctx.Remote}   NPC gives item {_talk.GiveItemId}");
         await SendMessageAsync(args[0], QuestInSlot(0) ?? 0, ct).ConfigureAwait(false);
         await SendAsync(Opcode.S2C_ITEM_ADDED, QuestResultFrames.ItemOperations(operations), ct).ConfigureAwait(false);
+        await FlushTimedGrantsAsync(ct).ConfigureAwait(false);
         return NpcScript.Pending;
     }
 
@@ -1664,6 +1740,15 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         lock (_rng) return new[] { all[_rng.Next(all.Count)] };
     }
 
+    private IReadOnlyList<RewardItem>? Rewards(IEnumerable<(int ItemIndex, int Count)>? rowItems, int rowType, IReadOnlyList<int>? randomTables)
+    {
+        var fixedRewards = Rewards(rowItems, rowType);
+        if (randomTables is null or { Count: 0 }) return fixedRewards;
+        IReadOnlyList<RewardItem>? drawn;
+        lock (_rng) drawn = QuestRandomRewards.Draw(randomTables, rowType, _catalogs.RandomResults, _rng.Next);
+        return drawn is null ? null : fixedRewards.Concat(drawn).ToList();
+    }
+
     private bool Fits(IReadOnlyList<Item> bag, IReadOnlyList<RequiredItem> required, IReadOnlyList<RewardItem> rewards)
     {
         var weight = bag.Sum(item => WeightOf(item.ItemIndex) * item.WeightUnits)
@@ -1673,6 +1758,14 @@ public sealed partial class NpcScriptExecutor : IJobQuests
     }
 
     private int WeightOf(int itemId) => _catalogs.Items.GetById(itemId)?.Weight ?? 0;
+
+    private async Task FlushTimedGrantsAsync(CancellationToken ct)
+    {
+        if (_timedGranted.Count == 0) return;
+        var granted = _timedGranted.ToList();
+        _timedGranted.Clear();
+        if (_player.TimedItemsGranted is { } announce) await announce(granted, ct).ConfigureAwait(false);
+    }
 
     private List<BagOperation> GrantRewards(ulong characterId, IReadOnlyList<RewardItem> rewards)
     {
@@ -1693,6 +1786,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
             else
             {
                 var minted = _itemManager.GrantRewardItem(characterId, reward.ItemIndex, count, itemClassOverride: itemClass);
+                if (TimedItemRules.IsTimed(minted)) _timedGranted.Add(new TimedItem(minted.ItemUid, minted.ItemIndex, minted.BreakedAt));
                 operations.Add(new BagOperation(QuestResultFrames.Created, itemClass, (uint)reward.ItemIndex, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot));
             }
         }

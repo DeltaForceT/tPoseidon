@@ -6,85 +6,69 @@ namespace tPoseidon.Core.Net.Packets;
 [WireOpcode((ushort)Opcode.SESSION_PARAM_1)]
 public sealed class SessionParam1Packet
 {
-    public const int PayloadSize = 31;
     public const int CharUidOffset = 0;
     public const int IpOffset = 8;
-    public const int IpFieldBytes = 15;
-    public const int PortOffset = 23;
-    public const int SessionTokenOffset = 27;
-
-    public static readonly byte[] SnapshotBytes =
-    {
-        0x8E, 0x8F, 0x09, 0x06, 0x00, 0x00, 0x00, 0x00,
-        0x31, 0x32, 0x37, 0x2E, 0x30, 0x2E, 0x30, 0x2E,
-        0x31, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x18, 0x34, 0x00, 0x00,
-        0x32, 0x07, 0x00, 0x00,
-    };
+    public const int MinimumPayloadSize = IpOffset + 1 + sizeof(uint) + sizeof(uint);
 
     public ulong SelectedCharUid { get; init; }
     public string IpAddress { get; init; } = string.Empty;
     public uint LoginPort { get; init; }
-        public uint SessionToken { get; init; }
-    public byte[] BaseBytes { get; init; } = Array.Empty<byte>();
+    public uint SessionToken { get; init; }
 
     public byte[] EncodePayload()
     {
-        if (BaseBytes.Length != PayloadSize)
-        {
-            throw new InvalidOperationException(
-                $"SessionParam1.BaseBytes must be {PayloadSize} bytes, got {BaseBytes.Length}.");
-        }
         var ipBytes = Encoding.ASCII.GetBytes(IpAddress);
-        if (ipBytes.Length >= IpFieldBytes)
+        if (ipBytes.Contains((byte)0))
         {
-            throw new InvalidOperationException(
-                $"IpAddress must fit in {IpFieldBytes - 1} bytes plus a NUL; got {ipBytes.Length}.");
+            throw new InvalidOperationException("IpAddress must not contain a NUL.");
         }
-        var output = new byte[PayloadSize];
-        Array.Copy(BaseBytes, output, PayloadSize);
-
-        for (var i = 0; i < 8; i++)
-        {
-            output[CharUidOffset + i] = (byte)((SelectedCharUid >> (i * 8)) & 0xFF);
-        }
-        Array.Clear(output, IpOffset, IpFieldBytes);
+        var output = new byte[MinimumPayloadSize + ipBytes.Length];
+        WriteUInt64Le(output, CharUidOffset, SelectedCharUid);
         Array.Copy(ipBytes, 0, output, IpOffset, ipBytes.Length);
-        WriteUInt32Le(output, PortOffset, LoginPort);
-        WriteUInt32Le(output, SessionTokenOffset, SessionToken);
+        var portOffset = IpOffset + ipBytes.Length + 1;
+        WriteUInt32Le(output, portOffset, LoginPort);
+        WriteUInt32Le(output, portOffset + sizeof(uint), SessionToken);
         return output;
     }
 
     public static SessionParam1Packet DecodePayload(ReadOnlySpan<byte> payload)
     {
-        if (payload.Length != PayloadSize)
+        if (payload.Length < MinimumPayloadSize)
         {
             throw new InvalidPacketException(
-                $"SessionParam1 payload must be exactly {PayloadSize} bytes, got {payload.Length}.");
+                $"SessionParam1 payload must be at least {MinimumPayloadSize} bytes, got {payload.Length}.");
         }
-        ulong uid = 0;
-        for (var i = 0; i < 8; i++) uid |= (ulong)payload[CharUidOffset + i] << (i * 8);
-        var ipSpan = payload.Slice(IpOffset, IpFieldBytes);
-        var nul = ipSpan.IndexOf((byte)0);
-        var ip = Encoding.ASCII.GetString(nul < 0 ? ipSpan : ipSpan[..nul]);
-        var port = ReadUInt32Le(payload, PortOffset);
-        var trailing = ReadUInt32Le(payload, SessionTokenOffset);
+        var nul = payload[IpOffset..].IndexOf((byte)0);
+        if (nul < 0 || payload.Length < IpOffset + nul + 1 + sizeof(uint) + sizeof(uint))
+        {
+            throw new InvalidPacketException(
+                $"SessionParam1 payload of {payload.Length} bytes is not a NUL-terminated host followed by port and token.");
+        }
+        var portOffset = IpOffset + nul + 1;
         return new SessionParam1Packet
         {
-            SelectedCharUid = uid,
-            IpAddress = ip,
-            LoginPort = port,
-            SessionToken = trailing,
-            BaseBytes = payload.ToArray(),
+            SelectedCharUid = ReadUInt64Le(payload, CharUidOffset),
+            IpAddress = Encoding.ASCII.GetString(payload.Slice(IpOffset, nul)),
+            LoginPort = ReadUInt32Le(payload, portOffset),
+            SessionToken = ReadUInt32Le(payload, portOffset + sizeof(uint)),
         };
+    }
+
+    private static void WriteUInt64Le(byte[] buf, int offset, ulong value)
+    {
+        for (var i = 0; i < sizeof(ulong); i++) buf[offset + i] = (byte)((value >> (i * 8)) & 0xFF);
     }
 
     private static void WriteUInt32Le(byte[] buf, int offset, uint value)
     {
-        buf[offset] = (byte)(value & 0xFF);
-        buf[offset + 1] = (byte)((value >> 8) & 0xFF);
-        buf[offset + 2] = (byte)((value >> 16) & 0xFF);
-        buf[offset + 3] = (byte)((value >> 24) & 0xFF);
+        for (var i = 0; i < sizeof(uint); i++) buf[offset + i] = (byte)((value >> (i * 8)) & 0xFF);
+    }
+
+    private static ulong ReadUInt64Le(ReadOnlySpan<byte> buf, int offset)
+    {
+        ulong value = 0;
+        for (var i = 0; i < sizeof(ulong); i++) value |= (ulong)buf[offset + i] << (i * 8);
+        return value;
     }
 
     private static uint ReadUInt32Le(ReadOnlySpan<byte> buf, int offset) =>

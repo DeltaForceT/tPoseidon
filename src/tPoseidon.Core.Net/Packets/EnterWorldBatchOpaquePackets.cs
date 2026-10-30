@@ -33,6 +33,7 @@ public sealed class GameBatchFloatArrayPacket
     public const int FloatCount2010 = 8;
     public const int FloatCount2014 = 10;
     public const int BonusRateSlot = 2;
+    public const int GuildRankRateSlot = 1;
     public const int GameMasterRateSlot = 5;
 
     public float[] Floats { get; init; } = new float[FloatCount2010];
@@ -44,10 +45,11 @@ public sealed class GameBatchFloatArrayPacket
         return new GameBatchFloatArrayPacket { Floats = floats };
     }
 
-    public static GameBatchFloatArrayPacket ForRateSlotsKr2014(float bonusRate, float gameMasterRate)
+    public static GameBatchFloatArrayPacket ForRateSlotsKr2014(float bonusRate, float gameMasterRate, float guildRankRate = 0f)
     {
         var packet = ForBonusRateKr2014(bonusRate);
         packet.Floats[GameMasterRateSlot] = gameMasterRate;
+        packet.Floats[GuildRankRateSlot] = guildRankRate;
         return packet;
     }
 

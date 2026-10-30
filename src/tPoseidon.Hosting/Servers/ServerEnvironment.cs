@@ -1,5 +1,6 @@
 using System.Globalization;
 using tPoseidon.Core.Common.Security;
+using tPoseidon.Core.Data;
 using tPoseidon.Core.Data.Postgres;
 
 namespace tPoseidon.Hosting.Servers;
@@ -32,6 +33,7 @@ public static class ServerEnvironment
             ["MT_GAME_PORT"] = settings.Ports.Game1.ToString(inv),
             ["MT_GAME_ALT_PORT"] = settings.Ports.Game2.ToString(inv),
             ["MT_MASTER_PORT"] = settings.Ports.Master.ToString(inv),
+            [GuildCoinRules.PerWinVariable] = settings.GuildCoinsPerWin.ToString(inv),
         };
 
         foreach (var pair in Guard(server.Name, settings.Security, paths))

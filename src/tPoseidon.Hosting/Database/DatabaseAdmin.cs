@@ -196,6 +196,18 @@ public static class DatabaseAdmin
         return WithDataSource(settings, dataSource => action(new PostgresPenaltyStore(dataSource)));
     }
 
+    public static T WithMembership<T>(DatabaseSettings settings, Func<PostgresMembershipStore, T> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        return WithDataSource(settings, dataSource => action(new PostgresMembershipStore(dataSource)));
+    }
+
+    public static T WithMyCampGifts<T>(DatabaseSettings settings, Func<MyCampGifts, T> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        return WithDataSource(settings, dataSource => action(new MyCampGifts(new PostgresMyCampStore(dataSource), new PostgresCharacterDirectory(dataSource), new PostgresCharStore(dataSource))));
+    }
+
     private static T WithDataSource<T>(DatabaseSettings settings, Func<NpgsqlDataSource, T> action)
     {
         ArgumentNullException.ThrowIfNull(settings);

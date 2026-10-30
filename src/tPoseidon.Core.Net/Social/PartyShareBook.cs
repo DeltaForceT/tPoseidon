@@ -29,6 +29,13 @@ public sealed class PartyShareBook
         return (int)(boosted * share);
     }
 
+    public bool AreGrouped(ulong first, ulong second) =>
+        first != second
+        && _bound.TryGetValue(first, out var firstBound)
+        && _bound.TryGetValue(second, out var secondBound)
+        && firstBound.OrderId == secondBound.OrderId
+        && firstBound.Group.Contains(second);
+
     public Task ApplyAsync(OfficerOrder order, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(order);

@@ -210,7 +210,7 @@ public static class PostFrames
         return w.ToArray();
     }
 
-    public static byte[] TakenBody(uint postUid, IReadOnlyList<BagOperation> operations)
+    public static byte[] TakenBody(uint postUid, IReadOnlyList<BagOperation> operations, IReadOnlyDictionary<ulong, DateTimeOffset>? expiries = null)
     {
         ArgumentNullException.ThrowIfNull(operations);
         var w = new PacketWriter(5 + operations.Count * 40);
@@ -219,7 +219,7 @@ public static class PostFrames
         foreach (var operation in operations)
         {
             w.WriteBytes(QuestResultFrames.ItemOperation(operation));
-            w.WriteUInt64(0);
+            w.WriteUInt64(expiries is not null && expiries.TryGetValue(operation.ItemUid, out var expiresAt) ? ClientClock.FileTime(expiresAt) : 0);
         }
         return w.ToArray();
     }

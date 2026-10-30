@@ -27,7 +27,16 @@ internal static class HelpCommand
         Console.WriteLine("  play      start the game client pointed at this server, logged in with your play account");
         Console.WriteLine("  server-file  write the file friends open in the launcher to join this server");
         Console.WriteLine("  launcher  publish the update folder for players' launchers (launcher publish, launcher folder)");
+        Console.WriteLine("  client    scan the game client folder and fix what the emulator needs (client check, client fix)");
         Console.WriteLine("  version   print the version");
+        Console.WriteLine();
+        Console.WriteLine("start options:");
+        Console.WriteLine("  --no-backup           start without the backup that is offered after an update (use it when pg_dump is not");
+        Console.WriteLine("                        installed and PostgreSQL does not run in a Docker container that publishes its port)");
+        Console.WriteLine();
+        Console.WriteLine("backup:");
+        Console.WriteLine("  uses pg_dump from PATH or the usual PostgreSQL folders; without it, runs pg_dump inside the running Docker");
+        Console.WriteLine("  container that publishes the database port");
         Console.WriteLine();
         Console.WriteLine("Setup options (all optional; setup asks for anything not given):");
         Console.WriteLine("  --client <folder>              game client folder");
@@ -39,6 +48,7 @@ internal static class HelpCommand
         Console.WriteLine("  --admin-user <name> --admin-password <secret>          your game account");
         Console.WriteLine("  --play-account <name>          the account Play logs in with (default: the one you create)");
         Console.WriteLine("  --cash free|balance|disabled --cash-start <amount>     item shop cash");
+        Console.WriteLine("  --guild-coins <amount>                                 guild coins for each guild game win (default 100)");
         Console.WriteLine();
         Console.WriteLine("play options:");
         Console.WriteLine("  --account <name>      log in with another existing account; remembered for next time");
@@ -67,6 +77,8 @@ internal static class HelpCommand
         ScriptsCommand.WriteHelp();
         Console.WriteLine();
         LauncherCommand.WriteHelp();
+        Console.WriteLine();
+        ClientCommand.WriteHelp();
         Console.WriteLine();
         Console.WriteLine("Common options:");
         Console.WriteLine("  --home <folder>            tPoseidon folder (default: the one this program is in)");

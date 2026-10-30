@@ -10,12 +10,16 @@ public static class GmPickers
     public const string AnyCategory = "Any category";
     public const string AnyTable = "Any table";
     public const string AnyMap = "Any map";
+    public const string MyCampCategory = "My Camp";
 
     public static GmPicker Map(GmModel model, string idLabel = "Map id") =>
         new(model, "maps", idLabel, (catalog, text) => catalog.FindMaps(text).Select(map => new GmPick(Text(map.Id), $"{map.Name} ({map.Id})")), false);
 
     public static GmPicker Npc(GmModel model) =>
         new(model, "NPCs", "NPC type", (catalog, text) => catalog.FindNpcs(text).Select(npc => new GmPick(Text(npc.Type), $"{npc.Name} · type {npc.Type}", Sprite(npc.Picture))), true);
+
+    public static GmPicker Skill(GmModel model) =>
+        new(model, "skills", "Skill id", (catalog, text) => catalog.FindSkills(text).Select(skill => new GmPick(Text(skill.Id), $"{skill.Name} · {skill.Id} · up to level {skill.MaxLevel}", SkillIcon(skill))), true);
 
     public static GmPicker Item(GmModel model)
     {
@@ -38,6 +42,38 @@ public static class GmPickers
         category.SelectionChanged += (_, _) => picker.Restart();
         table.SelectionChanged += (_, _) => picker.Restart();
         return picker;
+    }
+
+    public static GmGiveItemPicker GiveItem(GmModel model)
+    {
+        var category = GmKit.Choice(new[] { AnyCategory }.Concat(ItemCategories.All.Select(entry => entry.Name)).Append(MyCampCategory), 150);
+        var table = GmKit.Choice(new[] { AnyTable }.Concat(ItemNames.Tables), 130);
+        bool Camp() => category.SelectedIndex == ItemCategories.All.Count + 1;
+        GmPicker? picker = null;
+        picker = new GmPicker(
+            model,
+            "items",
+            "Item id",
+            (catalog, text) => Camp()
+                ? catalog.FindCampItems(text).Select(item => new GmPick(Text(item.Id), $"{item.Name} · {item.Id} · My Camp", CampIcon(item)))
+                : catalog
+                    .FindItems(
+                        text,
+                        table.SelectedIndex > 0 ? ItemNames.Tables[table.SelectedIndex - 1] : null,
+                        category.SelectedIndex > 0 ? ItemCategories.All[category.SelectedIndex - 1].Id : null)
+                    .Select(item => new GmPick(Text(item.Id), $"{item.Name} · {item.Id} · {item.Table}", Icon(item.Definition))),
+            true,
+            GmKit.Field("Category", category),
+            GmKit.Field("Game data table", table));
+        var result = new GmGiveItemPicker(picker, Camp);
+        category.SelectionChanged += (_, _) =>
+        {
+            table.IsEnabled = !Camp();
+            picker.Restart();
+            result.RaiseCampChanged();
+        };
+        table.SelectionChanged += (_, _) => picker.Restart();
+        return result;
     }
 
     public static GmPicker Monster(GmModel model)
@@ -78,6 +114,12 @@ public static class GmPickers
     private static GmArt? Icon(ItemParamEntry definition) =>
         definition.InvFileName.Length == 0 || definition.InvBundleNum < 0 ? null : GmArt.Icon(definition.InvFileName, definition.InvBundleNum);
 
+    private static GmArt? CampIcon(MyCampItemEntry item) =>
+        item.IconFile.Length == 0 || item.IconBundle < 0 ? null : GmArt.Icon(item.IconFile, item.IconBundle);
+
+    private static GmArt? SkillIcon(CatalogSkill skill) =>
+        skill.IconFile.Length == 0 || skill.IconBundle < 0 ? null : GmArt.Icon(skill.IconFile, skill.IconBundle);
+
     private static GmArt? Sprite(string file) => file.Length == 0 ? null : GmArt.Sprite(file);
 
     private static StackPanel Range(TextBox minimum, TextBox maximum)
@@ -90,4 +132,15 @@ public static class GmPickers
     }
 
     private static string Text(long value) => value.ToString(CultureInfo.InvariantCulture);
+}
+
+public sealed class GmGiveItemPicker(GmPicker picker, Func<bool> camp)
+{
+    public GmPicker Picker { get; } = picker;
+
+    public bool Camp => camp();
+
+    public event Action<bool>? CampChanged;
+
+    public void RaiseCampChanged() => CampChanged?.Invoke(camp());
 }

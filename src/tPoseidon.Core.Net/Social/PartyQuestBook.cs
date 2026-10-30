@@ -95,6 +95,12 @@ public sealed class PartyQuestBook
 
     public PartyQuestItem? Held(ulong characterId) => _items.GetValueOrDefault(characterId);
 
+    public Task SendRecordAsync(S2SessionContext context, ulong characterId, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return context.SendFrameAsync(PartyQuestFrames.Record, PartyQuestFrames.RecordFor(Held(characterId)), NextKey(), ct);
+    }
+
     public bool IsRunning(ulong characterId) => Held(characterId) is { Success: false };
 
     public static uint NowMs() => unchecked((uint)(DateTime.UtcNow.ToFileTimeUtc() / TimeSpan.TicksPerMillisecond));

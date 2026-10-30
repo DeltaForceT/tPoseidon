@@ -299,6 +299,15 @@ public sealed class PostgresItemStore : IItemStore
         return cmd.ExecuteNonQuery() == 1;
     }
 
+    public bool SetBreakedAt(ulong itemUid, DateTimeOffset breakedAt)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand("UPDATE items SET item_breaked = @item_breaked WHERE item_uid = @item_uid", conn);
+        cmd.Parameters.AddWithValue("item_breaked", breakedAt.UtcDateTime);
+        cmd.Parameters.AddWithValue("item_uid", unchecked((long)itemUid));
+        return cmd.ExecuteNonQuery() == 1;
+    }
+
     private const string BaseSelectSql = """
         SELECT i.item_uid, i.item_index, i.item_class, i.item_attr,
                i.item_charged, i.item_breaked, i.refine_type, i.refine_level,

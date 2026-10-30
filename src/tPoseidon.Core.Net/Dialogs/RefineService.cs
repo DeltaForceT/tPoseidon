@@ -118,17 +118,17 @@ public sealed class RefineService
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
         var target = bag.FirstOrDefault(item => item.ItemUid == targetUid);
         var definition = target is null ? null : _catalog.GetById(target.ItemIndex);
-        if (target is null || definition is null || RepairRules.Check(definition, target, Phantom) != RepairRules.NoError)
+        if (target is null || definition is null || RepairRules.Check(definition, target, Phantom) != RepairRules.NoError
+            || RepairRules.Material(_tables, definition, target) is not { } repairRow)
         {
             await RepairRefusedAsync(RepairRules.ImpossibleItem, $"item 0x{targetUid:X} cannot be repaired here", ct).ConfigureAwait(false);
             return;
         }
-        var count = RepairRules.MaterialCount(definition, target);
-        var material = bag.FirstOrDefault(item => item.Stack >= count && _catalog.GetById(item.ItemIndex) is { } materialDefinition
-            && RepairRules.IsMaterialFor(definition, materialDefinition));
+        var count = repairRow.RepairCount;
+        var material = bag.FirstOrDefault(item => item.ItemIndex == repairRow.RepairItemId && item.Stack >= count);
         if (material is null)
         {
-            await RepairRefusedAsync(RepairRules.NoMaterial, $"no repair powder x{count} for item {target.ItemIndex}", ct).ConfigureAwait(false);
+            await RepairRefusedAsync(RepairRules.NoMaterial, $"no item {repairRow.RepairItemId} x{count} for item {target.ItemIndex}", ct).ConfigureAwait(false);
             return;
         }
         var materialOperation = Take(material, count);

@@ -19,6 +19,20 @@ public static class ToolRunner
         return new ToolResult(process.ExitCode, (stdout.GetAwaiter().GetResult() + stderr.GetAwaiter().GetResult()).Trim());
     }
 
+    public static ToolResult CaptureTo(string executable, IEnumerable<string> arguments, IReadOnlyDictionary<string, string>? environment, Stream destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        var info = Build(executable, arguments, environment);
+        info.RedirectStandardOutput = true;
+        info.RedirectStandardError = true;
+        info.CreateNoWindow = true;
+        using var process = StartOrThrow(info);
+        var stderr = process.StandardError.ReadToEndAsync();
+        process.StandardOutput.BaseStream.CopyTo(destination);
+        process.WaitForExit();
+        return new ToolResult(process.ExitCode, stderr.GetAwaiter().GetResult().Trim());
+    }
+
     public static string? FindOnPath(string name)
     {
         var path = Environment.GetEnvironmentVariable("PATH");

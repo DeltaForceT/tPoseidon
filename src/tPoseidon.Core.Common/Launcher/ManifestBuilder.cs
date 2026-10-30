@@ -9,6 +9,7 @@ public static class ManifestBuilder
     public const string NewsFolder = "news";
     public const string ChannelFile = "channel.json";
     public const string ManifestFile = "manifest.json";
+    public const string LauncherFolder = "launcher";
 
     public static readonly IReadOnlyList<string> BannerNames = ["banner.png", "banner.jpg", "banner.jpeg"];
 
@@ -26,7 +27,8 @@ public static class ManifestBuilder
             channel.LauncherVersion ?? launcherVersion,
             new NewsStore(Path.Combine(updatesFolder, NewsFolder)).Load().Take(LauncherManifest.MaxNews).Select(post => post.ToItem()).ToList(),
             ReadFiles(updatesFolder),
-            banner is null ? null : Hash(Path.Combine(updatesFolder, banner)));
+            banner is null ? null : Hash(Path.Combine(updatesFolder, banner)),
+            ReadLauncher(updatesFolder));
         manifest.Validate();
         return manifest;
     }
@@ -41,6 +43,20 @@ public static class ManifestBuilder
 
     private static string? FindBanner(string updatesFolder) =>
         BannerNames.FirstOrDefault(name => File.Exists(Path.Combine(updatesFolder, name)) && new FileInfo(Path.Combine(updatesFolder, name)).Length <= LauncherManifest.MaxBannerBytes);
+
+    private static LauncherRelease? ReadLauncher(string updatesFolder)
+    {
+        var package = LauncherPackageInfo.Read(updatesFolder);
+        var folder = Path.Combine(updatesFolder, LauncherFolder);
+        if (package is null || !Directory.Exists(folder))
+        {
+            return null;
+        }
+
+        var files = new List<ManifestFile>();
+        AddFiles(files, folder, null);
+        return new LauncherRelease(package.Version, package.Executable, files);
+    }
 
     private static List<ManifestFile> ReadFiles(string updatesFolder)
     {

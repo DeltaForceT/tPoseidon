@@ -12,6 +12,7 @@ public sealed class MonsterManager : IMonsterEntityProvider
     private readonly MonsterOverridesProvider? _monsterOverrides;
     private readonly IdAllocator _idAllocator;
     private readonly Func<long>? _damageLimit;
+    private readonly IMonsterDamageObserver? _damageObserver;
     private readonly ConcurrentDictionary<ushort, MonsterEntity> _byEntityId = new();
     private readonly ConcurrentDictionary<ushort, IMonsterStrategy> _strategyByEntityId = new();
     private readonly ConcurrentDictionary<ushort, GroundItem> _groundItems = new();
@@ -23,7 +24,8 @@ public sealed class MonsterManager : IMonsterEntityProvider
         IMonItemDropInfoLookup? dropCatalog = null,
         MonsterOverridesProvider? monsterOverrides = null,
         int? rngSeed = null,
-        Func<long>? damageLimit = null)
+        Func<long>? damageLimit = null,
+        IMonsterDamageObserver? damageObserver = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(idAllocator);
@@ -32,6 +34,7 @@ public sealed class MonsterManager : IMonsterEntityProvider
         _monsterOverrides = monsterOverrides;
         _idAllocator = idAllocator;
         _damageLimit = damageLimit;
+        _damageObserver = damageObserver;
         _rng = rngSeed is int s ? new Random(s) : new Random();
     }
 
@@ -40,6 +43,10 @@ public sealed class MonsterManager : IMonsterEntityProvider
     public event Action<MonsterEntity, ushort>? MonsterKilled;
 
     public int Count => _byEntityId.Count;
+
+    public IReadOnlyDictionary<int, BossLifeProfile> BossLives { get; set; } = new Dictionary<int, BossLifeProfile>();
+
+    public BossEventOutbox BossEvents { get; } = new();
 
     public IReadOnlyCollection<MonsterEntity> All => _byEntityId.Values.ToArray();
 
@@ -51,13 +58,16 @@ public sealed class MonsterManager : IMonsterEntityProvider
     public IReadOnlyCollection<MonsterEntity> GetByMap(ushort mapId) =>
         _byEntityId.Values.Where(m => m.MapId == mapId && !m.IsDead).ToArray();
 
+    public IReadOnlyCollection<MonsterEntity> GetByScene(ushort mapId, ushort instanceKey) =>
+        _byEntityId.Values.Where(m => m.MapId == mapId && m.InstanceKey == instanceKey && !m.IsDead).ToArray();
+
     public MonsterEntity? Spawn(int monsterParamId, ushort mapId, ushort x, ushort y, ushort? spawnPointId = null)
         => Spawn(monsterParamId, mapId, x, y, spawnPointId, explicitEntityId: null);
 
     public MonsterEntity? Spawn(int monsterParamId, ushort mapId, ushort x, ushort y, ushort? spawnPointId, ushort? explicitEntityId)
         => Spawn(monsterParamId, mapId, x, y, spawnPointId, explicitEntityId, regionId: 0);
 
-    public MonsterEntity? Spawn(int monsterParamId, ushort mapId, ushort x, ushort y, ushort? spawnPointId, ushort? explicitEntityId, int regionId)
+    public MonsterEntity? Spawn(int monsterParamId, ushort mapId, ushort x, ushort y, ushort? spawnPointId, ushort? explicitEntityId, int regionId, ushort instanceKey = 0)
     {
         var def = _catalog.GetById(monsterParamId);
         if (def is null) return null;
@@ -82,14 +92,20 @@ public sealed class MonsterManager : IMonsterEntityProvider
             Level = level,
             SpawnPointId = spawnPointId ?? 0,
             RegionId = regionId,
+            InstanceKey = instanceKey,
             IsBoss = isBoss,
             Atype = atype,
             AiViewRange = def.AiViewRange,
             DamageLimit = _damageLimit,
+            DamageObserver = _damageObserver,
         };
         entity.InitHp(maxHp);
         entity.InitPosition(x, y);
         entity.InitSpeed(def.WalkSpeed);
+        if (atype is MonsterAType.BossMonster or MonsterAType.DoppelGanger && BossLives.TryGetValue(monsterParamId, out var bossProfile))
+        {
+            entity.AttachBoss(bossProfile, BossEvents, BossElements.CodeOf);
+        }
 
         var strategy = MonsterStrategyFactory.Create(atype);
         strategy.OnSpawn(entity);

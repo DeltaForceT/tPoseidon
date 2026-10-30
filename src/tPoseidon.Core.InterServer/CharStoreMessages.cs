@@ -188,6 +188,8 @@ public static class CharStoreWire
         writer.WriteInt16(c.GuildState);
         writer.WriteByte((byte)(c.IsGuildChief ? 1 : 0));
         writer.WriteInt64(c.GenTime.UtcTicks);
+        writer.WriteByte((byte)(c.IsMember ? 1 : 0));
+        UniqueItemMessages.WriteBossKillHistory(writer, c.BossKills);
     }
 
     private static Character ReadCharacter(ref PacketReader reader) => new()
@@ -261,6 +263,8 @@ public static class CharStoreWire
         GuildState = reader.ReadInt16(),
         IsGuildChief = reader.ReadByte() != 0,
         GenTime = new DateTimeOffset(reader.ReadInt64(), TimeSpan.Zero),
+        IsMember = reader.ReadByte() != 0,
+        BossKills = UniqueItemMessages.ReadBossKillHistory(ref reader),
     };
 
     private static void WriteStatsSnapshot(PacketWriter writer, CharacterStatsSnapshot s)

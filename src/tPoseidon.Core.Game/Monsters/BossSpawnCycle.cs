@@ -12,6 +12,7 @@ public sealed class BossSpawnCycle
     private readonly Random _rng;
     private readonly object _gate = new();
     private readonly Dictionary<ushort, Zone> _zones = new();
+    private readonly HashSet<ushort> _held = new();
 
     public BossSpawnCycle(MonsterManager monsters, IMonsterParamLookup catalog, Random? rng = null)
     {
@@ -46,12 +47,21 @@ public sealed class BossSpawnCycle
         }
     }
 
+    public void Hold(ushort mapId, bool held)
+    {
+        lock (_gate)
+        {
+            if (held) _held.Add(mapId);
+            else _held.Remove(mapId);
+        }
+    }
+
     public IReadOnlyList<MonsterEntity> Minute(ushort mapId, long nowMs)
     {
         var born = new List<MonsterEntity>();
         lock (_gate)
         {
-            if (!_zones.TryGetValue(mapId, out var zone)) return born;
+            if (_held.Contains(mapId) || !_zones.TryGetValue(mapId, out var zone)) return born;
             foreach (var slot in zone.Slots)
             {
                 var elapsed = slot.Minutes;

@@ -22,9 +22,9 @@ internal static class BackupCommand
 
     public static void Backup(InstallPaths paths, HostSettings settings)
     {
-        var pgDump = DatabaseBackup.LocatePgDump();
-        Console.WriteLine($"Backing up {settings.Database.Describe()} with {pgDump}...");
-        var target = DatabaseBackup.Run(paths, settings, pgDump);
+        var tool = DatabaseBackup.Locate(settings);
+        Console.WriteLine($"Backing up {settings.Database.Describe()} with {tool.Describe()}...");
+        var target = DatabaseBackup.Run(paths, settings, tool);
         Console.WriteLine($"Backup written to {target}.");
         Console.WriteLine(DatabaseBackup.RestoreHint(target));
     }

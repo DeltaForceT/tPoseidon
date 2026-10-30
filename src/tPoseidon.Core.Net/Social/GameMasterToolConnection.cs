@@ -33,6 +33,14 @@ public static class GameMasterToolConnection
         GameMasterFrames.SummonNpcFail,
         GameMasterFrames.GameFlagOk,
         GameMasterFrames.GameFlagFail,
+        GameMasterFrames.FlyOk,
+        GameMasterFrames.FlyFail,
+        GameMasterFrames.LearnSkillOk,
+        GameMasterFrames.LearnSkillFail,
+        GameMasterFrames.SetLevelOk,
+        GameMasterFrames.SetLevelFail,
+        GameMasterFrames.MegaphoneNoticeOk,
+        GameMasterFrames.MegaphoneNoticeFail,
         GameMasterFrames.CharInfoReply,
         GameMasterFrames.CharInfoMissing,
         GameMasterFrames.SummonMonsterOk,
@@ -96,6 +104,10 @@ public static class GameMasterToolConnection
         GameMasterFrames.InstantChatRemoveFail,
         GameMasterFrames.SummonNpcFail,
         GameMasterFrames.GameFlagFail,
+        GameMasterFrames.FlyFail,
+        GameMasterFrames.LearnSkillFail,
+        GameMasterFrames.SetLevelFail,
+        GameMasterFrames.MegaphoneNoticeFail,
         GameMasterFrames.CharInfoMissing,
         GameMasterFrames.SummonMonsterFail,
         GameMasterFrames.PresentItemFail,
@@ -212,11 +224,19 @@ public static class GameMasterToolConnection
         GameMasterFrames.SummonNpcFail => "summon NPC refused: the GM character is not on a game server",
         GameMasterFrames.GameFlagOk => "GM flag changed in the game",
         GameMasterFrames.GameFlagFail => "GM flag refused: the GM character is not in the game",
+        GameMasterFrames.FlyOk => "flying form changed",
+        GameMasterFrames.FlyFail => DescribeFlyFail(reply.Payload),
+        GameMasterFrames.LearnSkillOk => "skill learned: it is in the character's skill list and saved",
+        GameMasterFrames.LearnSkillFail => DescribeLearnSkillFail(reply.Payload),
+        GameMasterFrames.SetLevelOk => "level set: the character got the bonus points, stat growth, gifts and frames of that many level-ups, and it is saved",
+        GameMasterFrames.SetLevelFail => DescribeSetLevelFail(reply.Payload),
+        GameMasterFrames.MegaphoneNoticeOk => $"notice queued: {ReadUInt(reply.Payload)} shout(s) waiting before it",
+        GameMasterFrames.MegaphoneNoticeFail => DescribeMegaphoneNoticeFail(reply.Payload),
         GameMasterFrames.CharInfoReply => DescribeCharInfo(reply.Payload),
         GameMasterFrames.CharInfoMissing => "character info: not found",
         GameMasterFrames.SummonMonsterOk => "monsters summoned",
         GameMasterFrames.SummonMonsterFail => $"summon refused (reason {(reply.Payload.Length > 0 ? reply.Payload[0] : 0)}: 1 monster type, 2 map, 4 spawn failed or map not on this game server)",
-        GameMasterFrames.PresentItemOk => "item given: it is in the character's bag",
+        GameMasterFrames.PresentItemOk => "item given: it reached the character (bag or cash box, as asked)",
         GameMasterFrames.PresentItemFail => DescribePresentFail(reply.Payload),
         GameMasterFrames.SetIssueItemOk => "issue item set",
         GameMasterFrames.OxGiveItemOk => "OX items handed out",
@@ -282,6 +302,43 @@ public static class GameMasterToolConnection
         return $"teleport refused: {(who.Length == 0 ? "the GM character" : $"'{who}'")} or {(to.Length == 0 ? "the GM character" : $"'{to}'")} is not on a game server";
     }
 
+    private static string DescribeSetLevelFail(byte[] payload) =>
+        (payload.Length > 0 ? payload[0] : (byte)0) switch
+        {
+            (byte)GameMasterFrames.AckLevelNotOnline => "level not changed: the character is not on a game server",
+            (byte)GameMasterFrames.AckLevelInvalid => "level not changed: a level starts at 1",
+            (byte)GameMasterFrames.AckLevelLower => "level not changed: the original has no way to lower a level, so only a higher level can be set",
+            (byte)GameMasterFrames.AckLevelSame => "level not changed: the character is already at that level (the highest level is 400)",
+            var other => $"level not changed (reason {other})",
+        };
+
+    private static string DescribeMegaphoneNoticeFail(byte[] payload) =>
+        (payload.Length > 0 ? payload[0] : (byte)0) switch
+        {
+            GameMasterFrames.NoticeRefusedEmpty => "notice refused: the header and the text must both be filled and the header must not contain ]",
+            GameMasterFrames.NoticeRefusedTooLong => "notice refused: the line is longer than 300 bytes",
+            GameMasterFrames.NoticeRefusedNotSaved => "notice not queued: the megaphone queue could not be written",
+            var other => $"notice refused (reason {other})",
+        };
+
+    private static string DescribeLearnSkillFail(byte[] payload) =>
+        (payload.Length > 0 ? payload[0] : (byte)0) switch
+        {
+            (byte)GameMasterFrames.AckLearnUnknownSkill => "skill not learned: no such skill in the skill table",
+            (byte)GameMasterFrames.AckLearnBadLevel => "skill not learned: the level is outside 1 to the skill's maximum",
+            (byte)GameMasterFrames.AckLearnNotOnline => "skill not learned: the character is not on a game server",
+            (byte)GameMasterFrames.AckLearnNotHigher => "skill not learned: the character already has it at that level or higher",
+            var other => $"skill not learned (reason {other})",
+        };
+
+    private static string DescribeFlyFail(byte[] payload) =>
+        (payload.Length > 0 ? payload[0] : (byte)0) switch
+        {
+            (byte)GameMasterFrames.AckFlightNoGmFlag => "flying form refused: the GM flag is not set, so there is no eagle (use game-flag on first)",
+            (byte)GameMasterFrames.AckFlightNotInGame => "flying form refused: the GM character is not in the game",
+            var other => $"flying form refused (reason {other})",
+        };
+
     private static string DescribePresentFail(byte[] payload)
     {
         if (!GameMasterFrames.TryReadPresentFail(payload, GameMasterToolCommands.ClientText(), out var item, out var count, out var name, out var reason))
@@ -294,6 +351,7 @@ public static class GameMasterToolConnection
             (byte)GameMasterFrames.AckPresentUnknownItem => $"{subject} not given: no such item in the item table",
             (byte)GameMasterFrames.AckPresentNoReceiver or (byte)GameMasterFrames.AckPresentNotOnline => $"{subject} not given: the character is not on a game server",
             (byte)GameMasterFrames.AckPresentNoRoom => $"{subject} not given: the bag has no room (weight or slots)",
+            (byte)GameMasterFrames.AckPresentBoxFailed => $"{subject} not given: the cash box could not take it",
             var other => $"{subject} not given (reason {other})",
         };
     }

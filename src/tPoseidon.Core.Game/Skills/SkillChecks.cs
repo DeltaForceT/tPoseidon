@@ -10,6 +10,7 @@ public static class SkillFailure
     public const ushort NotEnoughHp = 5;
     public const ushort NotEnoughMp = 6;
     public const ushort OnCooldown = 0xC;
+    public const ushort LineBlocked = 0xD;
     public const ushort RefusedWithNotice = 0xF;
 
     public const byte WrongPlaceNotice = 0xF;

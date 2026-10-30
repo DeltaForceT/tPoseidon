@@ -9,6 +9,10 @@ public static class LoginPlacement
         if (x < 1 || y < 1) return false;
         if (geometry is null) return true;
         if (x >= geometry.CellsX * ZoneGeometry.CellSize || y >= geometry.CellsY * ZoneGeometry.CellSize) return false;
-        return geometry.AttributeAt(ZoneGeometry.CellOf(x), ZoneGeometry.CellOf(y)) != ZoneGeometry.CellBlocked;
+        var cellX = ZoneGeometry.CellOf(x);
+        var cellY = ZoneGeometry.CellOf(y);
+        return geometry.AttributeAt(cellX, cellY) != ZoneGeometry.CellBlocked
+            && !geometry.IsLoginExcluded(cellX, cellY)
+            && !geometry.IsStrictlyInsideRegionOfType(ZoneGeometry.RegionTypePortal, x, y);
     }
 }

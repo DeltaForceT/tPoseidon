@@ -2,8 +2,12 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Media;
+using tPoseidon.Core.Data;
 using tPoseidon.Core.Data.Postgres;
+using tPoseidon.Core.Game.Progression;
+using tPoseidon.Core.Game.Skills;
 using tPoseidon.Core.Net.Social;
 using tPoseidon.Hosting.GameMaster;
 
@@ -33,20 +37,86 @@ public static class GmPlayersPage
             counted,
             GmKit.Line(kit.Tool("Characters on this map", "char-count", checks => [checks.Number(counted.Id, "The map id", 0, ushort.MaxValue)])));
 
-        var item = GmPickers.Item(model);
+        var give = GmPickers.GiveItem(model);
+        var item = give.Picker;
         var count = GmKit.Box("Count", 80, "1");
+        var toBox = new CheckBox { Content = "Send to the cash box", IsChecked = false, VerticalAlignment = VerticalAlignment.Center };
+        var hours = GmKit.Box("Hours (timed item)", 130);
+        item.Id.TextChanged += async (_, _) =>
+        {
+            var catalog = await model.CatalogAsync().ConfigureAwait(true);
+            var choice = !give.Camp && uint.TryParse(item.Id.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var chosenId) && chosenId <= int.MaxValue
+                ? GmGiveItemChoice.For(catalog.Items.Find((int)chosenId))
+                : GmGiveItemChoice.Unknown;
+            toBox.IsEnabled = choice.BoxAvailable;
+            toBox.IsChecked = choice.BoxAvailable && choice.BoxByDefault;
+        };
+        var hoursField = GmKit.Field("Hours", hours);
+        var giveButton = kit.Tool("Give", () => GmGiveItem.CommandFor(toBox.IsChecked == true), [GmGiveItem.BagCommand, GmGiveItem.BoxCommand], checks =>
+        {
+            var who = Who(checks);
+            var id = checks.Number(item.Id, "The item id", 0, uint.MaxValue);
+            var amount = checks.Number(count, "Count", 1, ushort.MaxValue);
+            var boxed = toBox.IsChecked == true;
+            checks.Require(GmGiveItem.HoursValid(hours.Text ?? string.Empty), hours, "The hours must be a whole number from 0 to 65535, or empty.");
+            return GmGiveItem.Arguments(who, id, amount, boxed, hours.Text ?? string.Empty);
+        }, primary: true);
+        var campButton = kit.Camp("Give to My Camp", GmCamp.GiveName, checks =>
+        {
+            var who = Who(checks);
+            var id = checks.Number(item.Id, "The My Camp item id", MyCampGifts.MinItemIndex, MyCampGifts.MaxItemIndex);
+            return [who, id, checks.Number(count, "Count", MyCampGifts.MinCount, MyCampGifts.MaxCount)];
+        }, arguments => gifts => GmCamp.Give(gifts, arguments[0], int.Parse(arguments[1], CultureInfo.InvariantCulture), int.Parse(arguments[2], CultureInfo.InvariantCulture)), primary: true);
+        var campStockButton = kit.Camp("Show their My Camp items", GmCamp.StockName, checks => [Who(checks)], arguments => gifts => GmCamp.Stock(gifts, arguments[0]));
+        void ShowMode(bool camp)
+        {
+            toBox.IsVisible = !camp;
+            hoursField.IsVisible = !camp;
+            giveButton.IsVisible = !camp;
+            campButton.IsVisible = camp;
+            campStockButton.IsVisible = camp;
+        }
+
+        ShowMode(give.Camp);
+        give.CampChanged += ShowMode;
         var giveSection = GmKit.Section(
             "Give item",
-            "Puts the items in the bag of an online character.",
+            "Puts the items in the bag of an online character, or in his cash box. A timed item put in the bag arrives with its timer: Hours is its period, empty is the period the item table gives it. The cash box is on for cash items; there empty Hours is the shop period of the item, and the player takes the item out of the cash box. With the My Camp category the item goes to the new My Camp items of the character's account, online or not, and the player takes it from the camp tab of the My Shop window after the next camp is opened.",
             item,
             GmKit.Line(
                 GmKit.Field("Count", count),
-                kit.Tool("Give", "present", checks =>
+                toBox,
+                hoursField,
+                giveButton,
+                campButton,
+                campStockButton));
+
+        var skill = GmPickers.Skill(model);
+        var skillLevel = GmKit.Box("Level", 80, "1");
+        var skillSection = GmKit.Section(
+            "Teach a skill",
+            "Teaches an online character the skill at the level, or raises a skill he already has. No TM points are spent and no skill card is used. A skill he already has at that level or higher is left as it is. Level 1 to the skill's maximum; 11 is mastered.",
+            skill,
+            GmKit.Line(
+                GmKit.Field("Level", skillLevel),
+                kit.Tool("Teach", "learn-skill", checks =>
                 {
                     var who = Who(checks);
-                    var id = checks.Number(item.Id, "The item id", 0, uint.MaxValue);
-                    return [who, id, checks.Number(count, "Count", 1, ushort.MaxValue)];
+                    var id = checks.Number(skill.Id, "The skill id", 1, ushort.MaxValue);
+                    return [who, id, checks.Number(skillLevel, "Level", 1, SkillDefinition.HighestLevel)];
                 }, primary: true)));
+
+        var levelBox = GmKit.Box("Level", 80, "50");
+        var levelSection = GmKit.Section(
+            "Set level",
+            "Raises an online character to a level, 1 to 400. It does what that many natural level-ups do: 4 bonus points per level, the automatic stat growth, full HP and MP, the level-up gifts of every level passed, and the same frames to the client, so the client shows the new level, points and stats without a relog. The exp starts at the beginning of the new level. A lower level is refused: the original has no way to lower a level.",
+            GmKit.Line(
+                GmKit.Field("Level", levelBox),
+                kit.Tool("Set level", "set-level", checks =>
+                {
+                    var who = Who(checks);
+                    return [who, checks.Number(levelBox, "Level", LevelExpChart.FirstLevel, LevelExpChart.LastLevel)];
+                }, arguments => new GmConfirm($"Set the level of {arguments[0]} to {arguments[1]}?", "Bonus points, stats, gifts and HP follow as for natural level-ups. It cannot be lowered again.", "Set level"), primary: true)));
 
         var memo = GmKit.Lines("Memo text");
         var memoSection = GmKit.Section(
@@ -86,10 +156,19 @@ public static class GmPlayersPage
                 kit.Tool("Close personal shop", "remove-shop", checks => [Who(checks)], arguments => new GmConfirm($"Close the personal shop of {arguments[0]}?", "The shop closes at once.", "Close")),
                 kit.Tool("Close chat room", "remove-chat", checks => [Who(checks)], arguments => new GmConfirm($"Close the instant chat room of {arguments[0]}?", "Everyone in the room leaves it.", "Close"))));
 
+        var membershipSection = GmKit.Section(
+            "Membership",
+            "Gives the whole account the original's membership bonus: 20 percent more walk, run and chase speed, and the PC-room EXP and TM rates. It starts at the account's next login or zone change. Uses the Account field of the character section above.",
+            GmKit.Line(
+                kit.Membership("Make a member", checks => [checks.Text(account, "The account name"), GmMembership.OnWord], primary: true),
+                kit.Membership("Remove membership", checks => [checks.Text(account, "The account name"), GmMembership.OffWord]),
+                kit.Membership("Show members", _ => [GmMembership.ListWord])));
+
         return GmKit.Tab(
             "Find a player, then look at them, move them, give them items, send a memo or remove them from the game.",
             ("Find", [findSection, whoSection]),
-            ("Help or move", [MoveSection(kit, Who), giveSection, memoSection]),
+            ("Help or move", [MoveSection(kit, Who), giveSection, skillSection, levelSection, memoSection]),
+            ("Membership", [membershipSection]),
             ("Remove", [kickSection, closeSection]));
     }
 

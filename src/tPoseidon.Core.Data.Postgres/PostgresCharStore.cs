@@ -21,7 +21,8 @@ public sealed class PostgresCharStore : ICharStore
         "depth_count, dig_count, " +
         "hair_2, hair_3, job_state, " +
         "char_state, home, " +
-        "char_authority, guild_state, is_guild_chief, gen_time";
+        "char_authority, guild_state, is_guild_chief, gen_time, " +
+        "(SELECT is_member FROM accounts WHERE accounts.account_id = characters.account_id)";
 
     private readonly NpgsqlDataSource _dataSource;
 
@@ -39,7 +40,7 @@ public sealed class PostgresCharStore : ICharStore
         cmd.Parameters.AddWithValue("account_id", (long)accountId);
         using var reader = cmd.ExecuteReader();
         var result = new List<Character>();
-        while (reader.Read()) result.Add(ReadCharacter(reader));
+        while (reader.Read()) result.Add(ReadCharacter(reader, []));
         return result;
     }
 
@@ -50,9 +51,23 @@ public sealed class PostgresCharStore : ICharStore
             $"SELECT {CharacterSelectColumns} FROM characters WHERE character_id = @character_id",
             conn);
         cmd.Parameters.AddWithValue("character_id", unchecked((long)characterId));
+        var bossKills = LoadBossKills(conn, characterId);
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
-        return ReadCharacter(reader);
+        return ReadCharacter(reader, bossKills);
+    }
+
+    private static List<BossKillHistoryRecord> LoadBossKills(NpgsqlConnection conn, ulong characterId)
+    {
+        using var cmd = new NpgsqlCommand("SELECT mon_id, kill_count, kill_date FROM bossmon WHERE char_uid = @ch ORDER BY kill_date, mon_id", conn);
+        cmd.Parameters.AddWithValue("ch", unchecked((long)characterId));
+        using var reader = cmd.ExecuteReader();
+        var history = new List<BossKillHistoryRecord>();
+        while (reader.Read())
+        {
+            history.Add(new BossKillHistoryRecord(reader.GetInt32(0), reader.GetInt32(1), new DateTimeOffset(DateTime.SpecifyKind(reader.GetDateTime(2), DateTimeKind.Utc))));
+        }
+        return history;
     }
 
     public void AddCharacter(Character character)
@@ -312,7 +327,7 @@ public sealed class PostgresCharStore : ICharStore
         return CharacterEditCodes.Done;
     }
 
-    internal static Character ReadCharacter(NpgsqlDataReader reader) => new()
+    internal static Character ReadCharacter(NpgsqlDataReader reader, IReadOnlyList<BossKillHistoryRecord> bossKills) => new()
     {
         CharacterId = unchecked((ulong)reader.GetInt64(0)),
         OwnerAccountId = unchecked((uint)reader.GetInt64(1)),
@@ -382,5 +397,7 @@ public sealed class PostgresCharStore : ICharStore
         GuildState = reader.GetInt16(65),
         IsGuildChief = reader.GetBoolean(66),
         GenTime = new DateTimeOffset(reader.GetDateTime(67), TimeSpan.Zero),
+        IsMember = !reader.IsDBNull(68) && reader.GetBoolean(68),
+        BossKills = bossKills,
     };
 }

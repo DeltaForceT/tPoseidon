@@ -174,6 +174,16 @@ public sealed class InMemoryItemStore : IItemStore
         }
     }
 
+    public bool SetBreakedAt(ulong itemUid, DateTimeOffset breakedAt)
+    {
+        lock (_gate)
+        {
+            if (!_byUid.TryGetValue(itemUid, out var item)) return false;
+            _byUid[itemUid] = item with { BreakedAt = breakedAt };
+            return true;
+        }
+    }
+
     public bool SetStack(ulong itemUid, ushort stack)
     {
         lock (_gate)

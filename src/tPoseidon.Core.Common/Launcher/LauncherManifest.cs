@@ -7,6 +7,8 @@ public sealed record NewsItem(string Title, string Date, string Text, string? Pi
 
 public sealed record ManifestFile(string Path, long Size, string Sha256, string? Group = null);
 
+public sealed record LauncherRelease(string Version, string Executable, IReadOnlyList<ManifestFile> Files);
+
 public sealed record LauncherManifest(
     string Name,
     string? Color,
@@ -15,7 +17,8 @@ public sealed record LauncherManifest(
     string? LauncherVersion,
     IReadOnlyList<NewsItem> News,
     IReadOnlyList<ManifestFile> Files,
-    string? BannerSha256 = null)
+    string? BannerSha256 = null,
+    LauncherRelease? Launcher = null)
 {
     public const string FormatName = "tposeidon-launcher";
     public const int CurrentVersion = 1;
@@ -26,6 +29,9 @@ public sealed record LauncherManifest(
     public const int MaxTextLength = 4000;
     public const int MaxNameLength = 60;
     public const int MaxMaintenanceLength = 300;
+    public const int MaxVersionLength = 40;
+    public const int MaxLauncherFiles = 2000;
+    public const long MaxLauncherBytes = 1L << 30;
     public const long MaxFileBytes = 1L << 30;
     public const long MaxTotalBytes = 8L << 30;
     public const long MaxBannerBytes = 2L << 20;
@@ -75,7 +81,8 @@ public sealed record LauncherManifest(
             document.LauncherVersion,
             document.News ?? [],
             document.Files ?? [],
-            document.BannerSha256);
+            document.BannerSha256,
+            document.Launcher);
         manifest.Validate();
         return manifest;
     }
@@ -83,7 +90,7 @@ public sealed record LauncherManifest(
     public byte[] ToJson()
     {
         Validate();
-        return JsonSerializer.SerializeToUtf8Bytes(new Document(FormatName, CurrentVersion, Name, Color, Banner, Maintenance, LauncherVersion, News, Files, BannerSha256), JsonOptions);
+        return JsonSerializer.SerializeToUtf8Bytes(new Document(FormatName, CurrentVersion, Name, Color, Banner, Maintenance, LauncherVersion, News, Files, BannerSha256, Launcher), JsonOptions);
     }
 
     public void Validate()
@@ -131,6 +138,11 @@ public sealed record LauncherManifest(
             }
         }
 
+        if (Launcher is not null)
+        {
+            ValidateLauncher(Launcher);
+        }
+
         if (Files.Count > MaxFiles)
         {
             throw new InvalidDataException($"A manifest can list at most {MaxFiles} files.");
@@ -168,6 +180,45 @@ public sealed record LauncherManifest(
         }
     }
 
+    private static void ValidateLauncher(LauncherRelease launcher)
+    {
+        if (string.IsNullOrWhiteSpace(launcher.Version) || launcher.Version.Length > MaxVersionLength)
+        {
+            throw new InvalidDataException($"The launcher version must be 1 to {MaxVersionLength} characters.");
+        }
+
+        if (!ClientPath.TryNormalize(launcher.Executable, out _) || !launcher.Executable.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || launcher.Executable.Contains('/', StringComparison.Ordinal))
+        {
+            throw new InvalidDataException($"'{launcher.Executable}' is not a launcher program name.");
+        }
+
+        if (launcher.Files.Count is 0 or > MaxLauncherFiles || !launcher.Files.Any(file => string.Equals(file.Path, launcher.Executable, StringComparison.Ordinal)))
+        {
+            throw new InvalidDataException("The launcher update must list its program and at most " + MaxLauncherFiles + " files.");
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        long total = 0;
+        foreach (var file in launcher.Files)
+        {
+            if (!ClientPath.TryNormalize(file.Path, out _) || !seen.Add(file.Path))
+            {
+                throw new InvalidDataException($"'{file.Path}' is not a usable launcher file path.");
+            }
+
+            if (file.Size < 0 || file.Size > MaxFileBytes || !IsSha256(file.Sha256))
+            {
+                throw new InvalidDataException($"'{file.Path}' has no valid size and SHA-256.");
+            }
+
+            total += file.Size;
+            if (total > MaxLauncherBytes)
+            {
+                throw new InvalidDataException($"The launcher files are larger than the {MaxLauncherBytes >> 20} MB limit.");
+            }
+        }
+    }
+
     public static bool IsSha256(string? text) =>
         text is { Length: 64 } && text.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
 
@@ -184,5 +235,6 @@ public sealed record LauncherManifest(
         string? LauncherVersion,
         IReadOnlyList<NewsItem>? News,
         IReadOnlyList<ManifestFile>? Files,
-        string? BannerSha256);
+        string? BannerSha256,
+        LauncherRelease? Launcher);
 }

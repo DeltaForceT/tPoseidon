@@ -13,6 +13,7 @@ public sealed record VipShopPlayer
 {
     public required Func<Character?> Character { get; init; }
     public required Func<int> MaxWeight { get; init; }
+    public Func<IReadOnlyList<TimedItem>, CancellationToken, Task>? TimedItemsGranted { get; init; }
 }
 
 public sealed class VipShopService
@@ -41,12 +42,13 @@ public sealed class VipShopService
         IReadOnlyDictionary<string, IReadOnlyList<int>> lists,
         VipShopPlayer player,
         Random rng,
-        string logTag)
+        string logTag,
+        ItemManager? periods = null)
     {
         _ctx = ctx ?? throw new ArgumentNullException(nameof(ctx));
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-        _exchange = new MaterialExchange(items, catalog);
+        _exchange = new MaterialExchange(items, catalog, periods);
         _offers = offers ?? throw new ArgumentNullException(nameof(offers));
         _lists = lists ?? throw new ArgumentNullException(nameof(lists));
         _player = player ?? throw new ArgumentNullException(nameof(player));
@@ -118,6 +120,7 @@ public sealed class VipShopService
             await RefuseAsync(Failed, $"offer {offerId}: item {offer.ItemId} cannot be given (unknown item or no free bag slot)", ct).ConfigureAwait(false);
             return;
         }
+        if (_exchange.TakeTimedGrants() is { Count: > 0 } timedGrants && _player.TimedItemsGranted is { } announce) await announce(timedGrants, ct).ConfigureAwait(false);
         await SendAsync(Opcode.S2C_VIP_SHOP_BOUGHT, ExchangeFrames.Exchanged(operations), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   egg shop: offer {offerId} gives item {offer.ItemId} x{offer.ItemCount} for {offer.EggCost} eggs");
     }

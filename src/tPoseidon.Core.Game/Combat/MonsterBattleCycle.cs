@@ -107,6 +107,14 @@ public sealed class MonsterBattleCycle
         }
     }
 
+    public ushort? TargetOf(ushort monsterEntityId)
+    {
+        lock (_gate)
+        {
+            return _fights.TryGetValue(monsterEntityId, out var fight) ? fight.TargetEntityId : null;
+        }
+    }
+
     public void Forget(ushort monsterEntityId)
     {
         lock (_gate)

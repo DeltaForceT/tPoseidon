@@ -183,7 +183,7 @@ public sealed class SkillShopService
         if (!IsOpen || payload.Length < SkillShopFrames.ScriptHeaderSize) return;
         var npcEntityId = BinaryPrimitives.ReadUInt16LittleEndian(payload.Span);
         var function = payload.Span[2];
-        if (FindShop(npcEntityId) is null)
+        if (FindShop(npcEntityId) is not { } shop)
         {
             await RefuseForwardedAsync(ct).ConfigureAwait(false);
             return;
@@ -195,6 +195,9 @@ public sealed class SkillShopService
                 await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
                 return;
             case IdleFunction:
+                return;
+            case tPoseidon.Core.Game.Quests.SkillQuestRules.CheckFunction:
+                await RunSkillQuestCheckAsync(npcEntityId, shop, payload, ct).ConfigureAwait(false);
                 return;
             default:
                 Console.WriteLine($"{_logTag} {_ctx.Remote}   skill shop 0x{npcEntityId:X4}: parameter function {function} is not implemented; refused");
@@ -408,6 +411,25 @@ public sealed class SkillShopService
             return;
         }
         await SendAsync(Opcode.S2C_SKILL_SHOP_REFUSED, Array.Empty<byte>(), ct).ConfigureAwait(false);
+    }
+
+    private async Task RunSkillQuestCheckAsync(ushort npcEntityId, SkillShopEntity shop, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    {
+        if (_player.JobQuests is not { } quests || !NpcParamScriptRequest.TryRead(payload.Span, out var request))
+        {
+            await SendAsync(Opcode.S2C_SKILL_SHOP_REFUSED, Array.Empty<byte>(), ct).ConfigureAwait(false);
+            return;
+        }
+        var result = quests.CheckSkillQuest(
+            request.NumberAt(tPoseidon.Core.Game.Quests.SkillQuestRules.QuestParameter),
+            request.NumberAt(tPoseidon.Core.Game.Quests.SkillQuestRules.SkillParameter));
+        Console.WriteLine($"{_logTag} {_ctx.Remote}   skill master 0x{npcEntityId:X4} skill quest check: result {result}");
+        if (result == tPoseidon.Core.Game.Quests.NpcScript.Refused || result > request.Args.Count)
+        {
+            await SendAsync(Opcode.S2C_SKILL_SHOP_REFUSED, Array.Empty<byte>(), ct).ConfigureAwait(false);
+            return;
+        }
+        if (result >= 1) await SendPageAsync(npcEntityId, shop, request.Args[result - 1], ct).ConfigureAwait(false);
     }
 
     private async Task SendPageAsync(ushort npcEntityId, SkillShopEntity shop, ushort index, CancellationToken ct)

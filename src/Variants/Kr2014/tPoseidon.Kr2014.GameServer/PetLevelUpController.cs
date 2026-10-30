@@ -13,18 +13,20 @@ internal sealed class PetLevelUpController
     private readonly Func<PetLevelUpTables> _tables;
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
+    private readonly TimedGrantAnnouncer _timedGrants;
     private readonly int _bagCapacity;
     private readonly string _logTag;
     private readonly Random _rng = new();
     private readonly object _rngGate = new();
 
     public PetLevelUpController(
-        MasterEquipStatusUpgrade master, Func<PetLevelUpTables> tables, IItemStore items, IItemParamLookup catalog, int bagCapacity, string logTag)
+        MasterEquipStatusUpgrade master, Func<PetLevelUpTables> tables, IItemStore items, IItemParamLookup catalog, TimedGrantAnnouncer timedGrants, int bagCapacity, string logTag)
     {
         _master = master ?? throw new ArgumentNullException(nameof(master));
         _tables = tables ?? throw new ArgumentNullException(nameof(tables));
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        _timedGrants = timedGrants ?? throw new ArgumentNullException(nameof(timedGrants));
         _bagCapacity = bagCapacity;
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
@@ -93,7 +95,7 @@ internal sealed class PetLevelUpController
         {
             EquipUpgradeOperations.Delete(pet),
             EquipUpgradeOperations.Take(catalyst, (ushort)row.CatalystCount),
-            EquipUpgradeOperations.Insert(result.Id, result.ObjectClass, 1, 0),
+            EquipUpgradeOperations.Insert(result.Id, result.ObjectClass, 1, 0, periodMinutes: _timedGrants.PeriodOf(result.Id)),
         };
         player.UpgradeBusy = true;
         EquipStatusUpgradeResult stored;
@@ -111,6 +113,7 @@ internal sealed class PetLevelUpController
             return;
         }
         foreach (var removed in stored.Items.Where(item => item.Action == EquipUpgradeAction.Delete)) player.TimedItems.Forget(removed.ItemUid);
+        await _timedGrants.AnnounceAsync(player, stored).ConfigureAwait(false);
         await SendAsync(player, Opcode.S2C_PET_LEVELUP_RESULT, PetLevelUpFrames.Result(stored.Items.Select(EquipUpgradeOperations.ToBag).ToList())).ConfigureAwait(false);
         Log(player, $"pet {pet.ItemIndex} -> {row.ResultId} with {row.CatalystCount} x {row.CatalystItemId}");
     }

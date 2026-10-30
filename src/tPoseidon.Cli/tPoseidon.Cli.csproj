@@ -11,6 +11,7 @@
     <ProjectReference Include="..\tPoseidon.Core.Data.Postgres\tPoseidon.Core.Data.Postgres.csproj" />
     <ProjectReference Include="..\tPoseidon.Core.Net\tPoseidon.Core.Net.csproj" />
     <ProjectReference Include="..\tPoseidon.Hosting\tPoseidon.Hosting.csproj" />
+    <ProjectReference Include="..\tPoseidon.LauncherKit\tPoseidon.LauncherKit.csproj" />
   </ItemGroup>
 
 </Project>

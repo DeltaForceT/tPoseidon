@@ -1,9 +1,7 @@
 using System.Globalization;
-using Npgsql;
 using tPoseidon.Cli.Terminal;
-using tPoseidon.Core.Data;
-using tPoseidon.Core.Data.Postgres;
 using tPoseidon.Hosting;
+using tPoseidon.Hosting.GameMaster;
 
 namespace tPoseidon.Cli.Commands;
 
@@ -19,38 +17,27 @@ internal static class CampCommand
             throw new CliException("Say which character: tposeidon camp --character <name> [--give <camp item id> [--count <n>]]");
         }
 
-        using var dataSource = NpgsqlDataSource.Create(settings.Database.Connection);
-        ActiveSchemaProvider.Set(settings.Database.Schema);
-        var characterId = new PostgresCharacterDirectory(dataSource).FindCharacterId(name)
-            ?? throw new CliException($"There is no character named '{name}'.");
-        var character = new PostgresCharStore(dataSource).GetCharacterById(characterId)
-            ?? throw new CliException($"There is no character named '{name}'.");
-        var store = new PostgresMyCampStore(dataSource);
+        var gifts = new DatabaseGmCampGifts(settings.Database);
         var give = commandLine.Option("give");
-        if (give is null)
+        var outcome = give is null ? GmCamp.Stock(gifts, name) : GmCamp.Give(gifts, name, Number(give, "a My Camp item id"), CountOf(commandLine));
+        if (outcome.Refused)
         {
-            var items = store.GetItemsForAccount(character.OwnerAccountId).Where(item => item.ItemWhere != MyCampItemWhere.Deleted).ToArray();
-            Console.WriteLine($"{character.Name}: {items.Count(item => item.ItemWhere == MyCampItemWhere.New)} new and {items.Count(item => item.ItemWhere == MyCampItemWhere.Inventory)} stored My Camp items on the account");
-            return 0;
+            throw new CliException(outcome.Lines[0]);
         }
 
-        if (!int.TryParse(give, NumberStyles.None, CultureInfo.InvariantCulture, out var itemIndex) || itemIndex is < 1 or > ushort.MaxValue)
+        foreach (var line in outcome.Lines)
         {
-            throw new CliException($"'{give}' is not a My Camp item id (1 to {ushort.MaxValue}).");
+            Console.WriteLine(line);
         }
 
-        var count = 1;
-        if (commandLine.Option("count") is { } countText && (!int.TryParse(countText, NumberStyles.None, CultureInfo.InvariantCulture, out count) || count is < 1 or > 100))
-        {
-            throw new CliException($"'{countText}' is not a count (1 to 100).");
-        }
-
-        for (var granted = 0; granted < count; granted++)
-        {
-            store.AddItemForAccount(character.OwnerAccountId, itemIndex);
-        }
-
-        Console.WriteLine($"{character.Name}: added {count} of My Camp item {itemIndex} to the new items of the account; the character sees them in My Camp after the next camp is opened");
         return 0;
     }
+
+    private static int CountOf(CommandLine commandLine) =>
+        commandLine.Option("count") is { } text ? Number(text, "a count") : 1;
+
+    private static int Number(string text, string what) =>
+        int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : throw new CliException($"'{text}' is not {what}.");
 }

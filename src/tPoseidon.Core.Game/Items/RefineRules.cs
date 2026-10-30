@@ -55,11 +55,8 @@ public static class RefineRules
 
 public static class RepairRules
 {
-    public const int MaterialSubType = 63;
-    public const int PhantomPowderId = 64799;
     public const int NeoRefineIndex = 70;
     public const int PhantomMaxLevel = 185;
-    public const int PhantomPowderCount = 1;
     public const byte Repaired = 0;
 
     public const byte NoError = 0;
@@ -84,9 +81,15 @@ public static class RepairRules
         return NoError;
     }
 
-    public static int MaterialCount(ItemParamEntry definition, Item item) =>
-        IsNeo(definition) ? PhantomPowderCount : Math.Max(1, (int)item.RefineLevel);
-
-    public static bool IsMaterialFor(ItemParamEntry target, ItemParamEntry material) =>
-        material.SubType == MaterialSubType && (material.Id == PhantomPowderId) == IsNeo(target);
+    public static RepairRow? Material(RefineTables tables, ItemParamEntry definition, Item item)
+    {
+        ArgumentNullException.ThrowIfNull(tables);
+        ArgumentNullException.ThrowIfNull(definition);
+        ArgumentNullException.ThrowIfNull(item);
+        var neo = IsNeo(definition);
+        return tables.Repairs.FirstOrDefault(row => row.RefineLevel == item.RefineLevel
+            && row.Type == definition.Type
+            && row.SubType == definition.SubType
+            && row.NeoEquip == neo);
+    }
 }

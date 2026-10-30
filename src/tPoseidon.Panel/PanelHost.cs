@@ -1,5 +1,6 @@
 using Avalonia.Threading;
 using Npgsql;
+using tPoseidon.Core.Data;
 using tPoseidon.Hosting;
 using tPoseidon.Hosting.Database;
 using tPoseidon.Hosting.Processes;
@@ -311,9 +312,9 @@ public sealed class PanelHost
 
         try
         {
-            var pgDump = DatabaseBackup.LocatePgDump();
-            LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Backing up {settings.Database.Describe()} with {pgDump}...");
-            var target = await Task.Run(() => DatabaseBackup.Run(Paths, settings, pgDump)).ConfigureAwait(true);
+            var tool = await Task.Run(() => DatabaseBackup.Locate(settings)).ConfigureAwait(true);
+            LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Backing up {settings.Database.Describe()} with {tool.Describe()}...");
+            var target = await Task.Run(() => DatabaseBackup.Run(Paths, settings, tool)).ConfigureAwait(true);
             LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Backup written to {target}. {DatabaseBackup.RestoreHint(target)}");
             Notify(BannerKind.Success, "Backup written.", target);
         }
@@ -353,6 +354,7 @@ public sealed class PanelHost
 
         try
         {
+            LogHub.Write(LogHub.PanelSource, LogLevel.Info, ClientFolder.Plan(settings).Explanation);
             var target = GameClientLauncher.Launch(settings);
             LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Started the game client, connecting to {target}.");
         }
@@ -392,6 +394,33 @@ public sealed class PanelHost
         catch (HostingException ex)
         {
             Fail(LogHub.PanelSource, ex);
+        }
+    }
+
+    public int GuildCoinsPerWin => Settings?.GuildCoinsPerWin ?? GuildCoinRules.DefaultPerWin;
+
+    public async Task<bool> ChooseGuildCoinsPerWinAsync(int coins)
+    {
+        if (Settings is not { } settings || !GuildCoinRules.IsValid(coins))
+        {
+            return false;
+        }
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                settings.GuildCoinsPerWin = coins;
+                settings.Save(Paths);
+            }).ConfigureAwait(true);
+            LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Guild coins per guild game win: {coins}. Restart the servers to use it.");
+            Notify(BannerKind.Success, $"Guild coins per win: {coins}", "Restart the servers so the system server uses it.");
+            return true;
+        }
+        catch (HostingException ex)
+        {
+            Fail(LogHub.PanelSource, ex);
+            return false;
         }
     }
 

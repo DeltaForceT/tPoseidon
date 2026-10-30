@@ -25,6 +25,8 @@ public static class LobbyLogin
     public const int PenaltyNameBytes = 256;
     public const int BlockNoticeBytes = PenaltyNameBytes + 8 * sizeof(ushort);
     public static readonly TimeSpan StaleServerSelect = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan GameJoinWindow = TimeSpan.FromSeconds(30);
+    public const short InGameState = 4;
     public static readonly TimeSpan PenaltyReleasePeriod = TimeSpan.FromMinutes(1);
 
     public static LobbyLoginRefusal ForAccess(short accountAccess) => accountAccess switch
@@ -56,7 +58,10 @@ public static class LobbyLogin
         var staleServerSelect = account.State == ServerSelectedState
             && account.LatestLoginAt is { } loginAt
             && now - loginAt > StaleServerSelect;
-        return staleServerSelect ? LobbyLoginRefusal.None : LobbyLoginRefusal.AlreadyLoggedIn;
+        var abandonedGameJoin = account.State == InGameState
+            && account.PendingJoinSince is { } handedOffAt
+            && now - handedOffAt > GameJoinWindow;
+        return staleServerSelect || abandonedGameJoin ? LobbyLoginRefusal.None : LobbyLoginRefusal.AlreadyLoggedIn;
     }
 
     public static byte[] RefusalPayload(LobbyLoginRefusal refusal)

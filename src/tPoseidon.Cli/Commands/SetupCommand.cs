@@ -1,7 +1,9 @@
 using System.Globalization;
 using Npgsql;
+using tPoseidon.Core.Data;
 using tPoseidon.Cli.Terminal;
 using tPoseidon.Hosting;
+using tPoseidon.Hosting.ClientScan;
 using tPoseidon.Hosting.Database;
 using tPoseidon.Hosting.Servers;
 
@@ -27,7 +29,7 @@ internal sealed class SetupCommand
         _commandLine.RejectUnknown(
             "client", "audience", "public-ip",
             "db-host", "db-port", "db-name", "db-admin-user", "db-admin-password", "db-user", "db-password",
-            "admin-user", "admin-password", "play-account", "cash", "cash-start");
+            "admin-user", "admin-password", "play-account", "cash", "cash-start", "guild-coins");
         var settings = HostSettings.Load(_paths) ?? new HostSettings();
 
         Console.WriteLine($"tPoseidon {VersionCommand.Current} setup");
@@ -43,6 +45,7 @@ internal sealed class SetupCommand
         AskClientFolder(settings);
         AskNetwork(settings);
         AskCash(settings);
+        AskGuildCoins(settings);
         await ConfigureDatabaseAsync(settings, ct).ConfigureAwait(false);
         settings.Save(_paths);
 
@@ -90,6 +93,7 @@ internal sealed class SetupCommand
                 settings.ClientFolder = full;
                 settings.ClientExecutable = check.Executable;
                 Console.WriteLine($"   Found the client ({check.Executable}).");
+                ScanClient(settings, full);
                 Console.WriteLine();
                 return;
             }
@@ -102,6 +106,20 @@ internal sealed class SetupCommand
 
             Console.WriteLine("   " + problems);
         }
+    }
+
+    private void ScanClient(HostSettings settings, string folder)
+    {
+        Console.WriteLine("   Checking that the client has what the emulator needs...");
+        var context = new ClientScanContext(folder, settings.Launch.ServiceName, null, 0);
+        var report = ClientScanner.Default.Scan(context);
+        ClientCommand.Print(report);
+        if (report.FixableIds.Count == 0 || !_prompt.Confirm("   Fix these now? Each fix keeps a backup (tposeidon client fix --restore undoes it).", defaultValue: true))
+        {
+            return;
+        }
+
+        ClientCommand.Print(ClientScanner.Default.Fix(context, report.FixableIds));
     }
 
     private void AskNetwork(HostSettings settings)
@@ -171,6 +189,16 @@ internal sealed class SetupCommand
                 : throw new CliException($"'{start}' is not an amount.");
         }
 
+        Console.WriteLine();
+    }
+
+    private void AskGuildCoins(HostSettings settings)
+    {
+        Console.WriteLine("   Guild coins (the original servers give none; this is your own rule):");
+        var given = _commandLine.Option("guild-coins") ?? _prompt.Ask("   Coins a guild earns for each guild game it wins", settings.GuildCoinsPerWin.ToString(CultureInfo.InvariantCulture));
+        settings.GuildCoinsPerWin = int.TryParse(given, NumberStyles.None, CultureInfo.InvariantCulture, out var coins) && GuildCoinRules.IsValid(coins)
+            ? coins
+            : throw new CliException($"'{given}' is not a number of coins from 0 to {GuildCoinRules.MaxPerWin}.");
         Console.WriteLine();
     }
 

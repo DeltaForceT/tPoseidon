@@ -81,6 +81,7 @@ public static class ChannelLogin
 {
     public const ushort RefusalOpcode = 0x07D1;
     public const short ServerSelectedState = 3;
+    public const short World = 1;
     public const short Island = 1;
 
     public static ChannelLoginRefusal CheckVersion(ClientVersion sent, ClientVersion expected)

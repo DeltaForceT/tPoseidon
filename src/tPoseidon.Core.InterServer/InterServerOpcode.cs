@@ -31,8 +31,10 @@ public enum InterServerOpcode : ushort
     McmdUniqueItemCount = 0x0C0A,
     McmdUniqueItemIssue = 0x0C0B,
     McmdGuildList = 0x0C0C,
+    McmdShadowResultInsert = 0x0C20,
     McmdCrossServerValidate = 0x0C21,
-    McmdNetIdRoutingConfig = 0x0C23,
+    McmdShadowAreaReward = 0x0C22,
+    McmdShadowAreaRewardRelay = 0x0C23,
     McmdFortuneUpdate = 0x0C16,
     McmdSoulSeedUpdate = 0x0C1E,
     PcmdPostList = 0x0C40,
@@ -81,8 +83,13 @@ public enum InterServerOpcode : ushort
     IcmdGuardianRename = 0x1087,
     IcmdGuardianRenameAckOk = 0x1088,
     IcmdGuardianRenameAckCancel = 0x1089,
+    CcmdMegaphone = 0x0E6D,
     CcmdMegaphoneAckOk = 0x0E6E,
     CcmdMegaphoneAckCancel = 0x0E6F,
+    SysCmdMegaphoneMessage = 0x15A7,
+    SysCmdMegaphoneMessageAckOk = 0x15A8,
+    SysCmdCheckValidity = 0x15AA,
+    SysCmdCheckValidityAckOk = 0x15AB,
 
     TcmdMyCampToOwner = 0x0F3D,
     TcmdUpdateEquipmentAckOk = 0x0F3F,
@@ -119,9 +126,6 @@ public enum InterServerOpcode : ushort
     McmdMemoryPortDeleteAckCancel = 0x105B,
 
     CcmdSaveBossKillInfo = 0x0E5B,
-    CcmdBossKillHistoryAckOk = 0x0E5C,
-    CcmdBossKillHistoryAckCancel = 0x0E5D,
-    CcmdBossKillHistory = 0x0E5E,
     CcmdUniqueDutyExpire = 0x0E7B,
     IcmdUniqueItemWithdraw = 0x105C,
     IcmdUniqueItemWithdrawAckOk = 0x105D,
@@ -148,7 +152,6 @@ public enum InterServerOpcode : ushort
     CcmdUpdateOccupationIndexAckOk = 0x0E50,
     CcmdUpdateOccupationIndexAckCancel = 0x0E51,
 
-    CcmdMegaphone = 0x106D,
 
     McmdSoulSeedUse = 0x1075,
     McmdSoulSeedUseAckOk = 0x1076,

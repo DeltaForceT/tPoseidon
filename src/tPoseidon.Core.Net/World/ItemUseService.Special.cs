@@ -558,7 +558,8 @@ public sealed partial class ItemUseService
         try
         {
             var text = host.TextEncoding().GetString(request.Text);
-            if (await host.Shout(text, ct).ConfigureAwait(false) is not { } queued)
+            var shout = new MegaphoneShout(host.TextEncoding().GetString(request.Name), text, item.ItemIndex, definition.ObjectClass);
+            if (await host.Shout(shout, ct).ConfigureAwait(false) is not { } queued)
             {
                 await SendAsync((Opcode)SpecialItemFrames.MegaphoneRefused, SpecialItemFrames.Code(0), ct).ConfigureAwait(false);
                 Console.WriteLine($"{_logTag} {_remote()}   megaphone {item.ItemIndex} was not broadcast");

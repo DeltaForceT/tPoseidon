@@ -28,6 +28,16 @@ public sealed record ItemParamEntry
 
         public int InvBundleNum { get; init; }
 
+        public string EquipFileName { get; init; } = string.Empty;
+
+        public string PartFileName { get; init; } = string.Empty;
+
+        public int PivotId { get; init; }
+
+        public int HideHat { get; init; }
+
+        public int PivotKey => PivotId != 0 ? PivotId : Id;
+
         public int Effect { get; init; }
 
     public int ExistType { get; init; }

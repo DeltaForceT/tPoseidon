@@ -17,7 +17,7 @@ public static class ProgressFrames
     public const int LevelUpSize = CharacterStatBlock.Size + 13;
     public const byte GeneralGuideList = 0;
 
-    private const double SpeedUnit = 4.0;
+    public const double SpeedUnit = 4.0;
 
     public static byte[] ExpGained(long gain)
     {

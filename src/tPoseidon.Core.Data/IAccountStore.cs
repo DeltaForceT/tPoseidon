@@ -69,14 +69,14 @@ public interface IAccountStore
 
     bool EndLobbySession(uint accountId);
 
-    int ResetWorldStates();
+    int ResetWorldStates(short world, short island);
 
     bool JoinGame(uint accountId, long authcode, short island);
 
     void ResetGameState(uint accountId);
 }
 
-public sealed record LobbyAccountState(short AccountAccess, short GameAccess, short State, DateTimeOffset? LatestLoginAt);
+public sealed record LobbyAccountState(short AccountAccess, short GameAccess, short State, DateTimeOffset? LatestLoginAt, DateTimeOffset? PendingJoinSince = null);
 
 public sealed record PenaltyNotice(string Name, DateTimeOffset ReleaseAt);
 

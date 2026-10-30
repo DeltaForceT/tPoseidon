@@ -2,7 +2,7 @@ namespace tPoseidon.Cli.Terminal;
 
 internal sealed class CommandLine
 {
-    private static readonly HashSet<string> Switches = new(StringComparer.Ordinal) { "yes", "help" };
+    private static readonly HashSet<string> Switches = new(StringComparer.Ordinal) { "yes", "help", "no-backup", "restore" };
 
     private readonly Dictionary<string, string> _options;
     private readonly HashSet<string> _switches;
@@ -20,6 +20,10 @@ internal sealed class CommandLine
     public string Command { get; }
 
     public bool AssumeDefaults => _switches.Contains("yes");
+
+    public bool NoBackup => _switches.Contains("no-backup");
+
+    public bool Restore => _switches.Contains("restore");
 
     public bool Help => _switches.Contains("help");
 

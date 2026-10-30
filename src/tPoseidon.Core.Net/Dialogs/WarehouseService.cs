@@ -75,7 +75,11 @@ public sealed class WarehouseService
         return tabs;
     }
 
-    public async Task<int> OpenAsync(CancellationToken ct)
+    public Task<int> OpenAsync(CancellationToken ct) => OpenAsync(atCamp: false, ct);
+
+    public Task<int> OpenAtCampAsync(CancellationToken ct) => OpenAsync(atCamp: true, ct);
+
+    private async Task<int> OpenAsync(bool atCamp, CancellationToken ct)
     {
         if (_player.Character() is not { } character || _player.Stats() is not { } stats) return NpcScript.Silent;
         if (IsOpen)
@@ -84,10 +88,13 @@ public sealed class WarehouseService
             return NpcScript.Silent;
         }
         if (stats.Level < OpenLevel) return LevelTooLow;
-        if (stats.Money < OpenFee) return MoneyTooLow;
+        if (!atCamp && stats.Money < OpenFee) return MoneyTooLow;
 
-        await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
-        stats.GrantMoney(-OpenFee, StatChangeSource.Warehouse);
+        if (!atCamp)
+        {
+            await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
+            stats.GrantMoney(-OpenFee, StatChangeSource.Warehouse);
+        }
         await SendAsync(Opcode.S2C_MONEY, GroundItemFrames.Money(stats.Money), ct).ConfigureAwait(false);
         IsOpen = true;
         var tabs = Tabs(character.WarehouseSlots);

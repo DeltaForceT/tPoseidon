@@ -4,7 +4,7 @@ using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Social;
 
-public sealed record GuildEnterMatch(uint RoomKey, uint GuildCode, uint MapChoice, byte NoLadderFlag, string AcId, byte GameType, string GuildName, IReadOnlyList<ulong> Members, GuildLeagueRecord League, byte ScoreGoal = 0);
+public sealed record GuildEnterMatch(uint RoomKey, uint GuildCode, uint MapChoice, byte NoLadderFlag, string AcId, byte GameType, string GuildName, IReadOnlyList<ulong> Members, GuildLeagueRecord League, byte ScoreGoal = 0, int Ladder = 0);
 
 public sealed record GuildMatchSideResult(uint GuildCode, byte Count, ushort Kills, ushort Deaths, string Name);
 
@@ -113,6 +113,7 @@ public static class GuildGameOrders
         w.WriteNulTerminated(order.GuildName, text);
         w.WriteByte((byte)Math.Min(order.Members.Count, byte.MaxValue));
         foreach (var member in order.Members.Take(byte.MaxValue)) w.WriteUInt64(member);
+        w.WriteInt32(order.Ladder);
         w.WriteInt32(order.League.Battles);
         w.WriteInt32(order.League.Wins);
         w.WriteInt32(order.League.Losses);
@@ -136,12 +137,13 @@ public static class GuildGameOrders
         var guildName = r.ReadNulTerminated(text);
         if (r.Remaining < 1) return null;
         var count = r.ReadByte();
-        if (r.Remaining < count * 8 + LeagueRecordSize) return null;
+        if (r.Remaining < count * 8 + sizeof(int) + LeagueRecordSize) return null;
         var members = new ulong[count];
         for (var index = 0; index < count; index++) members[index] = r.ReadUInt64();
+        var ladder = r.ReadInt32();
         var league = new GuildLeagueRecord(r.ReadInt32(), r.ReadInt32(), r.ReadInt32());
         var scoreGoal = r.Remaining >= 1 ? r.ReadByte() : (byte)0;
-        return new GuildEnterMatch(key, guild, map, noLadderFlag, acId, gameType, guildName, members, league, scoreGoal);
+        return new GuildEnterMatch(key, guild, map, noLadderFlag, acId, gameType, guildName, members, league, scoreGoal, ladder);
     }
 
     public static byte[] LobbyNotice(byte gameType, uint mapChoice, string guildName, int count, ushort averageLevel, Encoding text)

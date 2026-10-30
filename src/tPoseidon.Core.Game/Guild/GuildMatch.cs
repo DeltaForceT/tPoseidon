@@ -14,18 +14,20 @@ public enum GuildMatchState
 
 public sealed class GuildMatchSide
 {
-    public GuildMatchSide(uint guildCode, string guildName, ulong masterId, GuildLeagueRecord league)
+    public GuildMatchSide(uint guildCode, string guildName, ulong masterId, GuildLeagueRecord league, int ladder = 0)
     {
         GuildCode = guildCode;
         GuildName = guildName;
         MasterId = masterId;
         League = league;
+        Ladder = ladder;
     }
 
     public uint GuildCode { get; }
     public string GuildName { get; }
     public ulong MasterId { get; }
     public GuildLeagueRecord League { get; }
+    public int Ladder { get; }
     public bool Ready { get; set; }
     public int BadQuits { get; set; }
 }
@@ -102,16 +104,17 @@ public sealed class GuildMatch
     public int[] TeamKills => _monsters?.TeamKills ?? _teamKills;
     public int[] TeamDeaths => _monsters?.TeamDeaths ?? _teamDeaths;
     public IReadOnlyList<GuildMatchSide> Sides => _sides;
+    public int AverageLadder => _sides.Count == 0 ? 0 : _sides.Sum(side => side.Ladder) / _sides.Count;
     public IReadOnlyCollection<MatchFighter> Fighters => _fighters.Values;
 
     public static byte PvpModeOf(int team) => (byte)(TeamPvpModeBase + (team != 0 ? 1 : 0));
 
-    public int AddSide(uint guildCode, string guildName, ulong masterId, GuildLeagueRecord league)
+    public int AddSide(uint guildCode, string guildName, ulong masterId, GuildLeagueRecord league, int ladder = 0)
     {
         ArgumentNullException.ThrowIfNull(guildName);
         if (_sides.FindIndex(side => side.GuildCode == guildCode) is var known and >= 0) return known;
         if (_sides.Count >= GuildGameRules.Teams || State != GuildMatchState.Room) return -1;
-        _sides.Add(new GuildMatchSide(guildCode, guildName, masterId, league));
+        _sides.Add(new GuildMatchSide(guildCode, guildName, masterId, league, ladder));
         return _sides.Count - 1;
     }
 

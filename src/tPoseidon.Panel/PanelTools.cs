@@ -9,6 +9,7 @@ namespace tPoseidon.Panel;
 public sealed class PanelTools
 {
     public const string ServerFileKey = "server-file";
+    public const string GuildCoinsKey = "guild-coins";
     public const string LauncherKey = "launcher";
     public const string LauncherChannelKey = "launcher-channel";
 
@@ -68,6 +69,9 @@ public sealed class PanelTools
     public void OpenGameMaster() => GmWindow.Open(Host.Paths);
 
     public void OpenSecurity() => SecurityWindow.Open(Host.Paths);
+
+    public Window? EditGuildCoins() =>
+        Host.Settings is null ? null : Present(GuildCoinsKey, () => new GuildCoinsWindow(Host));
 
     public Window? ShareServerFile() =>
         Host.Settings is { } settings ? Present(ServerFileKey, () => new ServerFileWindow(settings)) : null;

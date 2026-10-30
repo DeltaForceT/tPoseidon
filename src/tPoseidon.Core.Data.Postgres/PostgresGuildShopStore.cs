@@ -16,7 +16,7 @@ public sealed class PostgresGuildShopStore : IGuildShopStore
     public GuildShopState? StateOf(ulong guildCode)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();
-        using var cmd = new NpgsqlCommand("SELECT guild_coin, guild_max_members, depot_tabs FROM guild WHERE guild_code = @g", conn);
+        using var cmd = new NpgsqlCommand("SELECT guild_coin, guild_max_members, depot_tabs, icon_purchase FROM guild WHERE guild_code = @g", conn);
         cmd.Parameters.AddWithValue("g", unchecked((long)guildCode));
         using var reader = cmd.ExecuteReader();
         return reader.Read() ? ReadState(reader) : null;
@@ -39,7 +39,7 @@ public sealed class PostgresGuildShopStore : IGuildShopStore
 
         GuildShopState current;
         using (var lockRow = new NpgsqlCommand(
-            "SELECT guild_coin, guild_max_members, depot_tabs FROM guild WHERE guild_code = @g FOR UPDATE", conn, tx))
+            "SELECT guild_coin, guild_max_members, depot_tabs, icon_purchase FROM guild WHERE guild_code = @g FOR UPDATE", conn, tx))
         {
             lockRow.Parameters.AddWithValue("g", unchecked((long)order.GuildCode));
             using var reader = lockRow.ExecuteReader();
@@ -51,11 +51,12 @@ public sealed class PostgresGuildShopStore : IGuildShopStore
         if (decision.Error != GuildShopErrors.None) return new GuildShopReceipt(decision.Error, current);
 
         using (var update = new NpgsqlCommand(
-            "UPDATE guild SET guild_coin = @coin, guild_max_members = @max, depot_tabs = @tabs WHERE guild_code = @g", conn, tx))
+            "UPDATE guild SET guild_coin = @coin, guild_max_members = @max, depot_tabs = @tabs, icon_purchase = @purchase WHERE guild_code = @g", conn, tx))
         {
             update.Parameters.AddWithValue("coin", decision.After.Coins);
             update.Parameters.AddWithValue("max", (short)decision.After.MaxMembers);
             update.Parameters.AddWithValue("tabs", (short)decision.After.DepotTabs);
+            update.Parameters.AddWithValue("purchase", (short)decision.After.EmblemPurchase);
             update.Parameters.AddWithValue("g", unchecked((long)order.GuildCode));
             update.ExecuteNonQuery();
         }
@@ -72,6 +73,49 @@ public sealed class PostgresGuildShopStore : IGuildShopStore
 
         tx.Commit();
         return new GuildShopReceipt(GuildShopErrors.None, decision.After);
+    }
+
+    public GuildEmblemState? EmblemOf(ulong guildCode)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand(EmblemSelect, conn);
+        cmd.Parameters.AddWithValue("g", unchecked((long)guildCode));
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() ? ReadEmblem(reader) : null;
+    }
+
+    public GuildEmblemDecision? RegisterEmblem(ulong guildCode, Func<GuildEmblemState, GuildEmblemDecision> decide)
+    {
+        ArgumentNullException.ThrowIfNull(decide);
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        GuildEmblemState current;
+        using (var lockRow = new NpgsqlCommand(EmblemSelect + " FOR UPDATE", conn, tx))
+        {
+            lockRow.Parameters.AddWithValue("g", unchecked((long)guildCode));
+            using var reader = lockRow.ExecuteReader();
+            if (!reader.Read()) return null;
+            current = ReadEmblem(reader);
+        }
+        var decision = decide(current);
+        if (decision.Error != GuildEmblemErrors.Ok) return decision;
+        using (var update = new NpgsqlCommand("""
+            UPDATE guild SET icon_purchase = @purchase, icon_times = @times, icon_background = @template, icon_color = @colour,
+                icon_item = @icon, icon_changed_at = @changed
+            WHERE guild_code = @g
+            """, conn, tx))
+        {
+            update.Parameters.AddWithValue("purchase", (short)decision.After.Purchase);
+            update.Parameters.AddWithValue("times", checked((int)decision.After.Times));
+            update.Parameters.AddWithValue("template", (short)decision.After.Emblem.Template);
+            update.Parameters.AddWithValue("colour", (short)decision.After.Emblem.Colour);
+            update.Parameters.AddWithValue("icon", (long)decision.After.Emblem.Icon);
+            update.Parameters.AddWithValue("changed", decision.After.ChangedAt is { } at ? at : DBNull.Value);
+            update.Parameters.AddWithValue("g", unchecked((long)guildCode));
+            update.ExecuteNonQuery();
+        }
+        tx.Commit();
+        return decision;
     }
 
     public IReadOnlyList<GuildShopHistoryEntry> History(ulong guildCode)
@@ -112,6 +156,15 @@ public sealed class PostgresGuildShopStore : IGuildShopStore
         return cmd.ExecuteScalar() is int coins ? coins : null;
     }
 
+    private const string EmblemSelect =
+        "SELECT icon_purchase, icon_times, icon_background, icon_color, icon_item, icon_changed_at FROM guild WHERE guild_code = @g";
+
+    private static GuildEmblemState ReadEmblem(NpgsqlDataReader reader) => new(
+        new GuildEmblem((byte)reader.GetInt16(2), (byte)reader.GetInt16(3), (uint)reader.GetInt64(4)),
+        (byte)reader.GetInt16(0),
+        (uint)reader.GetInt32(1),
+        reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5));
+
     private static GuildShopState ReadState(NpgsqlDataReader reader) =>
-        new(reader.GetInt32(0), reader.GetInt16(1), reader.GetInt16(2));
+        new(reader.GetInt32(0), reader.GetInt16(1), reader.GetInt16(2), (byte)reader.GetInt16(3));
 }

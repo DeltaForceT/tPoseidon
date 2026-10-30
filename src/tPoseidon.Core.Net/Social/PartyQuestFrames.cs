@@ -12,6 +12,8 @@ public static class PartyQuestFrames
     public const ushort Timer = 0x04AA;
     public const ushort Kills = 0x04AB;
     public const ushort TimedOut = 0x04AC;
+    public const ushort Record = 0x04B0;
+    public const int RecordPresentSize = 27;
 
     public static byte[] GivenFor(uint questId, ushort monsterId, ushort targetCount, uint limitMs, byte completionCount)
     {
@@ -21,6 +23,23 @@ public static class PartyQuestFrames
         w.WriteUInt16(targetCount);
         w.WriteUInt32(limitMs);
         w.WriteByte(completionCount);
+        return w.ToArray();
+    }
+
+    public static byte[] RecordFor(PartyQuestItem? item)
+    {
+        if (item is null) return new[] { (byte)0 };
+        var w = new PacketWriter(RecordPresentSize);
+        w.WriteByte(1);
+        w.WriteUInt64(item.PartyUid);
+        w.WriteInt32((int)item.QuestId);
+        w.WriteUInt16(item.MonsterId);
+        w.WriteUInt16(item.OwnKills);
+        w.WriteUInt16(item.TargetCount);
+        w.WriteByte(item.MemberCount);
+        w.WriteInt32(item.RecordTime);
+        w.WriteByte(item.Success ? (byte)1 : (byte)0);
+        w.WriteUInt16((ushort)item.CompletionCount);
         return w.ToArray();
     }
 

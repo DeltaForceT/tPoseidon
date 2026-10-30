@@ -15,6 +15,7 @@ public static class NpcFunctionFrames
     public const ushort WarpGateClose = 0x01EC;
     public const ushort ZoneCommand = 0x03AC;
     public const string ReEnterRemainCommand = "CMD_PPZ_RE_ENTER_REMAIN";
+    public const string ZoneClosingCommand = "CMD_ZONECLOSING_NOTIFY";
 
     public static ushort? GuildWindow(int functionId) => functionId switch
     {
@@ -40,11 +41,15 @@ public static class NpcFunctionFrames
         _ => null,
     };
 
-    public static byte[] ReEnterRemain(int minutes)
+    public static byte[] ReEnterRemain(int minutes) => ZoneCommandBody(ReEnterRemainCommand, minutes);
+
+    public static byte[] ZoneClosingNotify(int secondsLeft) => ZoneCommandBody(ZoneClosingCommand, secondsLeft);
+
+    private static byte[] ZoneCommandBody(string command, int value)
     {
-        var w = new tPoseidon.Core.Net.PacketWriter(ReEnterRemainCommand.Length + 5);
-        w.WriteNulTerminated(ReEnterRemainCommand, System.Text.Encoding.ASCII);
-        w.WriteUInt32((uint)Math.Max(0, minutes));
+        var w = new tPoseidon.Core.Net.PacketWriter(command.Length + 5);
+        w.WriteNulTerminated(command, System.Text.Encoding.ASCII);
+        w.WriteUInt32((uint)Math.Max(0, value));
         return w.ToArray();
     }
 

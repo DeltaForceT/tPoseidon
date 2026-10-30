@@ -3,7 +3,7 @@ using tPoseidon.Core.Common.Launcher;
 
 namespace tPoseidon.Hosting;
 
-public sealed record PublishPreview(LauncherManifest Manifest, ManifestChanges Changes, IReadOnlyList<string> OriginalNameMatches);
+public sealed record PublishPreview(LauncherManifest Manifest, ManifestChanges Changes, IReadOnlyList<string> OriginalNameMatches, LauncherPackageInfo? Launcher);
 
 public sealed record PublishOutcome(LauncherManifest Manifest, PublishRecord Record);
 
@@ -30,7 +30,7 @@ public static class UpdateChannel
         var changes = ManifestChanges.Compare(LoadPublished(paths), manifest);
         var original = guard ?? OriginalGuard(settings);
         var matches = changes.Files.Where(file => file.State != FileState.Removed && original.Matches(file.Path)).Select(file => file.Path).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
-        return new PublishPreview(manifest, changes, matches);
+        return new PublishPreview(manifest, changes, matches, ReadLauncher(paths));
     }
 
     public static PublishOutcome Publish(InstallPaths paths, HostSettings settings, string? note = null)
@@ -52,8 +52,15 @@ public static class UpdateChannel
         {
             manifest = Build(paths, settings);
             changes = ManifestChanges.Compare(LoadPublished(paths), manifest);
+            var json = manifest.ToJson();
+            var key = SigningKeyStore.EnsureCreated(paths);
+            var signature = ManifestSignature.Sign(json, key.Pair, key.Rotations);
+            var signatureTarget = Path.Combine(paths.Updates, ManifestSignature.SignatureFile);
             var temporary = target + ".tmp";
-            File.WriteAllBytes(temporary, manifest.ToJson());
+            var signatureTemporary = signatureTarget + ".tmp";
+            File.WriteAllBytes(temporary, json);
+            File.WriteAllBytes(signatureTemporary, signature);
+            File.Move(signatureTemporary, signatureTarget, overwrite: true);
             File.Move(temporary, target, overwrite: true);
         }
         catch (IOException ex)
@@ -68,6 +75,19 @@ public static class UpdateChannel
         var record = PublishRecord.From(DateTimeOffset.UtcNow, note, manifest, changes);
         PublishHistory.Append(paths, record);
         return new PublishOutcome(manifest, record);
+    }
+
+    public static LauncherPackageInfo? ReadLauncher(InstallPaths paths)
+    {
+        ArgumentNullException.ThrowIfNull(paths);
+        try
+        {
+            return LauncherPackageInfo.Read(paths.Updates);
+        }
+        catch (InvalidDataException ex)
+        {
+            throw new HostingException($"The launcher update information in {paths.Updates} is not valid: {ex.Message}", "Choose the launcher zip again.", ex);
+        }
     }
 
     private static LauncherManifest Build(InstallPaths paths, HostSettings settings)

@@ -31,6 +31,12 @@ public static class ShopPrices
         return (int)(PriceRateOf(shopPriceRate) * (double)value * rate);
     }
 
+    public static int SellValue(int value, int itemType, int heldCount, int? drillLife)
+    {
+        if (itemType != DrillType || drillLife is not > 0) return value;
+        return (int)((long)value * heldCount / drillLife.Value);
+    }
+
     public static int SellUnitPrice(float shopPriceRate, int value, ShopGoodsEntry? goods, float shopSellingRate)
     {
         var rate = goods is { SellingRate: > 0f } ? goods.SellingRate : SellingRateOf(shopSellingRate);

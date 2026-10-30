@@ -5,6 +5,8 @@ namespace tPoseidon.Core.Game.Quests;
 
 public readonly record struct RequiredItem(int ItemId, int Count);
 
+public readonly record struct UserChoice(int Index, RequiredItem Item);
+
 public static class QuestTurnIn
 {
     public const int SingleOnlyOption = 0x1;
@@ -32,6 +34,22 @@ public static class QuestTurnIn
             if (held.ItemIndex == required.ItemId && held.Stack >= required.Count) return held;
         }
         return null;
+    }
+
+    public static UserChoice? UserChoiceOf(IReadOnlyList<Item> bag, IReadOnlyList<RequiredItem> required)
+    {
+        ArgumentNullException.ThrowIfNull(bag);
+        ArgumentNullException.ThrowIfNull(required);
+        if (required.Count == 0) return null;
+        var carried = bag.Where(held => held.ItemIndex == required[0].ItemId).Sum(held => held.Stack);
+        UserChoice? chosen = null;
+        for (var index = 0; index < required.Count; index++)
+        {
+            var record = required[index];
+            if (record.Count < 1 || record.Count > carried) continue;
+            if (chosen is null || record.Count > chosen.Value.Item.Count) chosen = new UserChoice(index, record);
+        }
+        return chosen;
     }
 
     public static bool HoldsAll(IReadOnlyList<Item> bag, IReadOnlyList<RequiredItem> required)

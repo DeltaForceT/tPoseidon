@@ -32,6 +32,7 @@ public static class GuildRules
     public const int NewGuildPoint = 1;
     public const int NewGuildRanking = 999999;
     public const int NoticesShown = 3;
+    public const int NoticeNotFound = 101;
 
     public static readonly IReadOnlyList<(string Name, int Point)> DefaultGrades = new[]
     {
@@ -73,7 +74,8 @@ public sealed record GuildDetail(
     IReadOnlyList<GuildGrade> Grades,
     IReadOnlyList<GuildNotice> Notices,
     int DepotTabs = 0,
-    int Coins = 0);
+    int Coins = 0,
+    GuildEmblemState Emblem = default);
 
 public sealed record GuildRosterEntry(
     ulong CharacterId,
@@ -112,4 +114,8 @@ public interface IGuildRulesStore
     IReadOnlyList<GuildRosterEntry> Members(uint guildCode);
 
     IReadOnlyList<GuildApplicant> Applicants(uint guildCode);
+
+    GuildResult<GuildNotice> AddNotice(ulong characterId, uint guildCode, string content);
+
+    int DeleteNotice(uint guildCode, long noticeCode);
 }

@@ -49,6 +49,7 @@ public static class SlotExtendRules
     public const byte SameSubItemKind = 13;
     public const byte NoLuckElixir = 14;
     public const byte NoGuard = 15;
+    public const byte NotEnoughGelder = 16;
     public const byte Unknown = 17;
 
     public const int EquipmentClass = 2;
@@ -56,18 +57,26 @@ public static class SlotExtendRules
     public const int FourSlotCap = 4;
     public const int FiveSlotCap = 5;
     public const int MaterialFifthSlotFlag = 1;
-    public const int MaterialLuckElixirFlag = 2;
-    public const int MaterialGuardFlag = 4;
+    public const int MaterialLuckElixirFlag = 4;
+    public const int MaterialGuardFlag = 2;
     public const int LuckElixirType = 0;
     public const int GuardType = 1;
     public const int MaxSubItems = 2;
     public const int FixedUids = 2;
     public const double PercentRange = 100.0;
+    public const int ValueFeeFactor = 10;
+    public const int LevelFeeFactor = 1000;
 
     public static int CapOf(ItemParamEntry equipment)
     {
         ArgumentNullException.ThrowIfNull(equipment);
         return (equipment.ExtendedOptions & FifthSlotOption) != 0 ? FiveSlotCap : FourSlotCap;
+    }
+
+    public static long Fee(ItemParamEntry equipment)
+    {
+        ArgumentNullException.ThrowIfNull(equipment);
+        return equipment.Value >= 1 ? (long)equipment.Value * ValueFeeFactor : (long)equipment.MinLevel * LevelFeeFactor;
     }
 
     public static byte Check(SlotExtendCandidate candidate)

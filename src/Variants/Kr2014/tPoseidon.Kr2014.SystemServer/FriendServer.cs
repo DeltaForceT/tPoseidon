@@ -59,7 +59,11 @@ public sealed class FriendServer
 
     private async Task LoginAsync(S2SessionContext ctx, CancellationToken ct)
     {
-        if (_room.Find(ctx) is not { } member) return;
+        if (_room.Find(ctx) is not { } member)
+        {
+            _log($"[friend] {ctx.Remote} asked for the friend list without a social session; no list sent");
+            return;
+        }
         var owner = member.Character.CharacterId;
         var groups = _friends.GetGroups(owner);
         if (groups.Count == 0)

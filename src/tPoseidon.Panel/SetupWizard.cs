@@ -10,8 +10,10 @@ using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Npgsql;
+using tPoseidon.Core.Data;
 using tPoseidon.Core.Data.Postgres;
 using tPoseidon.Hosting;
+using tPoseidon.Hosting.ClientScan;
 using tPoseidon.Hosting.Database;
 using tPoseidon.Hosting.Servers;
 
@@ -226,10 +228,12 @@ public sealed class ClientPage : WizardPage
     private readonly SetupState _state;
     private readonly TextBox _path;
     private readonly Banner _result = new();
+    private readonly ClientScanView _scan = new(new ClientScanModel(ClientScanner.Default));
 
     public ClientPage(SetupState state)
     {
         _state = state;
+        _scan.ContextSource = CurrentContext;
         _path = Box(state.Settings.ClientFolder);
         _path.TextChanged += (_, _) => { _result.Hide(); Mark(_path, false); };
         var browse = new Button { Content = "Browse...", Height = 30, MinHeight = 0, Padding = new Thickness(14, 0), VerticalContentAlignment = VerticalAlignment.Center };
@@ -237,7 +241,7 @@ public sealed class ClientPage : WizardPage
         browse.Click += async (_, _) => await BrowseAsync().ConfigureAwait(true);
         var check = new Button { Content = "Check folder", Height = 30, MinHeight = 0, Padding = new Thickness(14, 0), VerticalContentAlignment = VerticalAlignment.Center };
         check.Classes.Add("secondary");
-        check.Click += (_, _) => Validate();
+        check.Click += async (_, _) => await ValidateAndScanAsync().ConfigureAwait(true);
         var row = new DockPanel { LastChildFill = true };
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(6, 0, 0, 0) };
         buttons.Children.Add(browse);
@@ -247,7 +251,10 @@ public sealed class ClientPage : WizardPage
         row.Children.Add(_path);
         Children.Add(Labeled("Client folder", row, "The folder that contains the game's executable and its data files."));
         Children.Add(_result);
+        Children.Add(_scan);
     }
+
+    public ClientScanView Scan => _scan;
 
     public override string Title => "Game client";
 
@@ -295,6 +302,25 @@ public sealed class ClientPage : WizardPage
 
     public override Task<bool> LeaveAsync() => Task.FromResult(Validate());
 
+    public override void Entered()
+    {
+        if (_state.Settings.ClientFolder.Length > 0)
+        {
+            _ = ValidateAndScanAsync();
+        }
+    }
+
+    public async Task ValidateAndScanAsync()
+    {
+        if (Validate() && CurrentContext() is { } context)
+        {
+            await _scan.ScanAsync(context).ConfigureAwait(true);
+        }
+    }
+
+    private ClientScanContext? CurrentContext() =>
+        _state.Settings.ClientFolder.Length == 0 ? null : new ClientScanContext(_state.Settings.ClientFolder, _state.Settings.Launch.ServiceName, null, 0);
+
     private async Task BrowseAsync()
     {
         if (TopLevel.GetTopLevel(this)?.StorageProvider is not { CanPickFolder: true } storage)
@@ -306,7 +332,7 @@ public sealed class ClientPage : WizardPage
         if (picked.Count > 0 && picked[0].TryGetLocalPath() is { } local)
         {
             _path.Text = local;
-            Validate();
+            await ValidateAndScanAsync().ConfigureAwait(true);
         }
     }
 }
@@ -730,6 +756,41 @@ public sealed class CashPage : WizardPage
     }
 }
 
+public sealed class GuildCoinsPage : WizardPage
+{
+    private readonly SetupState _state;
+    private readonly TextBox _coins;
+    private readonly Banner _result = new();
+
+    public GuildCoinsPage(SetupState state)
+    {
+        _state = state;
+        _coins = Box(state.Settings.GuildCoinsPerWin.ToString(CultureInfo.InvariantCulture), null, false, 160);
+        Children.Add(Labeled("Coins a guild earns for each guild game it wins", _coins, "Guilds spend coins in the guild shop. Use 0 to give none; you can also add coins by hand with the guild-coins command."));
+        Children.Add(_result);
+        _coins.TextChanged += (_, _) => { _result.Hide(); Mark(_coins, false); };
+    }
+
+    public override string Title => "Guild coins";
+
+    public override string Subtitle => "A hosting choice: the original servers have no rule for guild coins.";
+
+    public override string StepName => "Guild coins";
+
+    public override Task<bool> LeaveAsync()
+    {
+        if (!(int.TryParse(_coins.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var amount) && GuildCoinRules.IsValid(amount)))
+        {
+            Mark(_coins, true);
+            _result.Show(BannerKind.Error, $"'{_coins.Text}' is not a number of coins.", $"Use a whole number from 0 to {GuildCoinRules.MaxPerWin}.");
+            return Task.FromResult(false);
+        }
+
+        _state.Settings.GuildCoinsPerWin = amount;
+        return Task.FromResult(true);
+    }
+}
+
 public sealed class DataPage : WizardPage
 {
     private const double ProvisionShare = 8;
@@ -968,6 +1029,7 @@ public sealed class FinishPage : WizardPage
         Add("Database", $"{_state.DatabaseName} on {_state.DatabaseServer}");
         Add("Account", _data.AccountOutcome.Length > 0 ? _data.AccountOutcome : _state.Account);
         Add("Item shop", settings.ShopCash == "balance" ? $"balance, {settings.ShopStartingCash.ToString("N0", CultureInfo.InvariantCulture)} to start" : settings.ShopCash);
+        Add("Guild coins", $"{settings.GuildCoinsPerWin.ToString("N0", CultureInfo.InvariantCulture)} for each guild game win");
     }
 
     private void Add(string label, string value)
@@ -1015,7 +1077,7 @@ public sealed class SetupWindow : Window
 
         _state = new SetupState(paths, LoadExisting(paths));
         var data = new DataPage(_state);
-        _pages.AddRange([new WelcomePage(_state), new ClientPage(_state), new PlayersPage(_state), new DatabasePage(_state), new PortsPage(_state), new AccountPage(_state), new CashPage(_state), data, new FinishPage(_state, data, OnFinish)]);
+        _pages.AddRange([new WelcomePage(_state), new ClientPage(_state), new PlayersPage(_state), new DatabasePage(_state), new PortsPage(_state), new AccountPage(_state), new CashPage(_state), new GuildCoinsPage(_state), data, new FinishPage(_state, data, OnFinish)]);
         foreach (var page in _pages)
         {
             page.StateChanged += UpdateFooter;

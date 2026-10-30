@@ -58,6 +58,8 @@ public sealed record ZoneGeometryDto
     public required int CellsY { get; init; }
     public required byte[] CellAttributesGzip { get; init; }
     public byte[]? GroundTypesGzip { get; init; }
+    public byte[]? SecondaryCellsGzip { get; init; }
+    public byte[]? HeightsGzip { get; init; }
     public required List<ZoneRegionDto> Regions { get; init; }
     public List<ZonePointDto>? Points { get; init; }
 }

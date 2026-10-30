@@ -36,6 +36,7 @@ public static class CoupleSocialFrames
     public const ushort DivorceAsked = 0x2EAF;
     public const ushort DivorceAnswer = 0x2EB0;
     public const ushort DivorceDone = 0x2EB2;
+    public const ushort Memo = 0x2EB3;
     public const ushort CoupleInfo = 0x2EB4;
 
     public const int ArticleMessageBytesLimit = 0x9B;
@@ -90,6 +91,17 @@ public static class CoupleSocialFrames
         ArgumentNullException.ThrowIfNull(text);
         var w = new PacketWriter(requesterName.Length + 1);
         w.WriteNulTerminated(requesterName, text);
+        return w.ToArray();
+    }
+
+    public static byte[] MemoBody(string senderName, string text, Encoding encoding)
+    {
+        ArgumentNullException.ThrowIfNull(senderName);
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(encoding);
+        var w = new PacketWriter(senderName.Length + text.Length + 2);
+        w.WriteNulTerminated(senderName, encoding);
+        w.WriteNulTerminated(text, encoding);
         return w.ToArray();
     }
 

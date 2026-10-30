@@ -16,7 +16,9 @@ public sealed record EquipUpgradeItem(
     byte Slot,
     short RefineType,
     byte RefineLevel,
-    byte RefineState);
+    byte RefineState,
+    int PeriodMinutes = 0,
+    DateTimeOffset? BreakedAt = null);
 
 public sealed record EquipStatusUpgrade(ulong CharacterId, uint Fee, int BagCapacity, IReadOnlyList<EquipUpgradeItem> Items);
 

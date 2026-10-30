@@ -18,12 +18,18 @@ public sealed record FortuneTables(
     public const string FeeTable = "FortuneGalder";
     public const string RuleTable = "FortuneRuleParam";
     public const string TitleTable = "FortuneRuleTitle";
+    public const string TodayCardTable = "TodayCardParam";
+    public const string TodayWeekTable = "TodayWeekParam";
     public const string NeedleSelectCardSeed = "NeedleSelectCardSeed";
     public const string MyCardSelectSeed = "MyCardSelectSeed";
     public const int CrossColumns = 9;
     public const int TitleConditions = 3;
 
     public IReadOnlyList<int> CardOrder { get; init; } = Array.Empty<int>();
+
+    public IReadOnlyDictionary<int, int> TodayExchangeByCard { get; init; } = new Dictionary<int, int>();
+
+    public IReadOnlyDictionary<int, float> TodayWeekdayValue { get; init; } = new Dictionary<int, float>();
 
     public IEnumerable<FortuneCardEntry> CardsInRowOrder => CardOrder.Where(Cards.ContainsKey).Select(id => Cards[id]);
 

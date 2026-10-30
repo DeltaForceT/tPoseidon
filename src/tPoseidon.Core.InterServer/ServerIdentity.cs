@@ -24,6 +24,8 @@ public sealed record ServerIdentity
     public static readonly ServerIdentity Game2 =
         new() { Name = "gserver2", Role = ServerRole.Game, ServerIndex = 3 };
 
+    public static readonly IReadOnlyList<ServerIdentity> GameServers = [Game1, Game2];
+
     public static readonly ServerIdentity System1 =
         new() { Name = "sserver1", Role = ServerRole.System, ServerIndex = 4 };
 

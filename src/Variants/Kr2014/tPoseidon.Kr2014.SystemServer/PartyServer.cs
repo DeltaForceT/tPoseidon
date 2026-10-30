@@ -63,6 +63,8 @@ public sealed class PartyServer
         On(dispatcher, ctx, PartyFrames.SetItemShare, (id, p) => _parties.SetItemShare(id, new PacketReader(p).ReadByte()));
         On(dispatcher, ctx, PartyFrames.MemberFlagOn, (id, p) => _parties.SetMemberFlag(id, new PacketReader(p).ReadUInt64(), raised: true));
         On(dispatcher, ctx, PartyFrames.MemberFlagOff, (id, p) => _parties.SetMemberFlag(id, new PacketReader(p).ReadUInt64(), raised: false));
+        On(dispatcher, ctx, PartyFrames.MemberSecondFlagOn, (id, p) => _parties.SetMemberFlag(id, new PacketReader(p).ReadUInt64(), raised: true, second: true));
+        On(dispatcher, ctx, PartyFrames.MemberSecondFlagOff, (id, p) => _parties.SetMemberFlag(id, new PacketReader(p).ReadUInt64(), raised: false, second: true));
         On(dispatcher, ctx, PartyFrames.AskToJoin, (id, p) =>
         {
             var r = new PacketReader(p);
@@ -122,6 +124,9 @@ public sealed class PartyServer
 
     public Task KindChangedAsync(ulong characterId, byte kind, byte job, CancellationToken ct) =>
         DeliverAsync(_parties.KindChanged(characterId, kind, job), ct);
+
+    public Task LevelChangedAsync(ulong characterId, uint level, CancellationToken ct) =>
+        DeliverAsync(_parties.LevelChanged(characterId, level), ct);
 
     public Task RenamedAsync(ulong characterId, string newName, CancellationToken ct) =>
         DeliverAsync(_parties.MemberRenamed(characterId, newName), ct);

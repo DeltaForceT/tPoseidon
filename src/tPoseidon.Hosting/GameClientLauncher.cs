@@ -48,12 +48,9 @@ public static class GameClientLauncher
             throw new HostingException($"The client folder {settings.ClientFolder} is not usable ({string.Join("; ", check.Problems)}). Run tposeidon setup again.");
         }
 
-        if (string.Equals(ClientFolder.Service(settings), ClientFolder.EnglishService, StringComparison.OrdinalIgnoreCase))
-        {
-            ClientFolder.PrepareEnglishMode(settings.ClientFolder);
-        }
-
+        var plan = ClientFolder.Prepare(settings);
         var executable = Path.Combine(settings.ClientFolder, check.Executable);
+        ShadowSanctuaryClientData.Apply(plan.LibConfig, executable);
         ClientAddressPatch.Apply(executable, settings.Network.PublicAddress, settings.Ports.Lobby);
         ProcessStartInfo info;
         if (OperatingSystem.IsWindows())

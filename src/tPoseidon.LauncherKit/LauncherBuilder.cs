@@ -69,6 +69,7 @@ public static class LauncherBuilder
         ArgumentNullException.ThrowIfNull(kit);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputFolder);
         var spec = request.Spec.Validated();
+        spec = spec with { LauncherVersion = spec.LauncherVersion ?? request.Version };
         var output = Path.GetFullPath(outputFolder);
         var work = Path.Combine(Path.GetTempPath(), "tposeidon-launcher-build-" + Guid.NewGuid().ToString("N"));
         try
@@ -79,6 +80,7 @@ public static class LauncherBuilder
             Report(progress, LauncherBuildStep.Branding, BrandingStart, PackingInstallerStart, 0);
             var executable = ExecutableName(spec.ServerName);
             File.Move(Path.Combine(stage, LauncherKitFiles.LauncherExecutable), Path.Combine(stage, executable));
+            ExecutableBranding.Apply(Path.Combine(stage, executable), new ExecutableIdentity(spec.ServerName, spec.ServerName, executable, spec.LauncherVersion!, request.Icon));
             Branding.Write(Path.Combine(stage, BrandingSpec.FolderName), spec, request.Logo, request.Background, request.Icon);
             File.WriteAllText(Path.Combine(stage, InstallNotes), Notes(spec, executable));
 
@@ -91,7 +93,11 @@ public static class LauncherBuilder
 
             Report(progress, LauncherBuildStep.WritingInstaller, WritingInstallerStart, Finished, 0);
             var setupTarget = Path.Combine(output, SetupFileName(spec.ServerName, spec.TestOnThisComputer));
-            InstallerPayload.Write(kit.InstallerExecutable, payloadZip, new InstallerHeader(spec.ServerName, request.Version, executable, $"{BrandingSpec.FolderName}/{spec.Icon}", $"{BrandingSpec.FolderName}/{spec.Logo}", spec.AccentColor), setupTarget);
+            var setupName = SetupFileName(spec.ServerName, spec.TestOnThisComputer);
+            var brandedStub = Path.Combine(work, setupName);
+            File.Copy(kit.InstallerExecutable, brandedStub);
+            ExecutableBranding.Apply(brandedStub, new ExecutableIdentity(spec.ServerName, spec.ServerName + SetupLabel, setupName, spec.LauncherVersion!, request.Icon));
+            InstallerPayload.Write(brandedStub, payloadZip, new InstallerHeader(spec.ServerName, request.Version, executable, $"{BrandingSpec.FolderName}/{spec.Icon}", $"{BrandingSpec.FolderName}/{spec.Logo}", spec.AccentColor), setupTarget);
             Report(progress, LauncherBuildStep.Done, Finished, Finished, 1);
             return new LauncherBuildResult(setupTarget, zipTarget);
         }

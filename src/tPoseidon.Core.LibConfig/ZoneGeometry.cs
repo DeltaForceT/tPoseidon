@@ -20,9 +20,10 @@ public sealed class ZoneGeometry
     public const int PointTypeRegionSpawn = 6;
     public const int PointTypeTeleportArrival = 7;
 
+    public const byte FlatHeight = 5;
     public const byte CellBlocked = 1;
-    public const byte CellConditionallyBlocked = 2;
     public const byte CellNoDestination = 3;
+    public const byte SecondaryCellLoginExcluded = 1;
 
     public required int MinX { get; init; }
     public required int MinY { get; init; }
@@ -34,6 +35,8 @@ public sealed class ZoneGeometry
     public required IReadOnlyList<ZoneRegion> Regions { get; init; }
     public IReadOnlyList<ZonePoint> Points { get; init; } = Array.Empty<ZonePoint>();
     public byte[] GroundTypes { get; init; } = Array.Empty<byte>();
+    public byte[] SecondaryCells { get; init; } = Array.Empty<byte>();
+    public byte[] Heights { get; init; } = Array.Empty<byte>();
 
     public bool HasGroundTypes => GroundTypes.Length == CellsX * CellsY && GroundTypes.Length > 0;
 
@@ -56,19 +59,45 @@ public sealed class ZoneGeometry
     public bool ContainsCell(int cellX, int cellY)
         => (uint)cellX < (uint)CellsX && (uint)cellY < (uint)CellsY;
 
+    public bool HasHeights => Heights.Length == CellsX * CellsY && Heights.Length > 0;
+
+    public byte HeightAtPosition(int x, int y)
+    {
+        if (!HasHeights) return FlatHeight;
+        var cellX = Math.Clamp(x / CellSize, 0, CellsX - 1);
+        var cellY = Math.Clamp(y / CellSize, 0, CellsY - 1);
+        return Heights[cellY * CellsX + cellX];
+    }
+
     public byte AttributeAt(int cellX, int cellY) => CellAttributes[cellY * CellsX + cellX];
 
-    public bool IsBlocked(int cellX, int cellY)
+    public byte SecondaryCellAtPosition(int x, int y)
     {
-        var attribute = AttributeAt(cellX, cellY);
-        return attribute == CellBlocked || attribute == CellConditionallyBlocked;
+        var cellX = CellOf(x);
+        var cellY = CellOf(y);
+        return SecondaryCells.Length == CellsX * CellsY && ContainsCell(cellX, cellY) ? SecondaryCells[cellY * CellsX + cellX] : (byte)0;
     }
+
+    public bool IsLoginExcluded(int cellX, int cellY)
+        => SecondaryCells.Length == CellAttributes.Length
+            && SecondaryCells[cellY * CellsX + cellX] == SecondaryCellLoginExcluded;
+
+    public bool IsStrictlyInsideRegionOfType(int type, int x, int y)
+    {
+        foreach (var region in Regions)
+        {
+            if (region.Type != type) continue;
+            if (region.X1 < x && x < region.X2 && region.Y1 < y && y < region.Y2) return true;
+        }
+        return false;
+    }
+
+    public bool IsBlocked(int cellX, int cellY) => AttributeAt(cellX, cellY) == CellBlocked;
 
     public bool IsFreeDestination(int cellX, int cellY)
     {
         var attribute = AttributeAt(cellX, cellY);
         return attribute != CellBlocked
-            && attribute != CellConditionallyBlocked
             && attribute != CellNoDestination;
     }
 

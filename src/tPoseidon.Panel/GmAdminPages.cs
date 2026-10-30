@@ -56,9 +56,11 @@ public static class GmAccountsPage
 
         var eagleSection = GmKit.Section(
             "GM in the game",
-            "Turns the connected GM character into a GM in the game, or back into a normal character, without typing anything in the game's chat: the GM eagle appears over the character and the @ chat commands work. The character has to be in the game.",
+            "Turns the connected GM character into a GM in the game, or back into a normal character, without typing anything in the game's chat: the GM eagle appears over the character and the @ chat commands work. The eagle has two forms: walking with sword and shield, and flying with spread wings. The original has one eagle only; there is no female eagle. The character has to be in the game.",
             GmKit.Line(
                 kit.Tool("Log my GM in as GM", "game-flag", _ => ["on"], primary: true),
+                kit.Tool("Flying form", "fly", _ => ["on"]),
+                kit.Tool("Walking form", "fly", _ => ["off"]),
                 kit.Tool("Log my GM out", "game-flag", _ => ["off"])));
 
         var speed = GmKit.Choice(["1 (normal)", "2", "3", "4"], 110);
@@ -152,7 +154,7 @@ public static class GmHelpPage
             tools));
 
         var admin = new StackPanel { Spacing = 2 };
-        foreach (var line in GmAccounts.Help.Concat(GmPenalties.Help))
+        foreach (var line in GmAccounts.Help.Concat(GmPenalties.Help).Concat(GmMembership.Help))
         {
             admin.Children.Add(new TextBlock { Text = line, FontFamily = Tokens.MonoFont, FontSize = 11.5, Foreground = Tokens.TextSecondary });
         }

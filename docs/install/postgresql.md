@@ -91,7 +91,16 @@ volumes:
   tposeidon-db:
 ```
 
-In setup, the admin login is `postgres` with the password you put in the file. For `tposeidon backup` you'll also need `pg_dump` on the computer itself (install the PostgreSQL client tools, e.g. `sudo apt install postgresql-client`).
+In setup, the admin login is `postgres` with the password you put in the file. ### Backups with PostgreSQL in Docker
+
+You do not need `pg_dump` on the computer. `tposeidon backup`, the panel's backup button and the backup offered by `tposeidon start` after an update work like this:
+
+1. If `pg_dump` is on PATH (or in the usual PostgreSQL folders), it is used.
+2. Otherwise tPoseidon asks Docker (`docker ps`) for a running container that publishes the database host and port saved in setup, for example `127.0.0.1:5433->5432/tcp`, and runs `pg_dump --format=custom` inside that container. The dump is streamed to the same file in the same `backups` folder as always, so `pg_restore` restores it the same way. The password is passed to Docker in the environment, not on the command line.
+
+For this to work, Docker must be running and the container started, and its published port must be the one setup used. The container's own `pg_dump` is the same version as the server, which is what you want.
+
+If neither way works, the message says so and what was missing. To start the servers anyway, run `tposeidon start --no-backup` (the panel has Start without a backup). In a run without a keyboard (`-y`, or input from a script) a failed backup stops the start with that message instead of asking, so use `--no-backup` there if you do not want a backup.
 
 ## When setup can't connect
 

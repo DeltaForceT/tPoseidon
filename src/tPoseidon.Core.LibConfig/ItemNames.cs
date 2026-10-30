@@ -28,6 +28,8 @@ public sealed class ItemNames
 
     public IReadOnlyCollection<ItemName> All => _names.Values;
 
+    public ItemName? Find(int itemIndex) => _names.GetValueOrDefault(itemIndex);
+
     public string? Of(int itemIndex) => _names.TryGetValue(itemIndex, out var name) ? name.Name : null;
 
     public static ItemNames Load(string libconfigPath)

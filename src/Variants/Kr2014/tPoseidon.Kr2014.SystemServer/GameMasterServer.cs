@@ -36,6 +36,24 @@ public sealed class GameMasterServer
 
     public Func<ulong, bool>? InstantChatRemover { get; set; }
 
+    public Func<string, int, int, bool>? CampItemGiver
+    {
+        get => _router.CampItemGiver;
+        set => _router.CampItemGiver = value;
+    }
+
+    public Func<string, bool, bool>? MemberSetter
+    {
+        get => _router.MemberSetter;
+        set => _router.MemberSetter = value;
+    }
+
+    public IReadOnlySet<int>? KnownCampItems
+    {
+        get => _router.KnownCampItems;
+        set => _router.KnownCampItems = value;
+    }
+
     public GameMasterServer(
         GameMasterService gameMasters,
         GameMasterChat chat,
@@ -84,6 +102,8 @@ public sealed class GameMasterServer
             p.Length >= 1 && ReadStrings(p[1..], 1) is { } account ? _gameMasters.AccountBlock(gm.CharacterId, p[0], account[0]) : null);
         Command(dispatcher, ctx, GameMasterFrames.SuperNotice, (_, p) =>
             GameMasterFrames.TryReadSuperNotice(p, _text, out var colour, out var notice) ? _gameMasters.SuperNotice(colour, notice) : null);
+        Command(dispatcher, ctx, GameMasterFrames.MegaphoneNotice, (gm, p) =>
+            gm.Tool && GameMasterFrames.TryReadMegaphoneNotice(p, _text, out var noticeHeader, out var noticeText) ? _gameMasters.MegaphoneNotice(gm.CharacterId, noticeHeader, noticeText) : null);
         Command(dispatcher, ctx, GameMasterFrames.CharCount, (gm, p) =>
             GameMasterFrames.TryReadZone(p, out var countedZone) ? GameMasterService.CharCount(gm.CharacterId, countedZone, CountInZone) : null);
         Command(dispatcher, ctx, GameMasterFrames.ZoneCounts, (gm, _) =>
@@ -95,7 +115,7 @@ public sealed class GameMasterServer
         Command(dispatcher, ctx, GameMasterFrames.CharInfo, (gm, p) =>
             ReadStrings(p, 1) is { } subject ? GameMasterService.CharInfo(gm.CharacterId, subject[0], Online) : null);
         Command(dispatcher, ctx, GameMasterFrames.PresentItem, (gm, p) =>
-            ReadPresent(p) is { } present ? _gameMasters.PresentItem(gm.CharacterId, present.Name, present.ItemId, present.Count, Online) : null);
+            ReadPresent(p) is { } present ? _gameMasters.PresentItem(gm.CharacterId, present.Name, present.ItemId, present.Count, present.Delivery, Online) : null);
         Command(dispatcher, ctx, GameMasterFrames.SummonMonster, (gm, p) =>
             GameMasterFrames.TryReadSummon(p, out var chrType, out var zone, out var count) ? GameMasterService.SummonMonster(gm.CharacterId, chrType, zone, count) : null);
         Command(dispatcher, ctx, GameMasterFrames.SummonMonsterArea, (gm, p) =>
@@ -104,6 +124,16 @@ public sealed class GameMasterServer
             gm.Tool ? GameMasterService.RemoveOwnMonsters(gm.CharacterId) : null);
         Command(dispatcher, ctx, GameMasterFrames.GameFlag, (gm, p) =>
             gm.Tool && GameMasterFrames.TryReadToggle(p, out var flagOn) ? _gameMasters.GameFlag(gm.CharacterId, flagOn, IsOnline(gm.CharacterId)) : null);
+        Command(dispatcher, ctx, GameMasterFrames.LearnSkill, (gm, p) =>
+            gm.Tool && GameMasterFrames.TryReadLearnSkillRequest(p, _text, out var learner, out var learnedSkill, out var learnedLevel)
+                ? GameMasterService.LearnSkill(gm.CharacterId, learner, learnedSkill, learnedLevel, Online)
+                : null);
+        Command(dispatcher, ctx, GameMasterFrames.SetLevel, (gm, p) =>
+            gm.Tool && GameMasterFrames.TryReadSetLevelRequest(p, _text, out var levelled, out var targetLevel)
+                ? GameMasterService.SetLevel(gm.CharacterId, levelled, targetLevel, Online)
+                : null);
+        Command(dispatcher, ctx, GameMasterFrames.Fly, (gm, p) =>
+            gm.Tool && GameMasterFrames.TryReadToggle(p, out var flying) ? _gameMasters.Fly(gm.CharacterId, flying, IsOnline(gm.CharacterId)) : null);
         Command(dispatcher, ctx, GameMasterFrames.Block, (gm, p) =>
             GameMasterFrames.TryReadBlock(p, _text, out var blockType, out var blockMinutes, out var blocked)
                 ? _gameMasters.Block(gm.CharacterId, blockType, blockMinutes, blocked, Online, BlockTime())
@@ -343,6 +373,8 @@ public sealed class GameMasterServer
             GameMasterFrames.ReportCharInfo => _gameMasters.CharInfoReported(request.GameMaster, report.Data, _room.Find(report.CharacterId)?.Character.AccountLabel ?? string.Empty),
             GameMasterFrames.ReportNpcOnOff => _gameMasters.NpcOnOffReported(request.GameMaster, report.Data),
             GameMasterFrames.ReportNpcRefresh => GameMasterService.NpcRefreshReported(request.GameMaster, request.Zone, report.Data),
+            GameMasterFrames.ReportSetFlight when GameMasterFrames.TryReadAckResult(report.Data, out var flightResult) =>
+                GameMasterService.FlyAnswer(request.GameMaster, request.OrderData ?? Array.Empty<byte>(), flightResult),
             GameMasterFrames.ReportPresentItem when GameMasterFrames.TryReadAckResult(report.Data, out var presentResult) =>
                 _gameMasters.PresentAnswer(request.GameMaster, request.OrderData ?? Array.Empty<byte>(), presentResult),
             _ => GameMasterService.Acknowledged(request.GameMaster, report.OrderType, report.Data),
@@ -527,7 +559,7 @@ public sealed class GameMasterServer
         return names;
     }
 
-    private (uint ItemId, ushort Count, string Name)? ReadPresent(ReadOnlySpan<byte> payload)
+    private (uint ItemId, ushort Count, string Name, PresentDelivery Delivery)? ReadPresent(ReadOnlySpan<byte> payload)
     {
         const int fixedLength = sizeof(uint) + sizeof(ushort);
         if (payload.Length < fixedLength + 1) return null;
@@ -536,7 +568,7 @@ public sealed class GameMasterServer
         var count = reader.ReadUInt16();
         var rest = payload[fixedLength..];
         var end = rest.IndexOf((byte)0);
-        return end < 0 ? null : (itemId, count, _text.GetString(rest[..end]));
+        return end < 0 ? null : (itemId, count, _text.GetString(rest[..end]), GameMasterFrames.ReadPresentDelivery(rest[(end + 1)..]));
     }
 
     private (string Name, ushort Zone)? ReadNameAndZone(ReadOnlySpan<byte> payload)
@@ -557,6 +589,12 @@ public sealed class GameMasterServer
     {
         GameMasterFrames.LoginOk => _chat.Result(GameMasterChat.GmFlagSetText, subject),
         GameMasterFrames.TeleportToZoneFail or GameMasterFrames.TeleportToChrFail => _chat.Result(GameMasterChat.NotOnlineText, subject),
+        GameMasterFrames.LearnSkillOk => GameMasterChat.LearnSkillDoneLine,
+        GameMasterFrames.SetLevelOk => GameMasterChat.SetLevelDoneLine,
+        GameMasterFrames.SetLevelFail => GameMasterChat.SetLevelRefusedLine(message.Payload.Length > 0 ? message.Payload[0] : (byte)0),
+        GameMasterFrames.LearnSkillFail => GameMasterChat.LearnSkillRefusedLine(message.Payload.Length > 0 ? message.Payload[0] : (byte)0),
+        GameMasterFrames.FlyOk => message.Payload.Length > 0 && message.Payload[0] == 1 ? GameMasterChat.FlyOnLine : GameMasterChat.FlyOffLine,
+        GameMasterFrames.FlyFail => GameMasterChat.FlyRefusedLine(message.Payload.Length > 0 ? message.Payload[0] : (byte)0),
         GameMasterFrames.PresentItemOk => GameMasterChat.ItemGivenLine,
         GameMasterFrames.PresentItemFail => GameMasterChat.ItemRefusedLine(message.Payload.Length > 0 ? message.Payload[^1] : (byte)0),
         _ => null,

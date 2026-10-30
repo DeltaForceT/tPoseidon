@@ -347,6 +347,8 @@ public sealed class Banner : Border
         Child = dock;
     }
 
+    public string Title => _title.Text ?? "";
+
     public void Show(BannerKind kind, string title, string? detail = null)
     {
         var (glyph, tint, accent) = kind switch

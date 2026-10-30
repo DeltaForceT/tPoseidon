@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using tPoseidon.Core.Data;
 using tPoseidon.Core.Net.Social;
 using tPoseidon.Hosting.GameMaster;
 
@@ -222,11 +223,15 @@ public sealed class GmKit
     public static string Quote(string argument) =>
         argument.Length == 0 || argument.Any(char.IsWhiteSpace) ? "\"" + argument + "\"" : argument;
 
-    public Button Tool(string label, string command, Func<GmChecks, IReadOnlyList<string>> build, Func<IReadOnlyList<string>, GmConfirm?>? confirm = null, Action<GmOutcome>? done = null, bool primary = false)
+    public Button Tool(string label, string command, Func<GmChecks, IReadOnlyList<string>> build, Func<IReadOnlyList<string>, GmConfirm?>? confirm = null, Action<GmOutcome>? done = null, bool primary = false) =>
+        Tool(label, () => command, [command], build, confirm, done, primary);
+
+    public Button Tool(string label, Func<string> chosen, IReadOnlyList<string> commands, Func<GmChecks, IReadOnlyList<string>> build, Func<IReadOnlyList<string>, GmConfirm?>? confirm = null, Action<GmOutcome>? done = null, bool primary = false)
     {
-        Model.Wire(command);
+        foreach (var command in commands) Model.Wire(command);
         return Act(label, build, confirm, async arguments =>
         {
+            var command = chosen();
             var outcome = await Model.ToolAsync($"{label} · {command} {string.Join(" ", arguments.Select(Quote))}".TrimEnd(), command, arguments).ConfigureAwait(true);
             if (outcome is not null)
             {
@@ -248,12 +253,38 @@ public sealed class GmKit
         }, primary);
     }
 
+    public Button Membership(string label, Func<GmChecks, IReadOnlyList<string>> build, Action<GmOutcome>? done = null, bool primary = false)
+    {
+        Model.Wire(GmMembership.Name);
+        return Act(label, build, null, async arguments =>
+        {
+            var outcome = await Model.MembershipAsync($"{label} · {GmMembership.Name} {string.Join(" ", arguments.Select(Quote))}".TrimEnd(), arguments).ConfigureAwait(true);
+            if (outcome is not null)
+            {
+                done?.Invoke(outcome);
+            }
+        }, primary);
+    }
+
     public Button Accounts(string label, string wired, Func<GmChecks, IReadOnlyList<string>> build, Func<IReadOnlyList<string>, Func<IGmAccountBook, GmOutcome>> action, Func<IReadOnlyList<string>, GmConfirm?>? confirm = null, Action<GmOutcome>? done = null, bool primary = false)
     {
         Model.Wire(wired);
         return Act(label, build, confirm, async arguments =>
         {
             var outcome = await Model.AccountsAsync($"{label} · {wired} {string.Join(" ", arguments.Select(Quote))}".TrimEnd(), action(arguments)).ConfigureAwait(true);
+            if (outcome is not null)
+            {
+                done?.Invoke(outcome);
+            }
+        }, primary);
+    }
+
+    public Button Camp(string label, string wired, Func<GmChecks, IReadOnlyList<string>> build, Func<IReadOnlyList<string>, Func<IMyCampGifts, GmOutcome>> action, Func<IReadOnlyList<string>, GmConfirm?>? confirm = null, Action<GmOutcome>? done = null, bool primary = false)
+    {
+        Model.Wire(wired);
+        return Act(label, build, confirm, async arguments =>
+        {
+            var outcome = await Model.CampAsync($"{label} · {wired} {string.Join(" ", arguments.Select(Quote))}".TrimEnd(), action(arguments)).ConfigureAwait(true);
             if (outcome is not null)
             {
                 done?.Invoke(outcome);

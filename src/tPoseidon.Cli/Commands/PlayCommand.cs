@@ -30,6 +30,7 @@ internal static class PlayCommand
             Console.WriteLine($"Play logs in with '{settings.Launch.Account}'. Switch with: tposeidon play --account <name>");
         }
 
+        Console.WriteLine(ClientFolder.Plan(settings).Explanation);
         var target = GameClientLauncher.Launch(settings);
         Console.WriteLine($"Started the game client, connecting to {target}.");
         return 0;
@@ -61,6 +62,7 @@ internal static class PlayCommand
 
         settings.Network.PublicAddress = server;
         settings.Launch.Account = account;
+        Console.WriteLine(ClientFolder.Plan(settings).Explanation);
         var target = GameClientLauncher.LaunchWithTicket(settings);
         Console.WriteLine($"Logged in. Started the game client, connecting to {target}.");
         return 0;

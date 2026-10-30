@@ -17,4 +17,7 @@ public sealed record PortalDestination
     public required int DestPortalId { get; init; }
     public required ushort SpawnX { get; init; }
     public required ushort SpawnY { get; init; }
+
+    public bool IsSameEntrance(PortalDestination? other) =>
+        other is not null && DestMapId == other.DestMapId && DestPortalId == other.DestPortalId;
 }

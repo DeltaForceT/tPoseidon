@@ -16,15 +16,20 @@ public static class GameMasterToolCommands
         new GameMasterToolCommand("teleport", "[who] <to>", "Send a character (default: the GM character) next to another online character.", "tposeidon gm teleport Friend Other --gm Boss", true),
         new GameMasterToolCommand("kick", "<name> [reason]", "Disconnect an online character. With a reason the player sees it first and is disconnected when his client confirms it (10 seconds), and his account is marked sanctioned.", "tposeidon gm kick Friend \"spamming\" --gm Boss", true),
         new GameMasterToolCommand("account-block", "on|off <name>", "Mark the account of a character as sanctioned (user authority 1), or back to normal.", "tposeidon gm account-block on Friend --gm Boss", true),
-        new GameMasterToolCommand("game-flag", "on|off", "Log the GM character in or out as GM in the game: on sets the GM flag and shows the GM eagle and enables the @ chat commands without typing @login; off clears them. The character must be in the game.", "tposeidon gm game-flag on --gm Boss", true),
+        new GameMasterToolCommand("game-flag", "on|off", "Log the GM character in or out as GM in the game: on sets the GM flag and shows the GM eagle and enables the @ chat commands without typing @login; off clears them. While the flag is on the character's class skills are replaced by the GM skills, and off gives them back. The character must be in the game.", "tposeidon gm game-flag on --gm Boss", true),
+        new GameMasterToolCommand("learn-skill", "<name> <skillId> <level>", "Teach an online character a skill at a level (1 up to the skill's maximum, 11 is mastered), or raise a skill he already has. No TM points are spent and no card is used. A skill he already has at that level or higher is left as it is.", "tposeidon gm learn-skill Friend 1001 5 --gm Boss", true),
+        new GameMasterToolCommand("set-level", "<name> <level>", "Raise an online character to a level (1 to 400). It does what that many natural level-ups do: 4 bonus points per level, the automatic stat growth, full HP and MP, the level-up gifts of every level passed, and the same frames to the client, so the client shows the new level, points and stats without a relog; the exp starts at the beginning of the new level. A lower level is refused: the original has no way to lower a level.", "tposeidon gm set-level Friend 50 --gm Boss", true),
+        new GameMasterToolCommand("fly", "on|off", "Give the GM eagle its flying form (on) or its walking form with sword and shield (off). The GM flag must be set first (game-flag on); game-flag off returns the character to normal.", "tposeidon gm fly on --gm Boss", true),
         new GameMasterToolCommand("speed", "<1..4>", "Set the GM character's movement speed.", "tposeidon gm speed 3 --gm Boss", true),
         new GameMasterToolCommand("immortal", "on|off", "Turn the GM character's immortal mode on or off.", "tposeidon gm immortal on --gm Boss", true),
         new GameMasterToolCommand("invisible", "on|off", "Turn the GM character's invisible mode on or off.", "tposeidon gm invisible off --gm Boss", true),
         new GameMasterToolCommand("memo", "<name> <text>", "Send a memo to a character.", "tposeidon gm memo Friend \"Hello\" --gm Boss", false),
         new GameMasterToolCommand("super-notice", "<colour> <text>", "Show a notice to everyone in the chat lobby (colour is a number, 0 for the default).", "tposeidon gm super-notice 0 \"Maintenance at 8\" --gm Boss", false),
+        new GameMasterToolCommand("megaphone-notice", "<header> <text>", "Queue an operator notice in the megaphone queue: every connected player sees it on the megaphone bar as [header] text, in the order of the queue and after the shouts already waiting (the line is at most 300 bytes). The header is the name the bar shows in front of the text, for example GM or Event.", "tposeidon gm megaphone-notice Event \"Double experience until 8\" --gm Boss", true),
         new GameMasterToolCommand("char-count", "<zoneId>", "Count the characters in a zone.", "tposeidon gm char-count 23 --gm Boss", true),
         new GameMasterToolCommand("zone-counts", "", "List every zone with characters in it and how many.", "tposeidon gm zone-counts --gm Boss", true),
         new GameMasterToolCommand("char-info", "<name>", "Show the account, id, zone, level and money of an online character.", "tposeidon gm char-info Friend --gm Boss", true),
+        new GameMasterToolCommand("present-box", "<name> <itemId> [count] [hours]", "Put items in the cash box of a character who is in the game (count defaults to 1); a timed item arrives with its period in hours (0 or no value: the shop period of the item, or no limit when the shop has none). The player takes it out of the cash box like a bought item.", "tposeidon gm present-box Friend 1001 1 720 --gm Boss", true),
         new GameMasterToolCommand("present", "<name> <itemId> [count]", "Put items in the bag of a character who is in the game (count defaults to 1); the answer says whether they arrived.", "tposeidon gm present Friend 1001 5 --gm Boss", true),
         new GameMasterToolCommand("summon-monster", "<monsterType> [count] [mapId]", "Summon monsters (monster type 2000 to 3434; count defaults to 1). Without a map they appear at the GM character's position; with a map id (1 to 999) they appear at a random arrival point of that map and the GM stays where he is.", "tposeidon gm summon-monster 2001 3 23 --gm Boss", true),
         new GameMasterToolCommand("spawn-monsters", "<monsterType> <count> <radius> [mapId [x y]]", "Summon monsters spread over a circle of radius world units (0 for one spot). Without a map the circle is centred on the GM character; with only a map id on a random arrival point of that map; with a map id and x y on those coordinates (map id 0 means the GM character's map). The GM stays where he is, and the server remembers the monsters for remove-my-monsters.", "tposeidon gm spawn-monsters 2001 10 150 23 800 600 --gm Boss", true),
@@ -84,6 +89,20 @@ public static class GameMasterToolCommands
 
     public static Encoding ClientText() => tPoseidon.Core.Common.ClientText.Encoding;
 
+    private static GameMasterToolRequest PresentRequest(string name, uint itemId, ushort count, PresentDelivery delivery, Encoding text)
+    {
+        var w = new PacketWriter(sizeof(uint) + sizeof(ushort) + name.Length + 1 + GameMasterFrames.PresentDeliveryLength);
+        w.WriteUInt32(itemId);
+        w.WriteUInt16(count);
+        w.WriteNulTerminated(name, text);
+        if (delivery.IsCashBox)
+        {
+            w.WriteByte(GameMasterFrames.PresentToCashBox);
+            w.WriteUInt16(delivery.Hours);
+        }
+        return new(GameMasterFrames.PresentItem, w.ToArray());
+    }
+
     public static GameMasterToolRequest? Build(string command, IReadOnlyList<string> args, Encoding text)
     {
         var w = new PacketWriter(64);
@@ -110,6 +129,8 @@ public static class GameMasterToolCommands
                 return new(GameMasterFrames.AccountBlock, w.ToArray());
             case "super-notice" when args.Count == 2 && ushort.TryParse(args[0], out var noticeColour):
                 return new(GameMasterFrames.SuperNotice, GameMasterFrames.SuperNoticeRequest(noticeColour, args[1], text));
+            case "megaphone-notice" when args.Count == 2:
+                return new(GameMasterFrames.MegaphoneNotice, GameMasterFrames.MegaphoneNoticeRequest(args[0], args[1], text));
             case "char-count" when args.Count == 1 && ushort.TryParse(args[0], out var countedZone):
                 w.WriteUInt16(countedZone);
                 return new(GameMasterFrames.CharCount, w.ToArray());
@@ -122,11 +143,22 @@ public static class GameMasterToolCommands
             case "char-info" when args.Count == 1:
                 w.WriteNulTerminated(args[0], text);
                 return new(GameMasterFrames.CharInfo, w.ToArray());
-            case "present" when args.Count is 2 or 3 && uint.TryParse(args[1], out var item) && (args.Count == 2 || ushort.TryParse(args[2], out _)):
-                w.WriteUInt32(item);
-                w.WriteUInt16(args.Count == 3 ? ushort.Parse(args[2], CultureInfo.InvariantCulture) : (ushort)1);
-                w.WriteNulTerminated(args[0], text);
-                return new(GameMasterFrames.PresentItem, w.ToArray());
+            case "present" when args.Count is >= 2 and <= 4 && uint.TryParse(args[1], out var item)
+                && (args.Count < 3 || ushort.TryParse(args[2], out _)) && (args.Count < 4 || ushort.TryParse(args[3], out _)):
+                return PresentRequest(
+                    args[0],
+                    item,
+                    args.Count >= 3 ? ushort.Parse(args[2], CultureInfo.InvariantCulture) : (ushort)1,
+                    PresentDelivery.BagFor(args.Count == 4 ? ushort.Parse(args[3], CultureInfo.InvariantCulture) : (ushort)0),
+                    text);
+            case "present-box" when args.Count is >= 2 and <= 4 && uint.TryParse(args[1], out var boxItem)
+                && (args.Count < 3 || ushort.TryParse(args[2], out _)) && (args.Count < 4 || ushort.TryParse(args[3], out _)):
+                return PresentRequest(
+                    args[0],
+                    boxItem,
+                    args.Count >= 3 ? ushort.Parse(args[2], CultureInfo.InvariantCulture) : (ushort)1,
+                    PresentDelivery.CashBox(args.Count == 4 ? ushort.Parse(args[3], CultureInfo.InvariantCulture) : (ushort)0),
+                    text);
             case "summon-monster" when args.Count is >= 1 and <= 3 && uint.TryParse(args[0], out var monsterType) && (args.Count < 2 || byte.TryParse(args[1], out _)) && (args.Count < 3 || ushort.TryParse(args[2], out _)):
                 w.WriteUInt32(monsterType);
                 w.WriteUInt32(args.Count == 3 ? uint.Parse(args[2], CultureInfo.InvariantCulture) : 0);
@@ -139,8 +171,14 @@ public static class GameMasterToolCommands
                 var areaX = args.Count == 6 ? ushort.Parse(args[4], CultureInfo.InvariantCulture) : (ushort)0;
                 var areaY = args.Count == 6 ? ushort.Parse(args[5], CultureInfo.InvariantCulture) : (ushort)0;
                 return new(GameMasterFrames.SummonMonsterArea, GameMasterFrames.SummonArea(new SummonAreaRequest(areaType, areaCount, areaRadius, anchor, areaMap, areaX, areaY)));
+            case "set-level" when args.Count == 2 && ushort.TryParse(args[1], out var targetLevel) && targetLevel != 0:
+                return new(GameMasterFrames.SetLevel, GameMasterFrames.SetLevelRequest(args[0], targetLevel, text));
             case "game-flag" when args.Count == 1 && GameMasterChat.TryParseSwitch(args[0], out var flagOn):
                 return new(GameMasterFrames.GameFlag, GameMasterFrames.Toggle(flagOn));
+            case "learn-skill" when args.Count == 3 && ushort.TryParse(args[1], out var skillId) && skillId != 0 && byte.TryParse(args[2], out var skillLevel) && skillLevel != 0:
+                return new(GameMasterFrames.LearnSkill, GameMasterFrames.LearnSkillRequest(args[0], skillId, skillLevel, text));
+            case "fly" when args.Count == 1 && GameMasterChat.TryParseSwitch(args[0], out var flying):
+                return new(GameMasterFrames.Fly, GameMasterFrames.Toggle(flying));
             case "remove-my-monsters" when args.Count == 0:
                 return new(GameMasterFrames.RemoveOwnMonsters, Array.Empty<byte>());
             case "issue-item" when args.Count == 3 && ushort.TryParse(args[0], out var issuer) && issuer != 0 && uint.TryParse(args[1], out var issuedItem) && ushort.TryParse(args[2], out var issuedCount):

@@ -80,29 +80,25 @@ public static class UniqueItemMessages
         return kills;
     }
 
-    public const int BossKillHistoryRecordSize = 12;
-
-    public static byte[] EncodeBossKillHistory(IReadOnlyList<BossKillHistoryRecord> history)
+    public static void WriteBossKillHistory(PacketWriter writer, IReadOnlyList<BossKillHistoryRecord> history)
     {
+        ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(history);
         var shown = history.Take(byte.MaxValue).ToList();
-        var w = new PacketWriter(1 + shown.Count * BossKillHistoryRecordSize);
-        w.WriteByte((byte)shown.Count);
+        writer.WriteByte((byte)shown.Count);
         foreach (var record in shown)
         {
-            w.WriteUInt16((ushort)record.MonsterId);
-            w.WriteUInt16((ushort)Math.Clamp(record.KillCount, 0, ushort.MaxValue));
-            w.WriteInt64(record.FirstKill.ToFileTime());
+            writer.WriteUInt16((ushort)record.MonsterId);
+            writer.WriteUInt16((ushort)Math.Clamp(record.KillCount, 0, ushort.MaxValue));
+            writer.WriteInt64(record.FirstKill.ToFileTime());
         }
-        return w.ToArray();
     }
 
-    public static IReadOnlyList<BossKillHistoryRecord> DecodeBossKillHistory(ReadOnlySpan<byte> body)
+    public static IReadOnlyList<BossKillHistoryRecord> ReadBossKillHistory(ref PacketReader reader)
     {
-        var r = new PacketReader(body);
-        var count = r.ReadByte();
+        var count = reader.ReadByte();
         var history = new List<BossKillHistoryRecord>(count);
-        for (var i = 0; i < count; i++) history.Add(new BossKillHistoryRecord(r.ReadUInt16(), r.ReadUInt16(), DateTimeOffset.FromFileTime(r.ReadInt64())));
+        for (var i = 0; i < count; i++) history.Add(new BossKillHistoryRecord(reader.ReadUInt16(), reader.ReadUInt16(), DateTimeOffset.FromFileTime(reader.ReadInt64())));
         return history;
     }
 

@@ -55,6 +55,33 @@ public static class QuestRules
         return rows[chosen];
     }
 
+    public static bool HoldsSourceSkill(QuestInfoEntry quest, IReadOnlyDictionary<int, int> skills)
+    {
+        ArgumentNullException.ThrowIfNull(quest);
+        ArgumentNullException.ThrowIfNull(skills);
+        if (quest.SrcSkill0 == 0) return true;
+        return skills.TryGetValue(quest.SrcSkill0, out var level) && level >= quest.SrcSkillLv0;
+    }
+
+    public static int SwappedOutSkill(QuestInfoEntry quest, IReadOnlyDictionary<int, int> skills)
+    {
+        ArgumentNullException.ThrowIfNull(quest);
+        ArgumentNullException.ThrowIfNull(skills);
+        if (quest.SrcSkill0 == 0) return 0;
+        return skills.TryGetValue(quest.SrcSkill0, out var level) && level == quest.SrcSkillLv0 ? quest.SrcSkill0 : 0;
+    }
+
+    public static QuestResultEntry? UserChoiceRow(IReadOnlyList<QuestResultEntry> rows, int recordIndex)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        if (rows.Count == 0) return null;
+        foreach (var row in rows)
+        {
+            if (row.Count == recordIndex) return row;
+        }
+        return rows[0];
+    }
+
     public static IReadOnlyList<RewardItem> RewardItems(IEnumerable<(int ItemIndex, int Count)> rowItems, IItemParamLookup items)
     {
         ArgumentNullException.ThrowIfNull(rowItems);

@@ -29,5 +29,5 @@ public sealed record SpecialItemHost
     public required Func<int, int, CancellationToken, Task<bool>> ForgetSkill { get; init; }
     public required Func<int, CancellationToken, Task<bool>> ExpandStorage { get; init; }
     public required Func<string, int, CancellationToken, Task<uint>> Rename { get; init; }
-    public required Func<string, CancellationToken, Task<uint?>> Shout { get; init; }
+    public required Func<MegaphoneShout, CancellationToken, Task<uint?>> Shout { get; init; }
 }

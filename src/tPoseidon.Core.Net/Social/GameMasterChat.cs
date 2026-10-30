@@ -23,6 +23,9 @@ public sealed class GameMasterChat
     public const string Speed = "Speed";
     public const string Immortal = "Immortal";
     public const string Invisible = "Invisible";
+    public const string Fly = "Fly";
+    public const string LearnSkill = "LearnSkill";
+    public const string SetLevel = "Level";
     public const string Memo = "Memo";
     public const string RemovePlayerShop = "RmvPlayerShop";
     public const string RemoveMyCamp = "RmvMyCamp";
@@ -40,6 +43,9 @@ public sealed class GameMasterChat
     public const string TradeBlockList = "TradeBlockList";
     public const string SummonMonster = "SummonMonster";
     public const string Item = "Item";
+    public const string CashItem = "CashItem";
+    public const string CampItem = "CampItem";
+    public const string Member = "Member";
     public const string CommandHelp = "CommandHelp";
 
     public const string GmFlagSetText = "GM_GMFlagSet";
@@ -58,6 +64,22 @@ public sealed class GameMasterChat
     public const string RemovePersonalShopText = "GM_RemovePersonalShop";
     public const string RemoveMyCampText = "GM_RemoveMyCamp";
     public const string RemoveInstantChatText = "GM_RemoveInstantChat";
+    public const string FlyOnLine = "Your GM eagle flies.";
+    public const string FlyOffLine = "Your GM eagle walks.";
+    public const string FlyNoGmFlagLine = "The flying form was not changed: log in as GM first.";
+    public const string FlyNotInGameLine = "The flying form was not changed: your character is not in the game.";
+    public const string LearnSkillDoneLine = "The skill was learned.";
+    public const string LearnSkillUnknownLine = "The skill was not learned: no such skill.";
+    public const string LearnSkillBadLevelLine = "The skill was not learned: that level does not exist for this skill.";
+    public const string LearnSkillNotOnlineLine = "The skill was not learned: the character is not in the game.";
+    public const string LearnSkillNotHigherLine = "The skill was not changed: the character already has it at that level or higher.";
+    public const string LearnSkillFailedLine = "The skill was not learned.";
+    public const string SetLevelDoneLine = "The level was set.";
+    public const string SetLevelNotOnlineLine = "The level was not changed: the character is not in the game.";
+    public const string SetLevelInvalidLine = "The level was not changed: a level starts at 1.";
+    public const string SetLevelLowerLine = "The level was not changed: the original has no way to lower a level, so only a higher level can be set.";
+    public const string SetLevelSameLine = "The level was not changed: the character is already at that level (the highest level is 400).";
+    public const string SetLevelFailedLine = "The level was not changed.";
     public const string NotAllowedLine = "You are not allowed to do that.";
     public const string BadArgumentsLine = "The command was not understood; type @commandhelp for the list.";
     public const string UnknownCommandLine = "Unknown command; type @commandhelp for the list.";
@@ -66,7 +88,34 @@ public sealed class GameMasterChat
     public const string ItemUnknownLine = "The item was not given: no such item.";
     public const string ItemNotOnlineLine = "The item was not given: the character is not in the game.";
     public const string ItemNoRoomLine = "The item was not given: the bag has no room for it.";
+    public const string CampItemGivenLine = "The My Camp item was added to the new items of the account.";
+    public const string CampItemUnknownLine = "The My Camp item was not added: no such My Camp item.";
+    public const string CampItemNoCharacterLine = "The My Camp item was not added: no such character.";
+    public const string MemberOnLine = "The account of the character is now a member; it applies at the next login or zone change.";
+    public const string MemberOffLine = "The account of the character is no longer a member; it applies at the next login or zone change.";
+    public const string MemberNoCharacterLine = "The membership was not changed: no such character.";
     public const string ItemFailedLine = "The item was not given.";
+
+    public static string FlyRefusedLine(byte reason) =>
+        reason == GameMasterFrames.AckFlightNotInGame ? FlyNotInGameLine : FlyNoGmFlagLine;
+
+    public static string SetLevelRefusedLine(byte reason) => reason switch
+    {
+        (byte)GameMasterFrames.AckLevelNotOnline => SetLevelNotOnlineLine,
+        (byte)GameMasterFrames.AckLevelInvalid => SetLevelInvalidLine,
+        (byte)GameMasterFrames.AckLevelLower => SetLevelLowerLine,
+        (byte)GameMasterFrames.AckLevelSame => SetLevelSameLine,
+        _ => SetLevelFailedLine,
+    };
+
+    public static string LearnSkillRefusedLine(byte reason) => reason switch
+    {
+        (byte)GameMasterFrames.AckLearnUnknownSkill => LearnSkillUnknownLine,
+        (byte)GameMasterFrames.AckLearnBadLevel => LearnSkillBadLevelLine,
+        (byte)GameMasterFrames.AckLearnNotOnline => LearnSkillNotOnlineLine,
+        (byte)GameMasterFrames.AckLearnNotHigher => LearnSkillNotHigherLine,
+        _ => LearnSkillFailedLine,
+    };
 
     public static string ItemRefusedLine(byte reason) => reason switch
     {
@@ -80,7 +129,7 @@ public sealed class GameMasterChat
 
     public static IReadOnlyList<GameMasterChatUsage> Commands { get; } = new[]
     {
-        new GameMasterChatUsage(Login, "<password>", "Log in as GM with the account's password (the GM character must be registered and GM login allowed from your address)."),
+        new GameMasterChatUsage(Login, "<password>", "Log in as GM with the account's password (the GM character must be registered and GM login allowed from your address). Your class skills are replaced by the GM skills until you log out."),
         new GameMasterChatUsage(Logout, "", "Log out of GM mode."),
         new GameMasterChatUsage(TeleportSelfToChr, "[who] <to>", "Send yourself, or who, next to another online character."),
         new GameMasterChatUsage(TeleportChrToZone, "[who] <zoneId>", "Send yourself, or who, to a zone (1 to 999)."),
@@ -88,6 +137,9 @@ public sealed class GameMasterChat
         new GameMasterChatUsage(Speed, "<1..4>", "Set your movement speed (1 is normal)."),
         new GameMasterChatUsage(Immortal, "on|off", "Turn your immortal mode on or off."),
         new GameMasterChatUsage(Invisible, "on|off", "Turn your invisible mode on or off."),
+        new GameMasterChatUsage(LearnSkill, "<skillId> <level> [name]", "Teach yourself, or the named online character, a skill at a level (1 up to the skill's maximum); no TM points are spent. A skill already held at that level or higher is left as it is."),
+        new GameMasterChatUsage(SetLevel, "<level> [name]", "Raise yourself, or the named online character, to a level (up to 400). It does what that many natural level-ups do: bonus points, stat growth, full HP and MP, the level-up gifts and the client frames, and the exp starts at the beginning of the new level. A lower level is refused; the original has no way to lower a level."),
+        new GameMasterChatUsage(Fly, "on|off", "Give your GM eagle its flying form (on) or its walking form with sword and shield (off)."),
         new GameMasterChatUsage(Memo, "<name> \"text\"", "Send a memo to a character."),
         new GameMasterChatUsage(RemovePlayerShop, "<name>", "Close the personal shop of an online character."),
         new GameMasterChatUsage(RemoveMyCamp, "<name>", "Close the My Camp of an online character."),
@@ -105,6 +157,9 @@ public sealed class GameMasterChat
         new GameMasterChatUsage(TradeBlockList, "", "List the trade-blocked characters."),
         new GameMasterChatUsage(SummonMonster, "<monsterType> [count]", "Summon monsters where you stand (monster type 2000 to 3434)."),
         new GameMasterChatUsage(Item, "<itemId> [count] [name]", "Put an item in your own bag, or in the bag of the named online character (count defaults to 1)."),
+        new GameMasterChatUsage(CashItem, "<itemId> [count] [hours] [name]", "Put an item in the cash box of your own account, or of the named online character; the player takes it out like a bought item. Hours is the period of a timed item (0 or left out: the shop period of the item, if it has one)."),
+        new GameMasterChatUsage(CampItem, "<campItemId> [count] [name]", "Add a My Camp item (count defaults to 1, at most 100) to the new items of your own account, or of the named character's account; the player takes it from the camp tab of My Shop."),
+        new GameMasterChatUsage(Member, "<name> on|off", "Give the whole account of a character the membership bonus (20 percent more walk, run and chase speed, and the PC-room EXP and TM rates) or take it away; it applies at the next login or zone change."),
         new GameMasterChatUsage(CommandHelp, "", "Print the GM command help lines of the client data."),
     };
 

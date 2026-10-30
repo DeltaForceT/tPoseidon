@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Npgsql;
+using tPoseidon.Core.Data;
 using tPoseidon.Core.Common.Security;
 
 namespace tPoseidon.Hosting;
@@ -45,6 +46,8 @@ public sealed class HostSettings
 
     public long ShopStartingCash { get; set; }
 
+    public int GuildCoinsPerWin { get; set; } = GuildCoinRules.DefaultPerWin;
+
     public string LastStartedVersion { get; set; } = "";
 
     public GuardSettings Security { get; set; } = new();
@@ -78,6 +81,14 @@ public sealed class HostSettings
             throw new HostingException(
                 $"{paths.SettingsFile} has security settings that do not work: {string.Join(" ", problems)}",
                 "Fix them, or remove the \"security\" section to go back to the defaults.",
+                null);
+        }
+
+        if (!GuildCoinRules.IsValid(settings.GuildCoinsPerWin))
+        {
+            throw new HostingException(
+                $"{paths.SettingsFile} has guildCoinsPerWin {settings.GuildCoinsPerWin}, which does not work.",
+                $"Use a whole number from 0 to {GuildCoinRules.MaxPerWin}.",
                 null);
         }
 

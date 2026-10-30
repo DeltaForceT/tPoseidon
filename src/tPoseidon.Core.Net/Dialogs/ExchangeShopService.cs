@@ -13,6 +13,7 @@ public sealed record ExchangePlayer
 {
     public required Func<Character?> Character { get; init; }
     public required Func<StatManager?> Stats { get; init; }
+    public Func<IReadOnlyList<TimedItem>, CancellationToken, Task>? TimedItemsGranted { get; init; }
 }
 
 public sealed class ExchangeShopService
@@ -33,10 +34,11 @@ public sealed class ExchangeShopService
         IReadOnlyDictionary<string, IReadOnlyList<int>> lists,
         ExchangePlayer player,
         Random rng,
-        string logTag)
+        string logTag,
+        ItemManager? periods = null)
     {
         _ctx = ctx ?? throw new ArgumentNullException(nameof(ctx));
-        _exchange = new MaterialExchange(items, catalog);
+        _exchange = new MaterialExchange(items, catalog, periods);
         _offers = offers ?? throw new ArgumentNullException(nameof(offers));
         _lists = lists ?? throw new ArgumentNullException(nameof(lists));
         _player = player ?? throw new ArgumentNullException(nameof(player));
@@ -108,6 +110,7 @@ public sealed class ExchangeShopService
             await SendAsync(Opcode.S2C_MONEY, GroundItemFrames.Money(stats.Money), ct).ConfigureAwait(false);
         }
         await SendAsync(Opcode.S2C_EXCHANGED, ExchangeFrames.Exchanged(operations), ct).ConfigureAwait(false);
+        if (_exchange.TakeTimedGrants() is { Count: > 0 } timedGrants && _player.TimedItemsGranted is { } announce) await announce(timedGrants, ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   exchange {offerId}: fee {offer.Fee}, {operations.Count} bag changes");
     }
 

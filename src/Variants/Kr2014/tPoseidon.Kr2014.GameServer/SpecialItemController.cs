@@ -5,6 +5,7 @@ using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.Game.Progression;
 using tPoseidon.Core.Game.Skills;
 using tPoseidon.Core.Game.Warp;
+using tPoseidon.Core.InterServer;
 using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.Dialogs;
 using tPoseidon.Core.Net.Packets;
@@ -21,14 +22,13 @@ internal sealed record SpecialItemSession(
 
 internal sealed class SpecialItemController
 {
-    public const ushort MegaphoneStyle = 0;
-    public const uint MegaphoneNothingQueued = 0;
 
     private readonly IAccountStore _accounts;
     private readonly ISkillStore _skills;
     private readonly ItemManager _itemManager;
     private readonly IItemParamLookup _catalog;
     private readonly SystemServerLink _systemLink;
+    private readonly MasterMegaphone _megaphone;
     private readonly Func<ushort, int> _mapOption;
     private readonly Func<SpecialPortTables> _ports;
     private readonly Func<int, SkillCardEntry?> _cardOfSkill;
@@ -42,6 +42,7 @@ internal sealed class SpecialItemController
         ItemManager itemManager,
         IItemParamLookup catalog,
         SystemServerLink systemLink,
+        MasterMegaphone megaphone,
         Func<ushort, int> mapOption,
         Func<SpecialPortTables> ports,
         Func<int, SkillCardEntry?> cardOfSkill,
@@ -54,6 +55,7 @@ internal sealed class SpecialItemController
         _itemManager = itemManager ?? throw new ArgumentNullException(nameof(itemManager));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _systemLink = systemLink ?? throw new ArgumentNullException(nameof(systemLink));
+        _megaphone = megaphone ?? throw new ArgumentNullException(nameof(megaphone));
         _mapOption = mapOption ?? throw new ArgumentNullException(nameof(mapOption));
         _ports = ports ?? throw new ArgumentNullException(nameof(ports));
         _cardOfSkill = cardOfSkill ?? throw new ArgumentNullException(nameof(cardOfSkill));
@@ -95,7 +97,7 @@ internal sealed class SpecialItemController
             ForgetSkill = (skillId, refund, ct) => ForgetSkillAsync(session, skillId, refund, ct),
             ExpandStorage = (slots, _) => Task.FromResult(ExpandStorage(session, slots)),
             Rename = (name, itemIndex, ct) => RenameAsync(session, name, itemIndex, ct),
-            Shout = (text, ct) => ShoutAsync(session, text, ct),
+            Shout = (shout, ct) => ShoutAsync(session, shout, ct),
         };
     }
 
@@ -214,14 +216,23 @@ internal sealed class SpecialItemController
         return CharacterEditCodes.Done;
     }
 
-    private async Task<uint?> ShoutAsync(SpecialItemSession session, string text, CancellationToken ct)
+    private async Task<uint?> ShoutAsync(SpecialItemSession session, MegaphoneShout shout, CancellationToken ct)
     {
         if (session.Player.Character is not { } character) return null;
-        var message = $"{character.Name} : {text}";
-        await _systemLink.SendAsync(
-            SystemLinkFrames.Megaphone, SystemLinkFrames.MegaphoneFor(character.CharacterId, MegaphoneStyle, message, _text), ct).ConfigureAwait(false);
-        Log(session.Player, $"shouts '{message}'");
-        return MegaphoneNothingQueued;
+        var message = shout.Line;
+        var request = new MegaphoneEnqueueRequest(new MegaphoneRefund(shout.ItemIndex, shout.ItemClass), message);
+        if (await _megaphone.EnqueueAsync(character.CharacterId, request, ct).ConfigureAwait(false) is not { } answer)
+        {
+            Log(session.Player, "shout not queued: the master server did not answer");
+            return null;
+        }
+        if (!answer.Accepted)
+        {
+            Log(session.Player, $"shout refused by the master server, code {answer.Value}");
+            return null;
+        }
+        Log(session.Player, $"shouts '{message}', {answer.Value} waiting");
+        return answer.Value;
     }
 
     private static byte NextKey() => (byte)Random.Shared.Next(1, 256);

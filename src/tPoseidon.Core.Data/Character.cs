@@ -41,6 +41,10 @@ public sealed class Character
 
         public bool IsGuildChief { get; init; }
 
+        public bool IsMember { get; init; }
+
+        public IReadOnlyList<BossKillHistoryRecord> BossKills { get; init; } = [];
+
         public DateTimeOffset GenTime { get; init; } = new(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
         public long Money { get; init; }

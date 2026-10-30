@@ -18,6 +18,8 @@ public static class ZoneGeometrySnapshot
             CellsY = geometry.CellsY,
             CellAttributesGzip = Compress(geometry.CellAttributes),
             GroundTypesGzip = geometry.HasGroundTypes ? Compress(geometry.GroundTypes) : null,
+            SecondaryCellsGzip = geometry.SecondaryCells.Length == geometry.CellAttributes.Length ? Compress(geometry.SecondaryCells) : null,
+            HeightsGzip = geometry.HasHeights ? Compress(geometry.Heights) : null,
             Regions = geometry.Regions.Select(r => new ZoneRegionDto
             {
                 Id = r.Id,
@@ -59,6 +61,12 @@ public static class ZoneGeometrySnapshot
             CellAttributes = attributes,
             GroundTypes = dto.GroundTypesGzip is { } ground && Decompress(ground) is { } types && types.Length == attributes.Length
                 ? types
+                : Array.Empty<byte>(),
+            SecondaryCells = dto.SecondaryCellsGzip is { } secondary && Decompress(secondary) is { } cells && cells.Length == attributes.Length
+                ? cells
+                : Array.Empty<byte>(),
+            Heights = dto.HeightsGzip is { } heightBytes && Decompress(heightBytes) is { } heights && heights.Length == attributes.Length
+                ? heights
                 : Array.Empty<byte>(),
             Regions = dto.Regions
                 .Select(r => new ZoneRegion(r.Id, r.Type, r.Param, r.X1, r.Y1, r.X2, r.Y2))

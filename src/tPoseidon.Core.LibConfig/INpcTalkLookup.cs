@@ -2,7 +2,7 @@ namespace tPoseidon.Core.LibConfig;
 
 public interface INpcTalkLookup
 {
-        NpcTalkEntry? GetByTypeOnMap(int npcType, string mapName);
+        NpcTalkEntry? GetByPosOnMap(int posId, string mapName);
 
         NpcTalkEntry? GetByTypeAnyMap(int npcType);
 

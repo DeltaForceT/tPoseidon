@@ -164,10 +164,11 @@ public sealed class PostgresGuildMatchStore : IGuildMatchStore
             if (cmd.ExecuteNonQuery() != 1) return false;
         }
         using (var cmd = new NpgsqlCommand("""
-            UPDATE guild SET guild_point = guild_point + @p, guild_point_increase = guild_point_increase + @p WHERE guild_code = @g
+            UPDATE guild SET guild_point = guild_point + @p, guild_point_increase = guild_point_increase + @p, guild_coin = guild_coin + @coins WHERE guild_code = @g
             """, conn, tx))
         {
             cmd.Parameters.AddWithValue("p", point);
+            cmd.Parameters.AddWithValue("coins", side.GuildCoins);
             cmd.Parameters.AddWithValue("g", (long)side.GuildCode);
             cmd.ExecuteNonQuery();
         }

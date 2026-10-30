@@ -129,10 +129,7 @@ public sealed class CharacterCreationManager
             _myCampStore.InsertDeco(myCampSlot.SlotCode, wall1.ItemUid, 0, -120, 0, 0, parentsUid: cell.ItemUid);
             _myCampStore.InsertDeco(myCampSlot.SlotCode, wall2.ItemUid, 0, -120, 0, 1, parentsUid: cell.ItemUid);
 
-            if (!_myCampStore.IsInitializedForAccount(request.OwnerAccountId))
-            {
-                _myCampStore.MarkInitializedForAccount(request.OwnerAccountId);
-            }
+            _myCampStore.TryGrantStarterItems(request.OwnerAccountId, MyCampStarterSet.Choose(Random.Shared));
         }
 
         var snapshot = new CharacterSnapshot

@@ -66,6 +66,8 @@ public interface ICashShopStore
 {
     ShopGoods? FindGoods(int goodsCode);
 
+    short? ShopPeriodHours(int itemIndex);
+
     long Balance(uint accountId, long startingBalance);
 
     long Grant(uint accountId, long amount, long startingBalance, string reason);

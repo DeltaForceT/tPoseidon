@@ -27,6 +27,7 @@ public sealed record ShopPlayer
     public required Func<StatManager?> Stats { get; init; }
     public required Func<int> MaxWeight { get; init; }
     public required Func<ushort> MapId { get; init; }
+    public Func<IReadOnlyList<TimedItem>, CancellationToken, Task>? TimedItemsGranted { get; init; }
 }
 
 public sealed class ShopTrade
@@ -34,6 +35,7 @@ public sealed class ShopTrade
     public const int SellLineSize = 14;
     public const int SellHeaderSize = 4;
 
+    private readonly List<TimedItem> _timedGranted = new();
     private readonly S2SessionContext _ctx;
     private readonly IItemParamLookup _definitions;
     private readonly ShopPlayer _player;
@@ -123,6 +125,12 @@ public sealed class ShopTrade
         foreach (var (itemId, count) in orders) operations.Add(Grant(character.CharacterId, itemId, count));
         stats.GrantMoney(-total, StatChangeSource.Item);
         await SendAsync(Opcode.S2C_SHOP_BOUGHT, ShopFrames.Traded(stats.Money, operations), ct).ConfigureAwait(false);
+        if (_timedGranted.Count > 0 && _player.TimedItemsGranted is { } announce)
+        {
+            var granted = _timedGranted.ToList();
+            _timedGranted.Clear();
+            await announce(granted, ct).ConfigureAwait(false);
+        }
         Console.WriteLine($"{_logTag} {_ctx.Remote}   shop 0x{shopEntityId:X4}: bought {string.Join(", ", orders.Select(o => $"{o.ItemId} x{o.Count}"))} for {total}, money {stats.Money}");
         return null;
     }
@@ -152,13 +160,9 @@ public sealed class ShopTrade
             if ((named.Options & ShopPrices.NotSellableOption) != 0) return refused;
             if (count < 1 || (count >= 2 && !named.IsStackable)) count = 1;
             if (!seen.Add(uid)) return refused;
-            if (bag.FirstOrDefault(item => item.ItemUid == uid) is not { } held || held.Stack < count) return refused;
+            if (bag.FirstOrDefault(item => item.ItemUid == uid) is not { } held) return refused;
             if (_definitions.GetById(held.ItemIndex) is not { } definition) return refused;
-            if (definition.Type == ShopPrices.DrillType)
-            {
-                Console.WriteLine($"{_logTag} {_ctx.Remote}   shop: selling drills is not implemented (item {itemId}); refused");
-                return refused;
-            }
+            if ((definition.IsStackable ? held.Stack : 1) < count) return refused;
             sales.Add((held, definition, count));
         }
 
@@ -166,7 +170,8 @@ public sealed class ShopTrade
         foreach (var (held, definition, count) in sales)
         {
             var row = offer.Goods.FirstOrDefault(entry => entry.ItemId == held.ItemIndex);
-            total += (long)ShopPrices.SellUnitPrice(offer.PriceRate, definition.Value, row, offer.SellingRate) * count;
+            var value = ShopPrices.SellValue(definition.Value, definition.Type, held.Stack, _itemManager.DrillLifeOf?.Invoke(held.ItemIndex));
+            total += (long)ShopPrices.SellUnitPrice(offer.PriceRate, value, row, offer.SellingRate) * count;
         }
         if (!offer.SellsSkillCards && !PickupRules.MoneyFits(stats.Money, total, stats.WalletLimit)) return (Opcode.S2C_MONEY_FULL, ShopFrames.MoneyFull());
 
@@ -174,7 +179,7 @@ public sealed class ShopTrade
         foreach (var (held, definition, count) in sales)
         {
             var wireUid = BagItemIds.OnWire(held.ItemUid);
-            if (held.Stack > count)
+            if (definition.IsStackable && held.Stack > count)
             {
                 var left = _items.AdjustStack(held.ItemUid, -count);
                 operations.Add(new BagOperation(QuestResultFrames.StackChanged, definition.ObjectClass, (uint)held.ItemIndex, wireUid, left));
@@ -209,6 +214,7 @@ public sealed class ShopTrade
             return new BagOperation(QuestResultFrames.StackChanged, itemClass, (uint)itemId, BagItemIds.OnWire(stack.ItemUid), total);
         }
         var minted = _itemManager.GrantRewardItem(characterId, itemId, (ushort)count, itemClassOverride: itemClass);
+        if (TimedItemRules.IsTimed(minted)) _timedGranted.Add(new TimedItem(minted.ItemUid, minted.ItemIndex, minted.BreakedAt));
         return new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);
     }
 

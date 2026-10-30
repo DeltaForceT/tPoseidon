@@ -29,4 +29,6 @@ public interface IItemStore
         ushort AdjustStack(ulong itemUid, int delta);
 
     bool SetStack(ulong itemUid, ushort stack);
+
+    bool SetBreakedAt(ulong itemUid, DateTimeOffset breakedAt);
 }

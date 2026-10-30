@@ -8,6 +8,8 @@ public sealed record CharacterInfoEntry
 
         public string CommonNameEng { get; init; } = string.Empty;
     public string FileName { get; init; } = string.Empty;
+    public string PartName { get; init; } = string.Empty;
+    public string PivotFileName { get; init; } = string.Empty;
     public float WalkSpeed { get; init; }
     public float RunSpeed { get; init; }
     public int MinAtkRange { get; init; }

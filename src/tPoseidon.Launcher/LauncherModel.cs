@@ -17,6 +17,14 @@ public enum ChannelStatus
     Offline,
 }
 
+public enum LauncherUpdateState
+{
+    None,
+    Downloading,
+    Ready,
+    Failed,
+}
+
 public enum SessionState
 {
     SignedOut,
@@ -43,9 +51,13 @@ public sealed class LauncherModel
     private readonly ClientUpdater _updater;
     private readonly Branding? _branding;
     private readonly IClientSetupStore? _setupStore;
+    private readonly ManifestTrust _trust;
+    private Task _lastRefresh = Task.CompletedTask;
+    private readonly LauncherSelfUpdater? _selfUpdater;
+    private LauncherStage? _pendingLauncher;
     private string? _password;
 
-    public LauncherModel(LauncherSettings settings, string settingsPath, ITicketService tickets, IClientHost client, ClientUpdater updater, Branding? branding = null, IClientSetupStore? setupStore = null)
+    public LauncherModel(LauncherSettings settings, string settingsPath, ITicketService tickets, IClientHost client, ClientUpdater updater, Branding? branding = null, IClientSetupStore? setupStore = null, LauncherSelfUpdater? selfUpdater = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _settingsPath = settingsPath ?? throw new ArgumentNullException(nameof(settingsPath));
@@ -54,6 +66,13 @@ public sealed class LauncherModel
         _updater = updater ?? throw new ArgumentNullException(nameof(updater));
         _branding = branding;
         _setupStore = setupStore;
+        _trust = new ManifestTrust(branding?.Spec.PublicKey);
+        _selfUpdater = selfUpdater;
+        if (selfUpdater?.TakeUnseenFailure() is { } failure)
+        {
+            Notice = new LauncherNotice(BannerKind.Warning, $"The launcher was not updated to version {failure.Version}", failure.Reason + " You can keep playing with this version.");
+        }
+
         if (_branding is not null)
         {
             _settings.Language = _branding.Spec.Language;
@@ -102,6 +121,14 @@ public sealed class LauncherModel
     public string StatusDetail { get; private set; } = "";
 
     public LauncherManifest? Manifest { get; private set; }
+
+    public ChannelTrust Trust { get; private set; }
+
+    public LauncherUpdateState LauncherUpdate { get; private set; }
+
+    public string? LauncherUpdateVersion => _pendingLauncher?.Version;
+
+    public bool CanGoBackToEarlierLauncher => _selfUpdater?.CanGoBack == true;
 
     public byte[]? BannerImage { get; private set; }
 
@@ -231,7 +258,20 @@ public sealed class LauncherModel
         }
     }
 
-    public async Task RefreshChannelAsync(CancellationToken ct)
+    public Task RefreshChannelAsync(CancellationToken ct)
+    {
+        var next = RefreshAfterAsync(_lastRefresh, ct);
+        _lastRefresh = next;
+        return next;
+    }
+
+    private async Task RefreshAfterAsync(Task previous, CancellationToken ct)
+    {
+        await Task.WhenAny(previous).ConfigureAwait(true);
+        await RefreshChannelCoreAsync(ct).ConfigureAwait(true);
+    }
+
+    private async Task RefreshChannelCoreAsync(CancellationToken ct)
     {
         if (SelectedServer is not { } server)
         {
@@ -244,18 +284,19 @@ public sealed class LauncherModel
         Changed?.Invoke();
         try
         {
-            var manifest = await _updater.Source.GetManifestAsync(server.WebAddress(ShopPort, UpdateChannelPaths.Manifest), ct).ConfigureAwait(true);
+            var fetched = await FetchManifestAsync(server, ct).ConfigureAwait(true);
             if (!ReferenceEquals(SelectedServer, server))
             {
                 return;
             }
 
-            if (manifest is null)
+            if (fetched is not { } channel)
             {
                 ClearChannel(ChannelStatus.Online, "");
             }
             else
             {
+                var (manifest, trust) = channel;
                 var banner = manifest.Banner is null ? null : await _updater.Source.GetImageAsync(server.WebAddress(ShopPort, UpdateChannelPaths.Banner), ct).ConfigureAwait(true);
                 var pictures = await LoadNewsPicturesAsync(server, manifest, ct).ConfigureAwait(true);
                 var plan = ClientCheck.Ok ? await Task.Run(() => ClientUpdater.Plan(_settings.ClientFolder, manifest), ct).ConfigureAwait(true) : UpdatePlan.Empty;
@@ -266,14 +307,19 @@ public sealed class LauncherModel
 
                 ClearChannel(string.IsNullOrWhiteSpace(manifest.Maintenance) ? ChannelStatus.Online : ChannelStatus.Maintenance, manifest.Maintenance ?? "");
                 Manifest = manifest;
+                Trust = trust;
                 BannerImage = banner;
                 NewsPictures = pictures;
                 Plan = plan;
+                if (manifest.Launcher is { } release && _trust.Required && trust == ChannelTrust.Verified)
+                {
+                    await PrepareLauncherUpdateAsync(server, release, ct).ConfigureAwait(true);
+                }
             }
         }
         catch (PlayFailure failure)
         {
-            ClearChannel(failure.Reason == PlayFailureReason.UpdateFailed ? ChannelStatus.Online : ChannelStatus.Offline, failure.Summary);
+            ClearChannel(failure.Reason is PlayFailureReason.UpdateFailed or PlayFailureReason.UpdatesNotTrusted ? ChannelStatus.Online : ChannelStatus.Offline, failure.Summary);
             Notice = LauncherNotice.From(failure);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -321,6 +367,13 @@ public sealed class LauncherModel
     {
         if (Busy || Session is SessionState.Ready or SessionState.UpdateFailed)
         {
+            return;
+        }
+
+        if (LauncherUpdate == LauncherUpdateState.Ready)
+        {
+            Notice = new LauncherNotice(BannerKind.Info, "Restart the launcher first", "A new launcher version is ready. Press Restart to install it, then log in.");
+            Changed?.Invoke();
             return;
         }
 
@@ -556,9 +609,11 @@ public sealed class LauncherModel
         Changed?.Invoke();
         try
         {
-            var manifest = await _updater.Source.GetManifestAsync(server.WebAddress(ShopPort, UpdateChannelPaths.Manifest), ct).ConfigureAwait(true);
-            if (manifest is not null)
+            var fetched = await FetchManifestAsync(server, ct).ConfigureAwait(true);
+            if (fetched is { } channel)
             {
+                var (manifest, trust) = channel;
+                Trust = trust;
                 if (!string.IsNullOrWhiteSpace(manifest.Maintenance))
                 {
                     Status = ChannelStatus.Maintenance;
@@ -585,6 +640,100 @@ public sealed class LauncherModel
             Notice = LauncherNotice.Error("Your client files could not be checked", ex.Message);
             Session = SessionState.UpdateFailed;
         }
+    }
+
+    public bool RestartForLauncherUpdate()
+    {
+        if (LauncherUpdate != LauncherUpdateState.Ready || _selfUpdater is null || _pendingLauncher is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            _selfUpdater.Restart(_pendingLauncher);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LauncherUpdate = LauncherUpdateState.Failed;
+            Notice = LauncherNotice.Error("The launcher could not restart to update", ex.Message);
+            Changed?.Invoke();
+            return false;
+        }
+    }
+
+    public bool GoBackToEarlierLauncher()
+    {
+        if (_selfUpdater is null || !_selfUpdater.CanGoBack)
+        {
+            return false;
+        }
+
+        try
+        {
+            _selfUpdater.GoBack();
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Notice = LauncherNotice.Error("The launcher could not go back to the earlier version", ex.Message);
+            Changed?.Invoke();
+            return false;
+        }
+    }
+
+    private async Task PrepareLauncherUpdateAsync(ServerFile server, LauncherRelease release, CancellationToken ct)
+    {
+        if (_selfUpdater is null || !_selfUpdater.Wants(release))
+        {
+            LauncherUpdate = LauncherUpdateState.None;
+            _pendingLauncher = null;
+            return;
+        }
+
+        Busy = true;
+        LauncherUpdate = LauncherUpdateState.Downloading;
+        ProgressFraction = 0;
+        ProgressText = "Downloading the new launcher...";
+        Changed?.Invoke();
+        try
+        {
+            var progress = new Progress<UpdateProgress>(update =>
+            {
+                ProgressFraction = update.TotalBytes == 0 ? 1 : (double)update.DoneBytes / update.TotalBytes;
+                ProgressText = $"Downloading the new launcher {update.FileNumber}/{update.FileCount}: {update.Current}";
+                Changed?.Invoke();
+            });
+            _pendingLauncher = await _selfUpdater.StageAsync(release, path => server.WebAddress(ShopPort, UpdateChannelPaths.LauncherFile(path)), progress, ct).ConfigureAwait(true);
+            LauncherUpdate = _pendingLauncher is null ? LauncherUpdateState.None : LauncherUpdateState.Ready;
+            if (_pendingLauncher is not null)
+            {
+                Notice = new LauncherNotice(BannerKind.Info, "A new launcher version is ready", "Press Restart to update. The launcher closes, installs it and opens again.");
+            }
+        }
+        catch (HostingException ex)
+        {
+            LauncherUpdate = LauncherUpdateState.Failed;
+            Notice = new LauncherNotice(BannerKind.Warning, "The launcher could not be updated", $"{ex.Summary} You can keep playing with this version.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            LauncherUpdate = LauncherUpdateState.Failed;
+            Notice = new LauncherNotice(BannerKind.Warning, "The launcher could not be updated", $"{ex.Message} You can keep playing with this version.");
+        }
+        finally
+        {
+            Busy = false;
+            ProgressFraction = 0;
+            ProgressText = "";
+        }
+    }
+
+    private async Task<(LauncherManifest Manifest, ChannelTrust Trust)?> FetchManifestAsync(ServerFile server, CancellationToken ct)
+    {
+        var fetched = await _updater.Source.GetManifestAsync(server.WebAddress(ShopPort, UpdateChannelPaths.Manifest), server.WebAddress(ShopPort, UpdateChannelPaths.Signature), ct).ConfigureAwait(true);
+        return fetched is null ? null : (fetched.Manifest, _trust.Check(fetched));
     }
 
     private async Task InstallAsync(ServerFile server, LauncherManifest manifest, CancellationToken ct)
@@ -675,6 +824,7 @@ public sealed class LauncherModel
         Status = status;
         StatusDetail = detail;
         Manifest = null;
+        Trust = ChannelTrust.Unknown;
         BannerImage = null;
         NewsPictures = new Dictionary<string, byte[]>();
         Plan = UpdatePlan.Empty;

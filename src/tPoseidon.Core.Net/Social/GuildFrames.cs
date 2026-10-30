@@ -8,7 +8,11 @@ namespace tPoseidon.Core.Net.Social;
 
 public sealed record GuildBlock(ulong CharacterId, uint GuildCode, string GuildName, string MasterName, string Greeting);
 
-public sealed record GuildStateView(GuildBlock Block, ushort MaxMembers, byte GradeIndex, ushort Rights, IReadOnlyList<string> GradeNames, byte DepotTabs = 0, uint Coins = 0);
+public sealed record GuildNoticeRow(uint Code, string Created, string Content);
+
+public sealed record GuildStateView(
+    GuildBlock Block, ushort MaxMembers, byte GradeIndex, ushort Rights, IReadOnlyList<string> GradeNames, byte DepotTabs = 0, uint Coins = 0,
+    IReadOnlyList<GuildNoticeRow>? Notices = null);
 
 public sealed record GuildMemberRow(
     ulong CharacterId,
@@ -41,6 +45,14 @@ public static class GuildFrames
     public const ushort OwnInfo = (ushort)Opcode.CHAR_SELECT;
     public const ushort DetailByCode = (ushort)Opcode.C2S_GUILD_DETAIL_BY_CODE;
     public const ushort DetailByCharacter = (ushort)Opcode.C2S_GUILD_DETAIL_BY_CHARACTER;
+
+    public const ushort Chat = 0x2C57;
+    public const ushort ChatLine = 0x2C58;
+
+    public const ushort NoticeAdd = 0x2BC8;
+    public const ushort NoticeAdded = 0x2BC9;
+    public const ushort NoticeDelete = 0x2BCA;
+    public const ushort NoticeDeleted = 0x2BCB;
 
     public const ushort GuildSms = 0x2B8B;
     public const ushort GuildSmsOwnGuild = 0x2B8D;
@@ -88,7 +100,7 @@ public static class GuildFrames
     public const int ForceOutResultHeaderLength = 0x0E;
     public const int AnswerApplyResultLength = 0x14;
     public const int DetailLength = 0x110;
-    public const int NameOrderLength = 0x2E;
+    public const int NameOrderLength = 0x2E + 6;
     public const int GradeCount = 7;
     public const int GradeRightsStride = 8;
     public const int GradeTableLength = 0x6C;
@@ -96,6 +108,16 @@ public static class GuildFrames
     public const int GradeNameLength = 11;
     public const int NoticeSlots = 3;
     public const int NoticeEntryLength = 0x90;
+    public const int NoticeCreatedLength = 17;
+    public const int NoticeContentLength = 121;
+    public const int NoticeAddRequestLength = NoticeContentLength;
+    public const int NoticeDeleteRequestLength = sizeof(uint);
+    public const string NoticeCreatedFormat = "yyyy-MM-dd HH:mm";
+
+    public const byte NoticeFailed = 1;
+    public const byte NoticeUnknownCode = 3;
+    public const byte AddNoticeNoRight = 3;
+    public const byte DeleteNoticeNoRight = 4;
 
     public const int GuildNameLength = 25;
     public const int BlockGuildNameLength = 24;
@@ -166,6 +188,9 @@ public static class GuildFrames
 
     public const ushort RightEditMembers = 0x01;
     public const ushort RightVolunteers = 0x02;
+    public const ushort RightNotices = 0x10;
+    public const ushort RightEmblem = GuildEmblemRules.PermissionRight;
+    public const int RightEmblemIndex = GuildEmblemRules.PermissionRightIndex;
     public const ushort RightDepot = GuildDepotRules.DepotRight;
     public const int RightDepotIndex = 6;
     public const ushort RightShop = GuildShopRules.ShopRight;
@@ -222,8 +247,10 @@ public static class GuildFrames
         w.WriteZero(8);
         WriteGradeRights(w, state.GradeIndex, state.Rights);
         WriteGradeTable(w, state.GradeNames, text);
-        w.WriteByte(0);
-        w.WriteZero(NoticeSlots * NoticeEntryLength);
+        var notices = (state.Notices ?? Array.Empty<GuildNoticeRow>()).Take(NoticeSlots).ToArray();
+        w.WriteByte((byte)notices.Length);
+        foreach (var notice in notices) WriteNotice(w, notice, text);
+        w.WriteZero((NoticeSlots - notices.Length) * NoticeEntryLength);
         return w.ToArray();
     }
 
@@ -437,23 +464,52 @@ public static class GuildFrames
 
     public static byte[] DetailRefused(byte code) => new[] { code };
 
-    public static byte[] NameTagFor(ushort entityId, string guildName, string alias, Encoding text)
+    public static byte[] NoticeAddRefused(byte code) => new[] { code };
+
+    public static byte[] NoticeAddedFor(GuildNoticeRow notice, Encoding text)
     {
-        ArgumentNullException.ThrowIfNull(guildName);
-        ArgumentNullException.ThrowIfNull(alias);
-        ArgumentNullException.ThrowIfNull(text);
-        var w = new PacketWriter(16 + guildName.Length + alias.Length);
-        w.WriteUInt16(entityId);
-        w.WriteNulTerminated(guildName, text);
-        w.WriteNulTerminated(alias, text);
-        w.WriteByte(0);
-        w.WriteByte(0);
-        w.WriteUInt32(0);
-        w.WriteByte(0);
+        ArgumentNullException.ThrowIfNull(notice);
+        var w = new PacketWriter(1 + NoticeEntryLength);
+        w.WriteByte(Ok);
+        WriteNotice(w, notice, text);
         return w.ToArray();
     }
 
-    public static byte[] NameOrderFor(string guildName, string alias, Encoding text)
+    public static byte[] NoticeDeleteRefused(byte code) => new[] { code };
+
+    public static byte[] NoticeDeletedFor(uint noticeCode)
+    {
+        var w = new PacketWriter(1 + sizeof(uint));
+        w.WriteByte(Ok);
+        w.WriteUInt32(noticeCode);
+        return w.ToArray();
+    }
+
+    public static string? ReadNoticeAddRequest(ReadOnlySpan<byte> payload, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return payload.Length < NoticeAddRequestLength ? null : ReadText(payload, 0, NoticeContentLength, text);
+    }
+
+    public static uint? ReadNoticeDeleteRequest(ReadOnlySpan<byte> payload) =>
+        payload.Length < NoticeDeleteRequestLength ? null : BinaryPrimitives.ReadUInt32LittleEndian(payload);
+
+    public static byte[] NameTagFor(ushort entityId, GuildTag tag, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(tag);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(16 + tag.GuildName.Length + tag.Alias.Length);
+        w.WriteUInt16(entityId);
+        w.WriteNulTerminated(tag.GuildName, text);
+        w.WriteNulTerminated(tag.Alias, text);
+        w.WriteByte(tag.Emblem.Template);
+        w.WriteByte(tag.Emblem.Colour);
+        w.WriteUInt32(tag.Emblem.Icon);
+        w.WriteByte(GuildEmblemFrames.NoTitle);
+        return w.ToArray();
+    }
+
+    public static byte[] NameOrderFor(string guildName, string alias, GuildEmblem emblem, Encoding text)
     {
         ArgumentNullException.ThrowIfNull(guildName);
         ArgumentNullException.ThrowIfNull(alias);
@@ -461,14 +517,21 @@ public static class GuildFrames
         var w = new PacketWriter(NameOrderLength);
         WriteText(w, guildName, GuildNameLength, text);
         WriteText(w, alias, AliasLength, text);
+        w.WriteByte(emblem.Template);
+        w.WriteByte(emblem.Colour);
+        w.WriteUInt32(emblem.Icon);
         return w.ToArray();
     }
 
-    public static (string GuildName, string Alias) ReadNameOrder(ReadOnlySpan<byte> data, Encoding text)
+    public static GuildTag ReadNameOrder(ReadOnlySpan<byte> data, Encoding text)
     {
         ArgumentNullException.ThrowIfNull(text);
         if (data.Length < NameOrderLength) throw new ArgumentException($"A guild name order is {NameOrderLength} bytes.", nameof(data));
-        return (ReadText(data, 0, GuildNameLength, text), ReadText(data, GuildNameLength, AliasLength, text));
+        var emblemAt = GuildNameLength + AliasLength;
+        return new GuildTag(
+            ReadText(data, 0, GuildNameLength, text),
+            ReadText(data, GuildNameLength, AliasLength, text),
+            new GuildEmblem(data[emblemAt], data[emblemAt + 1], BinaryPrimitives.ReadUInt32LittleEndian(data[(emblemAt + 2)..])));
     }
 
     public static ulong? ReadOwnInfoRequest(ReadOnlySpan<byte> payload) =>
@@ -489,6 +552,22 @@ public static class GuildFrames
         var end = body.IndexOf((byte)0);
         if (end < 0) return null;
         return (BinaryPrimitives.ReadUInt32LittleEndian(payload), text.GetString(body[..end]));
+    }
+
+    public static string? ReadChat(ReadOnlySpan<byte> payload, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var end = payload.IndexOf((byte)0);
+        return end < 0 ? null : text.GetString(payload[..end]);
+    }
+
+    public static byte[] ChatLineFor(string senderName, string message, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(senderName.Length + message.Length + 2);
+        w.WriteNulTerminated(senderName, text);
+        w.WriteNulTerminated(message, text);
+        return w.ToArray();
     }
 
     public static uint? ReadApplyRequest(ReadOnlySpan<byte> payload) =>
@@ -546,6 +625,14 @@ public static class GuildFrames
         w.WriteByte(0);
     }
 
+    private static void WriteNotice(PacketWriter w, GuildNoticeRow notice, Encoding text)
+    {
+        w.WriteUInt32(notice.Code);
+        WriteText(w, notice.Created, NoticeCreatedLength, text);
+        WriteText(w, notice.Content, NoticeContentLength, text);
+        w.WriteZero(NoticeEntryLength - sizeof(uint) - NoticeCreatedLength - NoticeContentLength);
+    }
+
     private static void WriteGradeRights(PacketWriter w, byte gradeIndex, ushort rights)
     {
         for (var grade = 0; grade < GradeCount; grade++)
@@ -556,7 +643,7 @@ public static class GuildFrames
             w.WriteZero(RightShopIndex - 2);
             w.WriteByte(own && (rights & RightShop) != 0 ? (byte)1 : (byte)0);
             w.WriteByte(own && (rights & RightDepot) != 0 ? (byte)1 : (byte)0);
-            w.WriteZero(GradeRightsStride - RightDepotIndex - 1);
+            w.WriteByte(own && (rights & RightEmblem) != 0 ? (byte)1 : (byte)0);
         }
     }
 
