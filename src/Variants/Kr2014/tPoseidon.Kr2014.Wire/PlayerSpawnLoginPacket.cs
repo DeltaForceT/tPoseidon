@@ -107,7 +107,7 @@ public sealed class PlayerSpawnLoginPacket
             EntityId = entityId,
             BodyType = makeUp.Type,
             Hair = makeUp.Hair,
-            ClassChainId = makeUp.Job,
+            ClassChainId = LookChangeRules.HighestJobOf(character),
             Level = character.Level,
             PositionX = position?.X ?? character.PositionX,
             PositionY = position?.Y ?? character.PositionY,

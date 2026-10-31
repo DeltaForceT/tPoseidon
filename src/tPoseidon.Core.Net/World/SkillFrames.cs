@@ -655,6 +655,12 @@ public static class SkillFrames
         }
     }
 
+    public static IReadOnlyList<SwingFrame> EncodeAfterBlock(IReadOnlyList<(Opcode Opcode, byte[] Payload)> afterBlock)
+    {
+        ArgumentNullException.ThrowIfNull(afterBlock);
+        return afterBlock.Select(frame => new SwingFrame(frame.Opcode, frame.Payload, MeleeSwingFrames.NoBlock, SwingAudience.Attacker)).ToList();
+    }
+
     private static void AppendBlockEnd(List<SwingFrame> frames, ushort blockId, IReadOnlyList<(Opcode Opcode, byte[] Payload)> afterBlock)
     {
         frames.Add(new(Opcode.S2C_COMMAND_BLOCK_END, Array.Empty<byte>(), blockId, SwingAudience.Everyone));

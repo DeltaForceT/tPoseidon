@@ -19,12 +19,8 @@ public static class OccupationRules
     public static int CurrentJobOf(Character character)
     {
         ArgumentNullException.ThrowIfNull(character);
-        return character.JobState switch
-        {
-            ThirdJobTier => character.Job3,
-            SecondJobTier => character.Job2,
-            _ => (int)character.Species,
-        };
+        if (character.Job3 != 0) return character.Job3;
+        return character.Job2 != 0 ? character.Job2 : (int)character.Species;
     }
 }
 

@@ -19,11 +19,14 @@ public sealed class TcpClientSession : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(client);
 
         _client = client;
+        _client.NoDelay = true;
         _stream = client.GetStream();
         _framer = new PacketFramer(maxPacketBytes);
     }
 
     public SessionGuard Guard { get; internal set; } = SessionGuard.None;
+
+    public bool NoDelay => _client.NoDelay;
 
     public void Abort()
     {

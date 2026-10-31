@@ -441,6 +441,12 @@ public sealed class SkillShopService
                 SkillShopFrames.Page(npcEntityId, text, (ushort)kind, (ushort)shop.JobQuestId, index, _textEncoding), ct).ConfigureAwait(false);
             return;
         }
+        if (_player.JobQuests?.QuestMessageOf(shop, index) is { } questText)
+        {
+            await SendAsync(Opcode.S2C_SKILL_SHOP_PAGE,
+                SkillShopFrames.Page(npcEntityId, questText, 0, (ushort)shop.JobQuestId, index, _textEncoding), ct).ConfigureAwait(false);
+            return;
+        }
         await SendAsync(Opcode.S2C_SKILL_SHOP_REFUSED, Array.Empty<byte>(), ct).ConfigureAwait(false);
     }
 

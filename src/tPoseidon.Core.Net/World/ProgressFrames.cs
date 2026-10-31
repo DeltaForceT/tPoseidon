@@ -130,6 +130,8 @@ public static class ProgressFrames
 
     public static byte SpeedQuarter(float speed) => unchecked((byte)(int)(speed / SpeedUnit));
 
+    public static float DrawnSpeed(float speed) => SpeedQuarter(speed) * (float)SpeedUnit;
+
     public static byte[] Speed(ushort entityId, float speed)
     {
         var w = new PacketWriter(SpeedSize);

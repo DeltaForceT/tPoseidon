@@ -13,6 +13,7 @@ public enum Opcode : ushort
         S2C_NPC_STATE           = 0x0042,
     S2C_OP_01CF_TBD                = 0x01CF,
     ENTITY_EMOTE              = 0x003F,
+    ENTITY_FACE               = 0x0041,
     S2C_PET_SPEECH               = 0x0250,
     C2S_OP_0266_TBD              = 0x0266,
     S2C_OP_01D0_TBD                = 0x01D0,

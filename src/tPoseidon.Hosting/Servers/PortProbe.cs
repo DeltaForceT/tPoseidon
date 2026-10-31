@@ -6,6 +6,8 @@ namespace tPoseidon.Hosting.Servers;
 
 public static class PortProbe
 {
+    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(1);
+
     public static bool IsListening(int port) => IsListening(port, IPAddress.Any);
 
     public static bool IsListening(int port, string bindAddress) =>
@@ -19,18 +21,23 @@ public static class PortProbe
             return false;
         }
 
-        if (ListenerTable() is { } listeners)
+        if (ListenerTable() is { } listeners && Clashes(listeners, port, bindAddress))
         {
-            return Clashes(listeners, port, bindAddress);
+            return true;
         }
 
+        return Accepts(port, bindAddress);
+    }
+
+    public static bool Accepts(int port, IPAddress bindAddress)
+    {
         using var client = new TcpClient();
         try
         {
-            client.Connect(IsWildcard(bindAddress) ? IPAddress.Loopback : bindAddress, port);
-            return true;
+            var target = IsWildcard(bindAddress) ? IPAddress.Loopback : bindAddress;
+            return client.ConnectAsync(target, port).Wait(ConnectTimeout) && client.Connected;
         }
-        catch (SocketException)
+        catch (Exception ex) when (ex is SocketException or AggregateException or ObjectDisposedException)
         {
             return false;
         }

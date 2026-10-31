@@ -144,6 +144,7 @@ internal sealed class HarconController : IDisposable
             return;
         }
         var tables = _tables();
+        var level = (ushort)(st.Stats?.Level ?? character.Level);
         var record = _store.Load(character.CharacterId);
         var code = st.HarconLobbyMap is null
             ? HarconRules.CreateInvalidPlayerState
@@ -155,9 +156,8 @@ internal sealed class HarconController : IDisposable
             return;
         }
         var stage = tables.Stages[request.StageId];
-        var room = _lobby.Create(stage, new HarconCreate(request.StageId, request.Title, request.MaxPlayers), new HarconMember(character.CharacterId, st.PlayerEntityId, character.Name));
+        var room = _lobby.Create(stage, new HarconCreate(request.StageId, request.Title, request.MaxPlayers), new HarconMember(character.CharacterId, st.PlayerEntityId, character.Name, level));
         await SendAsync(st, Opcode.S2C_HARCON_CREATED, HarconFrames.Created(room, _text)).ConfigureAwait(false);
-        await SendAsync(st, Opcode.S2C_HARCON_MEMBER_ADDED, HarconFrames.Member(room.Master!, _text)).ConfigureAwait(false);
         await SendLobbyAsync(Opcode.S2C_HARCON_ROOM_ADDED, HarconFrames.Room(room, _text), st).ConfigureAwait(false);
         Log(st, $"creates room {room.Key} (stage {stage.Id}, {room.MaxPlayers} players)");
         await WarpAsync(st, (ushort)stage.WaitMap, null).ConfigureAwait(false);
@@ -186,7 +186,7 @@ internal sealed class HarconController : IDisposable
             await SendAsync(st, Opcode.S2C_HARCON_JOIN_ERROR, new[] { refused }).ConfigureAwait(false);
             return;
         }
-        var joiner = new HarconMember(character.CharacterId, st.PlayerEntityId, character.Name);
+        var joiner = new HarconMember(character.CharacterId, st.PlayerEntityId, character.Name, (ushort)level);
         var room = _lobby.Join(key, joiner);
         await SendAsync(st, Opcode.S2C_HARCON_ROOM_INFO, HarconFrames.Room(room, _text)).ConfigureAwait(false);
         foreach (var member in room.Members) await SendAsync(st, Opcode.S2C_HARCON_MEMBER_ADDED, HarconFrames.Member(member, _text)).ConfigureAwait(false);
@@ -285,6 +285,7 @@ internal sealed class HarconController : IDisposable
         }
         st.Upgrade = UpgradeWindow.HarconShop;
         st.HarconShopNpc = npcType;
+        await SendAsync(st, Opcode.C2S_TRIGGER_75, Array.Empty<byte>()).ConfigureAwait(false);
         await SendAsync(st, (Opcode)HarconFrames.ShopOpened, HarconFrames.ShopOpen((ushort)npcType)).ConfigureAwait(false);
         Log(st, $"opens the Harcon coin shop of NPC {npcType}");
         return NpcScript.Silent;
@@ -383,7 +384,13 @@ internal sealed class HarconController : IDisposable
         var tables = _tables();
         var harconMap = tables.Stages.Values.Any(stage => stage.WaitMap == st.MapId || stage.PlayMap == st.MapId);
         if (st.HarconLobbyMap is { } lobbyMap && lobbyMap != st.MapId && !harconMap) st.HarconLobbyMap = null;
+        if (tables.Stages.Values.Any(stage => stage.WaitMap == st.MapId))
+        {
+            var held = _store.Load(character.CharacterId);
+            await SendAsync(st, Opcode.S2C_HARCON_LOBBY, HarconFrames.Lobby(0, held.Coins, held.Cleared.Order().ToArray())).ConfigureAwait(false);
+        }
         if (_lobby.RoomOf(character.CharacterId) is not { } room) return;
+        room.Member(character.CharacterId)?.Bind(st.PlayerEntityId);
         if (room.InProgress && _runs.TryGetValue(room.Key, out var state))
         {
             if (st.MapId == room.Stage.PlayMap)
@@ -417,6 +424,13 @@ internal sealed class HarconController : IDisposable
         if (_runs.TryGetValue(room.Key, out var state)) state.Run.Left(character.CharacterId);
         await RemoveAsync(null, character.CharacterId, null, Array.Empty<byte>()).ConfigureAwait(false);
     });
+
+    public async Task HandedOffAsync(InGameSessionState st, TimeSpan grace)
+    {
+        if (st.Character is not { } character || _lobby.RoomOf(character.CharacterId) is null) return;
+        await Task.Delay(grace).ConfigureAwait(false);
+        if (Session(character.CharacterId) is null) await LeftAsync(st).ConfigureAwait(false);
+    }
 
     public Task TickAsync(DateTimeOffset now) => Locked(async () =>
     {

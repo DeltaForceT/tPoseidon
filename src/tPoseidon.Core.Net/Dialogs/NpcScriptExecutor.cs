@@ -109,6 +109,8 @@ public interface IJobQuests
 
     int CheckSkillQuest(int questId, int skillId);
 
+    string? QuestMessageOf(SkillShopEntity shop, int index);
+
     Task<int> AcceptAsync(SkillShopEntity shop, IReadOnlyList<ushort> args, Func<ushort, CancellationToken, Task> sendPage, CancellationToken ct);
 
     Task<int> CompleteAsync(SkillShopEntity shop, IReadOnlyList<ushort> args, Func<ushort, CancellationToken, Task> sendPage, CancellationToken ct);
@@ -747,6 +749,16 @@ public sealed partial class NpcScriptExecutor : IJobQuests
     }
 
     public Task<int> CheckAsync(SkillShopEntity shop, int tier, CancellationToken ct) => Task.FromResult(CheckJobQuest(shop, tier));
+
+    public string? QuestMessageOf(SkillShopEntity shop, int index)
+    {
+        ArgumentNullException.ThrowIfNull(shop);
+        if (index < NpcMessages.QuestBase || index >= NpcMessages.MonsterBase) return null;
+        if (CharacterId is not ulong characterId || QuestOf(shop.JobQuestId, QuestTypes.JobChange) is not { } quest) return null;
+        var count = _stores.Quests.FindActive(characterId, QuestTypes.JobChange, shop.JobQuestId, monsterId: 0)?.CompletionCount ?? 1;
+        var text = QuestRules.ResultRow(_catalogs.QuestResults.RowsOf(quest.ResultTable), count)?.Message(index - NpcMessages.QuestBase);
+        return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
 
     public int CheckSkillQuest(int questId, int skillId) =>
         SkillQuestRules.Check(

@@ -78,17 +78,21 @@ public enum HarconRoomState
 
 public sealed class HarconMember
 {
-    public HarconMember(ulong characterId, ushort entityId, string name)
+    public HarconMember(ulong characterId, ushort entityId, string name, ushort level = 0)
     {
         CharacterId = characterId;
         EntityId = entityId;
         Name = name ?? throw new ArgumentNullException(nameof(name));
+        Level = level;
     }
 
     public ulong CharacterId { get; }
-    public ushort EntityId { get; }
+    public ushort EntityId { get; private set; }
+    public ushort Level { get; }
     public string Name { get; }
     public byte ReadyState { get; set; }
+
+    public void Bind(ushort entityId) => EntityId = entityId;
 }
 
 public sealed class HarconRoom

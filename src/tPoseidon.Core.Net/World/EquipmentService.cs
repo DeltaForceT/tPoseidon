@@ -69,7 +69,7 @@ public sealed class EquipmentService
         }
 
         var worn = EquipmentRules.WornBy(_items, _catalog, character.CharacterId);
-        if (EquipmentRules.CheckEquip(definition, item, slot, worn, character.Level, (int)character.Species, _player.StatTotals(), _player.HoldsAbility) is { } refusal)
+        if (EquipmentRules.CheckEquip(definition, item, slot, worn, character.Level, tPoseidon.Core.Game.Characters.LookChangeRules.BodyTypeOf(character), _player.StatTotals(), _player.HoldsAbility) is { } refusal)
         {
             await RefuseEquipAsync(wireUid, slot, $"item {item.ItemIndex}: {refusal}", ct).ConfigureAwait(false);
             return;
@@ -204,7 +204,7 @@ public sealed class EquipmentService
         }
 
         var worn = EquipmentRules.WornBy(_items, _catalog, character.CharacterId);
-        if (EquipmentRules.CheckEquipCommon(definition, item, worn, character.Level, (int)character.Species, _player.StatTotals()) is { } refusal)
+        if (EquipmentRules.CheckEquipCommon(definition, item, worn, character.Level, tPoseidon.Core.Game.Characters.LookChangeRules.BodyTypeOf(character), _player.StatTotals()) is { } refusal)
         {
             await RefuseCommonEquipAsync(wireUid, $"item {item.ItemIndex}: {refusal}", ct).ConfigureAwait(false);
             return;

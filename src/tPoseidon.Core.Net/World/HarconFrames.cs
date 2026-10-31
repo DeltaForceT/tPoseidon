@@ -69,7 +69,7 @@ public static class HarconFrames
         ArgumentNullException.ThrowIfNull(member);
         var w = new PacketWriter(MemberRecordSize);
         WriteFixed(w, member.Name, MemberNameSize, text);
-        w.WriteUInt16(member.EntityId);
+        w.WriteUInt16(member.Level);
         w.WriteByte(member.ReadyState);
         return w.ToArray();
     }

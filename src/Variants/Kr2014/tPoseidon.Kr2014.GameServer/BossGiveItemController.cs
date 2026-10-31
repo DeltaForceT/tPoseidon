@@ -13,16 +13,18 @@ internal sealed class BossGiveItemController
     private readonly IItemParamLookup _catalog;
     private readonly int _bagCapacity;
     private readonly string _logTag;
+    private readonly Func<MonsterEntity, byte[], Task> _announce;
     private readonly Random _rng = new();
 
     public BossGiveItemController(
-        BossGiveItemRoller roller, IItemStore items, ItemManager itemManager, IItemParamLookup catalog, int bagCapacity, string logTag)
+        BossGiveItemRoller roller, IItemStore items, ItemManager itemManager, IItemParamLookup catalog, int bagCapacity, Func<MonsterEntity, byte[], Task> announce, string logTag)
     {
         _roller = roller ?? throw new ArgumentNullException(nameof(roller));
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _itemManager = itemManager ?? throw new ArgumentNullException(nameof(itemManager));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _bagCapacity = bagCapacity;
+        _announce = announce ?? throw new ArgumentNullException(nameof(announce));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
 
@@ -46,6 +48,7 @@ internal sealed class BossGiveItemController
             byte randKey;
             lock (_rng) randKey = (byte)_rng.Next(1, 256);
             await player.SendFrameAsync(Opcode.S2C_ITEM_ADDED, QuestResultFrames.ItemOperations(new[] { operation }), randKey, ct).ConfigureAwait(false);
+            await _announce(monster, BossGiveItemFrames.Given(monster.EntityId, (uint)itemId, player.PlayerEntityId)).ConfigureAwait(false);
             Console.WriteLine($"{_logTag} [boss-give] {character.Name} gets item {itemId} for damaging boss {monster.MonsterParamId}");
         }
     }

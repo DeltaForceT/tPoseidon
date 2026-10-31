@@ -44,9 +44,10 @@ public static class EnterWorldBatchSynthesizer
         uint profileFlags = tPoseidon.Core.Game.Progression.ProfileViewRules.DefaultFlags,
         byte[]? bossKillWindow = null,
         byte[]? coverLetter = null,
+        uint gameClock = 0,
         CancellationToken ct = default)
     {
-        await SendPhase1Async(ctx, character, entityId, questLists, itemStore, skillStore, rates, itemOptions, timedItems, titles, fortune, fortuneTitleId, abilityPercents, petBag, profileFlags, bossKillWindow, coverLetter, ct).ConfigureAwait(false);
+        await SendPhase1Async(ctx, character, entityId, questLists, itemStore, skillStore, rates, itemOptions, timedItems, titles, fortune, fortuneTitleId, abilityPercents, petBag, profileFlags, bossKillWindow, coverLetter, gameClock, ct).ConfigureAwait(false);
         await SendPhase2Async(
             ctx, character, entityId, dialogService,
             worldEntities, characterInfoCatalog,
@@ -71,6 +72,7 @@ public static class EnterWorldBatchSynthesizer
         uint profileFlags = tPoseidon.Core.Game.Progression.ProfileViewRules.DefaultFlags,
         byte[]? bossKillWindow = null,
         byte[]? coverLetter = null,
+        uint gameClock = 0,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ctx);
@@ -81,7 +83,7 @@ public static class EnterWorldBatchSynthesizer
         await SendFrameAsync(ctx, Opcode.GAME_CHAR_DATA, randKey: 0x8A, charData.EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_BATCH_HEADER, randKey: 0x59,
-            new GameBatchHeaderPacket { EntityIdMirror = entityId, SpawnXTbd = (ushort)character.PositionX, SpawnYTbd = (ushort)character.PositionY }.EncodePayload(), ct);
+            new GameBatchHeaderPacket { ClockMilliseconds = gameClock, EntityIdMirror = entityId, SpawnXTbd = (ushort)character.PositionX, SpawnYTbd = (ushort)character.PositionY }.EncodePayload(), ct);
 
         var itemList = BuildItemListFromStore(character, itemStore, itemOptions);
         await SendFrameAsync(ctx, Opcode.GAME_ENTITY_LIST, randKey: 0x76, itemList.EncodePayload(), ct);

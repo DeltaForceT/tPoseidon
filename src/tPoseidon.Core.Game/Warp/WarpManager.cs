@@ -4,6 +4,8 @@ namespace tPoseidon.Core.Game.Warp;
 
 public sealed class WarpManager
 {
+    public static readonly TimeSpan DefaultTimeToLive = TimeSpan.FromSeconds(30);
+
     private readonly ConcurrentDictionary<uint, PendingWarpEntry> _byToken = new();
     private readonly ConcurrentDictionary<ulong, DateTime> _landingClaims = new();
     private readonly TimeSpan _ttl;
@@ -11,7 +13,7 @@ public sealed class WarpManager
 
     public WarpManager(TimeSpan? ttl = null)
     {
-        _ttl = ttl ?? TimeSpan.FromSeconds(30);
+        _ttl = ttl ?? DefaultTimeToLive;
     }
 
     public bool TryBegin(PendingWarp warp, out uint token)

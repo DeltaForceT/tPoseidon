@@ -9,17 +9,21 @@
   <a href="https://github.com/DeltaForceT/tPoseidon/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/DeltaForceT/tPoseidon?include_prereleases&label=release"></a>
   <a href="LICENSE"><img alt="License: beta license" src="https://img.shields.io/badge/license-beta%20license-blue"></a>
   <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-lightgrey">
+  <a href="https://discord.gg/RAfSMmBm7"><img alt="Discord" src="https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/DeltaForceT/tPoseidon/releases">Download</a> &middot;
+  <a href="https://github.com/DeltaForceT/tPoseidon/releases"><strong>Download</strong></a> &middot;
+  <a href="https://github.com/DeltaForceT/tPoseidon/wiki"><strong>Wiki (guides)</strong></a> &middot;
+  <a href="https://discord.gg/RAfSMmBm7"><strong>Discord</strong></a> &middot;
   <a href="#getting-started">Getting started</a> &middot;
   <a href="docs/beta/SYSTEMS.md">Systems status</a> &middot;
-  <a href="https://github.com/DeltaForceT/tPoseidon/issues/new?template=bug_report.yml">Report a bug</a> &middot;
-  <a href="https://github.com/DeltaForceT/tPoseidon/discussions">Discussions</a>
+  <a href="https://github.com/DeltaForceT/tPoseidon/issues/new?template=bug_report.yml">Report a bug</a>
 </p>
 
-tPoseidon runs every server the game needs (login, channel, master, system, game) on your own machine, so you can play again and host for your friends. We aim for the original game: same screens, same flow, same mechanics, 1x rates out of the box.
+tPoseidon runs every server the game needs (login, channel, master, system, game) on your own machine, so you can play again and host for your friends. I aim for the original game: same screens, same flow, same mechanics, 1x rates out of the box.
+
+**New here?** The [wiki](https://github.com/DeltaForceT/tPoseidon/wiki) has step-by-step guides: installing, hosting for friends, accounts, the launcher, GM tools, backups and troubleshooting. Questions: the [Discord](https://discord.gg/RAfSMmBm7).
 
 ## Beta rules
 
@@ -28,22 +32,33 @@ tPoseidon is in beta. These are the rules that matter. The full text is in [BETA
 - **Downloads, bug reports and suggestions only.** During the beta the project offers the release packages to download and takes bug reports and suggestions. Code contributions and forks open at 1.0.
 - **No forks and no redistribution of modified copies during the beta.** Download it, run it, host it for yourself and your community. Don't publish modified builds, forks or other emulators based on it, and don't re-upload the packages.
 - **No wipes.** Your accounts and characters live in your own database. Updates migrate it. Back up before every update.
-- **Bring your own KR 2014 client.** We don't ship it. Never share client or game files in this project's spaces.
-- **Put your version in every bug report**, for example `0.75.2-beta`. `tposeidon status` prints it.
+- **Bring your own KR 2014 client.** I don't ship it. Never share client or game files in this project's spaces.
+- **Put your version in every bug report**, for example `0.75.3-beta`. `tposeidon status` prints it.
 - **Report security problems privately.** See [SECURITY.md](SECURITY.md). Don't post them in issues or on the forum.
 - **Be respectful.** Everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## Where we are
+## Where it stands
 
-You can make a character and play through a good part of the game, but you will hit bugs and missing systems. [docs/beta/SYSTEMS.md](docs/beta/SYSTEMS.md) lists what works, what is built but needs testing, and what isn't built yet. Read it before you start. When something breaks, [How to report a bug](docs/beta/how-to-report-a-bug.md) explains what we need from you.
+You can make a character and play through a good part of the game, but you will hit bugs and missing systems. [docs/beta/SYSTEMS.md](docs/beta/SYSTEMS.md) lists what works, what is built but needs testing, and what isn't built yet. Read it before you start. When something breaks, [How to report a bug](docs/beta/how-to-report-a-bug.md) explains what I need from you.
 
 ## Requirements
 
-- **PostgreSQL 14 or newer**, installed by you. It holds accounts and characters. [docs/install/postgresql.md](docs/install/postgresql.md) has short steps for Windows, Linux, macOS and Docker.
-- **The KR 2014 game client**, your own copy. tPoseidon reads the game data it needs from your client folder while it runs. With the language on Automatic, Play looks at the client's own game data (`data/libconfig_eng.dat` if the client has it, otherwise `data/libconfig.dat`) and starts the client in Korean mode when that data is Korean (the original client) and in English mode when it is translated. When both files exist and the English one is not Korean, English mode wins, so a client whose `libconfig.dat` is Korean and whose `libconfig_eng.dat` is English runs in English with the English text. The **Client language** choice (the panel's settings menu, the "..." menu and the quick-access bubble, all the same list) sets it yourself. English mode loads `data/libconfig_eng.dat`, `data/libconfig_eng.idx` and `data/tahoma12.fnt`; Korean mode loads `data/libconfig.dat` and `data/libconfig.idx`. You do not need both sets: when the mode that is chosen lacks its files, Play adds them as copies of the other set (`libconfig.dat`, `libconfig.idx` and `gulim12.fnt` for English mode; `libconfig_eng.dat` and `libconfig_eng.idx` for Korean mode). The servers build their world data and read their NPC, monster and quest text from the very file the client loads in that mode, and rebuild it when that file changes. Play writes which mode it chose, and why, to the panel log or the console. Nothing is downloaded, and files the client already has are never replaced, with one exception: the client data has no map rows for the Shadow Sanctuary and Harcon Sanctuary maps (549 to 556 and 562 to 564), so setup and Play add exactly those 22 rows (11 in `MapInfoEx`, 11 in `MonsterScenario`) to the libconfig file of the chosen mode and rewrite its index. The first time, the original `.dat` and `.idx` are kept next to them as `.tposeidon-original`; a client that already has the rows is not touched, and nothing is changed while the client is running. The servers rebuild their world data once, because that file changed. The client also has an old Korean server address built in, which it always connects to; Play writes your server's address into both of the client's built-in addresses in your own `Trickster.bin` before starting it and keeps the original next to it as `Trickster.bin.tposeidon-original`. The client always uses lobby port 9980. Setup scans the client folder as soon as you choose it and lists what is missing or wrong (the client program, the libconfig set, the charts, the map folder, the address, the world data the server builds from the maps and the NPC tables); a **Fix** button repairs what has a known fix and keeps a backup of everything it changes. Run it any time with `tposeidon client check`, and `tposeidon client fix` (add `--restore` to put the originals back).
-- Nothing else. The release packages carry their own .NET runtime.
+| You need | Notes |
+|---|---|
+| **Windows 10 or 11, 64-bit** | Linux and macOS packages come with version 1.0, once I have tested them. |
+| **PostgreSQL 14 or newer** | Installed by you, or run in Docker. It holds the accounts and characters. Steps: [Installing](https://github.com/DeltaForceT/tPoseidon/wiki/Installing). |
+| **Your own KR 2014 client (2014.01.28)** | Not included, and never shared here. Every player uses their own copy. |
 
-Releases are for Windows (x64) only. Linux and macOS packages will come with version 1.0, after we have tested them ourselves.
+Nothing else: the release packages carry their own .NET runtime.
+
+**What tPoseidon does with your client folder**
+
+- Reads the game data it needs from it. Nothing is downloaded.
+- Points the client at your server when you press Play, and keeps the original file next to it (`.tposeidon-original`).
+- Picks Korean or English mode from the client's own data. You can change it with **Client language** in the panel.
+- Checks the folder during setup and offers a **Fix** for what the server needs (with backups and **Restore originals**).
+
+The details are in the wiki: [Client check](https://github.com/DeltaForceT/tPoseidon/wiki/Client-check) and [Playing and the launcher](https://github.com/DeltaForceT/tPoseidon/wiki/Playing-and-the-launcher).
 
 ## Getting started
 
@@ -148,11 +163,22 @@ You can add NPCs, quests and events without touching C#. Scripts are plain text 
 
 The [scripting reference](docs/scripting/README.md) has the language, and [four examples](docs/scripting/examples) show a greeter, a daily login reward, a fetch quest and a GM event.
 
+## Community
+
+Join the tPoseidon Discord: **https://discord.gg/RAfSMmBm7**
+
+- `#announcements`: every new release, posted automatically.
+- `#help-setup`: questions about installing and hosting.
+- `#bug-reports`: report a problem with the template in the channel. Complete reports are copied to the GitHub issue tracker, and the bot tells you in your thread when the fix is out.
+- `#suggestions`, `#general` and `#screenshots`.
+
+Game and server files are not allowed there, or anywhere else in this project's spaces: posts that share or ask for them are removed.
+
 ## Reporting bugs and ideas
 
-- **Bug:** use the [Bug report form](https://github.com/DeltaForceT/tPoseidon/issues/new?template=bug_report.yml), or post on the forum with [our template](docs/beta/forum-bug-report-template.md). Include your version, your system, the steps and the server logs.
+- **Bug:** use the [Bug report form](https://github.com/DeltaForceT/tPoseidon/issues/new?template=bug_report.yml), or post on the forum with [the forum template](docs/beta/forum-bug-report-template.md). Include your version, your system, the steps and the server logs.
 - **Idea:** use the [Feature request form](https://github.com/DeltaForceT/tPoseidon/issues/new?template=feature_request.yml).
-- **Stuck on setup?** Ask on the forum or in [Discussions](https://github.com/DeltaForceT/tPoseidon/discussions). The issue tracker is for bugs.
+- **Stuck on setup?** Ask in the `#help-setup` channel on [Discord](https://discord.gg/RAfSMmBm7), on the forum or in [Discussions](https://github.com/DeltaForceT/tPoseidon/discussions). The issue tracker is for bugs.
 - **Security problem?** See [SECURITY.md](SECURITY.md).
 
 ## Building from source
@@ -167,10 +193,10 @@ During the beta the source is here to read and build, and to prepare bug reports
 
 ## How it was made
 
-tPoseidon was built through reverse engineering and our own packet captures. No original code, binaries or game files are included in this repository or in the release packages.
+tPoseidon was built through reverse engineering and my own packet captures. No original code, binaries or game files are included in this repository or in the release packages.
 
 ## License
 
-During the beta, tPoseidon uses its own [beta license](LICENSE). It's free to download, run and host for yourself and your community. What you can't do yet is publish modified versions, forks or other emulators built from it, or re-upload the source or the packages somewhere else. We plan to move to an open-source license (AGPL) at 1.0.
+During the beta, tPoseidon uses its own [beta license](LICENSE). It's free to download, run and host for yourself and your community. What you can't do yet is publish modified versions, forks or other emulators built from it, or re-upload the source or the packages somewhere else. I plan to move to an open-source license (AGPL) at 1.0.
 
 Trickster Online, its client, art, music, data and trademarks belong to their owners. They aren't part of this project and the license doesn't cover them; see [NOTICE](NOTICE). tPoseidon is a fan project and has nothing to do with the game's owners.

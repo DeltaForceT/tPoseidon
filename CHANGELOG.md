@@ -2,6 +2,33 @@
 
 Every release is listed here, newest first. Versions look like `0.MINOR.PATCH-beta`; [BETA.md](docs/beta/BETA.md) explains what the numbers mean. Back up your database before every update. A release that changes the database says so at the top.
 
+## 0.75.3-beta
+
+No database change: install it over 0.75.x as usual. Fixes for the problems reported on GitHub (issue numbers in brackets), the Discord server, and a wiki with step-by-step guides.
+
+### Fixed
+
+- Time of day: the day clock the client runs is now the server's game clock, sent in the first world packet (0x00E6) and in the map change packet (0x009A), where the server used to send a constant and a random token. A map change no longer jumps the time (it showed about 7:05 PM), and the night the player sees is the night the server tests, so quests that need the night phase (CheckDailyValue) can progress when the screen is dark. (#24)
+- Job change: the character list now shows the changed job (the type of the first job change is sent in the list entry instead of always the base job), and the job that NPCs, the skill master and the spawn use is the highest job the character holds, as the original server sets it. Before, a changed character looked like its base job after a relog, was refused by the Warrior master as not being the base job, and could turn invisible after a map change. (#18, #26)
+- Equipment bought or received for a changed job (the cape of the first job change, for example) can be worn: the class check of an item now uses the character's current type (10 to 24 after a job change), as the original does, instead of the base type chosen at creation. (#24)
+- Bosses with kill items (Kaboom and the Growth Badge, for example): the item given from the boss is now announced as the original does, with S2C 0x0256 (boss, item, receiver) sent to the players around the boss, so the client shows the item received from the boss instead of only a line in the chat window. (#19)
+- Harcon Defence: a new room no longer closes while the host is moved to the waiting room. The warp to another map hands the player to a new connection, and the old connection used to take the player out of the room as if he had left; a hand-off now keeps the player in the room (it is released only if he does not arrive within the warp time). (#6)
+- Harcon Defence: the room member list shows the host once, and the number beside a member's name is the character level instead of the entity id. (#7)
+- Harcon Defence: the coin shop in the waiting room shows the character's coins and accepts purchases; the coin balance is sent when the player arrives on a waiting map, not only when the lobby is opened. (#8)
+- Harcon Defence: choosing the coin shop closes the NPC dialog before the shop window opens, as the other NPC windows do. (#16)
+- Delay on attacking, picking up and drilling: the servers now send every packet at once (TCP no-delay) instead of letting the system hold small packets back until the client acknowledges the previous ones, which stretched replies made of many small packets to a second or more on real networks. Candidate fix, not yet confirmed by the reporter (#5).
+- Aggressive monsters now attack: every half second an aggressive monster looks for the nearest player inside its view range and goes for them, as the original's aggressive attack strategy does; before, the server only noted the target in its log (#14).
+- Area skills such as Quake Hammer and Hammer Wheel no longer hit shadow-world monsters unless the player has the Third Eye (mind's eye) effect, as the original's area target collection requires (#15).
+- Quake Hammer shows its damage numbers and hit effects: I now close the cast block (header and end marker) as soon as it is sent and send each monster's hit outside any block, as the original's skill library does (the 1530 cast block holds only its header, the hits come from the per-target 1531 effect through the normal hit message). (#11)
+- Day and night music: Rose Garden Field 1 and the other maps play the music of the current time of day, because the client now gets the shared game clock described above when it enters the world and when it changes map (#17).
+- Logging out on a map that returns the character (zone type 6 or 8, class 3, or map option 4 in the map table) now saves the character on the return map, so the next login starts there instead of on the same map (#10).
+- Shift + click and a click while sitting now turn the character toward the clicked point without moving: the server answers the client's face request (0x0041) with the same turn frame to the player and the players around, as the original does (#12).
+- Attacking a moving monster: the character no longer keeps chasing until the monster stops. While a chase leg is running I now check each tick whether the monster is inside the weapon's attack range at its current position, and if so I stop the leg with a stop packet at the character's real position and start the swing, instead of waiting for the leg to end at the point where the monster used to stand. (#13)
+- Kaboom and the other multi-bar bosses show all their HP bars: the target info packet (S2C 0x0121, sent when the player clicks a monster) now carries the bar count and the boss flag, which the client needs to switch to its boss HP bar. Before, I sent zeros in those two fields, so the client opened the normal one-bar HP bar and the later HP updates (0x011E) could not change it. (#20)
+- Job change quests: after the quest is completed the master now shows the quest's own message with the Advance button (the quest result table's message, which the client asks for as page q4), so the job change window opens straight away. Before, I refused those pages, so the dialog closed and I had to talk to the master again. The accept message (q0) is shown the same way. (#24)
+- Movement: the walk and run speed I simulate for a character is now exactly the speed the client draws. The client moves at the announced speed byte times 4, so I now announce trunc(speed / 4), as the original game server does, from the real speed (items and effects included), and I walk the character on the server at that same value instead of 115 while the client drew 112.
+- `tposeidon start` no longer reports that the lobby did not open its port on Windows builds where the system's listener list omits it: when the list does not show the port, the check now also tries to connect to it (#9).
+
 ## 0.75.2-beta
 
 No database change: install over 0.75.0 as usual. Fixes for what 0.75 added and for reported problems, and three tools for server owners that players asked for.

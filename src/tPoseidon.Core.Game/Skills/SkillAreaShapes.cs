@@ -45,6 +45,7 @@ public sealed record AreaShape(AreaCentre Centre, int Limit, AreaTail Tail, Area
     public bool Falloff { get; init; }
     public bool SkipsFlyers { get; init; }
     public bool RestartsOnFirst { get; init; }
+    public bool HitsOutsideBlock { get; init; }
     public SkillHitKind Kind { get; init; } = SkillHitKind.Physical;
     public SkillAreaPower Power { get; init; } = SkillAreaPower.AttackTimesRatio;
     public int Element { get; init; }
@@ -64,7 +65,7 @@ public enum SkillAreaPower
     CarriedWeight,
 }
 
-public readonly record struct AreaCandidate(ushort EntityId, int X, int Y, bool IsDead, int MonsterType, ushort OwnerEntityId);
+public readonly record struct AreaCandidate(ushort EntityId, int X, int Y, bool IsDead, int MonsterType, ushort OwnerEntityId, bool IsShadow = false);
 
 public static class SkillAreaShapes
 {
@@ -164,7 +165,7 @@ public static class SkillAreaShapes
         },
         [QuakeHammer] = new(AreaCentre.Caster, PolarBearAreaLimit, AreaTail.None, AreaTm.Flat)
         {
-            LimitColumn = KillNumColumn, Power = SkillAreaPower.AttackAndDigRatio,
+            LimitColumn = KillNumColumn, Power = SkillAreaPower.AttackAndDigRatio, HitsOutsideBlock = true,
         },
         [HighSpeedDrop] = new(AreaCentre.Caster, PolarBearAreaLimit, AreaTail.None, AreaTm.Flat) { LimitColumn = KillNumColumn },
         [1261] = new(AreaCentre.Caster, 4, AreaTail.CountThenIds, AreaTm.Flat)
@@ -209,7 +210,8 @@ public static class SkillAreaShapes
         ushort casterEntityId,
         (int X, int Y) casterAt,
         AreaCandidate? selected,
-        IEnumerable<AreaCandidate> candidates)
+        IEnumerable<AreaCandidate> candidates,
+        bool casterSeesShadow = true)
     {
         ArgumentNullException.ThrowIfNull(shape);
         ArgumentNullException.ThrowIfNull(action);
@@ -225,7 +227,7 @@ public static class SkillAreaShapes
         {
             if (shape.Target == AreaTarget.AlwaysFirst && candidate.EntityId == selected?.EntityId) continue;
             if (shape.Target == AreaTarget.ExtraNearTarget && candidate.EntityId == selected?.EntityId) continue;
-            if (!Qualifies(shape, candidate, casterEntityId)) continue;
+            if (!Qualifies(shape, candidate, casterEntityId) || candidate.IsShadow && !casterSeesShadow) continue;
             var distanceFrom = shape.ConeFromCaster ? casterAt : centre;
             if (radius < SkillAreaRules.Distance(distanceFrom.X, distanceFrom.Y, candidate.X, candidate.Y)) continue;
             if (victims.Count >= limit) break;

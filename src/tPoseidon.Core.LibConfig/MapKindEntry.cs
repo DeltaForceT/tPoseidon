@@ -9,6 +9,9 @@ public readonly record struct MapKindEntry(int Id, int Type, int Class, int Opti
     public const int NoReturnClass = 3;
     public const int NoReturnOnArrivalClass = 5;
 
+    public const int LogoutToReturnMapOption = 0x4;
+    public static readonly int[] LogoutToReturnMapTypes = { 6, 8 };
+
     public const int NoRebirthItemOption = 0x20;
 
     public const int NoLoverMoveClass = 2;
@@ -19,6 +22,9 @@ public readonly record struct MapKindEntry(int Id, int Type, int Class, int Opti
     public bool IsReturnMapAtLogin => (Type == TownType || Type == SecondReturnType) && Class != NoReturnClass;
 
     public bool IsReturnMapOnArrival => IsReturnMapAtLogin && Class != NoReturnOnArrivalClass;
+
+    public bool LogsOutToReturnMap =>
+        Array.IndexOf(LogoutToReturnMapTypes, Type) >= 0 || Class == NoReturnClass || (Option & LogoutToReturnMapOption) != 0;
 
     public bool IsPerPlayerInstance => ParallelZoneType == PerPlayerInstanceZoneType;
 

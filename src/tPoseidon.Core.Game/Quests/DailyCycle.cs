@@ -28,6 +28,13 @@ public sealed class DailyCycle
 
     public int Phases => _phaseEnds.Length;
 
+    public uint ClockMilliseconds(DateTimeOffset now)
+    {
+        if (_cycleMinutes <= 0) return 0;
+        var cycleMs = (long)(_cycleMinutes * MillisecondsPerMinute);
+        return (uint)(now.ToUnixTimeMilliseconds() % cycleMs);
+    }
+
     public int? PhaseAt(DateTimeOffset now)
     {
         if (_cycleMinutes <= 0) return null;

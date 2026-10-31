@@ -9,19 +9,19 @@ public sealed class MobTargetInfoPacket
     public const int PayloadSize = 13;
 
     public required ushort EntityId { get; init; }
-    public required uint FieldAt02Tbd { get; init; }
-    public required uint FieldAt06Tbd { get; init; }
-    public ushort FieldAt0ATbd { get; init; }
-    public byte FieldAt0CTbd { get; init; }
+    public required uint Hp { get; init; }
+    public required uint Mp { get; init; }
+    public ushort HpBars { get; init; }
+    public byte BossFlag { get; init; }
 
     public byte[] EncodePayload()
     {
         var buf = new byte[PayloadSize];
         BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(0, 2), EntityId);
-        BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(2, 4), FieldAt02Tbd);
-        BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(6, 4), FieldAt06Tbd);
-        BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(10, 2), FieldAt0ATbd);
-        buf[12] = FieldAt0CTbd;
+        BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(2, 4), Hp);
+        BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(6, 4), Mp);
+        BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(10, 2), HpBars);
+        buf[12] = BossFlag;
         return buf;
     }
 
@@ -35,10 +35,10 @@ public sealed class MobTargetInfoPacket
         return new MobTargetInfoPacket
         {
             EntityId = BinaryPrimitives.ReadUInt16LittleEndian(payload[0..2]),
-            FieldAt02Tbd = BinaryPrimitives.ReadUInt32LittleEndian(payload[2..6]),
-            FieldAt06Tbd = BinaryPrimitives.ReadUInt32LittleEndian(payload[6..10]),
-            FieldAt0ATbd = BinaryPrimitives.ReadUInt16LittleEndian(payload[10..12]),
-            FieldAt0CTbd = payload[12],
+            Hp = BinaryPrimitives.ReadUInt32LittleEndian(payload[2..6]),
+            Mp = BinaryPrimitives.ReadUInt32LittleEndian(payload[6..10]),
+            HpBars = BinaryPrimitives.ReadUInt16LittleEndian(payload[10..12]),
+            BossFlag = payload[12],
         };
     }
 }

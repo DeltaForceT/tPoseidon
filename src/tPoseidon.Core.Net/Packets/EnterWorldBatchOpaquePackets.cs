@@ -4,8 +4,7 @@ public sealed class GameBatchHeaderPacket
 {
     public const int PayloadSize = 10;
 
-    public ushort Field0Tbd { get; init; } = 0xB397;
-    public ushort Field2Tbd { get; init; } = 0x00FF;
+    public uint ClockMilliseconds { get; init; }
     public ushort EntityIdMirror { get; init; } = 0x2E7E;
     public ushort SpawnXTbd { get; init; } = 0x03B5;
     public ushort SpawnYTbd { get; init; } = 0x08B4;
@@ -13,8 +12,8 @@ public sealed class GameBatchHeaderPacket
     public byte[] EncodePayload()
     {
         var buf = new byte[PayloadSize];
-        WriteU16(buf, 0, Field0Tbd);
-        WriteU16(buf, 2, Field2Tbd);
+        WriteU16(buf, 0, (ushort)(ClockMilliseconds & 0xFFFF));
+        WriteU16(buf, 2, (ushort)(ClockMilliseconds >> 16));
         WriteU16(buf, 4, EntityIdMirror);
         WriteU16(buf, 6, SpawnXTbd);
         WriteU16(buf, 8, SpawnYTbd);

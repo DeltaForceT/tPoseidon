@@ -93,15 +93,17 @@ public static class CharacterListBuilder
 
         WriteUInt16Le(entry, FirstJobSpeciesOffset, (ushort)character.Species);
 
-        var secondJobClass = character.JobTier >= 2
-            ? SpeciesDefaults.SecondJobClassIdForFirstJob(character.Species)
-            : (ushort)0;
+        var secondJobClass = character.Job2 != 0
+            ? character.Type2
+            : character.JobTier >= 2
+                ? SpeciesDefaults.SecondJobClassIdForFirstJob(character.Species)
+                : (ushort)0;
         WriteUInt16Le(entry, SecondJobClassOffset, secondJobClass);
 
         entry[FTypeOffset] = (byte)((byte)character.FType - 1);
         entry[SpeciesMirrorOffset] = (byte)character.Species;
         entry[SecondJobMirrorOffset] = (byte)(secondJobClass & 0xFF);
-        entry[JobTierOffset] = character.JobTier;
+        entry[JobTierOffset] = Math.Max(character.JobTier, character.JobState);
         WriteUInt16Le(entry, HairOffset, character.Hair);
         WriteUInt32Le(entry, MoneyOffset, WireLimits.Int32FieldUnsigned(character.Money));
         WriteUInt16Le(entry, LevelOffset, character.Level);
