@@ -112,12 +112,13 @@ public sealed class FriendServer
     private async Task ChangeGroupAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member) return;
-        var (friendId, groupNum, value) = ReadGroupChange(payload.Span);
-        var changed = groupNum < FriendRules.GroupCount && _friends.SetFriendGroup(member.Character.CharacterId, friendId, groupNum);
+        var (friendId, currentGroup, targetGroup) = FriendFrames.ReadGroupChange(payload.Span);
+        var changed = targetGroup < FriendRules.GroupCount
+            && _friends.SetFriendGroup(member.Character.CharacterId, friendId, (byte)targetGroup);
         await SendAsync(
             ctx,
             changed ? FriendFrames.GroupChanged : FriendFrames.GroupChangeRefused,
-            FriendFrames.GroupChange(friendId, groupNum, changed ? value : FriendFrames.GroupChangeRefusedCode),
+            FriendFrames.GroupChange(friendId, currentGroup, changed ? targetGroup : FriendFrames.GroupChangeRefusedCode),
             ct).ConfigureAwait(false);
     }
 
@@ -475,12 +476,6 @@ public sealed class FriendServer
         await NotifyAsync(target, FriendFrames.MessageDelivered, FriendFrames.MessageFrom(sender, text, _text), ct).ConfigureAwait(false);
         await SendAsync(ctx, FriendFrames.MessageSentTo, FriendFrames.Character(targetId), ct).ConfigureAwait(false);
         MemoSent?.Invoke(sender, targetId);
-    }
-
-    private static (ulong FriendId, byte GroupNum, uint Value) ReadGroupChange(ReadOnlySpan<byte> payload)
-    {
-        var reader = new PacketReader(payload);
-        return (reader.ReadUInt64(), reader.ReadByte(), reader.ReadUInt32());
     }
 
     private (ulong CharacterId, string Text) ReadCharacterAndText(ReadOnlySpan<byte> payload)

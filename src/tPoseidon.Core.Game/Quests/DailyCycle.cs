@@ -4,6 +4,7 @@ public sealed class DailyCycle
 {
     public const string TableName = "DailyTime";
     public const int CheckArgs = 4;
+    public static readonly TimeSpan ResyncInterval = TimeSpan.FromMilliseconds(600000);
 
     private const double MillisecondsPerMinute = 60000.0;
 

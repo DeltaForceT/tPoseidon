@@ -112,13 +112,14 @@ public sealed partial class NpcScriptExecutor
     private async Task<int> WarpGateAsync(bool bySpecies, CancellationToken ct)
     {
         if (_player.Character() is not { } character) return NpcScript.Refused;
+        var job = tPoseidon.Core.Data.OccupationRules.CurrentJobOf(character);
         var room = bySpecies
-            ? WarpGateRules.GuardianRoomOfSpecies(character.JobTier, (int)character.Species)
-            : WarpGateRules.GuardianRoomOfJob(character.JobTier);
+            ? WarpGateRules.GuardianRoomOfSpecies(job, (int)character.Species)
+            : WarpGateRules.GuardianRoomOfJob(job);
         if (room is not int zone || ZoneChangeRequested is not { } move) return NpcCheckRules.Allowed;
         await SendAsync(NpcFunctionFrames.WarpGateClose, Array.Empty<byte>(), ct).ConfigureAwait(false);
         Close();
-        Console.WriteLine($"{_logTag} {_ctx.Remote}   warp gate to the guardian room {zone} (job {character.JobTier}, species {character.Species})");
+        Console.WriteLine($"{_logTag} {_ctx.Remote}   warp gate to the guardian room {zone} (job {job}, species {character.Species})");
         await move(new ZoneChangeRequest((ushort)zone, tPoseidon.Core.Game.Warp.TeleportArrival.ChangeZoneType, null, TimeSpan.Zero), ct).ConfigureAwait(false);
         return NpcScript.Pending;
     }

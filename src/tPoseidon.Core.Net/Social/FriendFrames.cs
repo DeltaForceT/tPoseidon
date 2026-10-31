@@ -257,6 +257,12 @@ public static class FriendFrames
 
     public static byte[] ZoneMoveAnswer(ZoneMoveAnswer answer) => new[] { (byte)answer };
 
+    public static (ulong FriendId, byte CurrentGroup, uint TargetGroup) ReadGroupChange(ReadOnlySpan<byte> payload)
+    {
+        var reader = new PacketReader(payload);
+        return (reader.ReadUInt64(), reader.ReadByte(), reader.ReadUInt32());
+    }
+
     public static byte[] GroupChange(ulong friendCharacterId, byte groupNum, uint value)
     {
         var w = new PacketWriter(13);

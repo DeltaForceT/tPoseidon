@@ -113,6 +113,18 @@ public sealed class ColorOrFlagPacket0325
     public byte[] EncodePayload() => new[] { ByteR, ByteG, ByteB, ByteATbd };
 }
 
+public sealed class ZoneClockPacket
+{
+    public const int PayloadSize = 4;
+
+    public uint ClockMilliseconds { get; init; }
+
+    public byte[] EncodePayload() => BitConverter.GetBytes(ClockMilliseconds);
+
+    public static ZoneClockPacket DecodePayload(ReadOnlySpan<byte> payload) =>
+        new() { ClockMilliseconds = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(payload) };
+}
+
 public sealed class TimestampedSparsePacket0477
 {
     public const int PayloadSize = 20;

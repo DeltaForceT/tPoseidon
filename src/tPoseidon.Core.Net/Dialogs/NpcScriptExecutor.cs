@@ -131,8 +131,8 @@ public static class JobQuestRules
         ArgumentNullException.ThrowIfNull(character);
         return tier switch
         {
-            SecondJobQuest => character.JobState < OccupationRules.SecondJobTier,
-            ThirdJobQuest => character.JobState == OccupationRules.SecondJobTier,
+            SecondJobQuest => character.Job2 == 0,
+            ThirdJobQuest => character.Job2 != 0 && character.Job3 == 0,
             _ => false,
         };
     }

@@ -32,7 +32,7 @@ public sealed class BossLifeCycle
     public void Tick(long nowMs)
     {
         var live = new HashSet<ushort>();
-        foreach (var boss in _monsters.All)
+        foreach (var boss in _monsters.Bosses)
         {
             if (boss.Boss is not { } life || boss.IsDead) continue;
             live.Add(boss.EntityId);

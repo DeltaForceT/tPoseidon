@@ -24,6 +24,48 @@ public static class MeleeApproach
     public static readonly TimeSpan OrderGap = TimeSpan.FromMilliseconds(300);
     public static readonly TimeSpan BackOffGap = TimeSpan.FromMilliseconds(100);
 
+    public const int RandomSideAfterOrders = 2;
+    public const int RandomSideAngles = 6;
+
+    public static bool OrdersFromRandomSide(int ordersSinceInRange) => ordersSinceInRange > RandomSideAfterOrders;
+
+    public static (int X, int Y) RandomSidePoint(CharacterCombatInfo reach, int targetX, int targetY, Random rng)
+    {
+        ArgumentNullException.ThrowIfNull(reach);
+        ArgumentNullException.ThrowIfNull(rng);
+        var (directionX, directionY) = RandomSide(rng);
+        var radius = reach.ApproachRadius;
+        return (targetX + (int)(directionX * radius), targetY + (int)(directionY * radius));
+    }
+
+    private static (double X, double Y) RandomSide(Random rng)
+    {
+        double angle = rng.Next(RandomSideAngles);
+        return (Math.Cos(angle), -Math.Sin(angle));
+    }
+
+    public static bool StopsMidLeg(
+        CharacterCombatInfo reach,
+        int attackerX,
+        int attackerY,
+        int targetX,
+        int targetY)
+    {
+        ArgumentNullException.ThrowIfNull(reach);
+
+        var distanceSquared = SquaredDistance(attackerX, attackerY, targetX, targetY);
+        long max = reach.MaxAttackRange;
+        long min = reach.MinAttackRange;
+        return distanceSquared <= max * max && distanceSquared >= min * min;
+    }
+
+    private static long SquaredDistance(int ax, int ay, int bx, int by)
+    {
+        long dx = ax - bx;
+        long dy = ay - by;
+        return dx * dx + dy * dy;
+    }
+
     public static MeleeApproachDecision Decide(
         CharacterCombatInfo reach,
         int attackerX,
@@ -56,9 +98,7 @@ public static class MeleeApproach
         double directionY;
         if (distanceSquared == 0)
         {
-            var angle = rng.NextDouble() * Math.Tau;
-            directionX = Math.Cos(angle);
-            directionY = Math.Sin(angle);
+            (directionX, directionY) = RandomSide(rng);
         }
         else
         {

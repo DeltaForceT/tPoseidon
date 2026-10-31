@@ -28,6 +28,21 @@ public sealed record MonsterBattleMoved(
     ushort ToY,
     byte MoveType) : MonsterBattleEvent(EntityId);
 
+public enum MonsterBattleReachKind
+{
+    Swing,
+    CloseIn,
+    BackOff,
+}
+
+public readonly record struct MonsterBattleReachSample(
+    ushort EntityId,
+    MonsterBattleReachKind Kind,
+    int Distance,
+    int MinRange,
+    int MaxRange,
+    int AimRadius);
+
 public sealed record MonsterBattleSwung(
     ushort EntityId,
     ushort X,
@@ -122,6 +137,8 @@ public sealed class MonsterBattleCycle
             _fights.Remove(monsterEntityId);
         }
     }
+
+    public Action<MonsterBattleReachSample>? Observer { get; set; }
 
     public MonsterBattleHalted? Engage(MonsterEntity monster, ushort targetEntityId, DateTimeOffset now, TimeSpan? chase = null)
     {
@@ -257,6 +274,7 @@ public sealed class MonsterBattleCycle
                 }
                 if (decision.Kind == MeleeApproachKind.InRange || (backingOff && !canMove))
                 {
+                    fight.OrdersSinceInRange = 0;
                     fight.ChaseBudgetMs = ChaseTimeMs(definition);
                     Swing(monster, fight, definition, reach, target, hpLeftByTarget, now, events);
                     continue;
@@ -266,9 +284,19 @@ public sealed class MonsterBattleCycle
 
                 var gap = backingOff ? MeleeApproach.BackOffGap : MeleeApproach.OrderGap;
                 var moveType = !backingOff && fight.Settled ? MeleeApproach.ChaseMoveType : StoredMoveType;
-                var ordered = canMove
-                    && now - fight.LastOrderAt >= gap
-                    && TryMove(geometry, monster, fight, definition, decision, moveType, backingOff, now, events);
+                var orderDue = canMove && now - fight.LastOrderAt >= gap;
+                if (orderDue)
+                {
+                    fight.LastOrderAt = now;
+                    fight.OrdersSinceInRange++;
+                    if (MeleeApproach.OrdersFromRandomSide(fight.OrdersSinceInRange))
+                    {
+                        var (sideX, sideY) = MeleeApproach.RandomSidePoint(reach, target.X, target.Y, _rng);
+                        decision = decision with { X = sideX, Y = sideY };
+                    }
+                }
+                var ordered = orderDue
+                    && TryMove(Observer, geometry, monster, fight, definition, reach, target, decision, moveType, backingOff, now, events);
                 if (!ordered && !backingOff && !fight.Settled)
                 {
                     Leave(monsterId, MonsterBattleLeaveReason.ApproachRefused, events);
@@ -322,6 +350,11 @@ public sealed class MonsterBattleCycle
         hpLeftByTarget[fight.TargetEntityId] = fatal ? 0 : targetHp - outcome.Damage;
         fight.Settled = true;
         fight.NextSwingAt = now.AddMilliseconds(reach.MonsterSwingDelayMs(definition.DxLv + monster.StatDelta(MonsterStat.Dx)));
+        Observer?.Invoke(new MonsterBattleReachSample(
+            monster.EntityId,
+            MonsterBattleReachKind.Swing,
+            (int)Math.Round(Math.Sqrt(Math.Pow((double)monster.DestinationX - target.X, 2) + Math.Pow((double)monster.DestinationY - target.Y, 2))),
+            reach.MinAttackRange, reach.MaxAttackRange, reach.ApproachRadius));
         events.Add(new MonsterBattleSwung(
             monster.EntityId,
             monster.DestinationX,
@@ -335,16 +368,22 @@ public sealed class MonsterBattleCycle
     }
 
     private static bool TryMove(
+        Action<MonsterBattleReachSample>? observer,
         ZoneGeometry? geometry,
         MonsterEntity monster,
         Fight fight,
         MonsterParamEntry definition,
+        CharacterCombatInfo reach,
+        MonsterBattleTarget target,
         MeleeApproachDecision decision,
         byte moveType,
         bool backingOff,
         DateTimeOffset now,
         List<MonsterBattleEvent> events)
     {
+        var gapX = (double)monster.DestinationX - target.X;
+        var gapY = (double)monster.DestinationY - target.Y;
+        var distance = (int)Math.Round(Math.Sqrt(gapX * gapX + gapY * gapY));
         var effectiveType = MeleeApproach.EffectiveMoveType(moveType);
         var walkSpeed = monster.WalkSpeedOf(definition.WalkSpeed);
         var runSpeed = monster.RunSpeedOf(definition.RunSpeed);
@@ -365,10 +404,13 @@ public sealed class MonsterBattleCycle
         }
         var (fromX, fromY) = monster.MoveAlong(route.Points, now, travelMs);
 
-        fight.LastOrderAt = now;
         fight.MoveEndsAt = now.AddMilliseconds(travelMs);
         fight.SettlesOnArrival = backingOff;
         events.Add(new MonsterBattleMoved(monster.EntityId, fromX, fromY, destinationX, destinationY, moveType));
+        observer?.Invoke(new MonsterBattleReachSample(
+            monster.EntityId,
+            backingOff ? MonsterBattleReachKind.BackOff : MonsterBattleReachKind.CloseIn,
+            distance, reach.MinAttackRange, reach.MaxAttackRange, reach.ApproachRadius));
         return true;
     }
 
@@ -387,6 +429,7 @@ public sealed class MonsterBattleCycle
         public DateTimeOffset NextSwingAt;
         public DateTimeOffset MoveEndsAt;
         public DateTimeOffset LastOrderAt;
+        public int OrdersSinceInRange;
         public DateTimeOffset LastTick;
         public int ChaseBudgetMs;
         public MonsterTactics? Tactics;

@@ -51,7 +51,7 @@ public static class EnterWorldBatchSynthesizer
         await SendPhase2Async(
             ctx, character, entityId, dialogService,
             worldEntities, characterInfoCatalog,
-            monsterProvider, itemStore, rates, shops, skillShops, inView, activation, ct).ConfigureAwait(false);
+            monsterProvider, itemStore, rates, shops, skillShops, inView, activation, gameClock, ct).ConfigureAwait(false);
     }
 
     public static async Task SendPhase1Async(
@@ -150,6 +150,7 @@ public static class EnterWorldBatchSynthesizer
         SkillShopManager? skillShops = null,
         Func<int, int, bool>? inView = null,
         NpcActivation? activation = null,
+        uint gameClock = 0,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ctx);
@@ -188,7 +189,7 @@ public static class EnterWorldBatchSynthesizer
         var entityEcho = new EntityIdEchoPacket { EntityId = entityId };
         await SendFrameAsync(ctx, Opcode.ENTITY_ID_ECHO, randKey: 0x0B, entityEcho.EncodePayload(), ct);
 
-        await SendFrameAsync(ctx, Opcode.GAME_UNK_325, randKey: 0x87, new ColorOrFlagPacket0325().EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.GAME_UNK_325, randKey: 0x87, new ZoneClockPacket { ClockMilliseconds = gameClock }.EncodePayload(), ct);
 
         var hp = HealthStatusPacket.Of(character.CurrentHp);
         await SendFrameAsync(ctx, Opcode.S2C_HEALTH_STATUS, randKey: 0x2F, hp.EncodePayload(), ct);
@@ -441,6 +442,7 @@ public static class EnterWorldBatchSynthesizer
         Func<int, int, bool>? inView = null,
         NpcActivation? activation = null,
         uint entityFlags = Kr2014.Wire.PlayerSpawnLoginPacket.DefaultEntityFlags,
+        uint gameClock = 0,
         CancellationToken ct = default)
     {
         inView ??= EverywhereInView;
@@ -506,7 +508,7 @@ public static class EnterWorldBatchSynthesizer
         var entityEcho = new EntityIdEchoPacket { EntityId = entityId };
         await SendFrameAsync(ctx, Opcode.GAME_UNK_3A6, randKey: 0xA9, new HeadingVectorPacket().EncodePayload(), ct);
         await SendFrameAsync(ctx, Opcode.ENTITY_ID_ECHO, randKey: 0x0B, entityEcho.EncodePayload(), ct);
-        await SendFrameAsync(ctx, Opcode.GAME_UNK_325, randKey: 0x87, new ColorOrFlagPacket0325().EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.GAME_UNK_325, randKey: 0x87, new ZoneClockPacket { ClockMilliseconds = gameClock }.EncodePayload(), ct);
 
         var hp = HealthStatusPacket.Of(character.CurrentHp);
         await SendFrameAsync(ctx, Opcode.S2C_HEALTH_STATUS, randKey: 0x2F, hp.EncodePayload(), ct);

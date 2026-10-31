@@ -114,10 +114,29 @@ public sealed class LibConfigXmlReader
         return trimmed;
     }
 
-    private XmlReader OpenXmlReader(XmlReaderSettings settings)
+    private static readonly XmlReaderSettings TableSettings = new()
     {
-        var ms = new MemoryStream(_decodedXmlBytes, writable: false);
-        return XmlReader.Create(ms, settings);
+        IgnoreWhitespace = false,
+        IgnoreComments = true,
+        DtdProcessing = DtdProcessing.Ignore,
+        ConformanceLevel = ConformanceLevel.Fragment,
+    };
+
+    private void ReadTableRows(LibConfigTableSpan table, Action<IReadOnlyDictionary<string, string>> rowHandler)
+    {
+        using var stream = new MemoryStream(_decodedXmlBytes, table.Start, table.Length, writable: false);
+        using var reader = XmlReader.Create(stream, TableSettings);
+        reader.MoveToContent();
+        var tableElement = (XElement)XNode.ReadFrom(reader);
+        foreach (var rowElement in tableElement.Elements("ROW"))
+        {
+            var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var fieldElement in rowElement.Elements())
+            {
+                fields[fieldElement.Name.LocalName] = fieldElement.Value;
+            }
+            rowHandler(fields);
+        }
     }
 
     public IReadOnlyList<QuestInfoEntry> LoadAllQuestTables()
@@ -174,32 +193,9 @@ public sealed class LibConfigXmlReader
 
     private void LoadTable(string tableName, Action<IReadOnlyDictionary<string, string>> rowHandler)
     {
-        var settings = new XmlReaderSettings
+        if (LibConfigTableIndex.Of(_decodedXmlBytes).TryFind(tableName, out var table))
         {
-            IgnoreWhitespace = false,
-            IgnoreComments = true,
-            DtdProcessing = DtdProcessing.Ignore,
-        };
-
-        using var reader = OpenXmlReader(settings);
-        while (reader.Read())
-        {
-            if (reader.NodeType != XmlNodeType.Element) continue;
-
-            if (reader.Name == "TABLE" && reader.GetAttribute("name") == tableName)
-            {
-                var tableElement = (XElement)XNode.ReadFrom(reader);
-                foreach (var rowElement in tableElement.Elements("ROW"))
-                {
-                    var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-                    foreach (var fieldElement in rowElement.Elements())
-                    {
-                        fields[fieldElement.Name.LocalName] = fieldElement.Value;
-                    }
-                    rowHandler(fields);
-                }
-                return;
-            }
+            ReadTableRows(table, rowHandler);
         }
     }
 
@@ -3029,68 +3025,18 @@ public sealed class LibConfigXmlReader
     }
 
     private void LoadTablesWithPrefix(string tableNamePrefix,
-        Action<string, IReadOnlyDictionary<string, string>> rowHandler)
-    {
-        var settings = new XmlReaderSettings
-        {
-            IgnoreWhitespace = false,
-            IgnoreComments = true,
-            DtdProcessing = DtdProcessing.Ignore,
-        };
-
-        using var reader = OpenXmlReader(settings);
-        while (reader.Read())
-        {
-            if (reader.NodeType != XmlNodeType.Element) continue;
-            if (reader.Name != "TABLE") continue;
-
-            var tableName = reader.GetAttribute("name") ?? string.Empty;
-            if (!tableName.StartsWith(tableNamePrefix, StringComparison.Ordinal)) continue;
-
-            var tableElement = (XElement)XNode.ReadFrom(reader);
-            foreach (var rowElement in tableElement.Elements("ROW"))
-            {
-                var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-                foreach (var fieldElement in rowElement.Elements())
-                {
-                    fields[fieldElement.Name.LocalName] = fieldElement.Value;
-                }
-                rowHandler(tableName, fields);
-            }
-        }
-    }
+        Action<string, IReadOnlyDictionary<string, string>> rowHandler) =>
+        LoadTablesMatching(name => name.StartsWith(tableNamePrefix, StringComparison.Ordinal), rowHandler);
 
     private void LoadTablesNamed(IReadOnlySet<string> tableNames, Action<string, IReadOnlyDictionary<string, string>> rowHandler) =>
         LoadTablesMatching(tableNames.Contains, rowHandler);
 
     private void LoadTablesMatching(Func<string, bool> wanted, Action<string, IReadOnlyDictionary<string, string>> rowHandler)
     {
-        var settings = new XmlReaderSettings
+        foreach (var table in LibConfigTableIndex.Of(_decodedXmlBytes).Tables)
         {
-            IgnoreWhitespace = false,
-            IgnoreComments = true,
-            DtdProcessing = DtdProcessing.Ignore,
-        };
-
-        using var reader = OpenXmlReader(settings);
-        while (reader.Read())
-        {
-            if (reader.NodeType != XmlNodeType.Element) continue;
-            if (reader.Name != "TABLE") continue;
-
-            var tableName = reader.GetAttribute("name") ?? string.Empty;
-            if (!wanted(tableName)) continue;
-
-            var tableElement = (XElement)XNode.ReadFrom(reader);
-            foreach (var rowElement in tableElement.Elements("ROW"))
-            {
-                var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-                foreach (var fieldElement in rowElement.Elements())
-                {
-                    fields[fieldElement.Name.LocalName] = fieldElement.Value;
-                }
-                rowHandler(tableName, fields);
-            }
+            if (!wanted(table.Name)) continue;
+            ReadTableRows(table, fields => rowHandler(table.Name, fields));
         }
     }
 

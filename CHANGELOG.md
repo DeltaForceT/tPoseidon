@@ -2,6 +2,27 @@
 
 Every release is listed here, newest first. Versions look like `0.MINOR.PATCH-beta`; [BETA.md](docs/beta/BETA.md) explains what the numbers mean. Back up your database before every update. A release that changes the database says so at the top.
 
+## 0.75.4-beta
+
+This release changes the database: one update moves characters that changed job before the database kept their shown look to their real job (see Fixed). It runs by itself at the first start. Back up your database first, as always.
+
+### Fixed
+
+- Server speed: the game servers were doing far too much work all the time. Every world update went through every monster on the server (over 22,000) several times to find the ones on one map or the bosses, and that also blocked the handling of your actions while it ran. On some PCs this made skills take seconds or more to go off, monsters barely move and attacks lag. I now keep the monsters indexed per map and the bosses in their own list. Each game server went from about 1.5 CPU cores at idle to under 0.1.
+- Startup timeouts: starting all servers together could time out after 300 seconds, and then portals and GM warps did not work because one game server never came up. Every game data table was found by reading the whole libconfig from the top, dozens of times. The server now indexes the tables once and reads only the one it needs; a game server here starts in about a third of the time.
+- Combat and movement react faster: the game server now updates the world every 40 ms instead of 100 ms, like the official servers.
+- Melee chase (#13):
+  - You stop and swing as soon as the monster is in reach, instead of walking on to the middle of your range. Stopping that close used to put you inside the monster's own minimum distance, so it stepped back after every hit.
+  - Chasing a moving monster no longer gives up by itself before the first hit. It keeps following until you are in range, you cancel it, or the monster leaves your chase range.
+  - When the next chase step would end where you already stand, you and monsters now pick one of six sides around the target after two tries, like the original, instead of standing still.
+- Job change (#29): a character that had changed job before the database kept the shown look came into the game as its base job (base look, invisible after a map change, refused by the job masters, the Gate of Judgment saying no job change was made) while the character list showed the new job. The database update fixes those characters, and the Gate of Judgment, the job quests and the look change at Baron Andre now use the job the character holds.
+- Time of day (#29): the clock stayed at about 7:05 PM. A clock message sent after you enter a map carried a fixed value instead of the server's clock. It now carries the real clock and is sent again every 10 minutes like the original, so the night-only NPCs and quest steps (for example the sword quest of Episode 2 Chapter 1) follow the clock you see.
+- Friends: moving a friend to another group did nothing. The server read the wrong field of the request.
+
+### Changed
+
+- Panel: the item, My Camp, monster and map pickers list every match in one scroll list instead of stopping at 200.
+
 ## 0.75.3-beta
 
 No database change: install it over 0.75.x as usual. Fixes for the problems reported on GitHub (issue numbers in brackets), the Discord server, and a wiki with step-by-step guides.

@@ -111,7 +111,7 @@ public sealed class ScriptPlayerHost : ScriptHostBase, IScriptSessionHost
 
     public override long TechniqueLevel => _executor.ScriptStats?.TmLevel ?? Character.TmLevel;
 
-    public override long JobTier => Math.Max((byte)1, Character.JobState);
+    public override long JobTier => OccupationRules.HeldTierOf(Character);
 
     public override long JobType => OccupationRules.CurrentJobOf(Character);
 

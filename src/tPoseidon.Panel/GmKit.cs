@@ -100,8 +100,6 @@ public sealed class GmChecks
 
 public sealed class GmKit
 {
-    public const int PickerRows = 200;
-
     private readonly List<Button> _actions = [];
 
     public GmKit(GmModel model, Window owner)
@@ -455,11 +453,10 @@ public sealed class GmPicker : StackPanel
             return;
         }
 
-        var matches = _query(_catalog, Search.Text ?? "").Take(GmKit.PickerRows + 1).ToList();
-        _list.ItemsSource = matches.Take(GmKit.PickerRows).ToList();
+        var matches = _query(_catalog, Search.Text ?? "").ToList();
+        _list.ItemsSource = matches;
         _count.Text = _catalog.Problem
             ?? (matches.Count == 0 ? "Nothing matches. You can still type an id."
-            : matches.Count > GmKit.PickerRows ? string.Create(CultureInfo.InvariantCulture, $"Showing the first {GmKit.PickerRows} matches; type more to narrow it down.")
             : string.Create(CultureInfo.InvariantCulture, $"{matches.Count} match(es)."));
     }
 }

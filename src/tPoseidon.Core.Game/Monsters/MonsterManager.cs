@@ -14,6 +14,8 @@ public sealed class MonsterManager : IMonsterEntityProvider
     private readonly Func<long>? _damageLimit;
     private readonly IMonsterDamageObserver? _damageObserver;
     private readonly ConcurrentDictionary<ushort, MonsterEntity> _byEntityId = new();
+    private readonly ConcurrentDictionary<ushort, ConcurrentDictionary<ushort, MonsterEntity>> _byMap = new();
+    private readonly ConcurrentDictionary<ushort, MonsterEntity> _bosses = new();
     private readonly ConcurrentDictionary<ushort, IMonsterStrategy> _strategyByEntityId = new();
     private readonly ConcurrentDictionary<ushort, GroundItem> _groundItems = new();
     private readonly Random _rng;
@@ -48,7 +50,9 @@ public sealed class MonsterManager : IMonsterEntityProvider
 
     public BossEventOutbox BossEvents { get; } = new();
 
-    public IReadOnlyCollection<MonsterEntity> All => _byEntityId.Values.ToArray();
+    public IReadOnlyCollection<MonsterEntity> All => _byEntityId.Select(static pair => pair.Value).ToArray();
+
+    public IReadOnlyCollection<MonsterEntity> Bosses => _bosses.Select(static pair => pair.Value).ToArray();
 
     public MonsterParamEntry? Param(int monsterParamId) => _catalog.GetById(monsterParamId);
 
@@ -56,10 +60,14 @@ public sealed class MonsterManager : IMonsterEntityProvider
         _byEntityId.TryGetValue(entityId, out var m) ? m : null;
 
     public IReadOnlyCollection<MonsterEntity> GetByMap(ushort mapId) =>
-        _byEntityId.Values.Where(m => m.MapId == mapId && !m.IsDead).ToArray();
+        _byMap.TryGetValue(mapId, out var onMap)
+            ? onMap.Select(static pair => pair.Value).Where(static m => !m.IsDead).ToArray()
+            : Array.Empty<MonsterEntity>();
 
     public IReadOnlyCollection<MonsterEntity> GetByScene(ushort mapId, ushort instanceKey) =>
-        _byEntityId.Values.Where(m => m.MapId == mapId && m.InstanceKey == instanceKey && !m.IsDead).ToArray();
+        _byMap.TryGetValue(mapId, out var onMap)
+            ? onMap.Select(static pair => pair.Value).Where(m => m.InstanceKey == instanceKey && !m.IsDead).ToArray()
+            : Array.Empty<MonsterEntity>();
 
     public MonsterEntity? Spawn(int monsterParamId, ushort mapId, ushort x, ushort y, ushort? spawnPointId = null)
         => Spawn(monsterParamId, mapId, x, y, spawnPointId, explicitEntityId: null);
@@ -110,7 +118,10 @@ public sealed class MonsterManager : IMonsterEntityProvider
         var strategy = MonsterStrategyFactory.Create(atype);
         strategy.OnSpawn(entity);
 
+        if (_byEntityId.TryGetValue(entityId, out var replaced)) Unindex(replaced);
         _byEntityId[entityId] = entity;
+        _byMap.GetOrAdd(entity.MapId, static _ => new ConcurrentDictionary<ushort, MonsterEntity>())[entityId] = entity;
+        if (entity.Boss is not null) _bosses[entityId] = entity;
         _strategyByEntityId[entityId] = strategy;
         MonsterSpawned?.Invoke(entity);
         return entity;
@@ -163,10 +174,17 @@ public sealed class MonsterManager : IMonsterEntityProvider
 
     public bool Remove(ushort entityId)
     {
-        if (!_byEntityId.TryRemove(entityId, out _)) return false;
+        if (!_byEntityId.TryRemove(entityId, out var removed)) return false;
+        Unindex(removed);
         _strategyByEntityId.TryRemove(entityId, out _);
         _idAllocator.Release(entityId);
         return true;
+    }
+
+    private void Unindex(MonsterEntity entity)
+    {
+        if (_byMap.TryGetValue(entity.MapId, out var onMap)) onMap.TryRemove(new KeyValuePair<ushort, MonsterEntity>(entity.EntityId, entity));
+        _bosses.TryRemove(new KeyValuePair<ushort, MonsterEntity>(entity.EntityId, entity));
     }
 
     private static long ResolveMaxHp(MonsterParamEntry def)

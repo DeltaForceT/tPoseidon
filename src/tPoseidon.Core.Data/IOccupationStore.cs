@@ -16,6 +16,13 @@ public static class OccupationRules
         _ => null,
     };
 
+    public static byte HeldTierOf(Character character)
+    {
+        ArgumentNullException.ThrowIfNull(character);
+        if (character.Job3 != 0) return ThirdJobTier;
+        return character.Job2 != 0 ? SecondJobTier : (byte)1;
+    }
+
     public static int CurrentJobOf(Character character)
     {
         ArgumentNullException.ThrowIfNull(character);
