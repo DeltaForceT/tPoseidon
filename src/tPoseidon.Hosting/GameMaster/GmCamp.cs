@@ -8,6 +8,7 @@ namespace tPoseidon.Hosting.GameMaster;
 public static class GmCamp
 {
     public const string GiveName = "camp-give";
+    public const string GiveAllName = "camp-give-all";
     public const string StockName = "camp-stock";
 
     public static GmOutcome Stock(IMyCampGifts gifts, string character)
@@ -52,6 +53,36 @@ public static class GmCamp
         });
     }
 
+    public static GmOutcome GiveMatching(IMyCampGifts gifts, GameCatalog catalog, string character, string text)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(text);
+        var ids = catalog.FindCampItems(text).Select(item => item.Id).ToArray();
+        return GiveAll(gifts, character, ids, catalog.Problem ?? (text.Trim().Length == 0 ? "The game data has no My Camp items." : $"No My Camp item matches '{text.Trim()}'."));
+    }
+
+    public static GmOutcome GiveAll(IMyCampGifts gifts, string character, IReadOnlyList<int> itemIndexes, string noneReason)
+    {
+        ArgumentNullException.ThrowIfNull(gifts);
+        ArgumentNullException.ThrowIfNull(itemIndexes);
+        var owner = gifts.Find(character);
+        if (owner is null)
+        {
+            return Unknown(character);
+        }
+
+        if (itemIndexes.Count == 0)
+        {
+            return Refuse(noneReason);
+        }
+
+        var result = gifts.GiveMany(owner, itemIndexes);
+        return new GmOutcome(GmOutcome.Done, new[]
+        {
+            string.Create(CultureInfo.InvariantCulture, $"{owner.CharacterName}: added {result.Given} My Camp items to the new items of the account, {result.Skipped} skipped; the character sees them in My Camp after the next camp is opened"),
+        });
+    }
+
     private static GmOutcome Unknown(string character) => Refuse($"There is no character named '{character}'.");
 
     private static GmOutcome Refuse(string line) => new(GmOutcome.NotDone, new[] { line }, Refused: true);
@@ -69,6 +100,8 @@ public sealed class DatabaseGmCampGifts : IMyCampGifts
     public MyCampOwner? Find(string characterName) => DatabaseAdmin.WithMyCampGifts(_database, gifts => gifts.Find(characterName));
 
     public MyCampStock Stock(MyCampOwner owner) => DatabaseAdmin.WithMyCampGifts(_database, gifts => gifts.Stock(owner));
+
+    public MyCampBulkGift GiveMany(MyCampOwner owner, IReadOnlyList<int> itemIndexes) => DatabaseAdmin.WithMyCampGifts(_database, gifts => gifts.GiveMany(owner, itemIndexes));
 
     public void Give(MyCampOwner owner, int itemIndex, int count) => DatabaseAdmin.WithMyCampGifts(_database, gifts =>
     {

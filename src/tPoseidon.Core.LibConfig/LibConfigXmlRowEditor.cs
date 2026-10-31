@@ -17,8 +17,7 @@ public static class LibConfigXmlRowEditor
         ArgumentNullException.ThrowIfNull(xml);
         ArgumentNullException.ThrowIfNull(patch);
         var span = xml.AsSpan();
-        var headerPrefix = Encoding.ASCII.GetBytes($"\t<TABLE name='{patch.Table}' ");
-        var tableStart = span.IndexOf(headerPrefix);
+        var tableStart = LibConfigXmlStyle.TableStart(span, patch.Table);
         if (tableStart < 0)
         {
             throw new InvalidDataException($"libconfig has no table {patch.Table}.");
@@ -64,8 +63,7 @@ public static class LibConfigXmlRowEditor
     public static IReadOnlyList<string> MissingKeys(ReadOnlySpan<byte> xml, LibConfigRowPatch patch)
     {
         ArgumentNullException.ThrowIfNull(patch);
-        var headerPrefix = Encoding.ASCII.GetBytes($"\t<TABLE name='{patch.Table}' ");
-        var tableStart = xml.IndexOf(headerPrefix);
+        var tableStart = LibConfigXmlStyle.TableStart(xml, patch.Table);
         if (tableStart < 0)
         {
             return patch.Rows.Select(row => row[patch.Fields.ToList().IndexOf(patch.KeyField)]).ToList();
@@ -146,8 +144,7 @@ public static class LibConfigXmlRowEditor
 
     private static TableSpan? FindTable(ReadOnlySpan<byte> xml, string table)
     {
-        var headerPrefix = Encoding.ASCII.GetBytes($"	<TABLE name='{table}' ");
-        var tableStart = xml.IndexOf(headerPrefix);
+        var tableStart = LibConfigXmlStyle.TableStart(xml, table);
         if (tableStart < 0)
         {
             return null;
@@ -239,19 +236,7 @@ public static class LibConfigXmlRowEditor
         return row < 0 ? body.Length : row;
     }
 
-    private static string? Attribute(string line, string name)
-    {
-        var marker = name + "='";
-        var start = line.IndexOf(marker, StringComparison.Ordinal);
-        if (start < 0)
-        {
-            return null;
-        }
-
-        start += marker.Length;
-        var end = line.IndexOf('\'', start);
-        return end < 0 ? null : line[start..end];
-    }
+    private static string? Attribute(string line, string name) => LibConfigXmlStyle.Attribute(line, name);
 
     private static HashSet<string> ReadKeys(ReadOnlySpan<byte> body, string keyField)
     {
@@ -284,11 +269,10 @@ public static class LibConfigXmlRowEditor
     private static byte[] UpdateRowCount(ReadOnlySpan<byte> header, int added)
     {
         var text = Encoding.ASCII.GetString(header);
-        const string marker = "RowCount='";
-        var start = text.IndexOf(marker, StringComparison.Ordinal) + marker.Length;
-        var end = text.IndexOf('\'', start);
-        var count = int.Parse(text[start..end], NumberStyles.None, CultureInfo.InvariantCulture) + added;
-        return Encoding.ASCII.GetBytes(text[..start] + count.ToString(CultureInfo.InvariantCulture) + text[end..]);
+        var value = LibConfigXmlStyle.AttributeValue(text, "RowCount")
+            ?? throw new InvalidDataException("libconfig table header has no RowCount.");
+        var count = int.Parse(value.Value, NumberStyles.None, CultureInfo.InvariantCulture) + added;
+        return Encoding.ASCII.GetBytes(text[..value.Index] + count.ToString(CultureInfo.InvariantCulture) + text[(value.Index + value.Length)..]);
     }
 
     private static byte[] BuildRows(LibConfigRowPatch patch, List<FieldInfo> infos, List<IReadOnlyList<string>> rows)

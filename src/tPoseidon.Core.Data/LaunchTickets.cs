@@ -15,6 +15,8 @@ public static class LaunchTicket
 
     public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(5);
 
+    public static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(12);
+
     public static IPAddress Normalize(IPAddress address)
     {
         ArgumentNullException.ThrowIfNull(address);
@@ -57,7 +59,7 @@ public sealed class InMemoryLaunchTicketStore : ILaunchTicketStore
         lock (_tickets)
         {
             var now = _clock.GetUtcNow();
-            _tickets.RemoveAll(ticket => ticket.Expires <= now);
+            _tickets.RemoveAll(ticket => ticket.Expires <= now || ticket.AccountId == accountId);
             _tickets.Add((accountId, clientIps.Select(LaunchTicket.Normalize).ToHashSet(), now + lifetime));
         }
     }
@@ -74,7 +76,7 @@ public sealed class InMemoryLaunchTicketStore : ILaunchTicketStore
                 return false;
             }
 
-            _tickets.RemoveAt(index);
+            _tickets[index] = (accountId, [ip], now + LaunchTicket.SessionLifetime);
             return true;
         }
     }

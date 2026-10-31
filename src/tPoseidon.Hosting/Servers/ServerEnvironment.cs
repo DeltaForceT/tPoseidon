@@ -34,6 +34,7 @@ public static class ServerEnvironment
             ["MT_GAME_ALT_PORT"] = settings.Ports.Game2.ToString(inv),
             ["MT_MASTER_PORT"] = settings.Ports.Master.ToString(inv),
             [GuildCoinRules.PerWinVariable] = settings.GuildCoinsPerWin.ToString(inv),
+            [CharacterSlotRules.Variable] = settings.CharacterSlots.ToString(inv),
         };
 
         foreach (var pair in Guard(server.Name, settings.Security, paths))

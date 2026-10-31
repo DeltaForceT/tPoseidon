@@ -1017,6 +1017,13 @@ public sealed class LibConfigXmlReader
         return new FiestaTables(slots, ports);
     }
 
+    public IReadOnlyDictionary<int, string> LoadPotionEffects()
+    {
+        var effects = new Dictionary<int, string>();
+        LoadTable(PotionEffectTableName, row => effects.TryAdd(ReadInt(row, "eItemId"), ReadString(row, "EffectName")));
+        return effects;
+    }
+
     public PortalLevelBands LoadPortalLevelBands()
     {
         var bands = new Dictionary<(int Map, int Portal), PortalLevelBand>();
@@ -2523,6 +2530,8 @@ public sealed class LibConfigXmlReader
         "Fire", "Water", "Wind", "Earth", "Elec", "Light", "Dark", "NoProp", null!, null!, "Shadow",
         "FireR", "WaterR", "WindR", "EarthR", "ElecR", "LightR", "DarkR", "NoPropR", "GunR", "PhysicalR", "ShadowR",
     };
+
+    public const string PotionEffectTableName = "PotionEffectTable";
 
     public const string RefineSeedRule = "RefineSeed";
 

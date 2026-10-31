@@ -30,6 +30,8 @@ public sealed class GmServices
 
     public IMembershipStore? Membership { get; init; }
 
+    public IPlayerAccountBook? Players { get; init; }
+
     public required Func<GameCatalog> Catalog { get; init; }
 
     public ClientArtLibrary? Art { get; init; }
@@ -62,6 +64,7 @@ public sealed class GmServices
             Penalties = new DatabasePenaltyBook(settings.Database),
             Camp = new DatabaseGmCampGifts(settings.Database),
             Membership = new DatabaseMembershipBook(settings.Database),
+            Players = new DatabasePlayerAccountBook(settings.Database),
             Catalog = () => GameCatalog.For(settings),
             Art = new ClientArtLibrary(settings.ClientFolder, message => LogHub.Post(LogHub.PanelSource, LogLevel.Warn, message)),
         };
@@ -218,6 +221,14 @@ public sealed class GmModel : IDisposable
     {
         ArgumentNullException.ThrowIfNull(action);
         return _services.Accounts is { } book
+            ? RunAsync(title, () => Task.Run(() => (GmOutcome?)action(book)))
+            : Fail(title, Link.Message);
+    }
+
+    public Task<GmOutcome?> PlayerAccountsAsync(string title, Func<IPlayerAccountBook, GmOutcome> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        return _services.Players is { } book
             ? RunAsync(title, () => Task.Run(() => (GmOutcome?)action(book)))
             : Fail(title, Link.Message);
     }

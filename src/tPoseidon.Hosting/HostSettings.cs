@@ -48,6 +48,8 @@ public sealed class HostSettings
 
     public int GuildCoinsPerWin { get; set; } = GuildCoinRules.DefaultPerWin;
 
+    public int CharacterSlots { get; set; } = CharacterSlotRules.Default;
+
     public string LastStartedVersion { get; set; } = "";
 
     public GuardSettings Security { get; set; } = new();
@@ -89,6 +91,14 @@ public sealed class HostSettings
             throw new HostingException(
                 $"{paths.SettingsFile} has guildCoinsPerWin {settings.GuildCoinsPerWin}, which does not work.",
                 $"Use a whole number from 0 to {GuildCoinRules.MaxPerWin}.",
+                null);
+        }
+
+        if (!CharacterSlotRules.IsValid(settings.CharacterSlots))
+        {
+            throw new HostingException(
+                $"{paths.SettingsFile} has characterSlots {settings.CharacterSlots}, which does not work.",
+                $"Use a whole number from {CharacterSlotRules.Min} to {CharacterSlotRules.Max}.",
                 null);
         }
 

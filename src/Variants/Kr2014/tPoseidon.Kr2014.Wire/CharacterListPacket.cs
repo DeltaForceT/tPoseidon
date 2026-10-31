@@ -21,9 +21,10 @@ public sealed class CharacterListPacket
 
         public byte[] Trailer { get; init; } = TrailerWithSlotQuota(8);
 
-        public static byte[] TrailerWithSlotQuota(byte slotQuota)
+        public static byte[] TrailerWithSlotQuota(byte slotQuota, uint padlockState = 0)
     {
         var trailer = new byte[TrailerLength];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(trailer, padlockState);
         trailer[11] = slotQuota;
         return trailer;
     }

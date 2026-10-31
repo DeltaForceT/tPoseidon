@@ -258,6 +258,8 @@ public sealed class MainWindow : Window
 
         var guildCoins = new MenuItem { Header = "Guild coins per win..." };
         guildCoins.Click += (_, _) => Tools.EditGuildCoins();
+        var characterSlots = new MenuItem { Header = "Character slots per account..." };
+        characterSlots.Click += (_, _) => Tools.EditCharacterSlots();
         var folder = new MenuItem { Header = "Open the data folder" };
         folder.Click += async (_, _) => await Tools.OpenDataFolderAsync().ConfigureAwait(true);
         var splash = new MenuItem { Header = "Replay startup splash" };
@@ -285,6 +287,7 @@ public sealed class MainWindow : Window
                 launcherDrawer,
                 language,
                 guildCoins,
+                characterSlots,
                 folder,
                 firstDivider,
                 _reduce,
@@ -302,6 +305,7 @@ public sealed class MainWindow : Window
             channel.IsEnabled = _host.IsSetUp;
             publish.IsEnabled = _host.IsSetUp;
             guildCoins.IsEnabled = _host.IsSetUp;
+            characterSlots.IsEnabled = _host.IsSetUp;
             language.IsEnabled = _host.IsSetUp;
             Tools.MarkLanguages();
             splash.IsEnabled = !_motion.Reduced;

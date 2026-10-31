@@ -18,7 +18,7 @@ public sealed class PostgresLaunchTicketStore : ILaunchTicketStore
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var cmd = new NpgsqlCommand(
             """
-            WITH cleanup AS (DELETE FROM launch_tickets WHERE expires_at <= NOW())
+            WITH cleanup AS (DELETE FROM launch_tickets WHERE expires_at <= NOW() OR account_id = @id)
             INSERT INTO launch_tickets (account_id, client_ips, expires_at)
             VALUES (@id, @ips, NOW() + make_interval(secs => @secs))
             """,
@@ -34,7 +34,8 @@ public sealed class PostgresLaunchTicketStore : ILaunchTicketStore
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var cmd = new NpgsqlCommand(
             """
-            DELETE FROM launch_tickets
+            UPDATE launch_tickets
+            SET client_ips = ARRAY[@ip], expires_at = NOW() + make_interval(secs => @secs)
             WHERE ticket_id = (
                 SELECT ticket_id FROM launch_tickets
                 WHERE account_id = @id AND expires_at > NOW() AND @ip = ANY(client_ips)
@@ -45,6 +46,7 @@ public sealed class PostgresLaunchTicketStore : ILaunchTicketStore
             conn);
         cmd.Parameters.AddWithValue("id", (long)accountId);
         cmd.Parameters.AddWithValue("ip", LaunchTicket.Normalize(clientIp).ToString());
+        cmd.Parameters.AddWithValue("secs", LaunchTicket.SessionLifetime.TotalSeconds);
         return cmd.ExecuteNonQuery() == 1;
     }
 }

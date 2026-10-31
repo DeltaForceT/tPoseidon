@@ -29,7 +29,8 @@ public static class CharacterListBuilder
         public static CharacterListPacket Build(
         IReadOnlyList<Character> characters,
         IItemStore? itemStore = null,
-        byte slotQuota = 8)
+        byte slotQuota = 8,
+        uint padlockState = 0)
     {
         ArgumentNullException.ThrowIfNull(characters);
         if (characters.Count > byte.MaxValue)
@@ -52,7 +53,7 @@ public static class CharacterListBuilder
         return new CharacterListPacket
         {
             Entries = entries,
-            Trailer = CharacterListPacket.TrailerWithSlotQuota(slotQuota),
+            Trailer = CharacterListPacket.TrailerWithSlotQuota(slotQuota, padlockState),
         };
     }
 

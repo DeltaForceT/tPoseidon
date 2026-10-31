@@ -149,6 +149,28 @@ public sealed class PostgresMyCampStore : IMyCampStore
         };
     }
 
+    public int AddItemsForAccount(uint accountId, IReadOnlyList<int> itemIndexes, byte itemWhere = MyCampItemWhere.New)
+    {
+        ArgumentNullException.ThrowIfNull(itemIndexes);
+        if (itemIndexes.Count == 0)
+        {
+            return 0;
+        }
+
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand(
+            """
+            INSERT INTO mycamp_item (account_id, item_index, item_where, item_buy_date)
+            SELECT @account_id, index, @item_where, NOW()
+              FROM unnest(@item_indexes) AS index
+            """,
+            conn);
+        cmd.Parameters.AddWithValue("account_id", (long)accountId);
+        cmd.Parameters.AddWithValue("item_where", (short)itemWhere);
+        cmd.Parameters.AddWithValue("item_indexes", itemIndexes.ToArray());
+        return cmd.ExecuteNonQuery();
+    }
+
     public MyCampItem? FindItem(ulong itemUid)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();

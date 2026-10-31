@@ -61,12 +61,25 @@ public static class GmPlayersPage
             checks.Require(GmGiveItem.HoursValid(hours.Text ?? string.Empty), hours, "The hours must be a whole number from 0 to 65535, or empty.");
             return GmGiveItem.Arguments(who, id, amount, boxed, hours.Text ?? string.Empty);
         }, primary: true);
+        GameCatalog? shown = null;
+        var shownCount = 0;
         var campButton = kit.Camp("Give to My Camp", GmCamp.GiveName, checks =>
         {
             var who = Who(checks);
             var id = checks.Number(item.Id, "The My Camp item id", MyCampGifts.MinItemIndex, MyCampGifts.MaxItemIndex);
             return [who, id, checks.Number(count, "Count", MyCampGifts.MinCount, MyCampGifts.MaxCount)];
         }, arguments => gifts => GmCamp.Give(gifts, arguments[0], int.Parse(arguments[1], CultureInfo.InvariantCulture), int.Parse(arguments[2], CultureInfo.InvariantCulture)), primary: true);
+        var campAllButton = kit.Camp("Give all shown", GmCamp.GiveAllName, checks =>
+        {
+            var who = Who(checks);
+            var loaded = model.CatalogAsync();
+            checks.Require(loaded.IsCompletedSuccessfully, item.Search, "The game data is still loading. Try again in a moment.");
+            var text = (item.Search.Text ?? string.Empty).Trim();
+            shown = loaded.IsCompletedSuccessfully ? loaded.Result : null;
+            shownCount = shown?.FindCampItems(text).Count() ?? 0;
+            checks.Require(shownCount > 0, item.Search, "No My Camp item matches the search.");
+            return [who, text];
+        }, arguments => gifts => GmCamp.GiveMatching(gifts, shown!, arguments[0], arguments[1]), arguments => new GmConfirm(string.Create(CultureInfo.InvariantCulture, $"Give {shownCount} My Camp items to the account of {arguments[0]}?"), "Every My Camp item the search shows is added once to the new items of the account. This cannot be taken back from here.", "Give all"));
         var campStockButton = kit.Camp("Show their My Camp items", GmCamp.StockName, checks => [Who(checks)], arguments => gifts => GmCamp.Stock(gifts, arguments[0]));
         void ShowMode(bool camp)
         {
@@ -74,6 +87,7 @@ public static class GmPlayersPage
             hoursField.IsVisible = !camp;
             giveButton.IsVisible = !camp;
             campButton.IsVisible = camp;
+            campAllButton.IsVisible = camp;
             campStockButton.IsVisible = camp;
         }
 
@@ -81,7 +95,7 @@ public static class GmPlayersPage
         give.CampChanged += ShowMode;
         var giveSection = GmKit.Section(
             "Give item",
-            "Puts the items in the bag of an online character, or in his cash box. A timed item put in the bag arrives with its timer: Hours is its period, empty is the period the item table gives it. The cash box is on for cash items; there empty Hours is the shop period of the item, and the player takes the item out of the cash box. With the My Camp category the item goes to the new My Camp items of the character's account, online or not, and the player takes it from the camp tab of the My Shop window after the next camp is opened.",
+            "Puts the items in the bag of an online character, or in his cash box. A timed item put in the bag arrives with its timer: Hours is its period, empty is the period the item table gives it. The cash box is on for cash items; there empty Hours is the shop period of the item, and the player takes the item out of the cash box. With the My Camp category the item goes to the new My Camp items of the character's account, online or not (Give all shown adds every My Camp item the search lists, once each, in one step), and the player takes it from the camp tab of the My Shop window after the next camp is opened.",
             item,
             GmKit.Line(
                 GmKit.Field("Count", count),
@@ -89,6 +103,7 @@ public static class GmPlayersPage
                 hoursField,
                 giveButton,
                 campButton,
+                campAllButton,
                 campStockButton));
 
         var skill = GmPickers.Skill(model);
@@ -164,11 +179,48 @@ public static class GmPlayersPage
                 kit.Membership("Remove membership", checks => [checks.Text(account, "The account name"), GmMembership.OffWord]),
                 kit.Membership("Show members", _ => [GmMembership.ListWord])));
 
+        var playerName = GmKit.Box("Player account", 170);
+        var playerPassword = GmKit.Box("Password", 170);
+        playerPassword.PasswordChar = '●';
+        var playerAgain = GmKit.Box("Same password again", 170);
+        playerAgain.PasswordChar = '●';
+        void ClearPasswords(GmOutcome outcome)
+        {
+            if (outcome.Ok)
+            {
+                playerPassword.Text = string.Empty;
+                playerAgain.Text = string.Empty;
+            }
+        }
+
+        IReadOnlyList<string> PasswordArguments(GmChecks checks)
+        {
+            var typed = checks.Text(playerName, "The account name");
+            var password = playerPassword.Text ?? string.Empty;
+            checks.Require(GmPlayerAccounts.NameProblem(typed.Trim()) is null, playerName, GmPlayerAccounts.NameProblem(typed.Trim()) ?? string.Empty);
+            checks.Require(GmPlayerAccounts.PasswordProblem(password) is null, playerPassword, GmPlayerAccounts.PasswordProblem(password) ?? string.Empty);
+            checks.Require(password == (playerAgain.Text ?? string.Empty), playerAgain, "The two passwords are not the same.");
+            return [typed, password];
+        }
+
+        var accountsSection = GmKit.Section(
+            "Player accounts",
+            "The accounts players log in to the game with. Create one for each player, or set a new password for a player who forgot it. The name and password can be at most 19 bytes, the most the game client sends at login. Characters are made in the game after the first login. Works while the game servers are stopped (PostgreSQL must run).",
+            GmKit.Line(
+                GmKit.Field("Account", playerName),
+                GmKit.Field("Password", playerPassword),
+                GmKit.Field("Again", playerAgain)),
+            GmKit.Line(
+                kit.PlayerAccounts("Create account", GmPlayerAccounts.AddName, PasswordArguments, arguments => book => GmPlayerAccounts.Add(book, arguments[0], arguments[1]), arguments => new GmConfirm($"Create the account {arguments[0]}?", "The player logs in to the game with this name and password.", "Create"), ClearPasswords, primary: true),
+                kit.PlayerAccounts("Set password", GmPlayerAccounts.PasswordName, PasswordArguments, arguments => book => GmPlayerAccounts.SetPassword(book, arguments[0], arguments[1]), arguments => new GmConfirm($"Set a new password for {arguments[0]}?", "The old password stops working at once.", "Set password"), ClearPasswords),
+                kit.PlayerAccounts("Show accounts", GmPlayerAccounts.ListName, _ => [], _ => GmPlayerAccounts.List)));
+
         return GmKit.Tab(
             "Find a player, then look at them, move them, give them items, send a memo or remove them from the game.",
             ("Find", [findSection, whoSection]),
             ("Help or move", [MoveSection(kit, Who), giveSection, skillSection, levelSection, memoSection]),
             ("Membership", [membershipSection]),
+            ("Accounts", [accountsSection]),
             ("Remove", [kickSection, closeSection]));
     }
 

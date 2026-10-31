@@ -7,7 +7,7 @@ public sealed record LibConfigEncoded(byte[] Dat, byte[] Idx, int TableCount);
 
 public static class LibConfigDatEncryptor
 {
-    private static readonly byte[] TableLinePrefix = "	<TABLE name='"u8.ToArray();
+    private static readonly byte[] TableLinePrefix = "	<TABLE name="u8.ToArray();
 
     public const byte FormatMarker = 0x01;
     public const int BlockBytes = 8;
@@ -15,7 +15,6 @@ public static class LibConfigDatEncryptor
     private const uint Delta = 0x9E3779B9;
     private const int Rounds = 32;
     private const byte LineFeed = (byte)'\n';
-    private const byte NameQuote = (byte)'\'';
 
     public static LibConfigEncoded Encode(ReadOnlySpan<byte> xml, string key = LibConfigDatDecryptor.DefaultKey)
     {
@@ -32,10 +31,11 @@ public static class LibConfigDatEncryptor
             var feed = span[lineStart..].IndexOf(LineFeed);
             var length = feed < 0 ? span.Length - lineStart : feed + 1;
             var line = span.Slice(lineStart, length);
-            if (line.StartsWith(TableLinePrefix))
+            if (line.StartsWith(TableLinePrefix) && line.Length > TableLinePrefix.Length && LibConfigXmlStyle.IsQuote(line[TableLinePrefix.Length]))
             {
-                var nameStart = TableLinePrefix.Length;
-                var nameLength = line[nameStart..].IndexOf(NameQuote);
+                var quote = line[TableLinePrefix.Length];
+                var nameStart = TableLinePrefix.Length + 1;
+                var nameLength = line[nameStart..].IndexOf(quote);
                 idx.Write(line.Slice(nameStart, nameLength));
                 idx.WriteByte(0);
                 BinaryPrimitives.WriteUInt32LittleEndian(offset, (uint)(paddedOffset + 1));

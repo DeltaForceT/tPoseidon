@@ -86,6 +86,11 @@ public sealed class ClientScanModel
         {
             Notice = new ClientScanNotice(BannerKind.Error, "The client folder could not be read.", ex.Message);
         }
+        catch (Exception ex)
+        {
+            LogHub.Write(LogHub.PanelSource, LogLevel.Error, $"Client scan: {ex}");
+            Notice = new ClientScanNotice(BannerKind.Error, "The client check stopped with an error.", $"{ex.Message} The full error is in the panel log. Fixes listed after this one did not run.");
+        }
         finally
         {
             Busy = false;

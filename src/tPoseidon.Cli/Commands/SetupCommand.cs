@@ -29,7 +29,7 @@ internal sealed class SetupCommand
         _commandLine.RejectUnknown(
             "client", "audience", "public-ip",
             "db-host", "db-port", "db-name", "db-admin-user", "db-admin-password", "db-user", "db-password",
-            "admin-user", "admin-password", "play-account", "cash", "cash-start", "guild-coins");
+            "admin-user", "admin-password", "play-account", "cash", "cash-start", "guild-coins", "character-slots");
         var settings = HostSettings.Load(_paths) ?? new HostSettings();
 
         Console.WriteLine($"tPoseidon {VersionCommand.Current} setup");
@@ -46,6 +46,7 @@ internal sealed class SetupCommand
         AskNetwork(settings);
         AskCash(settings);
         AskGuildCoins(settings);
+        AskCharacterSlots(settings);
         await ConfigureDatabaseAsync(settings, ct).ConfigureAwait(false);
         settings.Save(_paths);
 
@@ -199,6 +200,16 @@ internal sealed class SetupCommand
         settings.GuildCoinsPerWin = int.TryParse(given, NumberStyles.None, CultureInfo.InvariantCulture, out var coins) && GuildCoinRules.IsValid(coins)
             ? coins
             : throw new CliException($"'{given}' is not a number of coins from 0 to {GuildCoinRules.MaxPerWin}.");
+        Console.WriteLine();
+    }
+
+    private void AskCharacterSlots(HostSettings settings)
+    {
+        Console.WriteLine($"   Character slots (the original servers allow {CharacterSlotRules.Default}; the game client shows {CharacterSlotRules.Max} cards):");
+        var given = _commandLine.Option("character-slots") ?? _prompt.Ask("   Characters each account can have", settings.CharacterSlots.ToString(CultureInfo.InvariantCulture));
+        settings.CharacterSlots = int.TryParse(given, NumberStyles.None, CultureInfo.InvariantCulture, out var slots) && CharacterSlotRules.IsValid(slots)
+            ? slots
+            : throw new CliException($"'{given}' is not a number of character slots from {CharacterSlotRules.Min} to {CharacterSlotRules.Max}.");
         Console.WriteLine();
     }
 

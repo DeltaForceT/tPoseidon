@@ -791,6 +791,41 @@ public sealed class GuildCoinsPage : WizardPage
     }
 }
 
+public sealed class CharacterSlotsPage : WizardPage
+{
+    private readonly SetupState _state;
+    private readonly TextBox _slots;
+    private readonly Banner _result = new();
+
+    public CharacterSlotsPage(SetupState state)
+    {
+        _state = state;
+        _slots = Box(state.Settings.CharacterSlots.ToString(CultureInfo.InvariantCulture), null, false, 160);
+        Children.Add(Labeled("Characters each account can have", _slots, $"A whole number from {CharacterSlotRules.Min} to {CharacterSlotRules.Max}. The original servers allow {CharacterSlotRules.Default}; the game client shows {CharacterSlotRules.Max} character cards. Lowering it later never removes characters."));
+        Children.Add(_result);
+        _slots.TextChanged += (_, _) => { _result.Hide(); Mark(_slots, false); };
+    }
+
+    public override string Title => "Character slots";
+
+    public override string Subtitle => "A hosting choice: how many characters one account can hold.";
+
+    public override string StepName => "Character slots";
+
+    public override Task<bool> LeaveAsync()
+    {
+        if (!(int.TryParse(_slots.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var count) && CharacterSlotRules.IsValid(count)))
+        {
+            Mark(_slots, true);
+            _result.Show(BannerKind.Error, $"'{_slots.Text}' is not a number of character slots.", $"Use a whole number from {CharacterSlotRules.Min} to {CharacterSlotRules.Max}.");
+            return Task.FromResult(false);
+        }
+
+        _state.Settings.CharacterSlots = count;
+        return Task.FromResult(true);
+    }
+}
+
 public sealed class DataPage : WizardPage
 {
     private const double ProvisionShare = 8;
@@ -1030,6 +1065,7 @@ public sealed class FinishPage : WizardPage
         Add("Account", _data.AccountOutcome.Length > 0 ? _data.AccountOutcome : _state.Account);
         Add("Item shop", settings.ShopCash == "balance" ? $"balance, {settings.ShopStartingCash.ToString("N0", CultureInfo.InvariantCulture)} to start" : settings.ShopCash);
         Add("Guild coins", $"{settings.GuildCoinsPerWin.ToString("N0", CultureInfo.InvariantCulture)} for each guild game win");
+        Add("Character slots", $"{settings.CharacterSlots.ToString(CultureInfo.InvariantCulture)} for each account");
     }
 
     private void Add(string label, string value)
@@ -1077,7 +1113,7 @@ public sealed class SetupWindow : Window
 
         _state = new SetupState(paths, LoadExisting(paths));
         var data = new DataPage(_state);
-        _pages.AddRange([new WelcomePage(_state), new ClientPage(_state), new PlayersPage(_state), new DatabasePage(_state), new PortsPage(_state), new AccountPage(_state), new CashPage(_state), new GuildCoinsPage(_state), data, new FinishPage(_state, data, OnFinish)]);
+        _pages.AddRange([new WelcomePage(_state), new ClientPage(_state), new PlayersPage(_state), new DatabasePage(_state), new PortsPage(_state), new AccountPage(_state), new CashPage(_state), new GuildCoinsPage(_state), new CharacterSlotsPage(_state), data, new FinishPage(_state, data, OnFinish)]);
         foreach (var page in _pages)
         {
             page.StateChanged += UpdateFooter;

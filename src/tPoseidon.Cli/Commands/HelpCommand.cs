@@ -18,6 +18,7 @@ internal static class HelpCommand
         Console.WriteLine("  status    show what is running, the ports and where the logs are");
         Console.WriteLine("  backup    back up the database with pg_dump");
         Console.WriteLine("  gm        game master tools (run 'tposeidon gm --help')");
+        Console.WriteLine("  account   create player accounts, set passwords, list accounts");
         Console.WriteLine("  cash      show or change an account's item shop cash (balance mode)");
         Console.WriteLine("  camp      list or add the My Camp items of a character's account");
         Console.WriteLine("  guild-depot  show or set how many depot tabs a guild owns");
@@ -49,6 +50,7 @@ internal static class HelpCommand
         Console.WriteLine("  --play-account <name>          the account Play logs in with (default: the one you create)");
         Console.WriteLine("  --cash free|balance|disabled --cash-start <amount>     item shop cash");
         Console.WriteLine("  --guild-coins <amount>                                 guild coins for each guild game win (default 100)");
+        Console.WriteLine("  --character-slots <1-8>                                characters each account can have (default 3)");
         Console.WriteLine();
         Console.WriteLine("play options:");
         Console.WriteLine("  --account <name>      log in with another existing account; remembered for next time");
@@ -68,8 +70,10 @@ internal static class HelpCommand
         Console.WriteLine("cash options:");
         Console.WriteLine("  --account <name> [--grant <amount>]   add (or with a minus sign, take) cash");
         Console.WriteLine();
+        AccountCommand.WriteHelp();
+        Console.WriteLine();
         Console.WriteLine("camp options:");
-        Console.WriteLine("  --character <name> [--give <camp item id> [--count <n>]]   add camp items to the account's new items");
+        Console.WriteLine("  --character <name> [--give <camp item id> [--count <n>] | --all-matching <text>]   add camp items to the account's new items; --all-matching adds every camp item whose name or id matches the text (the panel search), once each, in one step");
         Console.WriteLine();
         Console.WriteLine("gm options:");
         Console.WriteLine("  register --character <name> [--permit-ip <address>]   and the GM commands; see 'tposeidon gm --help'");

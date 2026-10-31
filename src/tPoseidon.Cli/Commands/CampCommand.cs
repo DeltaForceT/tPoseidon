@@ -9,17 +9,25 @@ internal static class CampCommand
 {
     public static int Run(InstallPaths paths, CommandLine commandLine)
     {
-        commandLine.RejectUnknown("character", "give", "count");
+        commandLine.RejectUnknown("character", "give", "count", "all-matching");
         var settings = CommandSupport.LoadSettings(paths);
         var name = commandLine.Option("character")?.Trim();
         if (string.IsNullOrEmpty(name))
         {
-            throw new CliException("Say which character: tposeidon camp --character <name> [--give <camp item id> [--count <n>]]");
+            throw new CliException("Say which character: tposeidon camp --character <name> [--give <camp item id> [--count <n>] | --all-matching <text>]");
         }
 
         var gifts = new DatabaseGmCampGifts(settings.Database);
         var give = commandLine.Option("give");
-        var outcome = give is null ? GmCamp.Stock(gifts, name) : GmCamp.Give(gifts, name, Number(give, "a My Camp item id"), CountOf(commandLine));
+        var matching = commandLine.Option("all-matching");
+        if (give is not null && matching is not null)
+        {
+            throw new CliException("Use either --give or --all-matching, not both.");
+        }
+
+        var outcome = matching is not null
+            ? GmCamp.GiveMatching(gifts, GameCatalog.For(settings), name, matching)
+            : give is null ? GmCamp.Stock(gifts, name) : GmCamp.Give(gifts, name, Number(give, "a My Camp item id"), CountOf(commandLine));
         if (outcome.Refused)
         {
             throw new CliException(outcome.Lines[0]);

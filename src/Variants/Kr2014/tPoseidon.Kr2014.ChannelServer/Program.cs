@@ -47,8 +47,9 @@ var deletedCharStore = new PostgresDeletedCharStore(pg.DataSource);
 var safetyPasswordStore = new PostgresSafetyPasswordStore(pg.DataSource);
 var secondPasswords = new tPoseidon.Core.Net.Social.SecondPasswordService(safetyPasswordStore, tPoseidon.Core.Common.ClientText.Encoding, TimeProvider.System);
 var gmBlockStore = new PostgresGmBlockStore(pg.DataSource);
+var characterSlotLimit = tPoseidon.Core.Data.CharacterSlotRules.FromEnvironment(Environment.GetEnvironmentVariable(tPoseidon.Core.Data.CharacterSlotRules.Variable));
 var characterCreationManager = new tPoseidon.Core.Game.Characters.CharacterCreationManager(
-    accountStore, itemStore, skillStore, myCampStore);
+    accountStore, itemStore, skillStore, myCampStore, characterSlotLimit);
 Console.WriteLine($"{LogTag} account store ready (Postgres-backed); ChannelIntro is checked against the lobby authcode");
 
 var LocalHostIp = ServerEndpointConfig.PublicIp;
@@ -164,9 +165,10 @@ var host = new S2ServerHost
                 await SendRawFrameAsync(ctx, info.Opcode, randKey: SecondPasswordRandKey, info.Payload, innerCt);
             }
             var characters = accountStore.GetCharactersForAccount(account.AccountId);
-            var charListPayload = CharacterListBuilder.Build(characters, itemStore).EncodePayload();
+            var slotQuota = tPoseidon.Core.Data.CharacterSlotRules.Quota(characterSlotLimit, characters.Select(c => (int)c.Slot));
+            var charListPayload = CharacterListBuilder.Build(characters, itemStore, slotQuota: (byte)slotQuota, padlockState: secondPasswords.StateAtLogin(account.AccountId)).EncodePayload();
             await SendFrameAsync(ctx, Opcode.CHAR_LIST, randKey: 0xB3, charListPayload, innerCt);
-            Console.WriteLine($"{LogTag} {ctx.Remote} sent CHAR_LIST account={account.AccountId} ({charListPayload.Length}B, {characters.Count} chars, slot quota=8)");
+            Console.WriteLine($"{LogTag} {ctx.Remote} sent CHAR_LIST account={account.AccountId} ({charListPayload.Length}B, {characters.Count} chars, slot quota={slotQuota}, limit={characterSlotLimit})");
             heartbeat.Start();
         });
 
@@ -240,13 +242,13 @@ var host = new S2ServerHost
             var existingChars = accountStore.GetCharactersForAccount(sessionAccountId.Value);
 
             var usedSlots = existingChars.Select(c => c.Slot).ToHashSet();
-            byte freshSlot = 0;
-            while (freshSlot < 3 && usedSlots.Contains(freshSlot)) freshSlot++;
-            if (freshSlot >= 3)
+            var freeSlot = existingChars.Count >= characterSlotLimit ? -1 : tPoseidon.Core.Data.CharacterSlotRules.FirstFreeSlot(characterSlotLimit, usedSlots.Select(s => (int)s));
+            if (freeSlot < 0)
             {
-                await SendCreateFailAsync(0x3FC, "no free slot (account already has 3 characters)");
+                await SendCreateFailAsync(0x3FC, $"no free slot (the account is at the limit of {characterSlotLimit} characters)");
                 return;
             }
+            var freshSlot = (byte)freeSlot;
 
             var freshCharId = 0x10000001ul + ((ulong)sessionAccountId.Value << 3) + freshSlot;
 

@@ -279,6 +279,19 @@ public sealed class GmKit
         }, primary);
     }
 
+    public Button PlayerAccounts(string label, string wired, Func<GmChecks, IReadOnlyList<string>> build, Func<IReadOnlyList<string>, Func<IPlayerAccountBook, GmOutcome>> action, Func<IReadOnlyList<string>, GmConfirm?>? confirm = null, Action<GmOutcome>? done = null, bool primary = false)
+    {
+        Model.Wire(wired);
+        return Act(label, build, confirm, async arguments =>
+        {
+            var outcome = await Model.PlayerAccountsAsync(arguments.Count > 0 ? $"{label} · {wired} {Quote(arguments[0])}" : $"{label} · {wired}", action(arguments)).ConfigureAwait(true);
+            if (outcome is not null)
+            {
+                done?.Invoke(outcome);
+            }
+        }, primary);
+    }
+
     public Button Camp(string label, string wired, Func<GmChecks, IReadOnlyList<string>> build, Func<IReadOnlyList<string>, Func<IMyCampGifts, GmOutcome>> action, Func<IReadOnlyList<string>, GmConfirm?>? confirm = null, Action<GmOutcome>? done = null, bool primary = false)
     {
         Model.Wire(wired);

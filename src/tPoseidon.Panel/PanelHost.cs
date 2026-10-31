@@ -397,6 +397,33 @@ public sealed class PanelHost
         }
     }
 
+    public int CharacterSlots => Settings?.CharacterSlots ?? CharacterSlotRules.Default;
+
+    public async Task<bool> ChooseCharacterSlotsAsync(int slots)
+    {
+        if (Settings is not { } settings || !CharacterSlotRules.IsValid(slots))
+        {
+            return false;
+        }
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                settings.CharacterSlots = slots;
+                settings.Save(Paths);
+            }).ConfigureAwait(true);
+            LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Character slots per account: {slots}. Restart the servers to use it.");
+            Notify(BannerKind.Success, $"Character slots per account: {slots}", "Restart the servers so the channel server uses it.");
+            return true;
+        }
+        catch (HostingException ex)
+        {
+            Fail(LogHub.PanelSource, ex);
+            return false;
+        }
+    }
+
     public int GuildCoinsPerWin => Settings?.GuildCoinsPerWin ?? GuildCoinRules.DefaultPerWin;
 
     public async Task<bool> ChooseGuildCoinsPerWinAsync(int coins)

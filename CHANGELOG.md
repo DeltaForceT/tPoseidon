@@ -2,6 +2,25 @@
 
 Every release is listed here, newest first. Versions look like `0.MINOR.PATCH-beta`; [BETA.md](docs/beta/BETA.md) explains what the numbers mean. Back up your database before every update. A release that changes the database says so at the top.
 
+## 0.75.2-beta
+
+No database change: install over 0.75.0 as usual. Fixes for what 0.75 added and for reported problems, and three tools for server owners that players asked for.
+
+### Added
+
+- Player accounts: `tposeidon account add <name>`, `account password <name>` and `account list` create accounts for your players, set a new password and show the accounts (created date, GM and membership marks). The panel's GM window has the same on **Players**, **Accounts**. A name that exists is refused instead of kept silently, and names and passwords follow the 19 byte limit of the game client's login.
+- My Camp: **Give all shown** in the GM window's Give item (My Camp category) gives every My Camp item the search lists to the character's account in one database step, after a confirm that states the count and the account, and reports how many were added and how many skipped. The command line has the same: `tposeidon camp --character <name> --all-matching <text>`.
+- Character slots per account: how many characters an account can hold is now a setting you choose (the original servers allow 3, which stays the default). Use the Character slots page of the setup wizard, the panel's "..." menu (Character slots per account...), `tposeidon setup --character-slots <1-8>`, or `characterSlots` in the settings file; 8 is the number of character cards the game client shows. Restart the servers after changing it. Lowering it never removes characters: an account that already has more keeps and can play them all, and cannot create another until it is under the limit. The character list unlocks every card up to the highest slot an account uses, so a character is never shown in a locked card.
+
+### Fixed
+
+- Korean character names: creating a character with a Korean name no longer fails with "This character name is unavailable (1019)". Character creation now uses the original's name rule (4 to 16 bytes, Korean allowed), the same one the rename item already used.
+- Character select showed 8 open slots while the server allows 3, so a fourth character failed with 1020. The open slots now match the server's limit (see Character slots per account).
+- "Move to starting screen" in the game no longer freezes the client for players who logged in with Play or the launcher. The client logs in again with the same login pass, which the lobby used to refuse after the first login; a used pass now stays valid for that account from the same address for 12 hours after the last login, and a new Play or launcher login replaces it.
+- Client check and Play with clients whose game data was rewritten by other tools (double quotes and no spaces in the table lines, as in some shared client packs): the check no longer reports present map rows as missing, its fixes add only what is really missing instead of stopping with "libconfig has no table MapInfoEx", and the libconfig index written for Play lists every table again.
+- Client check in the panel: an unexpected error during a fix no longer closes the panel. The error is shown in the check window and written to the panel log, and the window keeps working.
+- Second password (padlock): an account that already has a padlock is no longer offered to create one after every login. The character list now carries the account's padlock state, as the original server does.
+
 ## 0.75.0-beta
 
 **This release changes the database** (changes 083, 084, 087, 088 and 089 below). They apply on the first start, once; `tposeidon start` offers a backup first, and it now works with PostgreSQL in Docker too. Back up your database before you update. The first start also rebuilds the server's world data, so it takes a little longer.

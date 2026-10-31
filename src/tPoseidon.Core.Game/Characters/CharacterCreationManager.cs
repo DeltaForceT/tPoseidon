@@ -4,18 +4,18 @@ namespace tPoseidon.Core.Game.Characters;
 
 public sealed class CharacterCreationManager
 {
-    private const int MaxCharsPerAccount = 3;
-
     private readonly IAccountStore _accountStore;
     private readonly IItemStore _itemStore;
     private readonly ISkillStore? _skillStore;
     private readonly IMyCampStore? _myCampStore;
+    private readonly int _slotLimit;
 
     public CharacterCreationManager(
         IAccountStore accountStore,
         IItemStore itemStore,
         ISkillStore? skillStore = null,
-        IMyCampStore? myCampStore = null)
+        IMyCampStore? myCampStore = null,
+        int slotLimit = CharacterSlotRules.Default)
     {
         ArgumentNullException.ThrowIfNull(accountStore);
         ArgumentNullException.ThrowIfNull(itemStore);
@@ -23,6 +23,7 @@ public sealed class CharacterCreationManager
         _itemStore = itemStore;
         _skillStore = skillStore;
         _myCampStore = myCampStore;
+        _slotLimit = CharacterSlotRules.IsValid(slotLimit) ? slotLimit : throw new ArgumentOutOfRangeException(nameof(slotLimit));
     }
 
     public CharCreationOutcome CreateCharacter(CharacterCreationRequest request)
@@ -35,7 +36,7 @@ public sealed class CharacterCreationManager
         }
 
         var existingChars = _accountStore.GetCharactersForAccount(request.OwnerAccountId);
-        if (existingChars.Count >= MaxCharsPerAccount)
+        if (existingChars.Count >= _slotLimit || request.Slot >= _slotLimit)
         {
             return CharCreationOutcome.Fail(CharCreationError.OverflowSlotCount);
         }
@@ -149,18 +150,8 @@ public sealed class CharacterCreationManager
         return CharCreationOutcome.Success(snapshot);
     }
 
-    private static bool IsValidCharacterName(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return false;
-        if (name.Length is < 1 or > 16) return false;
-        if (name[0] == ' ' || name[^1] == ' ') return false;
-        foreach (var c in name)
-        {
-            if (c < 0x20 || c > 0x7E) return false;
-            if (c is '+' or '<' or '>' or '&' or '"' or '\'' or '\\' or '/') return false;
-        }
-        return true;
-    }
+    private static bool IsValidCharacterName(string name) =>
+        !string.IsNullOrEmpty(name) && CharacterNameRules.Accepts(tPoseidon.Core.Common.ClientText.Encoding.GetBytes(name));
 
     private static bool IsUniqueViolation(Exception ex)
     {

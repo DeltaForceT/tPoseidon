@@ -29,7 +29,7 @@ tPoseidon is in beta. These are the rules that matter. The full text is in [BETA
 - **No forks and no redistribution of modified copies during the beta.** Download it, run it, host it for yourself and your community. Don't publish modified builds, forks or other emulators based on it, and don't re-upload the packages.
 - **No wipes.** Your accounts and characters live in your own database. Updates migrate it. Back up before every update.
 - **Bring your own KR 2014 client.** We don't ship it. Never share client or game files in this project's spaces.
-- **Put your version in every bug report**, for example `0.75.0-beta`. `tposeidon status` prints it.
+- **Put your version in every bug report**, for example `0.75.2-beta`. `tposeidon status` prints it.
 - **Report security problems privately.** See [SECURITY.md](SECURITY.md). Don't post them in issues or on the forum.
 - **Be respectful.** Everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -62,9 +62,17 @@ Releases are for Windows (x64) only. Linux and macOS packages will come with ver
 
 ### How Play logs in
 
-The original game logged you in through the publisher's website, and the client never knew your password. tPoseidon does the same job itself. When you press Play (or run `tposeidon play`) on the server's computer, it leaves a one-time pass for your Play account in the database and then starts the client. The client logs in with a built-in placeholder password, and the lobby accepts that only if a pass is waiting for that account from that address. A pass works once and runs out after about a minute. Everyone else still needs the real password.
+The original game logged you in through the publisher's website, and the client never knew your password. tPoseidon does the same job itself. When you press Play (or run `tposeidon play`) on the server's computer, it leaves a one-time pass for your Play account in the database and then starts the client. The client logs in with a built-in placeholder password, and the lobby accepts that only if a pass is waiting for that account from that address. A pass must be used within five minutes; after that it only lets the same account back in from the same address (for example after "Move to starting screen"), for 12 hours after the last login. Everyone else still needs the real password.
 
 Friends who play from other computers can use the launcher below, or run `tposeidon play --server <your address> --account <their account> --client <their client folder>`. It asks for their password, checks it with your server's web port (the same one as the item shop, 9990 by default), and starts their client pointed at your server. The server must run the item shop for this. Their password travels to your server, so put the web port behind HTTPS (see [Hosting securely](docs/install/hosting-securely.md)) when your server is public and pass the secure address with `--web-url https://play.example.org:9990`.
+
+### Accounts for your players
+
+Setup makes one account, the one you play with. Make one for every other player, so that each has their own login. On the server computer, run `tposeidon account add <name>` (it asks for the password twice, or pass `--password <text>` in a script), `tposeidon account password <name>` to set a new password for a player who forgot theirs, and `tposeidon account list` to see the accounts. In the panel, open the GM window, then **Players**, then the **Accounts** page: type the account and the password twice, then **Create account**, **Set password** or **Show accounts**. Names and passwords can be at most 19 bytes, the most the game client sends at login. Players make their characters in the game after their first login.
+
+### Character slots per account
+
+The original servers let an account hold 3 characters. You can allow more, up to 8 (the game client shows 8 character cards): the **Character slots** page of the setup wizard, the panel's "..." menu (Character slots per account...), `tposeidon setup --character-slots <1-8>`, or `characterSlots` in `tposeidon.json`. The servers read it when they start, so restart them after changing it. Lowering it never removes or hides characters: an account that already has more keeps them all and can play them, and cannot make another until it is under the new limit. The character list shows every card up to the highest slot in use, even above the limit.
 
 ### Joining a friend's server
 

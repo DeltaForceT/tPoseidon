@@ -175,6 +175,25 @@ public static class DatabaseAdmin
             return true;
         });
 
+    public static void AddAccount(DatabaseSettings settings, string username, string password) =>
+        WithDataSource(settings, dataSource =>
+        {
+            var store = new PostgresAccountStore(dataSource);
+            if (store.GetAccountByUsername(username) is not null)
+            {
+                throw new HostingException($"There is already an account named '{username}'.");
+            }
+
+            store.RegisterAccount(username, PasswordHasher.Hash(password));
+            return true;
+        });
+
+    public static bool SetAccountPassword(DatabaseSettings settings, string username, string password) =>
+        WithDataSource(settings, dataSource => new PostgresAccountStore(dataSource).SetPasswordHash(username, PasswordHasher.Hash(password)));
+
+    public static IReadOnlyList<AccountListing> ListAccounts(DatabaseSettings settings) =>
+        WithDataSource(settings, dataSource => new PostgresAccountStore(dataSource).ListAccounts());
+
     public static IReadOnlyList<string> ListAccountNames(DatabaseSettings settings) =>
         WithDataSource(settings, dataSource => new PostgresAccountStore(dataSource).ListUsernames());
 

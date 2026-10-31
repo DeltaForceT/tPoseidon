@@ -56,6 +56,38 @@ public sealed class PostgresAccountStore : IAccountStore
         return names;
     }
 
+    public bool SetPasswordHash(string username, string passwordHash)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(username);
+        ArgumentException.ThrowIfNullOrEmpty(passwordHash);
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand("UPDATE accounts SET password_hash = @ph WHERE LOWER(username) = LOWER(@u)", conn);
+        cmd.Parameters.AddWithValue("ph", passwordHash);
+        cmd.Parameters.AddWithValue("u", username);
+        return cmd.ExecuteNonQuery() > 0;
+    }
+
+    public IReadOnlyList<AccountListing> ListAccounts()
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand(
+            """
+            SELECT a.username, a.account_created_at, a.is_member,
+                   EXISTS (SELECT 1 FROM tbl_gm_char AS g WHERE g.account_code = a.account_id)
+              FROM accounts AS a
+             ORDER BY LOWER(a.username)
+            """,
+            conn);
+        using var reader = cmd.ExecuteReader();
+        var accounts = new List<AccountListing>();
+        while (reader.Read())
+        {
+            accounts.Add(new AccountListing(reader.GetString(0), new DateTimeOffset(reader.GetDateTime(1), TimeSpan.Zero), reader.GetBoolean(2), reader.GetBoolean(3)));
+        }
+
+        return accounts;
+    }
+
     public Account? GetAccountById(uint accountId)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();

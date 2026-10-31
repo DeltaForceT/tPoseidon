@@ -118,6 +118,8 @@ public sealed class SecondPasswordService
             ? [SecondPasswordFrames.InfoReply(record.Email, record.LockFlag, record.LockLimitBitmask, _text)]
             : [];
 
+    public byte StateAtLogin(uint accountId) => StateOf(_store.Find(accountId));
+
     public bool PermitsCharacterDelete(uint accountId, string passwordHash)
     {
         ArgumentNullException.ThrowIfNull(passwordHash);

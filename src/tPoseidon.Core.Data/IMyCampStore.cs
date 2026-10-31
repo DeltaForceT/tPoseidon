@@ -16,6 +16,8 @@ public interface IMyCampStore
 
     MyCampItem AddItemForAccount(uint accountId, int itemIndex, byte itemWhere = MyCampItemWhere.New);
 
+    int AddItemsForAccount(uint accountId, IReadOnlyList<int> itemIndexes, byte itemWhere = MyCampItemWhere.New);
+
     MyCampItem? FindItem(ulong itemUid);
 
     IReadOnlyList<MyCampItem> GetItemsForAccount(uint accountId);

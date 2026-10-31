@@ -4,6 +4,8 @@ public sealed record MyCampOwner(string CharacterName, uint AccountId);
 
 public sealed record MyCampStock(MyCampOwner Owner, int NewItems, int StoredItems);
 
+public sealed record MyCampBulkGift(int Given, int Skipped);
+
 public interface IMyCampGifts
 {
     MyCampOwner? Find(string characterName);
@@ -11,6 +13,8 @@ public interface IMyCampGifts
     MyCampStock Stock(MyCampOwner owner);
 
     void Give(MyCampOwner owner, int itemIndex, int count);
+
+    MyCampBulkGift GiveMany(MyCampOwner owner, IReadOnlyList<int> itemIndexes);
 }
 
 public sealed class MyCampGifts : IMyCampGifts
@@ -64,5 +68,14 @@ public sealed class MyCampGifts : IMyCampGifts
         {
             _camp.AddItemForAccount(owner.AccountId, itemIndex);
         }
+    }
+
+    public MyCampBulkGift GiveMany(MyCampOwner owner, IReadOnlyList<int> itemIndexes)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(itemIndexes);
+        var wanted = itemIndexes.Where(IsItemIndex).Distinct().ToArray();
+        var given = _camp.AddItemsForAccount(owner.AccountId, wanted);
+        return new MyCampBulkGift(given, itemIndexes.Count - given);
     }
 }
