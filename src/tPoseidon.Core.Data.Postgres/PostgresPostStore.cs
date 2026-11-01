@@ -909,12 +909,13 @@ public sealed class PostgresPostStore : IPostStore
                     long created;
                     using (var insert = new NpgsqlCommand("""
                         INSERT INTO items (item_index, item_class, item_attr, item_charged, item_breaked, refine_type, refine_level, refine_state, item_slot, item_stack)
-                        VALUES (@i, 1, 0, 0, '2020-01-01', 0, 0, 0, 0, @n)
+                        VALUES (@i, 1, 0, 0, @nb, 0, 0, 0, 0, @n)
                         RETURNING item_uid
                         """, conn, tx))
                     {
                         insert.Parameters.AddWithValue("i", item.Index);
                         insert.Parameters.AddWithValue("n", (int)count);
+                        insert.Parameters.AddWithValue("nb", Item.NeverBreaks);
                         created = (long)insert.ExecuteScalar()!;
                     }
                     using (var own = new NpgsqlCommand("INSERT INTO item_char (char_uid, item_uid, item_where, item_pos) VALUES (@c, @u, @w, @pos)", conn, tx))

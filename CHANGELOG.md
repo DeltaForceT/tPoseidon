@@ -2,6 +2,33 @@
 
 Every release is listed here, newest first. Versions look like `0.MINOR.PATCH-beta`; [BETA.md](docs/beta/BETA.md) explains what the numbers mean. Back up your database before every update. A release that changes the database says so at the top.
 
+## 0.77.3-beta
+
+Database change 091: repairs the look state and job types of characters with a changed job. It applies on start.
+
+Database change 092: stores the "no expiry" date of items in UTC and repairs the items that came out expired. It applies on start.
+
+### Fixed
+
+- Timed items on servers behind UTC: on a PostgreSQL server set to a time zone behind UTC (UTC-1 to UTC-12), every item bought or created came out as an expired timed item and could not be equipped ("the timed item has expired"). I wrote the "no expiry" date without a time zone, so the database moved it by the server's offset. It is now always stored in UTC, and database change 092 repairs the items already affected, so you do not need to change your server's time zone.
+
+- Item element values: the element attack and resist values of an item (Item_Attribute) now show in the item tooltip and in the element attack and element resist rows of My View. The client reads those values only from the property list that comes with each equipment item and never from its own table, so I now send the Item_Attribute row in the property list at login, when an item enters your bag (pickup, NPC reward, GM present) and in the inspect window (issue 45).
+- Monster attackers (issue 35): a player can no longer be attacked by any number of monsters at once. I now limit how many monsters fight the same player the way the original does: the map's monster pool row decides (type 1 sets the count, type 2 removes the limit), otherwise the monster's own retreat count, otherwise 5. A monster over the limit does not join the fight.
+- Bosses (issue 37): Type 3 bosses such as Kaboom now attack a player who comes near. They scan for targets every half second like the aggressive monsters do. Both kinds now use the fixed view range of 200 that the original sets for them, instead of the view range column of the monster table.
+- Defense Paralysis (issue 48): a player under a monster's Defense Paralysis can no longer dodge or block normal attacks, and every normal attack from monsters hits.
+- Shadow monsters and the mind's eye (Third Eye) effect: a shadow monster no longer targets or chases a player who does not have the effect, and a chase already running ends when the target does not have it, as the original does (issue 38). The attacks of a shadow monster, including its area attacks, no longer hit players without the effect (issue 43). A player without the effect can no longer attack a shadow monster, not even by clicking it right after attacking a normal monster; the request is refused the way the original refuses it, and the same goes for gun shots, skills and target marks aimed at it (issue 47).
+- Harcon Defence: wave 1 now really starts. The waves put their monsters on the map's spawn points by region number, as the original does, but I looked for a rectangle with that number. Map 663 has none, so every monster appeared at the top left corner, out of sight, and the Harcons did not get their place either. I now use the spawn points of the region number first (issue 34).
+- Map 616 Harcon defence: the decorated notice frame no longer opens empty. The data of ScMon_EP6 gives most rows a single space as their comment, and I sent that space as a notice; the client then draws the frame with nothing in it. A blank comment is now not sent at all (issue 39).
+- Map 616 Harcon defence: the client no longer closes with a Trickster error when Kronos or another boss casts skill 1302 (Flash Attack). The effect of that skill reads the speed and the aimed position after its header, and I sent only the header. I now send both, like the player cast does (issue 40).
+- My Camp: you can sit on furniture again. I now answer the client's sit and stand request for a placed chair or sofa like the original: the seat count comes from the item's Attr flags, a full or seatless object is refused, everyone in the camp sees you sit, and guests who enter later see who is already seated.
+- Server selection: a LAN server address with 15 characters, such as 192.168.100.100, made the lobby fail after you picked a server and the client stayed on "Logging in...". I now send the channel address the way the original does, in a 16 byte field, so every IPv4 address works (issue 31).
+- Job change halls: the Gate of Judgment sent a Buffalo Warrior to the Sheep hall (and every other species to the hall of the next one), because it used the job numbers of the old server while the 2014 client counts the second jobs from 10. I now take each job to the hall of its own species, so the messengers of the hall offer your own jobs (issue 30).
+- Changed jobs: a character that holds a second or third job is now always shown and spawned with it. Before, a stored look state of 0, or a third look without a third job, made a Warrior spawn as a Fighter and could leave the body type empty after a map change. A missing job type is now taken from the job, and database change 091 repairs the stored look state and job types of such characters (issue 30).
+- Chaos Tower gate: a polar bear on its last job is no longer refused at the gate (NPC 1338). I had cut the job check off at job 33 and split its two masks at job 17, but the 2014 game data counts jobs up to 36 and starts the second mask at job 19 (issue 36).
+- NPCs that come and go: Aria in Megalopolis Square no longer stands seven times on the same spot, only the Aria of the current weekday is there (issue 33). Don Danihen and the developers of the Underground Development Room now follow the day: Don Danihen shows up only at night, the developers only by day (issue 32). The timed Robin Van Peruoja rows follow the morning and afternoon split. The calendar dates of these rows are not used yet.
+- Game master tools: the monster picker, the spawn and summon commands and the chat command now cover every monster in the game data, including the shadow monsters such as Chronos (16735), not only types 2000 to 3434 (issue 44).
+- Guild memo: the memo you send to a single player from the guild window did nothing. I now deliver it like the original: an online player gets it at once as a guild message, an offline player gets it stored with their friend messages, and without a guild you get the refusal.
+
 ## 0.75.4-beta
 
 This release changes the database: one update moves characters that changed job before the database kept their shown look to their real job (see Fixed). It runs by itself at the first start. Back up your database first, as always.

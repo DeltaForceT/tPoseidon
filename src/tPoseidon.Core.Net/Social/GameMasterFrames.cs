@@ -232,7 +232,7 @@ public static class GameMasterFrames
     public const int CharInfoReportLength = 0x34;
     public const int MusicNameLength = 64;
     public const uint FirstSummonableMonster = 2000;
-    public const uint LastSummonableMonster = 3434;
+    public const uint LastSummonableMonster = 16998;
 
     public const byte NormalSpeed = 1;
     public const byte MaxSpeed = 4;

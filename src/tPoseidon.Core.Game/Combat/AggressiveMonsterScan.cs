@@ -1,12 +1,14 @@
 using tPoseidon.Core.Data;
+using tPoseidon.Core.Game.Monsters;
 
 namespace tPoseidon.Core.Game.Combat;
 
-public readonly record struct AggroPlayer(ushort EntityId, int X, int Y);
+public readonly record struct AggroPlayer(ushort EntityId, int X, int Y, bool SeesShadowWorld = false);
 
 public sealed class AggressiveMonsterScan
 {
     public const int ScanIntervalMs = 500;
+    public const int ViewRange = 200;
 
     private readonly object _gate = new();
     private readonly Dictionary<ushort, DateTimeOffset> _nextScanAt = new();
@@ -21,7 +23,7 @@ public sealed class AggressiveMonsterScan
         var engagements = new List<(MonsterEntity, ushort)>();
         foreach (var monster in monsters)
         {
-            if (monster.Atype != MonsterAType.AggressiveMonster || monster.IsDead || monster.AiViewRange <= 0) continue;
+            if (!Scans(monster.Atype) || monster.IsDead) continue;
             lock (_gate)
             {
                 if (_nextScanAt.TryGetValue(monster.EntityId, out var nextAt) && now < nextAt) continue;
@@ -37,6 +39,8 @@ public sealed class AggressiveMonsterScan
         return engagements;
     }
 
+    public static bool Scans(MonsterAType atype) => atype is MonsterAType.AggressiveMonster or MonsterAType.BossMonster;
+
     public void Forget(ushort monsterEntityId)
     {
         lock (_gate)
@@ -47,12 +51,14 @@ public sealed class AggressiveMonsterScan
 
     private static ushort? Nearest(MonsterEntity monster, IReadOnlyList<AggroPlayer> players, DateTimeOffset now)
     {
-        var radiusSquared = (long)monster.AiViewRange * monster.AiViewRange;
+        var radiusSquared = (long)ViewRange * ViewRange;
         var (monsterX, monsterY) = monster.GetInterpolatedPosition(now);
         ushort? best = null;
         var bestDistance = long.MaxValue;
+        var shadow = ShadowActors.IsMonster(monster.MonsterParamId);
         foreach (var player in players)
         {
+            if (shadow && !player.SeesShadowWorld) continue;
             var dx = (long)player.X - monsterX;
             var dy = (long)player.Y - monsterY;
             var distance = dx * dx + dy * dy;

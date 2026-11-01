@@ -1,6 +1,8 @@
 using tPoseidon.Core.Common;
+using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.LibConfig;
+using tPoseidon.Core.Net.Packets;
 
 namespace tPoseidon.Core.Net.World;
 
@@ -86,12 +88,17 @@ public static class GroundItemFrames
         return w.ToArray();
     }
 
-    public static byte[] AddedToBag(byte kind, byte itemClass, uint itemId, ulong itemUid, ushort count, byte mixSlot = 0)
+    public static byte[] AddedToBag(byte kind, byte itemClass, uint itemId, ulong itemUid, ushort count, byte mixSlot = 0, IReadOnlyList<ItemProperty>? options = null)
     {
-        var w = new PacketWriter(AddedToBagSize + RareItemExtraBytes + 1);
+        var listed = itemClass == ItemParamEntry.RareClass && kind != PickupRules.StackGrew ? options ?? Array.Empty<ItemProperty>() : Array.Empty<ItemProperty>();
+        var w = new PacketWriter(AddedToBagSize + RareItemExtraBytes + 1 + listed.Count * GameItemListPacket.OptionSize);
         w.WriteByte(kind);
         WriteItem(w, itemClass, itemId, itemUid, count, mixSlot);
-        if (itemClass == ItemParamEntry.RareClass && kind != PickupRules.StackGrew) w.WriteByte(NoOptions);
+        if (itemClass == ItemParamEntry.RareClass && kind != PickupRules.StackGrew)
+        {
+            w.WriteByte((byte)listed.Count);
+            foreach (var option in listed) GameItemListPacket.WriteOption(w, option);
+        }
         w.WriteByte(NotUnique);
         return w.ToArray();
     }
@@ -112,10 +119,11 @@ public static class GroundItemFrames
             if (kind != PickupRules.StackGrew)
             {
                 var options = r.ReadByte();
-                if (options != NoOptions)
+                if (options > ItemPropertyTypes.MaxPerItem)
                 {
-                    throw new InvalidPacketException($"The bag addition of item {itemId} lists {options} options; additions carry none.");
+                    throw new InvalidPacketException($"The bag addition of item {itemId} lists {options} options; at most {ItemPropertyTypes.MaxPerItem} fit.");
                 }
+                r.Skip(options * GameItemListPacket.OptionSize);
             }
         }
         r.ReadByte();

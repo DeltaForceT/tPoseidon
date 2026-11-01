@@ -54,6 +54,8 @@ public static class GuildFrames
     public const ushort NoticeDelete = 0x2BCA;
     public const ushort NoticeDeleted = 0x2BCB;
 
+    public const ushort GuildMemo = 0x2B89;
+    public const ushort GuildMemoNoGuild = 0x2B8A;
     public const ushort GuildSms = 0x2B8B;
     public const ushort GuildSmsOwnGuild = 0x2B8D;
     public const int GuildSmsMinimum = sizeof(uint) + 1;
@@ -542,6 +544,17 @@ public static class GuildFrames
         ArgumentNullException.ThrowIfNull(text);
         if (payload.Length < CreateRequestLength) return null;
         return new GuildCreateRequest(ReadText(payload, 0, GuildNameLength, text), ReadText(payload, 0x2D, IntroLength, text));
+    }
+
+    public static (string TargetName, string Text)? ReadGuildMemo(ReadOnlySpan<byte> payload, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var nameEnd = payload.IndexOf((byte)0);
+        if (nameEnd < 0) return null;
+        var body = payload[(nameEnd + 1)..];
+        var textEnd = body.IndexOf((byte)0);
+        if (textEnd < 0) return null;
+        return (text.GetString(payload[..nameEnd]), text.GetString(body[..textEnd]));
     }
 
     public static (uint GuildCode, string Text)? ReadGuildSms(ReadOnlySpan<byte> payload, Encoding text)

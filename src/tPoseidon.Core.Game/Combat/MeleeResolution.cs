@@ -93,7 +93,8 @@ public static class MeleeResolution
         int targetLevel,
         long targetHp,
         bool targetProtected,
-        Random rng)
+        Random rng,
+        bool targetDefenceParalysed = false)
     {
         ArgumentNullException.ThrowIfNull(rng);
 
@@ -112,6 +113,13 @@ public static class MeleeResolution
             hit = rng.Next(PerCent) < Math.Min(HighestChance, attackerAc);
             evade = rng.Next(PerCent) < Math.Min(HighestChance, targetHv);
             block = rng.Next(PerCent) < Math.Min(HighestChance, targetLk);
+        }
+
+        if (targetDefenceParalysed)
+        {
+            hit = true;
+            evade = false;
+            block = false;
         }
 
         if (targetProtected)

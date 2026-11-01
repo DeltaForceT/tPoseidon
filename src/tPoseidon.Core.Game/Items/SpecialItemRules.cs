@@ -101,7 +101,7 @@ public static class HairDyeRules
     public static int SlotOf(Character character)
     {
         ArgumentNullException.ThrowIfNull(character);
-        return Math.Clamp((int)character.JobState, BaseSlot, OccupationRules.ThirdJobTier);
+        return Math.Clamp((int)OccupationRules.LookStateOf(character), BaseSlot, OccupationRules.ThirdJobTier);
     }
 }
 

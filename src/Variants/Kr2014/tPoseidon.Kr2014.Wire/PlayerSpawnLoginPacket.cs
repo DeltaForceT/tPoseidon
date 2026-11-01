@@ -86,7 +86,7 @@ public sealed class PlayerSpawnLoginPacket
         uint entityFlags = DefaultEntityFlags)
     {
         ArgumentNullException.ThrowIfNull(character);
-        var makeUp = LookChangeRules.MakeUpOf(character, character.JobState)
+        var makeUp = LookChangeRules.MakeUpOf(character, OccupationRules.LookStateOf(character))
             ?? new MakeUp((ushort)character.Species, (byte)character.Species, (byte)character.Hair);
 
         var looks = new Dictionary<byte, uint>

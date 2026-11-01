@@ -41,8 +41,8 @@ public static class SympathizingRules
 
 public static class WarpGateRules
 {
-    public const int FirstJob = 9;
-    public const int LastJob = 33;
+    public const int FirstJob = 10;
+    public const int LastJob = 36;
     public const int SpeciesRoomBase = 628;
     public const int SpeciesRooms = 8;
     public const int PolarBearRoom = 754;
@@ -50,14 +50,14 @@ public static class WarpGateRules
 
     public static int? GuardianRoomOfJob(int job) => job switch
     {
-        9 or 17 or 18 => 239,
-        10 or 19 or 20 => 240,
-        11 or 21 or 22 => 241,
-        12 or 23 or 24 or 25 => 242,
-        13 or 26 or 27 => 243,
-        14 or 28 or 29 => 244,
-        15 or 30 or 31 => 245,
-        16 or 32 or 33 => 246,
+        10 or 19 or 20 => 239,
+        11 or 21 or 22 => 240,
+        12 or 23 or 24 => 241,
+        13 or 25 or 26 or 27 => 242,
+        14 or 28 or 29 => 243,
+        15 or 30 or 31 => 244,
+        16 or 32 or 33 => 245,
+        17 or 34 or 35 => 246,
         _ => null,
     };
 

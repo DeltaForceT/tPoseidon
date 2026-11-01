@@ -79,10 +79,10 @@ public static class FriendRules
     public static ushort CharacterTypeOf(Character character)
     {
         ArgumentNullException.ThrowIfNull(character);
-        return character.JobState switch
+        return OccupationRules.LookStateOf(character) switch
         {
-            2 => character.Type2,
-            3 => character.Type3,
+            2 => OccupationRules.SecondJobTypeOf(character),
+            3 => OccupationRules.ThirdJobTypeOf(character),
             _ => (ushort)character.Species,
         };
     }

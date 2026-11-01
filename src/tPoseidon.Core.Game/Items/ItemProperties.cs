@@ -66,10 +66,7 @@ public sealed class ItemPropertyRules
         if (definition.SubType == ItemParamEntry.GunSubType) list.Add(new ItemProperty(ItemPropertyTypes.Stat, GunApId, (short)definition.Ap, 0));
         if (definition.HpRecoveryRate != 0) list.Add(new ItemProperty(ItemPropertyTypes.Stat, HpRecoveryId, (short)Math.Truncate(definition.HpRecoveryRate), 0));
         if (definition.MpRecoveryRate != 0) list.Add(new ItemProperty(ItemPropertyTypes.Stat, MpRecoveryId, (short)Math.Truncate(definition.MpRecoveryRate), 0));
-        if (_tables.Attributes.TryGetValue(definition.Id, out var attributes))
-        {
-            foreach (var (index, value) in attributes) list.Add(new ItemProperty(ItemPropertyTypes.Stat, AttributeId(index), (short)value, 0));
-        }
+        list.AddRange(AttributeDefaults(definition));
         return list;
     }
 
@@ -128,6 +125,29 @@ public sealed class ItemPropertyRules
             var at = property.Type == ItemPropertyTypes.Stat ? list.FindIndex(p => p.Type == ItemPropertyTypes.Stat && p.Id == property.Id) : -1;
             if (at >= 0) list[at] = property;
             else list.Add(property);
+        }
+        return list.Take(ItemPropertyTypes.MaxPerItem).ToList();
+    }
+
+    public List<ItemProperty> AttributeDefaults(ItemParamEntry definition)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        var list = new List<ItemProperty>();
+        if (_tables.Attributes.TryGetValue(definition.Id, out var attributes))
+        {
+            foreach (var (index, value) in attributes) list.Add(new ItemProperty(ItemPropertyTypes.Stat, AttributeId(index), (short)value, 0));
+        }
+        return list;
+    }
+
+    public List<ItemProperty> ForClient(ItemParamEntry definition, IReadOnlyList<ItemProperty> stored)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        ArgumentNullException.ThrowIfNull(stored);
+        var list = ForClient(stored, definition);
+        foreach (var attribute in AttributeDefaults(definition))
+        {
+            if (!list.Any(property => property.Type == attribute.Type && property.Id == attribute.Id)) list.Add(attribute);
         }
         return list.Take(ItemPropertyTypes.MaxPerItem).ToList();
     }

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using tPoseidon.Core.Common;
 
@@ -6,8 +7,10 @@ namespace tPoseidon.Core.Net.Packets;
 [WireOpcode((ushort)Opcode.CHANNEL_HANDOFF)]
 public sealed class ChannelHandoffPacket
 {
-    public const int IpFieldWidth = 15;
-    public const int PayloadWidth = IpFieldWidth + 1 + 2;
+    public const int IpBufferWidth = 16;
+    public const int MaxIpChars = IpBufferWidth - 1;
+    public const int PortWidth = sizeof(ushort);
+    public const int PayloadWidth = IpBufferWidth + PortWidth;
 
     public string IpAddress { get; init; } = string.Empty;
     public byte ReservedByte { get; init; } = 0x37;
@@ -16,18 +19,18 @@ public sealed class ChannelHandoffPacket
     public byte[] EncodePayload()
     {
         var ipBytes = Encoding.ASCII.GetBytes(IpAddress);
-        if (ipBytes.Length >= IpFieldWidth)
+        if (ipBytes.Length > MaxIpChars)
         {
             throw new InvalidPacketException(
-                $"ChannelHandoff IP '{IpAddress}' is {ipBytes.Length} bytes; field holds {IpFieldWidth - 1} chars + NUL.");
+                $"ChannelHandoff IP '{IpAddress}' is {ipBytes.Length} bytes; the buffer holds {MaxIpChars} chars + NUL.");
         }
         var w = new PacketWriter(PayloadWidth);
         w.WriteBytes(ipBytes);
-        for (var i = ipBytes.Length; i < IpFieldWidth; i++)
+        for (var i = ipBytes.Length; i < MaxIpChars; i++)
         {
             w.WriteByte(0x00);
         }
-        w.WriteByte(ReservedByte);
+        w.WriteByte(ipBytes.Length == MaxIpChars ? (byte)0x00 : ReservedByte);
         w.WriteUInt16(ChannelPort);
         return w.ToArray();
     }
@@ -39,11 +42,11 @@ public sealed class ChannelHandoffPacket
             throw new InvalidPacketException(
                 $"ChannelHandoff payload must be exactly {PayloadWidth} bytes, got {payload.Length}.");
         }
-        var ipField = payload[..IpFieldWidth];
+        var ipField = payload[..IpBufferWidth];
         var nul = ipField.IndexOf((byte)0);
         var ip = Encoding.ASCII.GetString(nul < 0 ? ipField : ipField[..nul]);
-        var reserved = payload[IpFieldWidth];
-        var port = (ushort)(payload[IpFieldWidth + 1] | (payload[IpFieldWidth + 2] << 8));
+        var reserved = payload[MaxIpChars];
+        var port = BinaryPrimitives.ReadUInt16LittleEndian(payload[IpBufferWidth..]);
         return new ChannelHandoffPacket
         {
             IpAddress = ip,

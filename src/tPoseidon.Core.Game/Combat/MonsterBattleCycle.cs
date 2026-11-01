@@ -11,6 +11,7 @@ public enum MonsterBattleLeaveReason
     OutOfChaseRange,
     ChaseTimeSpent,
     ApproachRefused,
+    TargetNotVisible,
 }
 
 public abstract record MonsterBattleEvent(ushort EntityId);
@@ -71,7 +72,8 @@ public readonly record struct MonsterBattleTarget(
     long Hp,
     bool Protected = false,
     long MaxHp = 0,
-    int Job = 0);
+    int Job = 0,
+    bool DefenceParalysed = false);
 
 public sealed class MonsterBattleCycle
 {
@@ -90,13 +92,15 @@ public sealed class MonsterBattleCycle
     private readonly Dictionary<ushort, Fight> _fights = new();
     private readonly Func<int, IReadOnlyList<MonsterTacticEntry>>? _tacticsOf;
     private readonly Func<int, int, bool>? _castable;
+    private readonly Func<MonsterEntity, int?>? _attackerLimitOf;
 
     public MonsterBattleCycle(
         IMonsterParamLookup catalog,
         IReadOnlyDictionary<int, CharacterCombatInfo> reachByType,
         Random? rng = null,
         Func<int, IReadOnlyList<MonsterTacticEntry>>? tacticsOf = null,
-        Func<int, int, bool>? castable = null)
+        Func<int, int, bool>? castable = null,
+        Func<MonsterEntity, int?>? attackerLimitOf = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(reachByType);
@@ -105,6 +109,19 @@ public sealed class MonsterBattleCycle
         _rng = rng ?? new Random();
         _tacticsOf = tacticsOf;
         _castable = castable;
+        _attackerLimitOf = attackerLimitOf;
+    }
+
+    public bool AtAttackerLimit(MonsterEntity monster, ushort targetEntityId)
+    {
+        ArgumentNullException.ThrowIfNull(monster);
+        if (_attackerLimitOf is null) return false;
+        var limit = _attackerLimitOf(monster);
+        lock (_gate)
+        {
+            var others = _fights.Count(pair => pair.Key != monster.EntityId && pair.Value.TargetEntityId == targetEntityId);
+            return MonsterAttackerLimit.Exceeded(limit, others);
+        }
     }
 
     public static int ChaseTimeMs(MonsterParamEntry definition)
@@ -191,7 +208,8 @@ public sealed class MonsterBattleCycle
         ZoneGeometry? geometry,
         IReadOnlyCollection<MonsterEntity> monsters,
         IReadOnlyDictionary<ushort, MonsterBattleTarget> targets,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        Func<MonsterEntity, ushort, bool>? mayHold = null)
     {
         ArgumentNullException.ThrowIfNull(monsters);
         ArgumentNullException.ThrowIfNull(targets);
@@ -211,6 +229,12 @@ public sealed class MonsterBattleCycle
                 if (!monstersById.TryGetValue(monsterId, out var monster) || monster.IsDead)
                 {
                     _fights.Remove(monsterId);
+                    continue;
+                }
+
+                if (mayHold is not null && !mayHold(monster, fight.TargetEntityId))
+                {
+                    Leave(monsterId, MonsterBattleLeaveReason.TargetNotVisible, events);
                     continue;
                 }
 
@@ -345,7 +369,8 @@ public sealed class MonsterBattleCycle
             target.Level,
             targetHp,
             target.Protected,
-            _rng);
+            _rng,
+            target.DefenceParalysed);
         var fatal = outcome.Damage >= targetHp;
         hpLeftByTarget[fight.TargetEntityId] = fatal ? 0 : targetHp - outcome.Damage;
         fight.Settled = true;

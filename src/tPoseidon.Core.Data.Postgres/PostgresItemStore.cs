@@ -45,7 +45,7 @@ public sealed class PostgresItemStore : IItemStore
                 (item_index, item_class, item_attr, item_charged, item_breaked,
                  refine_type, refine_level, refine_state, item_slot, item_stack)
             VALUES
-                (@item_index, @item_class, 0, 0, '2020-01-01',
+                (@item_index, @item_class, 0, 0, @item_breaked,
                  0, 0, 0, 0, @item_stack)
             RETURNING item_uid
             """,
@@ -54,6 +54,7 @@ public sealed class PostgresItemStore : IItemStore
             insertItemCmd.Parameters.AddWithValue("item_index", itemIndex);
             insertItemCmd.Parameters.AddWithValue("item_class", (short)itemClass);
             insertItemCmd.Parameters.AddWithValue("item_stack", (int)stack);
+            insertItemCmd.Parameters.AddWithValue("item_breaked", Item.NeverBreaks);
             newUid = (long)insertItemCmd.ExecuteScalar()!;
         }
 

@@ -9,5 +9,7 @@ public static class ShadowActors
 
     public static bool IsMonster(int monsterId) => monsterId is >= FirstMonsterId and <= LastMonsterId;
 
+    public static bool HiddenFrom(int monsterId, bool seesShadowWorld) => IsMonster(monsterId) && !seesShadowWorld;
+
     public static bool IsNpc(int npcType) => npcType is >= FirstNpcId and <= LastNpcId;
 }

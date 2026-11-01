@@ -652,7 +652,9 @@ internal sealed class HarconController : IDisposable
     private async Task SpawnAsync(List<ushort> owned, ushort mapId, HarconSpawnOrder order)
     {
         _geometry.TryGetValue(mapId, out var geometry);
-        if (geometry?.Regions.FirstOrDefault(candidate => candidate.Id == order.RegionId) is not { } area)
+        var points = HarconSpawnPlaces.PointsOf(geometry, order.RegionId);
+        ZoneRegion? area = geometry?.Regions.Where(candidate => candidate.Id == order.RegionId).Select(candidate => (ZoneRegion?)candidate).FirstOrDefault();
+        if (points.Count == 0 && area is null)
         {
             Console.WriteLine($"{_logTag} [harcon] map {mapId} has no region {order.RegionId} for monster {order.MonsterId}");
             return;
@@ -662,8 +664,18 @@ internal sealed class HarconController : IDisposable
             ushort x, y;
             lock (_rng)
             {
-                x = (ushort)_rng.Next(Math.Min(area.X1, area.X2), Math.Max(area.X1, area.X2) + 1);
-                y = (ushort)_rng.Next(Math.Min(area.Y1, area.Y2), Math.Max(area.Y1, area.Y2) + 1);
+                if (points.Count > 0)
+                {
+                    var point = points[_rng.Next(points.Count)];
+                    x = (ushort)point.X;
+                    y = (ushort)point.Y;
+                }
+                else
+                {
+                    var rectangle = area!.Value;
+                    x = (ushort)_rng.Next(Math.Min(rectangle.X1, rectangle.X2), Math.Max(rectangle.X1, rectangle.X2) + 1);
+                    y = (ushort)_rng.Next(Math.Min(rectangle.Y1, rectangle.Y2), Math.Max(rectangle.Y1, rectangle.Y2) + 1);
+                }
             }
             if (_monsters.Spawn(order.MonsterId, mapId, x, y, null, null, order.RegionId) is not { } monster) continue;
             owned.Add(monster.EntityId);

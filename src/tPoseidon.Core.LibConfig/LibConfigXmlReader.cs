@@ -1325,6 +1325,23 @@ public sealed class LibConfigXmlReader
             steps.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<ScenarioStep>)pair.Value.OrderBy(step => step.Id).ToArray(), StringComparer.Ordinal));
     }
 
+    public IReadOnlyList<NpcTimerEntry> LoadNpcTimers()
+    {
+        var timers = new List<NpcTimerEntry>();
+        LoadTable(NpcTimerEntry.TableName, row =>
+        {
+            var subType = ReadInt(row, "SubType");
+            if (subType == ShadowTimerEntry.ShadowSubType) return;
+            timers.Add(new NpcTimerEntry(
+                ReadInt(row, "TimerID"), ReadString(row, "Comment"),
+                ReadInt(row, "In_Hour") * 60 + ReadInt(row, "In_Minute"),
+                ReadInt(row, "Out_Hour") * 60 + ReadInt(row, "Out_Minute"),
+                ReadInt(row, "In_DailyValue"), ReadInt(row, "Out_DailyValue"),
+                NpcTimerEntry.ParseWeekdays(ReadString(row, "WorkingDays")), subType));
+        });
+        return timers;
+    }
+
     public IReadOnlyList<ShadowTimerEntry> LoadShadowTimers()
     {
         var timers = new List<ShadowTimerEntry>();
@@ -2049,7 +2066,8 @@ public sealed class LibConfigXmlReader
             ReadInt(row, "ID"),
             ReadString(row, "Name").Trim(),
             ReadString(row, "InvFileName").Trim(),
-            ReadInt(row, "InvBundleNum"))));
+            ReadInt(row, "InvBundleNum"),
+            ReadFlags(row, "Attr"))));
         return entries;
     }
 

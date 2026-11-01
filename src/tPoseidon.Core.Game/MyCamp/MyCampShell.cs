@@ -154,6 +154,7 @@ public sealed class MyCampShell
     public IReadOnlyCollection<ulong> Guests => _guests;
     public IReadOnlyDictionary<ulong, MyCampItemRecord> Layout => _layout;
     public MyCampTimerTracker Timers { get; } = new();
+    public MyCampSeating Seating { get; } = new();
 
     public void SetChat(string title, byte maxGuests, bool hasPassword, string password)
     {

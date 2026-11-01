@@ -17,6 +17,7 @@ internal sealed class MyCampController : IDisposable
     private readonly Func<InGameSessionState, Opcode, byte[], Task> _sendToOthersOnMap;
     private readonly Func<InGameSessionState, Task> _showPlayers;
     private readonly Func<ushort> _newEntityId;
+    private readonly Func<ushort, int> _seatFlags;
     private readonly Encoding _text;
     private readonly string _logTag;
     private readonly Dictionary<ulong, MyCampShell> _byOwner = new();
@@ -28,7 +29,7 @@ internal sealed class MyCampController : IDisposable
         IMyCampStore store, Func<ushort, int> zoneType, IReadOnlyDictionary<ushort, ZoneGeometry> geometry,
         Func<IReadOnlyCollection<InGameSessionState>> sessions, Func<ushort, Opcode, byte[], Task> sendToMap,
         Func<InGameSessionState, Opcode, byte[], Task> sendToOthersOnMap, Func<InGameSessionState, Task> showPlayers,
-        Func<ushort> newEntityId, Encoding text, string logTag)
+        Func<ushort> newEntityId, Func<ushort, int> seatFlags, Encoding text, string logTag)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _zoneType = zoneType ?? throw new ArgumentNullException(nameof(zoneType));
@@ -38,6 +39,7 @@ internal sealed class MyCampController : IDisposable
         _sendToOthersOnMap = sendToOthersOnMap ?? throw new ArgumentNullException(nameof(sendToOthersOnMap));
         _showPlayers = showPlayers ?? throw new ArgumentNullException(nameof(showPlayers));
         _newEntityId = newEntityId ?? throw new ArgumentNullException(nameof(newEntityId));
+        _seatFlags = seatFlags ?? throw new ArgumentNullException(nameof(seatFlags));
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
@@ -360,6 +362,29 @@ internal sealed class MyCampController : IDisposable
         Log(st, $"kicks {guestCharacter.Name} out of the camp");
     });
 
+    public Task SitAsync(InGameSessionState st, ReadOnlyMemory<byte> payload) => Locked(async () =>
+    {
+        if (!MyCampFrames.TryReadSit(payload.Span, out var objectUid, out var state)) return;
+        if (state != MyCampSeating.Sitting && state != MyCampSeating.Standing) return;
+        if (SeatingShell(st) is not { } shell) return;
+        var refused = true;
+        if (shell.Layout.TryGetValue(objectUid, out var record) && record.State == MyCampRules.StatePlaced)
+        {
+            if (state == MyCampSeating.Sitting)
+                refused = shell.Seating.Sit(objectUid, MyCampSeating.SeatCount(_seatFlags(record.ItemIndex)), st.PlayerEntityId, state) < 0;
+            else
+                refused = !shell.Seating.Stand(objectUid, st.PlayerEntityId);
+        }
+        if (refused)
+        {
+            await SendAsync(st, Opcode.S2C_MYCAMP_SIT_REFUSED, MyCampFrames.SitAnswer(objectUid, state)).ConfigureAwait(false);
+            return;
+        }
+        await _sendToMap(shell.ShellZone, Opcode.S2C_MYCAMP_SIT, MyCampFrames.Sit(st.PlayerEntityId, objectUid, state)).ConfigureAwait(false);
+        await SendAsync(st, Opcode.S2C_MYCAMP_SIT_OK, MyCampFrames.SitAnswer(objectUid, state)).ConfigureAwait(false);
+        Log(st, state == MyCampSeating.Sitting ? $"sits on camp object {objectUid}" : $"stands up from camp object {objectUid}");
+    });
+
     public Task LeftAsync(InGameSessionState st) => Locked(async () =>
     {
         if (st.Character is not { } character) return;
@@ -372,6 +397,7 @@ internal sealed class MyCampController : IDisposable
         if (GuestShell(character.CharacterId) is { } shell)
         {
             shell.RemoveGuest(character.CharacterId);
+            shell.Seating.Release(st.PlayerEntityId);
             await _sendToMap(shell.FieldMap, Opcode.S2C_MYCAMP_GUEST_COUNT, MyCampFrames.GuestCount(shell)).ConfigureAwait(false);
         }
     });
@@ -405,6 +431,7 @@ internal sealed class MyCampController : IDisposable
     {
         if (guest.Character is not { } character) return;
         shell.RemoveGuest(character.CharacterId);
+        shell.Seating.Release(guest.PlayerEntityId);
         _transfers.Remove(character.CharacterId);
         if (guest.MapId == shell.ShellZone) await ReturnAsync(guest, shell, kickReason).ConfigureAwait(false);
         await _sendToMap(shell.FieldMap, Opcode.S2C_MYCAMP_GUEST_COUNT, MyCampFrames.GuestCount(shell)).ConfigureAwait(false);
@@ -505,6 +532,13 @@ internal sealed class MyCampController : IDisposable
 
     private MyCampShell? ShellOfOwner(InGameSessionState st) =>
         st.Character is { } character && Shell(character.CharacterId) is { } shell && st.MapId == shell.ShellZone ? shell : null;
+
+    private MyCampShell? SeatingShell(InGameSessionState st)
+    {
+        if (st.Character is not { } character || !MyCampRules.IsShellZone(st.MapId)) return null;
+        var shell = Shell(character.CharacterId) ?? GuestShell(character.CharacterId);
+        return shell is not null && shell.ShellZone == st.MapId ? shell : null;
+    }
 
     private MyCampShell? GuestShell(ulong guestId)
     {

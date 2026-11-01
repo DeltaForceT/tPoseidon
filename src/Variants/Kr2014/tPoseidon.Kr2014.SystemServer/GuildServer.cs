@@ -75,6 +75,7 @@ public sealed class GuildServer
             GuildFrames.ReadDetailByCodeRequest(p) is { } guildCode ? _guilds.DetailByCode(id, guildCode) : null);
         On(dispatcher, ctx, GuildFrames.DetailByCharacter, (id, p) =>
             GuildFrames.ReadDetailByCharacterRequest(p, _text) is { } name ? _guilds.DetailByCharacter(id, name) : null);
+        dispatcher.Register(GuildFrames.GuildMemo, (_, payload, ct) => GuildMemoAsync(ctx, payload, ct));
         dispatcher.Register(GuildFrames.GuildSms, (_, payload, ct) => GuildSmsAsync(ctx, payload, ct));
         dispatcher.Register(GuildGameRooms.DetailRequest, async (_, payload, ct) =>
         {
@@ -434,6 +435,28 @@ public sealed class GuildServer
         });
 
     public IFriendStore? Friends { get; set; }
+
+    private async Task GuildMemoAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    {
+        if (_room.Find(ctx) is not { } member || GuildFrames.ReadGuildMemo(payload.Span, _text) is not { } memo) return;
+        var owner = member.Character.CharacterId;
+        var plan = _guilds.GuildMemo(owner);
+        switch (plan.Outcome)
+        {
+            case GuildMemoOutcome.NoGuild:
+                await ctx.SendFrameAsync(GuildFrames.GuildMemoNoGuild, Array.Empty<byte>(), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+                break;
+            case GuildMemoOutcome.Deliver when _room.FindNamed(memo.TargetName) is { } target:
+                await target.Context.SendFrameAsync(FriendFrames.GuildSmsReceived,
+                    FriendFrames.GuildSmsFrom(owner, plan.SenderName, memo.Text, _text), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+                _log($"[guild] memo from 0x{owner:X} to 0x{target.Character.CharacterId:X}");
+                break;
+            case GuildMemoOutcome.Deliver when Friends?.FindCharacter(memo.TargetName) is { } stored:
+                var kept = Friends.SendMessage(stored.FriendCharacterId, owner, FriendRules.GuildMessageKind, FriendRules.Truncate(memo.Text, FriendRules.MessageContentLength, _text));
+                _log($"[guild] memo from 0x{owner:X} to the offline 0x{stored.FriendCharacterId:X}: {(kept ? "stored" : "not stored")}");
+                break;
+        }
+    }
 
     private async Task GuildSmsAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {

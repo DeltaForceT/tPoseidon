@@ -7,8 +7,8 @@ public static class NpcCheckRules
     public const int Allowed = 1;
     public const int NotAllowed = 2;
     public const int FirstJob = 1;
-    public const int LastJob = 33;
-    public const int SecondMaskFirstJob = 17;
+    public const int LastJob = 36;
+    public const int SecondMaskFirstJob = 19;
     public const int SkillLevelLow = 2;
     public const int SkillMissing = 3;
     public const int RandomMoveZones = 5;

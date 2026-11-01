@@ -46,6 +46,7 @@ public static class SkillFrames
     public const int HitResultSize = 30;
     public const int MonsterHitRecordSize = 32;
     public const int PositionTailSize = 10;
+    public const int FlashAimTailSize = 8;
     public const int MonsterHpSize = 9;
     public const int DeathSize = 3;
 
@@ -246,6 +247,15 @@ public static class SkillFrames
         w.WriteByte(unchecked((byte)effectClass));
         w.WriteUInt16(skillId);
         w.WriteUInt16(effectState);
+        return w.ToArray();
+    }
+
+    public static byte[] FlashAimTail(float speed, ushort aimX, ushort aimY)
+    {
+        var w = new PacketWriter(FlashAimTailSize);
+        w.WriteUInt32(BitConverter.SingleToUInt32Bits(speed));
+        w.WriteUInt16(aimX);
+        w.WriteUInt16(aimY);
         return w.ToArray();
     }
 

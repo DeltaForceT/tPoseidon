@@ -33,8 +33,8 @@ public static class LookChangeRules
         return tier switch
         {
             BaseTier => new MakeUp((ushort)character.Species, (byte)character.Species, (byte)character.Hair),
-            OccupationRules.SecondJobTier when character.Job2 != 0 => new MakeUp(character.Type2, character.Job2, (byte)character.Hair2),
-            OccupationRules.ThirdJobTier when character.Job3 != 0 => new MakeUp(character.Type3, character.Job3, (byte)character.Hair3),
+            OccupationRules.SecondJobTier when character.Job2 != 0 => new MakeUp(OccupationRules.SecondJobTypeOf(character), character.Job2, (byte)character.Hair2),
+            OccupationRules.ThirdJobTier when character.Job3 != 0 => new MakeUp(OccupationRules.ThirdJobTypeOf(character), character.Job3, (byte)character.Hair3),
             _ => null,
         };
     }
@@ -49,7 +49,7 @@ public static class LookChangeRules
     public static ushort BodyTypeOf(Character character)
     {
         ArgumentNullException.ThrowIfNull(character);
-        return MakeUpOf(character, character.JobState)?.Type ?? (ushort)character.Species;
+        return MakeUpOf(character, OccupationRules.LookStateOf(character))?.Type ?? (ushort)character.Species;
     }
 
     public static ushort[] Looks(Character character)
@@ -58,8 +58,8 @@ public static class LookChangeRules
         return
         [
             (byte)character.Species, (ushort)character.Species,
-            character.Job2, character.Type2,
-            character.Job3, character.Type3,
+            character.Job2, OccupationRules.SecondJobTypeOf(character),
+            character.Job3, OccupationRules.ThirdJobTypeOf(character),
         ];
     }
 }

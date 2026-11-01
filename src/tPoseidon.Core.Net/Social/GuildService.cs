@@ -14,6 +14,15 @@ public enum GuildSmsOutcome
     Deliver,
 }
 
+public enum GuildMemoOutcome
+{
+    Dropped,
+    NoGuild,
+    Deliver,
+}
+
+public sealed record GuildMemoPlan(GuildMemoOutcome Outcome, string SenderName);
+
 public sealed record GuildSmsPlan(GuildSmsOutcome Outcome, ulong MasterCharacterId, string SenderName);
 
 public sealed record GuildNameOrder(ulong CharacterId, string GuildName, string Alias, GuildEmblem Emblem);
@@ -625,6 +634,17 @@ public sealed class GuildService
             foreach (var gone in members) ClearMembership(outbox, gone);
         }
         return (GuildRules.Ok, outbox);
+    }
+
+    public GuildMemoPlan GuildMemo(ulong characterId)
+    {
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } sender) return new GuildMemoPlan(GuildMemoOutcome.Dropped, string.Empty);
+            return sender.GuildCode == 0
+                ? new GuildMemoPlan(GuildMemoOutcome.NoGuild, sender.Name)
+                : new GuildMemoPlan(GuildMemoOutcome.Deliver, sender.Name);
+        }
     }
 
     public GuildSmsPlan GuildSms(ulong characterId, uint guildCode)

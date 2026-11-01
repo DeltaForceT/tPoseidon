@@ -27,7 +27,7 @@ public static class MyCampFrames
         w.WriteNulTerminated(shell.Title, text);
         w.WriteNulTerminated(shell.OwnerName, text);
         WriteSystemTime(w, shell.OpenedAt);
-        w.WriteUInt16(0);
+        WriteSittables(w, shell);
         return w.ToArray();
     }
 
@@ -42,8 +42,51 @@ public static class MyCampFrames
         w.WriteNulTerminated(shell.OwnerName, text);
         w.WriteByte(GuestView);
         WriteSystemTime(w, shell.OpenedAt);
-        w.WriteUInt16(0);
+        WriteSittables(w, shell);
         return w.ToArray();
+    }
+
+    public static byte[] Sit(ushort playerId, ulong objectUid, byte state)
+    {
+        var w = new PacketWriter(11);
+        w.WriteUInt16(playerId);
+        w.WriteUInt64(objectUid);
+        w.WriteByte(state);
+        return w.ToArray();
+    }
+
+    public static byte[] SitAnswer(ulong objectUid, byte state)
+    {
+        var w = new PacketWriter(9);
+        w.WriteUInt64(objectUid);
+        w.WriteByte(state);
+        return w.ToArray();
+    }
+
+    public static bool TryReadSit(ReadOnlySpan<byte> payload, out ulong objectUid, out byte state)
+    {
+        objectUid = 0;
+        state = 0;
+        if (payload.Length < 9) return false;
+        objectUid = System.Buffers.Binary.BinaryPrimitives.ReadUInt64LittleEndian(payload);
+        state = payload[8];
+        return true;
+    }
+
+    private static void WriteSittables(PacketWriter w, MyCampShell shell)
+    {
+        var occupied = shell.Seating.Occupied();
+        w.WriteUInt16((ushort)occupied.Count);
+        foreach (var (objectUid, sitters) in occupied)
+        {
+            w.WriteUInt64(objectUid);
+            w.WriteByte((byte)sitters.Count);
+            foreach (var sitter in sitters)
+            {
+                w.WriteUInt16(sitter.PlayerId);
+                w.WriteByte(sitter.State);
+            }
+        }
     }
 
     public static byte[] House(MyCampShell shell, ulong ownerUid, Encoding text)

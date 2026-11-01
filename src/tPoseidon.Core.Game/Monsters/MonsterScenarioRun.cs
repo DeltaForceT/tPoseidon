@@ -80,7 +80,7 @@ public sealed class MonsterScenarioRun
                     SpawnMany(step, step.ResultValue);
                     break;
             }
-            if (step.Comment.Length != 0) _host.Announce(step.Comment);
+            if (!string.IsNullOrWhiteSpace(step.Comment)) _host.Announce(step.Comment);
         }
         _index++;
     }
@@ -106,7 +106,7 @@ public sealed class MonsterScenarioRun
         {
             if (Evaluate(entry, false) != Verdict.Passed) continue;
             _pending.Remove(entry);
-            if (entry.Comment.Length != 0) _host.Announce(entry.Comment);
+            if (!string.IsNullOrWhiteSpace(entry.Comment)) _host.Announce(entry.Comment);
         }
     }
 

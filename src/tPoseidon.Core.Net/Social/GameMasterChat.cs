@@ -155,7 +155,7 @@ public sealed class GameMasterChat
         new GameMasterChatUsage(ChatBlockList, "", "List the chat-blocked characters."),
         new GameMasterChatUsage(MoveBlockList, "", "List the move-blocked characters."),
         new GameMasterChatUsage(TradeBlockList, "", "List the trade-blocked characters."),
-        new GameMasterChatUsage(SummonMonster, "<monsterType> [count]", "Summon monsters where you stand (monster type 2000 to 3434)."),
+        new GameMasterChatUsage(SummonMonster, "<monsterType> [count]", "Summon monsters where you stand (monster type 2000 to 16998)."),
         new GameMasterChatUsage(Item, "<itemId> [count] [name]", "Put an item in your own bag, or in the bag of the named online character (count defaults to 1)."),
         new GameMasterChatUsage(CashItem, "<itemId> [count] [hours] [name]", "Put an item in the cash box of your own account, or of the named online character; the player takes it out like a bought item. Hours is the period of a timed item (0 or left out: the shop period of the item, if it has one)."),
         new GameMasterChatUsage(CampItem, "<campItemId> [count] [name]", "Add a My Camp item (count defaults to 1, at most 100) to the new items of your own account, or of the named character's account; the player takes it from the camp tab of My Shop."),
