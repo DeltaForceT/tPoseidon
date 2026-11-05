@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Variants/Kr2014/tPoseidon.Kr2014.GameServer/tPoseidon.Kr2014.GameServer.csproj" />
+  </ItemGroup>
+</Project>

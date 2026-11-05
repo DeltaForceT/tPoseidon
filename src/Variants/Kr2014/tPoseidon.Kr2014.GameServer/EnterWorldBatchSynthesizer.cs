@@ -16,6 +16,32 @@ public static class EnterWorldBatchSynthesizer
 {
     private const uint EquippedSlotFlag = 1;
 
+    // KR2014 self-character creation selects a tier from the stats tail, then
+    // reads that tier's body/job from GAME_CHAR_DATA and its matching hair.
+    private static byte[] RestoreLoginAppearance(byte[] payload, Character character, bool stats)
+    {
+        if (stats)
+        {
+            payload[271] = (byte)character.Hair;
+            payload[272] = (byte)character.Hair2;
+            payload[273] = OccupationRules.LookStateOf(character);
+            payload[276] = (byte)character.Hair3;
+        }
+        else
+        {
+            var type2 = OccupationRules.SecondJobTypeOf(character);
+            var type3 = OccupationRules.ThirdJobTypeOf(character);
+            payload[0x35] = (byte)type2;
+            payload[0x36] = (byte)(type2 >> 8);
+            payload[0x37] = character.Job2;
+            payload[0x38] = (byte)type3;
+            payload[0x39] = (byte)(type3 >> 8);
+            payload[0x3A] = character.Job3;
+        }
+        return payload;
+    }
+
+
     private static bool EverywhereInView(int x, int y) => true;
 
     public static async Task SendBatchAsync(
@@ -80,7 +106,7 @@ public static class EnterWorldBatchSynthesizer
         ArgumentNullException.ThrowIfNull(questLists);
 
         var charData = GameCharDataPacket.For(character);
-        await SendFrameAsync(ctx, Opcode.GAME_CHAR_DATA, randKey: 0x8A, charData.EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.GAME_CHAR_DATA, randKey: 0x8A, RestoreLoginAppearance(charData.EncodePayload(), character, false), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_BATCH_HEADER, randKey: 0x59,
             new GameBatchHeaderPacket { ClockMilliseconds = gameClock, EntityIdMirror = entityId, SpawnXTbd = (ushort)character.PositionX, SpawnYTbd = (ushort)character.PositionY }.EncodePayload(), ct);
@@ -89,7 +115,7 @@ public static class EnterWorldBatchSynthesizer
         await SendFrameAsync(ctx, Opcode.GAME_ENTITY_LIST, randKey: 0x76, itemList.EncodePayload(), ct);
 
         var charStats = BuildCharInfo(character, itemStore);
-        await SendFrameAsync(ctx, Opcode.GAME_CHAR_STATS, randKey: 0x2D, charStats.EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.GAME_CHAR_STATS, randKey: 0x2D, RestoreLoginAppearance(charStats.EncodePayload(), character, true), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_UNK_EA, randKey: 0xD0, questLists.Normal, ct);
         await SendFrameAsync(ctx, Opcode.GAME_MONSTER_QUEST, randKey: 0xC2, questLists.Monster, ct);
