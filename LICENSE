@@ -1,5 +1,5 @@
 tPoseidon Beta License
-Version 1.0
+Version 1.1
 
 Copyright (c) 2026 the tPoseidon authors. All rights reserved except as
 granted below.
@@ -67,19 +67,22 @@ license after the beta; until it does, these terms apply.
    f. use the Software or the project's spaces to distribute the game
       client or any file belonging to the game.
 
-   If the Software is hosted on a service whose terms let users fork or copy
-   repositories (for example by pressing a "Fork" button), you may use that
-   feature only to the extent the service's terms require, and only to view
-   the Software and to send bug reports and suggestions back to the tPoseidon
-   project. Using,
-   building for distribution, hosting or distributing such a copy is not
-   permitted.
+   If the Software is hosted on a service that lets users fork or copy
+   repositories (for example by pressing a "Fork" button), you may fork it
+   there, change it and build it on your own machines only to prepare a
+   contribution and send it to the tPoseidon project as a pull request under
+   section 4. You may not publish builds or releases of a fork, host a game
+   server with it except privately for testing under section 2(d), or use a
+   fork for anything else.
 
 4. Contributions
 
-   You may send bug reports and suggestions to the tPoseidon project.
-   Code contributions (patches and pull requests) are not accepted until
-   the project's 1.0 release. By sending anything to the project you:
+   You may send bug reports, suggestions and code contributions (pull
+   requests) to the tPoseidon project. Every commit in a pull request must
+   carry a "Signed-off-by" line (git commit -s), which confirms points a and
+   b below. The project decides which contributions to include and may
+   change them before including them. By sending anything to the project
+   you:
 
    a. confirm that you wrote it or otherwise have the right to submit it,
       and that it does not contain files belonging to the game or code you

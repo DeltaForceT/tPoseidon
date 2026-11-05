@@ -1,0 +1,31 @@
+name: Sign-off
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  sign-off:
+    name: Commits are signed off
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check every commit for a Signed-off-by line
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          missing=0
+          for commit in $(git rev-list "$BASE..$HEAD"); do
+            if ! git log -1 --format=%B "$commit" | grep -qE '^Signed-off-by: .+ <.+>$'; then
+              echo "::error::Commit $commit has no Signed-off-by line. Sign it off with git commit -s (or git commit --amend -s)."
+              missing=1
+            fi
+          done
+          exit $missing

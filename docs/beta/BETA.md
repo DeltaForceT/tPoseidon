@@ -18,8 +18,8 @@ We announce each move on the forum and in the release notes.
 
 ## Beta rules
 
-- **No forks during the beta.** Download it, run it, host it for yourself and your community, that's all fine. Publishing a modified copy, a fork or an emulator built from tPoseidon is not, and neither is re-uploading the source or the packages somewhere else. The details are in the [LICENSE](../../LICENSE). We plan to move to an open-source license after the beta.
-- While we're in beta the project offers downloads (the release packages) and takes bug reports and suggestions. Code contributions and forks open at 1.0.
+- **Forks only for pull requests during the beta.** Download it, run it, host it for yourself and your community, that's all fine. You can fork the repository to prepare a pull request. Publishing a modified copy, a fork or an emulator built from tPoseidon is not allowed, and neither is re-uploading the source or the packages somewhere else. The details are in the [LICENSE](../../LICENSE). We plan to move to an open-source license after the beta.
+- While we're in beta the project offers downloads (the release packages) and takes bug reports, suggestions and pull requests. See [CONTRIBUTING.md](../../CONTRIBUTING.md).
 - Bug reports and suggestions are welcome. We aren't taking code contributions during the beta; see [CONTRIBUTING.md](../../CONTRIBUTING.md) for how that opens up at 1.0.
 - Bring your own client. We don't ship it, and the project's spaces aren't the place to share it.
 

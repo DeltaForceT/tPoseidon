@@ -29,8 +29,8 @@ tPoseidon runs every server the game needs (login, channel, master, system, game
 
 tPoseidon is in beta. These are the rules that matter. The full text is in [BETA.md](docs/beta/BETA.md) and the [LICENSE](LICENSE).
 
-- **Downloads, bug reports and suggestions only.** During the beta the project offers the release packages to download and takes bug reports and suggestions. Code contributions and forks open at 1.0.
-- **No forks and no redistribution of modified copies during the beta.** Download it, run it, host it for yourself and your community. Don't publish modified builds, forks or other emulators based on it, and don't re-upload the packages.
+- **Downloads, bug reports, suggestions and pull requests.** During the beta the project offers the release packages to download and takes bug reports, suggestions and code contributions. See [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Forks only for pull requests, no redistribution of modified copies during the beta.** Download it, run it, host it for yourself and your community. You can fork the repository to prepare a pull request, but don't publish modified builds, forks or other emulators based on it, and don't re-upload the packages.
 - **No wipes.** Your accounts and characters live in your own database. Updates migrate it. Back up before every update.
 - **Bring your own KR 2014 client.** I don't ship it. Never share client or game files in this project's spaces.
 - **Put your version in every bug report**, for example `0.75.3-beta`. `tposeidon status` prints it.
@@ -197,6 +197,6 @@ tPoseidon was built through reverse engineering and my own packet captures. No o
 
 ## License
 
-During the beta, tPoseidon uses its own [beta license](LICENSE). It's free to download, run and host for yourself and your community. What you can't do yet is publish modified versions, forks or other emulators built from it, or re-upload the source or the packages somewhere else. I plan to move to an open-source license (AGPL) at 1.0.
+During the beta, tPoseidon uses its own [beta license](LICENSE). It's free to download, run and host for yourself and your community. You can fork it to prepare a pull request. What you can't do yet is publish modified versions, forks or other emulators built from it, or re-upload the source or the packages somewhere else. I plan to move to an open-source license (AGPL) at 1.0.
 
 Trickster Online, its client, art, music, data and trademarks belong to their owners. They aren't part of this project and the license doesn't cover them; see [NOTICE](NOTICE). tPoseidon is a fan project and has nothing to do with the game's owners.
