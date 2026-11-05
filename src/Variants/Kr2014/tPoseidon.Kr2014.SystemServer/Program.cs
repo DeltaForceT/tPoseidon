@@ -352,8 +352,14 @@ var clientHost = new tPoseidon.Core.Net.S2.S2ServerHost
         gameMasterServer.Closed(ctx);
         if (socialRoom.Leave(ctx) is { } member)
         {
-            await friendServer.ClosedAsync(member, stopCts.Token).ConfigureAwait(false);
-            await partyServer.ClosedAsync(member, stopCts.Token).ConfigureAwait(false);
+            try
+            {
+                await friendServer.ClosedAsync(member, stopCts.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                await partyServer.ClosedAsync(member, CancellationToken.None).ConfigureAwait(false);
+            }
             await guildServer.ClosedAsync(member, stopCts.Token).ConfigureAwait(false);
             coupleServer.Closed(member);
             angelServer.Closed(member);

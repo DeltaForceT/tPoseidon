@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/tPoseidon.Core.Net/tPoseidon.Core.Net.csproj" />
+      <ProjectReference Include="../../src/Variants/Kr2014/tPoseidon.Kr2014.SystemServer/tPoseidon.Kr2014.SystemServer.csproj" />
+  </ItemGroup>
+</Project>

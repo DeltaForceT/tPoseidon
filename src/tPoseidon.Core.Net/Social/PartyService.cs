@@ -136,7 +136,18 @@ public sealed class PartyService
         var outbox = new PartyOutbox();
         lock (_gate)
         {
-            if (_online.ContainsKey(characterId)) return outbox;
+            var expired = ExpireOfflineMembers();
+            foreach (var message in expired) outbox.Add(message);
+            foreach (var order in expired.Orders) outbox.Order(order);
+            if (_online.TryGetValue(characterId, out var current))
+            {
+                current.Name = name;
+                current.Kind = kind;
+                current.Level = level;
+                current.Zone = _zones.GetValueOrDefault(characterId);
+                if (current.Party is { } active) RestorePartyState(outbox, active, current);
+                return outbox;
+            }
             var member = new Member(characterId, name, kind, level) { Zone = _zones.GetValueOrDefault(characterId) };
             if (_depot.Remove(characterId, out var entry)
                 && _parties.TryGetValue(entry.PartyId, out var party)
@@ -147,8 +158,7 @@ public sealed class PartyService
                 member.Party = party;
                 Broadcast(outbox, party, PartyFrames.MemberReturned, PartyFrames.MemberReturnedFor(member.MemberId, characterId, party.LevelFlag), except: null);
                 party.Online.Add(member);
-                RefreshMirrors(outbox, party);
-                RecomputeShare(outbox, party);
+                RestorePartyState(outbox, party, member);
             }
             else
             {
@@ -169,10 +179,8 @@ public sealed class PartyService
             DropSeekerPost(outbox, characterId);
             if (member.Party is not { } party) return outbox;
             var wasMaster = party.MasterMemberId == member.MemberId;
-            if (!wasMaster || party.Online.Count > 1)
-            {
-                _depot[characterId] = new DepotEntry(party.Id, _time.GetUtcNow() + _rules.OfflineMemberKeepTime);
-            }
+            // Retain the final online member too, so an all-offline party can recover.
+            _depot[characterId] = new DepotEntry(party.Id, _time.GetUtcNow() + _rules.OfflineMemberKeepTime);
             party.Online.Remove(member);
             party.Offline.Add(member);
             if (party.PendingAsker == characterId) party.PendingAsker = 0;
@@ -1533,4 +1541,28 @@ public sealed class PartyService
         public int Size => Online.Count + Offline.Count;
         public bool IsFull => Size >= PartyRules.MostMembers;
     }
+    private void RestorePartyState(PartyOutbox outbox, Party party, Member member)
+    {
+        if (MasterOf(party) is null)
+        {
+            party.MasterMemberId = member.MemberId;
+            Broadcast(outbox, party, PartyFrames.MasterChanged,
+                PartyFrames.MasterChangedFor(party.MasterMemberId, party.LevelFlag), except: member);
+            HandOverBoardNotice(outbox, party);
+        }
+        outbox.Add(new(member.CharacterId, PartyFrames.JoinState, PartyFrames.JoinStateFor(
+            party.Id, party.Name, party.MasterMemberId, member.MemberId, party.DivisionType, party.LevelFlag,
+            party.ItemShare, party.SecondOption,
+            party.Online.Select(InfoOf).ToArray(), party.Offline.Select(InfoOf).ToArray(), _text)));
+        RefreshMirrors(outbox, party);
+        // Rejoining is not a roster edit: preserve a configured custom split.
+        if (party.DivisionType == PartyDivision.Custom)
+            Broadcast(outbox, party, PartyFrames.Division, PartyFrames.DivisionFor(party.DivisionType, party.Shares), except: null);
+        else
+            Recompute(outbox, party);
+        RecomputeShare(outbox, party);
+        RefreshPartyPost(outbox, party);
+    }
+
+
 }
