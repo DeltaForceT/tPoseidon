@@ -353,6 +353,35 @@ public static class EquipmentRules
             stats.Hp + bonus[9], stats.Dp + bonus[10], stats.Hv + bonus[11]);
     }
 
+    public static EffectiveStats WithEquipment(
+        EffectiveStats stats,
+        IReadOnlyList<WornItem> worn,
+        IItemPropertyStore properties,
+        ItemPropertyRules propertyRules,
+        IReadOnlyList<int> extra)
+    {
+        ArgumentNullException.ThrowIfNull(worn);
+        ArgumentNullException.ThrowIfNull(properties);
+        ArgumentNullException.ThrowIfNull(propertyRules);
+        ArgumentNullException.ThrowIfNull(extra);
+        var bonus = new int[ItemStatCount];
+        for (var stat = 0; stat < bonus.Length && stat < extra.Count; stat++) bonus[stat] = extra[stat];
+        foreach (var held in worn)
+        {
+            // Full replaces stored base stats and supplies missing definition defaults.
+            // The definition-only overload below already adds those defaults once.
+            foreach (var property in propertyRules.Full(held.Definition, properties.ForItem(held.Item.ItemUid)))
+            {
+                var stat = property.Id - ItemPropertyRules.FirstStatId;
+                if (property.Type is >= 0 and <= ItemPropertyTypes.RefineBonus && stat is >= 0 and < ItemStatCount)
+                    bonus[stat] += property.Value;
+            }
+            for (var stat = 0; stat < ItemStatCount && stat < held.Definition.StatBonuses.Count; stat++)
+                bonus[stat] -= held.Definition.StatBonuses[stat];
+        }
+        return WithEquipment(stats, worn.Select(held => held.Definition), bonus);
+    }
+
     public static IReadOnlyList<int> Totals(EffectiveStats stats) => new[]
     {
         stats.Ap, stats.Ac, stats.Dx, stats.Mp, stats.Ma, stats.Md,

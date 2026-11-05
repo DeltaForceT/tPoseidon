@@ -39,3 +39,6 @@ jobs:
 
       - name: Build
         run: dotnet build tPoseidon.sln --configuration Release --no-restore
+
+      - name: Equipment stat regression
+        run: dotnet run --project tests/EquipmentStatsRegression --configuration Release

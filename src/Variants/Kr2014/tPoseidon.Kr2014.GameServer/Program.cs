@@ -2956,7 +2956,7 @@ Func<S2SessionContext, CancellationToken, Task> sessionHandler = (ctx, sessionCt
             var worn = tPoseidon.Core.Game.Items.EquipmentRules.WornBy(itemStore, itemCatalog, character.CharacterId);
             return tPoseidon.Core.Game.Items.EquipmentRules.WithEquipment(
                 gameMasters.Rates.WithAbilities(statusChart.Compute(partyBonuses.WithBonus(character.CharacterId, points ?? StatusValueChart.PointsOf(character)))),
-                worn.Select(held => held.Definition),
+                worn, itemPropertyStore, itemPropertyRules,
                 WithFortune(tPoseidon.Core.Game.Items.SetItemBook.Bonus(setItems.Active(worn.Select(held => held.Definition.Id)))));
         }
 
