@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using tPoseidon.Core.Game.Drilling;
+using tPoseidon.Core.Game.Monsters;
 
 namespace tPoseidon.Core.Net.World;
 
@@ -7,6 +8,19 @@ public readonly record struct DrillSpot(ushort X, ushort Y, int MapDepth, int La
 
 public static class DrillFrames
 {
+    // Treasure events (0x0482 and 0x043D) have no hidden-state word.
+    // Ordinary ground-item frames must retain it.
+    public static byte[] TreasureItem(FieldItem item)
+    {
+        var actor = GroundItemFrames.AlreadyThere(item);
+        const int positionBytes = 3 * sizeof(ushort);
+        const int hiddenBytes = sizeof(ushort);
+        var payload = new byte[actor.Length - hiddenBytes];
+        actor.AsSpan(0, positionBytes).CopyTo(payload);
+        actor.AsSpan(positionBytes + hiddenBytes).CopyTo(payload.AsSpan(positionBytes));
+        return payload;
+    }
+
     public const int StartRequestSize = 5;
     public const int CancelRequestSize = 4;
     public const int EndRequestSize = 8;

@@ -476,10 +476,10 @@ internal sealed class DrillController
             _groundItems.Add(item);
             dropped.Add(item);
         }
-        var w = new PacketWriter(4 + dropped.Count * (GroundItemFrames.AlreadyThereSize + GroundItemFrames.RareItemExtraBytes));
+        var w = new PacketWriter(4 + dropped.Count * (GroundItemFrames.AlreadyThereSize - sizeof(ushort) + GroundItemFrames.RareItemExtraBytes));
         w.WriteUInt16(owner.PlayerEntityId);
         w.WriteUInt16((ushort)dropped.Count);
-        foreach (var item in dropped) w.WriteBytes(GroundItemFrames.AlreadyThere(item));
+        foreach (var item in dropped) w.WriteBytes(DrillFrames.TreasureItem(item));
         await _sendToMap(owner.MapId, opcode, w.ToArray()).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [spot] 0x{owner.PlayerEntityId:X4} dug treasure {row.ItemId}: {dropped.Count} items (today value {today})");
     }
