@@ -33,11 +33,13 @@ tPoseidon is in beta. These are the rules that matter. The full text is in [BETA
 - **Forks only for pull requests, no redistribution of modified copies during the beta.** Download it, run it, host it for yourself and your community. You can fork the repository to prepare a pull request, but don't publish modified builds, forks or other emulators based on it, and don't re-upload the packages.
 - **No wipes.** Your accounts and characters live in your own database. Updates migrate it. Back up before every update.
 - **Bring your own KR 2014 client.** I don't ship it. Never share client or game files in this project's spaces.
-- **Put your version in every bug report**, for example `0.75.3-beta`. `tposeidon status` prints it.
+- **Put your version in every bug report**, for example `0.83.2-beta`. `tposeidon status` prints it.
 - **Report security problems privately.** See [SECURITY.md](SECURITY.md). Don't post them in issues or on the forum.
 - **Be respectful.** Everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Where it stands
+
+**Latest release: [0.83.2-beta](https://github.com/DeltaForceT/tPoseidon/releases/tag/v0.83.2-beta)** (2026-11-06): almost 60 fixes from your reports (crashes on drilling treasure and after a job change, the party after a reconnect, monster chasing, Harcon Defence, item stats), Linux packages back, and the first code from an outside contributor. Every change is in the [CHANGELOG](CHANGELOG.md).
 
 You can make a character and play through a good part of the game, but you will hit bugs and missing systems. [docs/beta/SYSTEMS.md](docs/beta/SYSTEMS.md) lists what works, what is built but needs testing, and what isn't built yet. Read it before you start. When something breaks, [How to report a bug](docs/beta/how-to-report-a-bug.md) explains what I need from you.
 
@@ -189,7 +191,7 @@ You need the .NET 8 SDK.
 dotnet build tPoseidon.sln
 ```
 
-During the beta the source is here to read and build, and to prepare bug reports; see [CONTRIBUTING.md](CONTRIBUTING.md).
+During the beta the source is here to read and build, to prepare bug reports and to prepare pull requests; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## How it was made
 
