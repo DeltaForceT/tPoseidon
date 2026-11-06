@@ -19,12 +19,6 @@ public sealed class InMemoryNpcMsgLookup : INpcMsgLookup
         }
     }
 
-        public static InMemoryNpcMsgLookup LoadFromXml(string xmlPath)
-    {
-        var reader = new LibConfigXmlReader(xmlPath);
-        var entries = reader.LoadAllNpcMsgTables();
-        return new InMemoryNpcMsgLookup(entries);
-    }
 
     public NpcMsgEntry? GetRow(string tableName, int rowNo)
     {

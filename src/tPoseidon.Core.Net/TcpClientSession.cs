@@ -159,6 +159,22 @@ public sealed class TcpClientSession : IAsyncDisposable
         }
     }
 
+    public async Task SendAsync(Func<ReadOnlyMemory<byte>> buildFrame, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(buildFrame);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            await _stream.WriteAsync(buildFrame(), cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!_disposed) _writeLock.Release();
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed) return;

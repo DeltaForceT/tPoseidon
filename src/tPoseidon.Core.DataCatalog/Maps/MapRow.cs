@@ -1,0 +1,25 @@
+namespace tPoseidon.Core.DataCatalog.Maps;
+
+public sealed record MapRow(
+    int Id,
+    string Name,
+    string FileName,
+    string NpcTable,
+    string MonsterTable,
+    string BossMonsterTable,
+    string ItemTable,
+    string ShopTable,
+    string SkillShopTable,
+    int MonsterAvrNum,
+    int MaxDepth,
+    int BossMonsterCnt,
+    int BossMonCheckTime,
+    int Type,
+    int Class,
+    int Option,
+    int ParallelZoneType,
+    int WorldMapRegion,
+    float ShopPriceRate,
+    int MinItemDepth,
+    int MaxItemDepth,
+    float ItemPercentage);

@@ -82,6 +82,8 @@ public sealed class PlayerPosture
 
     public void StandUp() => Enter(PostureState.Standing);
 
+    public void Disturb() => _idleMs = 0;
+
     public bool IdleEmoteDue(int elapsedMs, int level, bool moving, Func<int, int> nextBelow)
     {
         ArgumentNullException.ThrowIfNull(nextBelow);

@@ -456,7 +456,7 @@ public sealed partial class ItemUseService
             {
                 var minted = _itemManager.GrantRewardItem(characterId, grant.ItemId, count, itemClassOverride: given.ObjectClass);
                 if (TimedItemRules.IsTimed(minted)) timedGrants.Add(minted);
-                operations.Add(new BagOperation(QuestResultFrames.Created, given.ObjectClass, (uint)grant.ItemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot));
+                operations.Add(new BagOperation(QuestResultFrames.Created, given.ObjectClass, (uint)grant.ItemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot, Options: minted.Rolled));
             }
         }
         if (timedGrants.Count > 0 && _player.TimedItemsGranted is { } announce) await announce(TimedItemPeriods.Registered(timedGrants), ct).ConfigureAwait(false);

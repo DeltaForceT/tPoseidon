@@ -68,7 +68,7 @@ public sealed class ClientArtLibrary
         try
         {
             var sprite = Open(file);
-            return frame == SpriteFrame ? sprite.ReadStanding() : sprite.ReadImage(frame);
+            return frame == SpriteFrame ? sprite.ReadStanding() : sprite.ReadBundle(frame);
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {

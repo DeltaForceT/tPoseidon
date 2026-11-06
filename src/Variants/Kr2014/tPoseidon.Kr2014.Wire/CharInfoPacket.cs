@@ -14,7 +14,7 @@ public sealed class CharInfoPacket
     public const int StateRecordOffset = StatBlockOffset + CharacterStatBlock.Size;
 
     public const ushort StateRecordLead = 1;
-    public const byte FirstHairSlot = 1;
+    public const byte FirstLookTier = 1;
     public const ushort StarterWarehouseSlots = 80;
 
     private const int StateTailOffset = 0x36;
@@ -34,7 +34,9 @@ public sealed class CharInfoPacket
     public uint Exp { get; init; }
 
     public byte Hair { get; init; }
-    public byte HairSlot { get; init; } = FirstHairSlot;
+    public byte SecondHair { get; init; }
+    public byte LookTier { get; init; } = FirstLookTier;
+    public byte ThirdHair { get; init; }
     public ushort WarehouseSlots { get; init; } = StarterWarehouseSlots;
 
     public readonly record struct EquipSlot(uint ItemUid, uint Flags);
@@ -63,9 +65,10 @@ public sealed class CharInfoPacket
         var exp = r.ReadUInt32();
         r.Skip(StateTailOffset - BytesBeforeStateTail);
         var hair = r.ReadByte();
-        r.ReadByte();
-        var hairSlot = r.ReadByte();
+        var secondHair = r.ReadByte();
+        var lookTier = r.ReadByte();
         var warehouseSlots = r.ReadUInt16();
+        var thirdHair = r.ReadByte();
         return new CharInfoPacket
         {
             EquipSlots = slots,
@@ -80,8 +83,10 @@ public sealed class CharInfoPacket
             TmExp = tmExp,
             Exp = exp,
             Hair = hair,
-            HairSlot = hairSlot,
+            SecondHair = secondHair,
+            LookTier = lookTier,
             WarehouseSlots = warehouseSlots,
+            ThirdHair = thirdHair,
         };
     }
 
@@ -115,10 +120,10 @@ public sealed class CharInfoPacket
         w.WriteUInt32(Exp);
         w.WriteBytes(new byte[StateTailOffset - BytesBeforeStateTail]);
         w.WriteByte(Hair);
-        w.WriteByte(0);
-        w.WriteByte(HairSlot);
+        w.WriteByte(SecondHair);
+        w.WriteByte(LookTier);
         w.WriteUInt16(WarehouseSlots);
-        w.WriteByte(0);
+        w.WriteByte(ThirdHair);
         w.WriteByte(0);
 
         var payload = w.ToArray();

@@ -23,6 +23,10 @@ public static class CharacterListBuilder
     internal const int LevelOffset = 0x2B;
     private const int EquipBlockOffset = 0x2D;
     private const int EquipBlockSlots = 5;
+    private const int SecondJobHairOffset = 0x26;
+    private const int ThirdJobTypeOffset = 0x8C;
+    private const int ThirdJobOffset = 0x8E;
+    private const int ThirdJobHairOffset = 0x8F;
     private const int EarItemOffset = 0x41;
     private const int TailItemOffset = 0x45;
 
@@ -93,18 +97,18 @@ public static class CharacterListBuilder
 
         WriteUInt16Le(entry, FirstJobSpeciesOffset, (ushort)character.Species);
 
-        var secondJobClass = character.Job2 != 0
-            ? OccupationRules.SecondJobTypeOf(character)
-            : character.JobTier >= 2
-                ? SpeciesDefaults.SecondJobClassIdForFirstJob(character.Species)
-                : (ushort)0;
+        var secondJobClass = character.Job2 != 0 ? OccupationRules.SecondJobTypeOf(character) : (ushort)0;
         WriteUInt16Le(entry, SecondJobClassOffset, secondJobClass);
 
         entry[FTypeOffset] = (byte)((byte)character.FType - 1);
         entry[SpeciesMirrorOffset] = (byte)character.Species;
         entry[SecondJobMirrorOffset] = (byte)(secondJobClass & 0xFF);
-        entry[JobTierOffset] = Math.Max(character.JobTier, OccupationRules.LookStateOf(character));
+        entry[JobTierOffset] = OccupationRules.LookStateOf(character);
         WriteUInt16Le(entry, HairOffset, character.Hair);
+        entry[SecondJobHairOffset] = (byte)character.Hair2;
+        WriteUInt16Le(entry, ThirdJobTypeOffset, OccupationRules.ThirdJobTypeOf(character));
+        entry[ThirdJobOffset] = character.Job3;
+        entry[ThirdJobHairOffset] = (byte)character.Hair3;
         WriteUInt32Le(entry, MoneyOffset, WireLimits.Int32FieldUnsigned(character.Money));
         WriteUInt16Le(entry, LevelOffset, character.Level);
 

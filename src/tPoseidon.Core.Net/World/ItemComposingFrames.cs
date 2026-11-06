@@ -105,6 +105,7 @@ public static class ItemComposingFrames
     {
         w.WriteByte((byte)property.Type);
         w.WriteUInt16((ushort)property.Id);
+        w.WriteUInt16((ushort)property.Value);
         w.WriteUInt32(property.Extra);
     }
 }

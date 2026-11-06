@@ -33,6 +33,8 @@ public static class GroundSkills
 
     public static bool UsesPoint(int targetInput) => targetInput is PositionInput or RegionInput or PlacementInput;
 
+    public static bool IsPlacedAtPoint(int actionId, int targetInput) => UsesPoint(targetInput) && IsGround(actionId);
+
     public static GroundSpawn? SpawnOf(int actionId) => Spawns.TryGetValue(actionId, out var spawn) ? spawn : null;
 
     public static bool IsGround(int actionId) =>

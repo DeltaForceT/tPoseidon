@@ -108,7 +108,7 @@ public sealed partial class ItemUseService
         }
         var minted = _itemManager.GrantRewardItem(characterId, grant.ItemId, count, itemClassOverride: given.ObjectClass);
         if (timedGrants is not null && TimedItemRules.IsTimed(minted)) timedGrants.Add(minted);
-        return new BagOperation(QuestResultFrames.Created, given.ObjectClass, (uint)grant.ItemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);
+        return new BagOperation(QuestResultFrames.Created, given.ObjectClass, (uint)grant.ItemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot, Options: minted.Rolled);
     }
 
     private BagOperation TakeOne(Item item, ItemParamEntry definition)

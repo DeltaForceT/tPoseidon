@@ -8,7 +8,7 @@ A lot of the game works. What we don't know yet is how it holds up with real pla
 
 ## Stages
 
-**Closed beta.** A small group of invited testers. We want to know three things: does setup work on Windows, can you play from character creation onward, and does updating ever lose data. Expect frequent builds, sometimes a few a week.
+**Closed beta.** A small group of invited testers. We want to know three things: does setup work on Windows and Linux, can you play from character creation onward, and does updating ever lose data. Expect frequent builds, sometimes a few a week.
 
 **Open beta.** Anyone can download it. We slow down on new features and spend the time on bugs, performance, and making hosting easier. Fewer builds, and each one gets proper release notes.
 
@@ -57,7 +57,7 @@ For now, expect:
 
 - some systems missing or half done (the release notes say what's in);
 - text, positions or timings that don't quite match the original yet;
-- Windows packages only; Linux and macOS come with version 1.0, after we have tested them ourselves;
+- Windows and Linux x64 packages; macOS comes with version 1.0, after we have tested it ourselves;
 - if the client closes right after Play or shows `?????` for names, check **Client language** in the panel (settings menu, "..." menu or bubble) and the panel log line that starts with "Client mode": it says which of `data/libconfig.dat` and `data/libconfig_eng.dat` the client and the servers use. From 0.75 you only need one of the two files.
 
 ## How fixes reach you

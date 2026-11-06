@@ -601,6 +601,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
                 result = _player.HarconPlay is { } harconPlay ? await harconPlay(call.Slot, args, _npc, ct).ConfigureAwait(false) : NpcScript.Refused;
                 if (result == NpcScript.Silent)
                 {
+                    if (NpcScript.ClosesDialogWhenSilent(call.Operation)) await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
                     Close();
                     return;
                 }
@@ -1799,7 +1800,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
             {
                 var minted = _itemManager.GrantRewardItem(characterId, reward.ItemIndex, count, itemClassOverride: itemClass);
                 if (TimedItemRules.IsTimed(minted)) _timedGranted.Add(new TimedItem(minted.ItemUid, minted.ItemIndex, minted.BreakedAt));
-                operations.Add(new BagOperation(QuestResultFrames.Created, itemClass, (uint)reward.ItemIndex, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot));
+                operations.Add(new BagOperation(QuestResultFrames.Created, itemClass, (uint)reward.ItemIndex, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot, Options: minted.Rolled));
             }
         }
         return operations;

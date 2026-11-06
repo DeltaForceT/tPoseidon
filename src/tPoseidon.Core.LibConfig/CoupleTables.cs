@@ -1,3 +1,5 @@
+using tPoseidon.Core.Common.Indexing;
+
 namespace tPoseidon.Core.LibConfig;
 
 public readonly record struct CouplePointRange(int MinRelation, int MaxRelation, int MinLove, int MaxLove, int MinFriend, int MaxFriend)
@@ -31,6 +33,10 @@ public sealed record CoupleTables(
     IReadOnlyList<int> DeleteSkillIds,
     IReadOnlyDictionary<int, CoupleEventPoints> EventPoints)
 {
+    private readonly SourceBoundIndex<int, MarriageTitleEntry> _titlesByIndex = new(row => row.Index);
+
+    public MarriageTitleEntry? TitleOf(int index) => _titlesByIndex.Over(Titles, Titles).Find(index);
+
     public const string ExchangeTable = "ExchangeMarriage";
     public const string TitleTable = "MarriageTitleInfo";
     public const string RingTable = "WeddingRingInfo";

@@ -101,7 +101,7 @@ public sealed class MaterialExchange
                 EquipmentRules.FirstFreeBagPosition(_items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory)), pieceCount);
             if (_periods is not null) created = _periods.StampPeriod(created, TimedItemPeriods.MinutesOf(definition, _periods.TimerMinutes));
             if (TimedItemRules.IsTimed(created)) _timedGranted.Add(new TimedItem(created.ItemUid, created.ItemIndex, created.BreakedAt));
-            operations.Add(new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(created.ItemUid), created.Stack, created.ItemSlot));
+            operations.Add(new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(created.ItemUid), created.Stack, created.ItemSlot, Options: created.Rolled));
         }
         return operations;
     }

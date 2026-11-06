@@ -405,7 +405,7 @@ internal sealed class ShadowEventController : IDisposable
     private int SpawnAt(Zone zone, int monsterId, int regionId)
     {
         var points = _geometry.TryGetValue(zone.Plan.MapId, out var geometry)
-            ? geometry.PointsOfType(ZoneGeometry.PointTypeRegionSpawn).Where(point => point.Id == regionId).ToArray()
+            ? geometry.PointsOf(ZoneGeometry.PointTypeRegionSpawn, regionId).ToArray()
             : Array.Empty<ZonePoint>();
         int x = DefaultSpawnX, y = DefaultSpawnY;
         if (points.Length != 0)

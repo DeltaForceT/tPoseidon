@@ -76,9 +76,10 @@ var libConfigPath = new[]
     Path.Combine(variantDataRoot, "libconfig_eng.dat"),
     RepoRoot.Data("libconfig_kr_en.xml"),
 }.FirstOrDefault(File.Exists);
-var guildShopTables = libConfigPath is null
+var libConfigData = libConfigPath is null ? null : tPoseidon.Core.DataCatalog.SharedCatalog.For(libConfigPath, tPoseidon.Core.DataCatalog.SharedCatalog.DefaultCacheDirectory());
+var guildShopTables = libConfigData is null
     ? tPoseidon.Core.LibConfig.GuildShopTables.Empty
-    : new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadGuildShopTables();
+    : libConfigData!.Shops.GuildShopTables;
 Log($"guild shop from libconfig: {guildShopTables.Goods.Count} goods (GuildShopGoodsTable)");
 var guildEmblemItems = new tPoseidon.Core.Data.Postgres.PostgresItemStore(postgres.DataSource);
 var guildEmblemProperties = new tPoseidon.Core.Data.Postgres.PostgresItemPropertyStore(postgres.DataSource);
@@ -102,11 +103,11 @@ var guildServer = new tPoseidon.Kr2014.SystemServer.GuildServer(
 if (libConfigPath is not null)
 {
     guildServer.RoomCaptions = tPoseidon.Core.Net.Social.GuildRoomCaptions.From(
-        new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadNameValueTable(tPoseidon.Core.Net.Social.GuildRoomCaptions.TextTable));
+        libConfigData!.Texts.NameValueTable(tPoseidon.Core.Net.Social.GuildRoomCaptions.TextTable));
 }
 var coupleTables = libConfigPath is null
     ? tPoseidon.Core.LibConfig.CoupleTables.Empty
-    : new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadCoupleTables();
+    : libConfigData!.SocialSystems.CoupleTables;
 Log($"couple tables from libconfig: {coupleTables.DeleteQuestIds.Count} quests and {coupleTables.DeleteSkillIds.Count} skills removed at break-up (CoupleDeleteInfo)");
 var coupleService = new CoupleService(
     new tPoseidon.Core.Data.Postgres.PostgresCoupleRulesStore(postgres.DataSource),
@@ -117,7 +118,7 @@ var coupleService = new CoupleService(
     TimeProvider.System,
     libConfigPath is null
         ? new Dictionary<string, string>()
-        : new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadNameStringTable(CoupleService.SystemServerStringTable),
+        : libConfigData!.Texts.NameStringTable(CoupleService.SystemServerStringTable),
     new tPoseidon.Core.Net.Social.FriendOfflineCoupleMemos(
         friendStore,
         systemIni?.GetInt("FriendOfflineSMSLimitCount", tPoseidon.Core.Data.FriendRules.OfflineMessageLimit) ?? tPoseidon.Core.Data.FriendRules.OfflineMessageLimit,
@@ -143,7 +144,7 @@ var weddingHalls = new WeddingHallService(
 var zoneTypes = new Dictionary<int, int>();
 if (libConfigPath is not null)
 {
-    foreach (var mapKind in new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadMapKinds()) zoneTypes[mapKind.Id] = mapKind.Type;
+    foreach (var mapKind in tPoseidon.Core.DataCatalog.SharedCatalog.For(libConfigPath, tPoseidon.Core.DataCatalog.SharedCatalog.DefaultCacheDirectory()).Maps.ToMapKinds()) zoneTypes[mapKind.Id] = mapKind.Type;
 }
 var coupleServer = new tPoseidon.Kr2014.SystemServer.CoupleServer(
     coupleService,
@@ -187,7 +188,7 @@ var cardBattleServer = new tPoseidon.Kr2014.SystemServer.CardBattleServer(
         tPoseidon.Core.Common.ClientText.Encoding,
         libConfigPath is null
             ? null
-            : new tPoseidon.Core.Game.CardBattle.SpecialCardSets(new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadCardSpecialSets())),
+            : new tPoseidon.Core.Game.CardBattle.SpecialCardSets(libConfigData!.GuardianSoul.CardSpecialSets)),
     socialRoom,
     gameLinks,
     tPoseidon.Core.Common.ClientText.Encoding,
@@ -200,10 +201,10 @@ var rankServer = new tPoseidon.Kr2014.SystemServer.RankServer(
     socialRoom,
     Log);
 
-var gameMasterReader = libConfigPath is null ? null : new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath);
+
 var gameMasterChat = new GameMasterChat(
-    gameMasterReader?.LoadNameStringTable(GameMasterChat.ResultTable) ?? new Dictionary<string, string>(),
-    gameMasterReader?.LoadNameStringTable(GameMasterChat.HelpTable) ?? new Dictionary<string, string>());
+    libConfigData?.Texts.NameStringTable(GameMasterChat.ResultTable) ?? new Dictionary<string, string>(),
+    libConfigData?.Texts.NameStringTable(GameMasterChat.HelpTable) ?? new Dictionary<string, string>());
 MasterServerClient? masterClient = null;
 
 async Task MasterFrameAsync(InterServerFrame frame, CancellationToken ct)
@@ -352,8 +353,14 @@ var clientHost = new tPoseidon.Core.Net.S2.S2ServerHost
         gameMasterServer.Closed(ctx);
         if (socialRoom.Leave(ctx) is { } member)
         {
-            await friendServer.ClosedAsync(member, stopCts.Token).ConfigureAwait(false);
-            await partyServer.ClosedAsync(member, stopCts.Token).ConfigureAwait(false);
+            try
+            {
+                await friendServer.ClosedAsync(member, stopCts.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                await partyServer.ClosedAsync(member, CancellationToken.None).ConfigureAwait(false);
+            }
             await guildServer.ClosedAsync(member, stopCts.Token).ConfigureAwait(false);
             coupleServer.Closed(member);
             angelServer.Closed(member);
@@ -422,7 +429,7 @@ var membership = new tPoseidon.Core.Data.Postgres.PostgresMembershipStore(postgr
 gameMasterServer.MemberSetter = membership.SetMemberOfCharacter;
 if (libConfigPath is not null)
 {
-    gameMasterServer.KnownCampItems = new tPoseidon.Core.LibConfig.LibConfigXmlReader(libConfigPath).LoadMyCampItems().Select(entry => entry.Id).ToHashSet();
+    gameMasterServer.KnownCampItems = libConfigData!.ItemSystems.MyCampItems.Select(entry => entry.Id).ToHashSet();
 }
 gameLinks.OnLinked = gameMasterServer.GameServerLinkedAsync;
 var gameLinkTasks = new[] { ServerEndpointConfig.GamePort, ServerEndpointConfig.GameAltPort }

@@ -16,7 +16,8 @@ public sealed class AggressiveMonsterScan
     public IReadOnlyList<(MonsterEntity Monster, ushort TargetEntityId)> Due(
         IEnumerable<MonsterEntity> monsters,
         IReadOnlyList<AggroPlayer> players,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        Func<MonsterEntity, AggroPlayer, bool>? ignores = null)
     {
         ArgumentNullException.ThrowIfNull(monsters);
         ArgumentNullException.ThrowIfNull(players);
@@ -30,7 +31,7 @@ public sealed class AggressiveMonsterScan
                 _nextScanAt[monster.EntityId] = now.AddMilliseconds(ScanIntervalMs);
             }
 
-            if (Nearest(monster, players, now) is { } target)
+            if (Nearest(monster, players, now, ignores) is { } target)
             {
                 engagements.Add((monster, target));
             }
@@ -49,7 +50,7 @@ public sealed class AggressiveMonsterScan
         }
     }
 
-    private static ushort? Nearest(MonsterEntity monster, IReadOnlyList<AggroPlayer> players, DateTimeOffset now)
+    private static ushort? Nearest(MonsterEntity monster, IReadOnlyList<AggroPlayer> players, DateTimeOffset now, Func<MonsterEntity, AggroPlayer, bool>? ignores)
     {
         var radiusSquared = (long)ViewRange * ViewRange;
         var (monsterX, monsterY) = monster.GetInterpolatedPosition(now);
@@ -59,6 +60,7 @@ public sealed class AggressiveMonsterScan
         foreach (var player in players)
         {
             if (shadow && !player.SeesShadowWorld) continue;
+            if (ignores is not null && ignores(monster, player)) continue;
             var dx = (long)player.X - monsterX;
             var dy = (long)player.Y - monsterY;
             var distance = dx * dx + dy * dy;

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using tPoseidon.Core.Common;
+using tPoseidon.Core.Common.Indexing;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.Game.Monsters;
@@ -14,7 +15,20 @@ namespace tPoseidon.Core.Net.Dialogs;
 public sealed record ShopOffer
 {
     public required ushort NpcEntityId { get; init; }
-    public required IReadOnlyList<ShopGoodsEntry> Goods { get; init; }
+    private IReadOnlyList<ShopGoodsEntry> _goods = Array.Empty<ShopGoodsEntry>();
+    private FirstIndex<int, ShopGoodsEntry>? _goodsByItem;
+
+    public required IReadOnlyList<ShopGoodsEntry> Goods
+    {
+        get => _goods;
+        init
+        {
+            _goods = value;
+            _goodsByItem = null;
+        }
+    }
+
+    public ShopGoodsEntry? GoodsOf(int itemId) => (_goodsByItem ??= new FirstIndex<int, ShopGoodsEntry>(_goods, row => row.ItemId)).Find(itemId);
     public required float PurchaseRate { get; init; }
     public required float SellingRate { get; init; }
     public required float PriceRate { get; init; }
@@ -114,7 +128,7 @@ public sealed class ShopTrade
         long total = 0;
         foreach (var (itemId, count) in orders)
         {
-            if (offer.Goods.FirstOrDefault(row => row.ItemId == itemId) is not { } row) return Opcode.S2C_SHOP_BUY_REFUSED;
+            if (offer.GoodsOf(itemId) is not { } row) return Opcode.S2C_SHOP_BUY_REFUSED;
             var cost = (long)BuyUnitPrice(offer, itemId, row) * count;
             total += cost;
             if (cost > int.MaxValue || total > int.MaxValue) return Opcode.S2C_SHOP_BUY_REFUSED;
@@ -169,7 +183,7 @@ public sealed class ShopTrade
         long total = 0;
         foreach (var (held, definition, count) in sales)
         {
-            var row = offer.Goods.FirstOrDefault(entry => entry.ItemId == held.ItemIndex);
+            var row = offer.GoodsOf(held.ItemIndex);
             var value = ShopPrices.SellValue(definition.Value, definition.Type, held.Stack, _itemManager.DrillLifeOf?.Invoke(held.ItemIndex));
             total += (long)ShopPrices.SellUnitPrice(offer.PriceRate, value, row, offer.SellingRate) * count;
         }
@@ -215,7 +229,7 @@ public sealed class ShopTrade
         }
         var minted = _itemManager.GrantRewardItem(characterId, itemId, (ushort)count, itemClassOverride: itemClass);
         if (TimedItemRules.IsTimed(minted)) _timedGranted.Add(new TimedItem(minted.ItemUid, minted.ItemIndex, minted.BreakedAt));
-        return new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);
+        return new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot, Options: minted.Rolled);
     }
 
     private int ValueOf(int itemId) => _definitions.GetById(itemId)?.Value ?? 0;

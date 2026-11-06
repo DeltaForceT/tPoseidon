@@ -105,6 +105,9 @@ public static class SkillFrames
         return w.ToArray();
     }
 
+    public static (Opcode Opcode, byte[] Payload) ListRemoval(int skillId) =>
+        (Opcode.S2C_QUEST_SKILL_REMOVED, QuestSkillRemoved(skillId));
+
     public static byte[] LearnSeen(ushort playerEntityId)
     {
         var w = new PacketWriter(2);

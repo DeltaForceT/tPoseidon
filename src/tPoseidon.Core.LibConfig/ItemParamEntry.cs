@@ -92,6 +92,16 @@ public sealed record ItemParamEntry
 
     public int ReformCount { get; init; }
 
+    public const int NotReformOption = 0x1000000;
+    public const int DefaultReformCount = 5;
+    public static readonly IReadOnlyList<int> ReformableTypes = new[] { 2, 3, 4, 7, 8, 0x18, 0x19, 0x22 };
+
+    public static int ReformCountOf(int type, int tableCount) =>
+        tableCount > 0 ? tableCount : ReformableTypes.Contains(type) ? DefaultReformCount : 0;
+
+    public static int OptionsOf(int type, int tableCount, int tableOptions) =>
+        tableCount > 0 || ReformableTypes.Contains(type) ? tableOptions : tableOptions | NotReformOption;
+
     public const int UsableOption = 0x2;
     public const int KeptWhenUsedExtendedOption = 0x40;
     public const int OnlyDropperTakesOption = 0x800;

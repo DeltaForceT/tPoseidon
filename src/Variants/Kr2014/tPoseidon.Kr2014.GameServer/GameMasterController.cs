@@ -285,7 +285,17 @@ internal sealed class GameMasterController : IDisposable
                     await AcknowledgeAsync(order, GameMasterFrames.ReportPresentItem, GameMasterFrames.AckPresentNoReceiver, ct).ConfigureAwait(false);
                     return;
                 }
-                await AcknowledgeAsync(order, GameMasterFrames.ReportPresentItem, await _presentItem(receiver, itemId, itemCount, delivery).ConfigureAwait(false), ct).ConfigureAwait(false);
+                uint presentResult;
+                try
+                {
+                    presentResult = await _presentItem(receiver, itemId, itemCount, delivery).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    Console.Error.WriteLine($"{_logTag} [gm] present item {itemId} x{itemCount} for 0x{receiverId:X} failed: {ex.GetType().Name}: {ex.Message}");
+                    presentResult = GameMasterFrames.AckFailed;
+                }
+                await AcknowledgeAsync(order, GameMasterFrames.ReportPresentItem, presentResult, ct).ConfigureAwait(false);
                 break;
             case GameMasterFrames.OrderOxQuestion:
                 if (_playerById(order.CharacterId) is not { } asker || !ItemGiveFrames.OxMaps.Contains(asker.MapId)) return;

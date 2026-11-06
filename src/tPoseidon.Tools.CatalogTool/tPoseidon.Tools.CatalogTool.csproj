@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>tPoseidon.Tools.CatalogTool</RootNamespace>
+    <NoWarn>$(NoWarn);CA1303;CA1305;CA1861</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\tPoseidon.Core.DataCatalog\tPoseidon.Core.DataCatalog.csproj" />
+  </ItemGroup>
+
+</Project>

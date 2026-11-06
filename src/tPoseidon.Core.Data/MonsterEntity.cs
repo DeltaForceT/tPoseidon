@@ -193,6 +193,11 @@ public sealed class MonsterEntity
         get { lock (_lock) return _curY; }
     }
 
+    public bool IsMoving(DateTimeOffset now)
+    {
+        lock (_lock) return now < _moveEndsAt;
+    }
+
     public (ushort x, ushort y) GetInterpolatedPosition(DateTimeOffset now)
     {
         lock (_lock)
@@ -402,6 +407,8 @@ public sealed class MonsterEntity
         }
     }
 
+    public bool IsDefended { get; set; }
+
     public bool Guarded
     {
         get { lock (_lock) return Boss?.Guarded ?? false; }
@@ -467,6 +474,28 @@ public sealed class MonsterEntity
             if (_hp <= 0) return 0;
             _hp = Math.Min(_hp + amount, MaxHp);
             return _hp;
+        }
+    }
+
+    private int _guardCharges;
+    private DateTimeOffset _guardUntil;
+
+    public void RaiseGuard(int charges, DateTimeOffset until)
+    {
+        lock (_lock)
+        {
+            _guardCharges = Math.Max(0, charges);
+            _guardUntil = until;
+        }
+    }
+
+    public bool ConsumeGuard(DateTimeOffset now)
+    {
+        lock (_lock)
+        {
+            if (_guardCharges <= 0 || now >= _guardUntil) return false;
+            _guardCharges--;
+            return true;
         }
     }
 }

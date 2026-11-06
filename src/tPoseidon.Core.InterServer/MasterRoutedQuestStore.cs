@@ -36,7 +36,7 @@ public sealed class MasterRoutedQuestStore : IQuestStore
                 _fallback.AddActive(quest);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest AddActive char 0x{quest.CharacterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             _fallback.AddActive(quest);
@@ -55,7 +55,7 @@ public sealed class MasterRoutedQuestStore : IQuestStore
             }
             return QuestStoreWire.DecodeQuestList(reply);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest GetActiveForCharacter char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.GetActiveForCharacter(characterId);
@@ -81,7 +81,7 @@ public sealed class MasterRoutedQuestStore : IQuestStore
             if (!present) return null;
             return QuestStoreWire.DecodeQuest(reply.AsSpan(1));
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest FindActive char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.FindActive(characterId, questType, questId, monsterId);
@@ -103,7 +103,7 @@ public sealed class MasterRoutedQuestStore : IQuestStore
             var reader = new PacketReader(reply);
             return reader.ReadInt32();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest CountActiveOfType char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.CountActiveOfType(characterId, questType);
@@ -126,7 +126,7 @@ public sealed class MasterRoutedQuestStore : IQuestStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest UpdateMonsterProgress char 0x{characterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.UpdateMonsterProgress(characterId, questId, monsterId, killCount, recordTime);
@@ -148,7 +148,7 @@ public sealed class MasterRoutedQuestStore : IQuestStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest RemoveActive char 0x{characterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.RemoveActive(characterId, questType, questId, monsterId);
@@ -196,7 +196,7 @@ public sealed class MasterRoutedQuestHistoryStore : IQuestHistoryStore
             if (!present) return null;
             return QuestStoreWire.DecodeQuestHistory(reply.AsSpan(1));
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest-history Find char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.Find(characterId, questType, questId, monsterId);
@@ -214,7 +214,7 @@ public sealed class MasterRoutedQuestHistoryStore : IQuestHistoryStore
                 _fallback.Insert(row);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest-history Insert char 0x{row.CharacterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             _fallback.Insert(row);
@@ -233,7 +233,7 @@ public sealed class MasterRoutedQuestHistoryStore : IQuestHistoryStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest-history Update char 0x{row.CharacterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.Update(row);
@@ -252,7 +252,7 @@ public sealed class MasterRoutedQuestHistoryStore : IQuestHistoryStore
             }
             return QuestStoreWire.DecodeQuestHistoryList(reply);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest-history GetForCharacter char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.GetForCharacter(characterId);
@@ -270,7 +270,7 @@ public sealed class MasterRoutedQuestHistoryStore : IQuestHistoryStore
                 _fallback.AppendLog(row);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest-history AppendLog char 0x{row.CharacterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             _fallback.AppendLog(row);
@@ -295,7 +295,7 @@ public sealed class MasterRoutedQuestHistoryStore : IQuestHistoryStore
             var reader = new PacketReader(reply);
             return reader.ReadByte() != 0;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest-history CompletedToday char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.CompletedToday(characterId, questType, questId, monsterId, referenceUtc);
@@ -320,7 +320,7 @@ public sealed class MasterRoutedQuestHistoryStore : IQuestHistoryStore
             var reader = new PacketReader(reply);
             return reader.ReadByte() != 0;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"quest-history HasCompletedAtLeast char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.HasCompletedAtLeast(characterId, questType, questId, monsterId, threshold);

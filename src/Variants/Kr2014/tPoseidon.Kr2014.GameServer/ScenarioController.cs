@@ -13,9 +13,7 @@ internal sealed class ScenarioController : IDisposable
     public const long FrameMilliseconds = 100;
     public const ushort DefaultSpawnX = 600;
     public const ushort DefaultSpawnY = 400;
-    public const int HarconMonsterType = 8;
-    public const int BossMonsterType = 7;
-    public const int UncappedMonsterType = 10;
+    public const int HarconMonsterType = MonsterScenarioRun.HarconMonsterType;
     public const int MinimumCastLevel = 1;
 
     private sealed record SkillCast(ushort CasterEntityId, int SkillId, int Level);
@@ -29,6 +27,7 @@ internal sealed class ScenarioController : IDisposable
         public MonsterScenarioRun Runner { get; set; } = null!;
         public required DateTimeOffset StartedAt { get; init; }
         public long TickedUntil { get; set; }
+        public bool Finished { get; set; }
         public List<OutboxEntry> Outbox { get; } = new();
     }
 
@@ -121,7 +120,7 @@ internal sealed class ScenarioController : IDisposable
             await StartAsync(session, now, sessions).ConfigureAwait(false);
         }
         foreach (var kill in TakeKills()) await HandleKillAsync(kill, sessions).ConfigureAwait(false);
-        foreach (var run in _runs.Values.ToArray())
+        foreach (var run in _runs.Values.Where(run => !run.Finished).ToArray())
         {
             var elapsed = (long)(now - run.StartedAt).TotalMilliseconds;
             for (var frame = run.TickedUntil + FrameMilliseconds; frame <= elapsed; frame += FrameMilliseconds)
@@ -167,32 +166,25 @@ internal sealed class ScenarioController : IDisposable
 
     private async Task HandleKillAsync(MonsterEntity victim, InGameSessionState[] sessions)
     {
-        if (!_runs.TryGetValue((victim.MapId, victim.InstanceKey), out var run)) return;
-        switch (TypeOf(victim.MonsterParamId))
+        if (!_runs.TryGetValue((victim.MapId, victim.InstanceKey), out var run) || run.Finished) return;
+        var ending = MonsterScenarioRun.EndingOf(TypeOf(victim.MonsterParamId));
+        if (ending == ScenarioEnding.None)
         {
-            case HarconMonsterType:
-                run.Outbox.Add(new OutboxEntry(Opcode.S2C_SCENARIO_OUTCOME, ScenarioFrames.Outcome(false)));
-                await FlushAsync(run, sessions).ConfigureAwait(false);
-                _ended.Add((run.MapId, run.Key));
-                await StopAsync(run, sessions).ConfigureAwait(false);
-                await RewardAsync(run, sessions).ConfigureAwait(false);
-                break;
-            case BossMonsterType or UncappedMonsterType:
-                run.Outbox.Add(new OutboxEntry(Opcode.S2C_SCENARIO_OUTCOME, ScenarioFrames.Outcome(true)));
-                await FlushAsync(run, sessions).ConfigureAwait(false);
-                await RewardAsync(run, sessions).ConfigureAwait(false);
-                break;
-            default:
-                run.Runner.RecordKill(victim.MonsterParamId);
-                break;
+            run.Runner.RecordKill(victim.MonsterParamId);
+            return;
         }
+        run.Outbox.Add(new OutboxEntry(Opcode.S2C_SCENARIO_OUTCOME, ScenarioFrames.Outcome(ending == ScenarioEnding.Won)));
+        await FlushAsync(run, sessions).ConfigureAwait(false);
+        _ended.Add((run.MapId, run.Key));
+        run.Finished = true;
+        await RewardAsync(run, sessions).ConfigureAwait(false);
     }
 
     private async Task RewardAsync(Run run, InGameSessionState[] sessions)
     {
         foreach (var session in sessions.Where(session => session.MapId == run.MapId && session.InstanceKey == run.Key))
         {
-            if (ScenarioExit.ZoneOf(session.FiestaReturnZone) is not { } exitZone
+            if (ScenarioExit.ZoneOf(session.ScenarioEntranceZone, session.FiestaReturnZone) is not { } exitZone
                 || session.RequestZoneChange is not { } requestZoneChange
                 || !_leaving.Add(session))
             {
@@ -244,7 +236,7 @@ internal sealed class ScenarioController : IDisposable
 
     private ZonePoint[] PointsOf(ushort mapId, int regionId) =>
         _geometry.TryGetValue(mapId, out var geometry)
-            ? geometry.PointsOfType(ZoneGeometry.PointTypeRegionSpawn).Where(point => point.Id == regionId).ToArray()
+            ? geometry.PointsOf(ZoneGeometry.PointTypeRegionSpawn, regionId).ToArray()
             : Array.Empty<ZonePoint>();
 
     private int TypeOf(int monsterId) => _monsters.Param(monsterId)?.Type ?? 0;

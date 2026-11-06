@@ -19,7 +19,7 @@ public sealed class ShadowTargeting
     }
 
     public static bool MayDamage(ShadowAiEntry? entry, bool victimIsPlayer) =>
-        entry is not null && (entry.AiType != NonresidentMonsterTargetOnlyStrategy.TargetOnlyAiType || !victimIsPlayer);
+        entry is null || entry.AiType != NonresidentMonsterTargetOnlyStrategy.TargetOnlyAiType || !victimIsPlayer;
 
     public ShadowTargeting(Func<int, ShadowAiEntry?> entryOf)
     {

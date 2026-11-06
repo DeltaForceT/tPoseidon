@@ -2,6 +2,33 @@ using System.Text;
 
 namespace tPoseidon.Core.LibConfig;
 
+public readonly record struct BodyBox(int Left, int Top, int Right, int Bottom)
+{
+    public const int SmallSpriteLimit = 0x50;
+    public const float InsetFraction = 0.3f;
+    public const double InsetDivisor = 2.0;
+
+    public static BodyBox Of(NoriFrameBox frame)
+    {
+        var insetX = (int)(frame.Width * (double)InsetFraction / InsetDivisor);
+        var insetY = (int)(frame.Height * (double)InsetFraction / InsetDivisor);
+        if (frame.Width <= SmallSpriteLimit && frame.Height <= SmallSpriteLimit)
+        {
+            insetX = -insetX;
+            insetY = -insetY;
+        }
+        var left = frame.X + insetX;
+        var top = frame.Y + insetY;
+        return new BodyBox(left, top, left + frame.Width - 2 * insetX, top + frame.Height - 2 * insetY);
+    }
+
+    public bool Overlaps(int x, int y, BodyBox other, int otherX, int otherY) =>
+        x + Left < otherX + other.Right
+        && otherX + other.Left < x + Right
+        && y + Top < otherY + other.Bottom
+        && otherY + other.Top < y + Bottom;
+}
+
 public sealed record CharacterCombatInfo
 {
     public const int DefaultMaxAttackRange = 86;
@@ -14,6 +41,7 @@ public sealed record CharacterCombatInfo
     public const int LowestDxModifier = -30;
     public const double NegativeDxFactor = 0.01;
 
+    public const string StandAnimation = "서있기_대각왼쪽앞";
     public const string AttackAnimation = "공격";
     public const string Attack2Animation = "공격2";
     public const string AttackReadyAnimation = "공격준비";
@@ -27,6 +55,8 @@ public sealed record CharacterCombatInfo
     public required int AttackMs { get; init; }
     public required int Attack2Ms { get; init; }
     public required int AttackReadyMs { get; init; }
+
+    public BodyBox? Box { get; init; }
 
     public int? ApproachOverride { get; init; }
 
@@ -65,6 +95,7 @@ public sealed record CharacterCombatInfo
             AttackMs = Delay(animations, AttackAnimation),
             Attack2Ms = Delay(animations, Attack2Animation),
             AttackReadyMs = Delay(animations, AttackReadyAnimation),
+            Box = BoxOf(animations),
         };
     }
 
@@ -102,6 +133,9 @@ public sealed record CharacterCombatInfo
         }
         return infos;
     }
+
+    private static BodyBox? BoxOf(IReadOnlyList<NoriAnimation>? animations) =>
+        animations is not null && NoriAnimationReader.Find(animations, StandAnimation) is { FirstBox: { } frame } ? BodyBox.Of(frame) : null;
 
     private static int Delay(IReadOnlyList<NoriAnimation>? animations, string name)
         => animations is null ? 0 : NoriAnimationReader.TotalOf(animations, name) ?? MissingAnimationMs;

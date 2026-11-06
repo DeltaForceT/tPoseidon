@@ -109,7 +109,7 @@ public sealed class MonsterManager : IMonsterEntityProvider
         };
         entity.InitHp(maxHp);
         entity.InitPosition(x, y);
-        entity.InitSpeed(def.WalkSpeed);
+        entity.InitSpeed(ClientSpeed.Drawn(def.WalkSpeed));
         if (atype is MonsterAType.BossMonster or MonsterAType.DoppelGanger && BossLives.TryGetValue(monsterParamId, out var bossProfile))
         {
             entity.AttachBoss(bossProfile, BossEvents, BossElements.CodeOf);

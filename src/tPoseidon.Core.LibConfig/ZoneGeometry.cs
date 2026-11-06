@@ -1,3 +1,5 @@
+using tPoseidon.Core.Common.Indexing;
+
 namespace tPoseidon.Core.LibConfig;
 
 public readonly record struct ZoneRegion(int Id, int Type, int Param, int X1, int Y1, int X2, int Y2);
@@ -42,15 +44,28 @@ public sealed class ZoneGeometry
 
     public byte GroundTypeAt(int cellX, int cellY) => GroundTypes[cellY * CellsX + cellX];
 
-    public IReadOnlyList<ZonePoint> PointsOfType(int type)
+    private GroupIndex<int, ZonePoint>? _pointsByType;
+    private GroupIndex<(int Type, int Id), ZonePoint>? _pointsByTypeAndId;
+    private GroupIndex<int, ZonePoint>? _pointsById;
+    private FirstIndex<int, ZoneRegion>? _regionsById;
+
+    public IReadOnlyList<ZonePoint> PointsOfType(int type) =>
+        (_pointsByType ??= new GroupIndex<int, ZonePoint>(Points, point => point.Type)).Of(type);
+
+    public IReadOnlyList<ZonePoint> PointsOf(int type, int id) =>
+        (_pointsByTypeAndId ??= new GroupIndex<(int, int), ZonePoint>(Points, point => (point.Type, point.Id))).Of((type, id));
+
+    public ZonePoint FirstPointOf(int type, int id)
     {
-        var matches = new List<ZonePoint>();
-        foreach (var point in Points)
-        {
-            if (point.Type == type) matches.Add(point);
-        }
-        return matches;
+        var points = PointsOf(type, id);
+        return points.Count > 0 ? points[0] : default;
     }
+
+    public IReadOnlyList<ZonePoint> PointsWithId(int id) =>
+        (_pointsById ??= new GroupIndex<int, ZonePoint>(Points, point => point.Id)).Of(id);
+
+    public ZoneRegion? RegionOf(int id) =>
+        (_regionsById ??= new FirstIndex<int, ZoneRegion>(Regions, region => region.Id)).TryGet(id, out var region) ? region : null;
 
     public static int CellOf(int worldCoordinate) => worldCoordinate / CellSize;
 

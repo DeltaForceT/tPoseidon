@@ -20,6 +20,7 @@ public sealed class MonsterWanderCycle
     public const int WaitMaxMs = 6000;
     public const int RetryMinMs = 1000;
     public const int RetryMaxMs = 2000;
+    public const int ArrivalNoticeDelayMs = 300;
 
     public const int StepMin = 60;
     public const int StepLimit = 250;
@@ -84,6 +85,11 @@ public sealed class MonsterWanderCycle
 
                 if (slot.Moving)
                 {
+                    while (slot.PendingLegs.Count > 0 && now >= slot.PendingLegs.Peek().At)
+                    {
+                        var leg = slot.PendingLegs.Dequeue();
+                        events.Add(new MonsterMoveStarted(monster.EntityId, leg.FromX, leg.FromY, leg.ToX, leg.ToY));
+                    }
                     if (now < slot.ArrivesAt) continue;
                     slot.Moving = false;
                     slot.CountdownMs = _rng.Next(WaitMinMs, WaitMaxMs);
@@ -143,11 +149,9 @@ public sealed class MonsterWanderCycle
             return;
         }
 
-        var walkSpeed = monster.WalkSpeedOf(definition.WalkSpeed);
+        var walkSpeed = ClientSpeed.Drawn(monster.WalkSpeedOf(definition.WalkSpeed));
         if (walkSpeed <= 0f || monster.RunSpeedOf(definition.RunSpeed) <= 0f) return;
         var travelMs = (int)Math.Ceiling(route.Length / walkSpeed * MillisecondsPerSecond);
-        var destinationX = (ushort)route.DestinationX;
-        var destinationY = (ushort)route.DestinationY;
         monster.MoveAlong(route.Points, now, travelMs);
 
         if (monster.TakeOrder(WalkMoveType, walkSpeed))
@@ -155,8 +159,20 @@ public sealed class MonsterWanderCycle
             events.Add(new MonsterSpeedChanged(monster.EntityId, walkSpeed));
         }
         slot.Moving = true;
-        slot.ArrivesAt = now + TimeSpan.FromMilliseconds(travelMs);
-        events.Add(new MonsterMoveStarted(monster.EntityId, fromX, fromY, destinationX, destinationY));
+        slot.ArrivesAt = now + TimeSpan.FromMilliseconds(travelMs + ArrivalNoticeDelayMs);
+        slot.PendingLegs.Clear();
+        var legs = WanderRoute.Legs(geometry, fromX, fromY, route.Points);
+        for (var i = 0; i < legs.Count; i++)
+        {
+            var leg = legs[i];
+            var started = new MonsterMoveStarted(monster.EntityId, (ushort)leg.FromX, (ushort)leg.FromY, (ushort)leg.ToX, (ushort)leg.ToY);
+            if (i == 0) events.Add(started);
+            else
+            {
+                var at = now + TimeSpan.FromMilliseconds(Math.Ceiling(leg.StartDistance / walkSpeed * MillisecondsPerSecond));
+                slot.PendingLegs.Enqueue(new PendingLeg(at, started.FromX, started.FromY, started.ToX, started.ToY));
+            }
+        }
     }
 
     private (int X, int Y) ChooseDestination(ZoneGeometry geometry, MonsterEntity monster, int fromX, int fromY)
@@ -201,5 +217,8 @@ public sealed class MonsterWanderCycle
         public DateTimeOffset LastTick;
         public bool Moving;
         public DateTimeOffset ArrivesAt;
+        public Queue<PendingLeg> PendingLegs { get; } = new();
     }
+
+    private readonly record struct PendingLeg(DateTimeOffset At, ushort FromX, ushort FromY, ushort ToX, ushort ToY);
 }

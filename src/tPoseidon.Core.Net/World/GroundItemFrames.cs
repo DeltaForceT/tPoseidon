@@ -37,6 +37,8 @@ public static class GroundItemFrames
 
     public const int DroppedSize = 28;
     public const int AlreadyThereSize = 26;
+    public const int SpotTreasureHeaderSize = 4;
+    public const int SpotTreasureEntrySize = 24;
     public const int RemovedSize = 3;
     public const int PickedUpSize = 19;
     public const int AddedToBagSize = 17;
@@ -58,6 +60,22 @@ public static class GroundItemFrames
         ArgumentNullException.ThrowIfNull(item);
         var w = new PacketWriter(AlreadyThereSize + RareItemExtraBytes);
         WriteActor(w, item);
+        return w.ToArray();
+    }
+
+    public static byte[] SpotTreasure(ushort ownerEntityId, IReadOnlyList<FieldItem> items)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        var w = new PacketWriter(SpotTreasureHeaderSize + items.Count * (SpotTreasureEntrySize + RareItemExtraBytes));
+        w.WriteUInt16(ownerEntityId);
+        w.WriteUInt16((ushort)items.Count);
+        foreach (var item in items)
+        {
+            w.WriteUInt16(item.EntityId);
+            w.WriteUInt16(item.X);
+            w.WriteUInt16(item.Y);
+            WriteResting(w, item);
+        }
         return w.ToArray();
     }
 

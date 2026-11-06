@@ -71,14 +71,14 @@ public sealed class ClientWorldCheck : IClientCheck
     {
         public static WorldTables Read(string libconfig)
         {
-            var reader = new LibConfigXmlReader(libconfig);
+            var catalog = tPoseidon.Core.DataCatalog.SharedCatalog.For(libconfig);
             return new WorldTables(
-                reader.LoadMapInfo().GroupBy(map => map.Id).Select(group => group.First()).OrderBy(map => map.Id).ToList(),
-                new InMemoryNpcTalkLookup(reader.LoadAllNpcTalkTables()),
-                new InMemoryShopZoneLookup(reader.LoadAllShopZoneTables()),
-                new InMemorySkillShopZoneLookup(reader.LoadAllSkillShopZoneTables()),
-                reader.LoadCharacterInfo().GroupBy(entry => entry.Id).ToDictionary(group => group.Key, group => group.First()),
-                reader.LoadAllMonZoneTables().ToLookup(entry => entry.MapName, StringComparer.Ordinal));
+                catalog.Maps.ToMapInfo().GroupBy(map => map.Id).Select(group => group.First()).OrderBy(map => map.Id).ToList(),
+                new InMemoryNpcTalkLookup(catalog.Npcs.NpcTalkTables),
+                new InMemoryShopZoneLookup(catalog.Shops.ShopZoneTables),
+                new InMemorySkillShopZoneLookup(catalog.Shops.SkillShopZoneTables),
+                catalog.Npcs.CharacterInfo.GroupBy(entry => entry.Id).ToDictionary(group => group.Key, group => group.First()),
+                catalog.Zones.ToMonZones().ToLookup(entry => entry.MapName, StringComparer.Ordinal));
         }
     }
 

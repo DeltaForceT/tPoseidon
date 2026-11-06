@@ -139,7 +139,7 @@ public static class CoupleRules
         ArgumentNullException.ThrowIfNull(tables);
         ArgumentNullException.ThrowIfNull(heldCount);
         if (coupleState != CoupleStates.CloseEnough) return (MarriageOptionRefusal.NotCloseEnough, null);
-        var title = tables.Titles.FirstOrDefault(row => row.Index == request.TitleIndex);
+        var title = tables.TitleOf(request.TitleIndex);
         if (title is null) return (MarriageOptionRefusal.TitleMissing, null);
         if (!title.Points.Contains(points.Relation, points.Love, points.Friend)) return (MarriageOptionRefusal.TitleOutOfRange, null);
         var ringRow = tables.ExchangeRow(request.RingItemId);

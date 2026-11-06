@@ -18,6 +18,7 @@ public static class CharacterCombatSnapshot
             AttackMs = info.AttackMs,
             Attack2Ms = info.Attack2Ms,
             AttackReadyMs = info.AttackReadyMs,
+            Box = info.Box is { } box ? new BodyBoxDto { Left = box.Left, Top = box.Top, Right = box.Right, Bottom = box.Bottom } : null,
         };
     }
 
@@ -39,6 +40,7 @@ public static class CharacterCombatSnapshot
                 AttackMs = dto.AttackMs,
                 Attack2Ms = dto.Attack2Ms,
                 AttackReadyMs = dto.AttackReadyMs,
+                Box = dto.Box is { } box ? new BodyBox(box.Left, box.Top, box.Right, box.Bottom) : null,
             };
         }
         return byId;

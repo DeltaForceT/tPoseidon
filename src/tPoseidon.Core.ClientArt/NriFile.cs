@@ -125,6 +125,27 @@ public sealed class NriFile
         return Decode(_data.AsSpan(cursor, size), width, height);
     }
 
+    public ClientPicture ReadBundle(int bundle)
+    {
+        if (bundle < 0)
+        {
+            throw new InvalidDataException($"The bundle number {bundle} is not usable.");
+        }
+
+        if (_animationCount == 0)
+        {
+            return ReadImage(bundle);
+        }
+
+        var animations = ReadAnimationStarts();
+        if (bundle >= animations.Count)
+        {
+            throw new InvalidDataException($"The sprite has {animations.Count} bundles and bundle {bundle} was asked for.");
+        }
+
+        return ComposeFirstFrame(animations[bundle].Start);
+    }
+
     public ClientPicture ReadStanding()
     {
         var animations = ReadAnimationStarts();

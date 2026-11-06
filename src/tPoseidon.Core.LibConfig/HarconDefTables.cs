@@ -45,6 +45,14 @@ public sealed record HarconDefTables(
     public const int RankedCoins = 10;
     public const string NpcTalkTablePrefix = "NpcTalk_";
     public const string NpcShopColumn = "HarconShopTable";
+    public const int EagleEventStage = 27;
+    public const int EagleEventMap = 678;
+
+    public static HarconStageEntry Corrected(HarconStageEntry stage)
+    {
+        ArgumentNullException.ThrowIfNull(stage);
+        return stage.Id == EagleEventStage ? stage with { PlayMap = EagleEventMap } : stage;
+    }
 
     public IReadOnlyDictionary<int, int> ShopOfNpc { get; init; } = new Dictionary<int, int>();
 

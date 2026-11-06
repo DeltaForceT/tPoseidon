@@ -206,7 +206,7 @@ internal sealed class PuzzleController : IDisposable
     private async Task ShowAsync(MemoryPuzzleRun run, (int PositionId, int MonsterId) next)
     {
         var point = _geometry.TryGetValue(run.MapId, out var geometry)
-            ? geometry.PointsOfType(ZoneGeometry.PointTypeRegionSpawn).Where(candidate => candidate.Id == next.PositionId).Take(1).ToArray()
+            ? geometry.PointsOf(ZoneGeometry.PointTypeRegionSpawn, next.PositionId).Take(1).ToArray()
             : Array.Empty<ZonePoint>();
         if (point.Length == 0 || _monsters.Spawn(next.MonsterId, run.MapId, (ushort)point[0].X, (ushort)point[0].Y) is not { } statue)
         {
@@ -268,7 +268,7 @@ internal sealed class PuzzleController : IDisposable
             return null;
         }
         var minted = _itemManager.GrantRewardItem(character.CharacterId, itemId, count, itemClassOverride: itemClass);
-        return new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);
+        return new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot, Options: minted.Rolled);
     }
 
     private void OnMonsterKilled(MonsterEntity monster, ushort killer)

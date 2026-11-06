@@ -4,6 +4,7 @@
     <ProjectReference Include="..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
     <ProjectReference Include="..\tPoseidon.Core.Data\tPoseidon.Core.Data.csproj" />
     <ProjectReference Include="..\tPoseidon.Core.LibConfig\tPoseidon.Core.LibConfig.csproj" />
+    <ProjectReference Include="..\tPoseidon.Core.DataCatalog\tPoseidon.Core.DataCatalog.csproj" />
     <ProjectReference Include="..\tPoseidon.Core.Game\tPoseidon.Core.Game.csproj" />
     <ProjectReference Include="..\tPoseidon.Core.Net\tPoseidon.Core.Net.csproj" />
     <ProjectReference Include="..\tPoseidon.Core.WorldSnapshot\tPoseidon.Core.WorldSnapshot.csproj" />

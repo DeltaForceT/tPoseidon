@@ -112,9 +112,20 @@ public sealed class JsonPortalLookup : IPortalLookup
             var fileName = map.Md3FileName.Trim();
             if (fileName.Length == 0) continue;
             if (Md3MapReader.ReadMap(tPoseidon.Core.Common.ClientFiles.Combine(mapDirectory, fileName)) is not { } md3) continue;
-            AddMap(map.Id, md3, entrances, arrivals, entryPoints);
+            AddMap(map.Id, md3, entrances, arrivals, entryPoints, LyrPortalsOf(mapDirectory, fileName));
         }
         return new JsonPortalLookup(entrances, arrivals, entryPoints);
+    }
+
+    public static IReadOnlyList<LyrPortal> LyrPortalsOf(string mapDirectory, string md3FileName)
+    {
+        var stem = Path.ChangeExtension(md3FileName.Trim(), null);
+        if (tPoseidon.Core.Common.ClientFiles.Locate(tPoseidon.Core.Common.ClientFiles.Combine(mapDirectory, stem + ".lyr")) is not { } layers
+            || tPoseidon.Core.Common.ClientFiles.Locate(tPoseidon.Core.Common.ClientFiles.Combine(mapDirectory, stem + ".bac")) is not { } background)
+        {
+            return Array.Empty<LyrPortal>();
+        }
+        return LyrPortalReader.Read(File.ReadAllBytes(layers), File.ReadAllBytes(background));
     }
 
     public static void AddMap(
@@ -122,7 +133,8 @@ public sealed class JsonPortalLookup : IPortalLookup
         Md3Map md3,
         Dictionary<ushort, IReadOnlyList<PortalEntrance>> entrances,
         Dictionary<(ushort, ushort), (ushort, ushort)> arrivals,
-        Dictionary<ushort, IReadOnlyList<(ushort X, ushort Y)>>? entryPoints = null)
+        Dictionary<ushort, IReadOnlyList<(ushort X, ushort Y)>>? entryPoints = null,
+        IReadOnlyList<LyrPortal>? lyrPortals = null)
     {
         ArgumentNullException.ThrowIfNull(md3);
         ArgumentNullException.ThrowIfNull(entrances);
@@ -147,6 +159,20 @@ public sealed class JsonPortalLookup : IPortalLookup
                 DestMap = (ushort)range.Destination,
             })
             .ToList();
+        var nextId = list.Count == 0 ? 1 : list.Max(entrance => entrance.Id) + 1;
+        foreach (var portal in lyrPortals ?? Array.Empty<LyrPortal>())
+        {
+            if (list.Any(entrance => entrance.DestMap == portal.DestinationMap)) continue;
+            list.Add(new PortalEntrance
+            {
+                Id = nextId++,
+                XMin = Math.Min(portal.X1, portal.X2),
+                YMin = Math.Min(portal.Y1, portal.Y2),
+                XMax = Math.Max(portal.X1, portal.X2),
+                YMax = Math.Max(portal.Y1, portal.Y2),
+                DestMap = (ushort)portal.DestinationMap,
+            });
+        }
         if (list.Count > 0) entrances[mapId] = list;
         foreach (var pointType in ArrivalPointTypes)
         {

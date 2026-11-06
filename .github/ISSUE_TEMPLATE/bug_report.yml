@@ -36,6 +36,7 @@ body:
       label: Server operating system
       options:
         - Windows 10 / 11 (x64)
+        - Linux x64
         - Other (say below)
     validations:
       required: true

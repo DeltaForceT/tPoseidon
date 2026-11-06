@@ -90,6 +90,14 @@ public static class ShadowSanctuaryRows
             ["1176", "75", "0", "0", "0", "0", "0", "0", "810", "0", "NpcMsg_Path_NE_Npc177_HC3", " ", " ", " ", "0", " ", "0", "0", " ", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "5", "8", "0", "0", "0", "0", "0", "0", "0", "6", "813", " ", "0", "0", "0", "0", "0", "0", "0", "0", " ", " "],
         ]);
 
+    public static readonly LibConfigRowPatch HarconShop = new(
+        "HarconShop_2",
+        "ID",
+        ["ID", "Category", "ChangeItemId", "ChangeItemCnt", "CoinCnt", "Comment"],
+        [
+            ["34", "3", "64791", "1", "5", "Advanced Turret Control Stone"],
+        ]);
+
     public static readonly IReadOnlyList<LibConfigFieldPatch> TimerNpcs =
     [
         new("NpcTalk_Seabed_Town", "Type", "17176", new Dictionary<string, string> { ["TeleportId"] = "800", ["TimerID"] = "800", ["MinimapMarkType"] = "6" }),
@@ -102,7 +110,7 @@ public static class ShadowSanctuaryRows
         new("NpcTalk_Path_NE", "Type", "17176", new Dictionary<string, string> { ["TeleportId"] = "807", ["TimerID"] = "807", ["MinimapMarkType"] = "6" }),
     ];
 
-    public static IReadOnlyList<LibConfigRowPatch> Patches { get; } = [MapInfo, MonsterScenario, TimeTable, Teleport, HarconNpcs];
+    public static IReadOnlyList<LibConfigRowPatch> Patches { get; } = [MapInfo, MonsterScenario, TimeTable, Teleport, HarconNpcs, HarconShop];
 
     public static bool Pending(byte[] xml) =>
         Patches.Any(patch => LibConfigXmlRowEditor.MissingKeys(xml, patch).Count > 0)

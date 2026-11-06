@@ -25,6 +25,7 @@ public static class MonsterSkills
     public const int FluentWaist = 1240;
     public const int Destruction = 1294;
     public const int Vampiric = 1460;
+    public const int Guard = 1463;
     public const int Unshield = 1081;
     public const int DarkSlow = 1322;
     public const int Poison = 1464;
@@ -55,6 +56,8 @@ public static class MonsterSkills
     private const double ChargingDivisor = 800.0;
 
     public const int ElectricShockVictims = 5;
+    public const int ElectricShockChildMs = 500;
+    public const int ElectricShockObjectMs = 2000;
     public const int DestructionVictims = 7;
     public const int DestructionHoldMs = 500;
     public const int DotPeriodMs = 2000;
@@ -78,6 +81,8 @@ public static class MonsterSkills
     public const string PowerColumn = "AP";
     public const string RadiusColumn = "Radius";
     public const string CountColumn = "Count";
+    public const string CastDelayColumn = "MonDelay";
+    public const float DefaultCoolSeconds = 2f;
 
     private const float LifeShare = 0.1f;
     private const double DefenceShare = 0.5;
@@ -96,10 +101,14 @@ public static class MonsterSkills
         [LightWave] = (SkillActions.LightElement, MagicLoss),
     };
 
+    public static MonsterSkillTiming Timing(float? castDelaySeconds, float? coolSeconds) => new(
+        castDelaySeconds is > 0f ? (int)Math.Round(castDelaySeconds.Value * 1000.0) : 0,
+        (int)Math.Round((coolSeconds ?? DefaultCoolSeconds) * 1000.0));
+
     public static bool IsBuilt(int actionId) =>
         actionId is Heal or ChainArrow or MagicRing or FireBreath or ThunderBreath or SharpBrandish or Thunderbolt or WindSlash or Siren
             or DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
-            or Destruction or Vampiric or Poison or Charging or Warp or MagicStorm or EarthDivide
+            or Destruction or Vampiric or Poison or Charging or Warp or MagicStorm or EarthDivide or Guard
         || SingleMagic.ContainsKey(actionId) || HarconSkills.IsHarcon(actionId);
 
     public static bool IsObject(int actionId) =>
@@ -147,3 +156,5 @@ public static class MonsterSkills
         return WireLimits.Saturate(damage * (double)fall);
     }
 }
+
+public readonly record struct MonsterSkillTiming(int CastMs, int CoolMs);

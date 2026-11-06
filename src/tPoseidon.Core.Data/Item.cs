@@ -30,6 +30,8 @@ public sealed record Item
 
         public required byte SlotPosition { get; init; }
 
+    public IReadOnlyList<ItemProperty> Rolled { get; init; } = [];
+
     public const byte RareClass = 2;
 
     public static DateTimeOffset BreakedAfter(byte itemClass, int periodMinutes, DateTimeOffset now) =>

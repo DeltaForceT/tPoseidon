@@ -23,12 +23,6 @@ public sealed class InMemoryQuestResultLookup : IQuestResultLookup, IQuestResult
         }
     }
 
-    public static InMemoryQuestResultLookup LoadFromXml(string xmlPath)
-    {
-        var reader = new LibConfigXmlReader(xmlPath);
-        var entries = reader.LoadAllQuestResultTables();
-        return new InMemoryQuestResultLookup(entries);
-    }
 
     public QuestResultEntry? GetByQuestId(int questId, int count = 1) =>
         _byKey.TryGetValue((questId, count), out var entry) ? entry : null;

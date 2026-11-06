@@ -27,6 +27,11 @@ public sealed class GameCharDataPacket
 
         public ulong Timestamp { get; init; }
 
+    public ushort SecondType { get; init; }
+    public byte SecondJob { get; init; }
+    public ushort ThirdType { get; init; }
+    public byte ThirdJob { get; init; }
+
     public static GameCharDataPacket For(Character character)
     {
         ArgumentNullException.ThrowIfNull(character);
@@ -43,6 +48,10 @@ public sealed class GameCharDataPacket
             StatC = character.PtsS,
             StatD = character.PtsC,
             Timestamp = (ulong)character.GenTime.ToUnixTimeSeconds(),
+            SecondType = OccupationRules.SecondJobTypeOf(character),
+            SecondJob = character.Job2,
+            ThirdType = OccupationRules.ThirdJobTypeOf(character),
+            ThirdJob = character.Job3,
         };
     }
 
@@ -70,6 +79,10 @@ public sealed class GameCharDataPacket
         buf[0x2B] = StatC;
         buf[0x2C] = StatD;
         WriteUInt64Le(buf, 0x2D, Timestamp);
+        WriteUInt16Le(buf, 0x35, SecondType);
+        buf[0x37] = SecondJob;
+        WriteUInt16Le(buf, 0x38, ThirdType);
+        buf[0x3A] = ThirdJob;
 
         return buf;
     }
@@ -94,6 +107,10 @@ public sealed class GameCharDataPacket
             StatC = payload[0x2B],
             StatD = payload[0x2C],
             Timestamp = ReadUInt64Le(payload, 0x2D),
+            SecondType = ReadUInt16Le(payload, 0x35),
+            SecondJob = payload[0x37],
+            ThirdType = ReadUInt16Le(payload, 0x38),
+            ThirdJob = payload[0x3A],
         };
     }
 

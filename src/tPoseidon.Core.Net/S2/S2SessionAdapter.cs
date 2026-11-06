@@ -86,7 +86,7 @@ public sealed class S2SessionAdapter
                 {
                     await _dispatcher.DispatchAsync(opcode, decoded.Payload, cancellationToken).ConfigureAwait(false);
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
+                catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
                 {
                     var payloadHex = Convert.ToHexString(
                         decoded.Payload, 0, Math.Min(decoded.Payload.Length, 32));

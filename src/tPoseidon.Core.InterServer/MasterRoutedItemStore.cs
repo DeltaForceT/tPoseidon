@@ -52,7 +52,12 @@ public sealed class MasterRoutedItemStore : IItemStore
             }
             return ItemStoreWire.DecodeItem(reply);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (MasterCallTimedOutException ex)
+        {
+            _log($"item GrantToCharacter: master did not answer in time ({ex.Subject}); not applied locally");
+            throw;
+        }
+        catch (Exception ex)
         {
             _log($"item GrantToCharacter char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.GrantToCharacter(characterId, itemIndex, itemClass, slotKind, slotPosition, stack);
@@ -71,7 +76,7 @@ public sealed class MasterRoutedItemStore : IItemStore
             }
             return ItemStoreWire.DecodeItemList(reply);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"item GetAllForCharacter char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.GetAllForCharacter(characterId);
@@ -92,7 +97,7 @@ public sealed class MasterRoutedItemStore : IItemStore
             }
             return ItemStoreWire.DecodeItemList(reply);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"item GetForCharacterBySlotKind char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.GetForCharacterBySlotKind(characterId, slotKind);
@@ -116,7 +121,7 @@ public sealed class MasterRoutedItemStore : IItemStore
             if (!present) return null;
             return ItemStoreWire.DecodeItem(reply.AsSpan(1));
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"item FindByUid item 0x{itemUid:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.FindByUid(itemUid);
@@ -141,7 +146,7 @@ public sealed class MasterRoutedItemStore : IItemStore
             if (!present) return null;
             return ItemStoreWire.DecodeItem(reply.AsSpan(1));
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"item FindBySlot char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.FindBySlot(characterId, slotKind, slotPosition);
@@ -163,7 +168,7 @@ public sealed class MasterRoutedItemStore : IItemStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"item MoveToSlot item 0x{itemUid:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.MoveToSlot(itemUid, newSlotKind, newSlotPosition);
@@ -183,7 +188,7 @@ public sealed class MasterRoutedItemStore : IItemStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"item UnassignFromCharacter item 0x{itemUid:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.UnassignFromCharacter(itemUid);
@@ -206,7 +211,7 @@ public sealed class MasterRoutedItemStore : IItemStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"item AssignToCharacter item 0x{itemUid:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.AssignToCharacter(itemUid, characterId, slotKind, slotPosition);
@@ -226,7 +231,7 @@ public sealed class MasterRoutedItemStore : IItemStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"item Delete item 0x{itemUid:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.Delete(itemUid);
@@ -249,7 +254,12 @@ public sealed class MasterRoutedItemStore : IItemStore
             var reader = new PacketReader(reply);
             return reader.ReadUInt16();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (MasterCallTimedOutException ex)
+        {
+            _log($"item AdjustStack: master did not answer in time ({ex.Subject}); not applied locally");
+            throw;
+        }
+        catch (Exception ex)
         {
             _log($"item AdjustStack item 0x{itemUid:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.AdjustStack(itemUid, delta);
@@ -271,7 +281,12 @@ public sealed class MasterRoutedItemStore : IItemStore
             }
             return reply.Length > 0 && reply[0] == 1;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (MasterCallTimedOutException ex)
+        {
+            _log($"item SetStack: master did not answer in time ({ex.Subject}); not applied locally");
+            throw;
+        }
+        catch (Exception ex)
         {
             _log($"item SetStack item 0x{itemUid:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.SetStack(itemUid, stack);
@@ -293,7 +308,12 @@ public sealed class MasterRoutedItemStore : IItemStore
             }
             return reply.Length > 0 && reply[0] == 1;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (MasterCallTimedOutException ex)
+        {
+            _log($"item SetBreakedAt: master did not answer in time ({ex.Subject}); not applied locally");
+            throw;
+        }
+        catch (Exception ex)
         {
             _log($"item SetBreakedAt item 0x{itemUid:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.SetBreakedAt(itemUid, breakedAt);
@@ -309,9 +329,17 @@ public sealed class MasterRoutedItemStore : IItemStore
         }
 
         var request = BuildRequest(charUid, subOp, body);
-        var reply = _client
-            .SendAndAwaitReplyAsync(request, AckOpcodes, _timeout, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        InterServerFrame reply;
+        try
+        {
+            reply = _client
+                .SendAndAwaitReplyAsync(request, AckOpcodes, _timeout, CancellationToken.None)
+                .GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException ex)
+        {
+            throw new MasterCallTimedOutException(subOp.ToString(), $"0x{charUid:X16}", ex);
+        }
         ok = reply.Opcode == InterServerOpcode.TpItemStoreCallAckOk;
         return reply.Body;
     }

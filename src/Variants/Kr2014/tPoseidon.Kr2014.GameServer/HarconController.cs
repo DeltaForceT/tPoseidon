@@ -45,6 +45,7 @@ internal sealed class HarconController : IDisposable
     private readonly ItemManager _itemManager;
     private readonly IItemParamLookup _catalog;
     private readonly Action<ushort, int> _castTactic;
+    private readonly Func<InGameSessionState, IReadOnlyList<TimedItem>, Task> _announceTimed;
     private readonly int _bagCapacity;
     private readonly Encoding _text;
     private readonly string _logTag;
@@ -60,7 +61,7 @@ internal sealed class HarconController : IDisposable
         Func<HarconDefTables> tables, IHarconDefStore store, MonsterManager monsters, IReadOnlyDictionary<ushort, ZoneGeometry> geometry,
         Func<int, string> mapMonsterTable, Func<IReadOnlyCollection<InGameSessionState>> sessions, Func<MonsterEntity, byte[]> spawnFrame,
         Func<ushort, byte[]> despawnFrame, Func<ushort, Opcode, byte[], Task> sendToMap, IItemStore items, ItemManager itemManager,
-        IItemParamLookup catalog, Action<ushort, int> castTactic, int bagCapacity, Encoding text, string logTag)
+        IItemParamLookup catalog, Action<ushort, int> castTactic, Func<InGameSessionState, IReadOnlyList<TimedItem>, Task> announceTimed, int bagCapacity, Encoding text, string logTag)
     {
         _tables = tables ?? throw new ArgumentNullException(nameof(tables));
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -75,6 +76,7 @@ internal sealed class HarconController : IDisposable
         _itemManager = itemManager ?? throw new ArgumentNullException(nameof(itemManager));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _castTactic = castTactic ?? throw new ArgumentNullException(nameof(castTactic));
+        _announceTimed = announceTimed ?? throw new ArgumentNullException(nameof(announceTimed));
         _bagCapacity = bagCapacity;
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
@@ -116,9 +118,11 @@ internal sealed class HarconController : IDisposable
         try
         {
             st.HarconLobbyMap = st.MapId;
-            await SendAsync(st, Opcode.S2C_HARCON_LOBBY, HarconFrames.Lobby(category, record.Coins, record.Cleared.Order().ToArray())).ConfigureAwait(false);
-            await SendAsync(st, Opcode.S2C_HARCON_TOTAL_RECORD, HarconFrames.TotalRecord(_store.Totals(character.CharacterId))).ConfigureAwait(false);
-            await SendAsync(st, Opcode.S2C_HARCON_ROOM_LIST, HarconFrames.RoomList(_lobby.Rooms, _text)).ConfigureAwait(false);
+            foreach (var (opcode, payload) in HarconFrames.LobbyOpening(
+                category, record.Coins, record.Cleared.Order().ToArray(), _store.Totals(character.CharacterId), _lobby.Rooms, _text))
+            {
+                await SendAsync(st, opcode, payload).ConfigureAwait(false);
+            }
         }
         finally
         {
@@ -199,17 +203,21 @@ internal sealed class HarconController : IDisposable
     public Task LeaveAsync(InGameSessionState st) => Locked(async () =>
     {
         if (st.Character is not { } character) return;
-        if (_lobby.RoomOf(character.CharacterId) is not { } room)
+        var room = _lobby.RoomOf(character.CharacterId);
+        var outcome = HarconLobby.DecideLeave(room);
+        switch (outcome.Kind)
         {
-            await SendAsync(st, Opcode.S2C_HARCON_LEAVE_ERROR, new[] { HarconRules.LeaveNoStage }).ConfigureAwait(false);
-            return;
+            case HarconLeaveKind.CloseLobby:
+                st.HarconLobbyMap = null;
+                await SendAsync(st, Opcode.S2C_HARCON_LEFT, Array.Empty<byte>()).ConfigureAwait(false);
+                return;
+            case HarconLeaveKind.Refuse:
+                await SendAsync(st, Opcode.S2C_HARCON_LEAVE_ERROR, new[] { outcome.Code }).ConfigureAwait(false);
+                return;
+            default:
+                await RemoveAsync(st, character.CharacterId, Opcode.S2C_HARCON_LEFT, Array.Empty<byte>()).ConfigureAwait(false);
+                return;
         }
-        if (room.State != HarconRoomState.Waiting)
-        {
-            await SendAsync(st, Opcode.S2C_HARCON_LEAVE_ERROR, new[] { HarconRules.LeaveInvalidPlayerState }).ConfigureAwait(false);
-            return;
-        }
-        await RemoveAsync(st, character.CharacterId, Opcode.S2C_HARCON_LEFT, Array.Empty<byte>()).ConfigureAwait(false);
     });
 
     public Task KickAsync(InGameSessionState st, ReadOnlyMemory<byte> payload) => Locked(async () =>
@@ -315,13 +323,14 @@ internal sealed class HarconController : IDisposable
             await SendAsync(st, Opcode.S2C_HARCON_SHOP_ERROR, new[] { HarconShopErrors.NotEnoughCoins }).ConfigureAwait(false);
             return;
         }
-        if (Grant(character.CharacterId, row.ItemId, (ushort)Math.Clamp(row.ItemCount, 1, ushort.MaxValue)) is not { } change)
+        if (Grant(character.CharacterId, row.ItemId, (ushort)Math.Clamp(row.ItemCount, 1, ushort.MaxValue), out var created) is not { } change)
         {
             await SendAsync(st, Opcode.S2C_HARCON_SHOP_ERROR, new[] { HarconShopErrors.BagFull }).ConfigureAwait(false);
             return;
         }
         var coins = _store.AddCoins(character.CharacterId, -price);
         await SendAsync(st, Opcode.S2C_HARCON_SHOP_BOUGHT, HarconFrames.Bought(QuestResultFrames.ItemOperation(change), coins)).ConfigureAwait(false);
+        await _announceTimed(st, TimedItemPeriods.Registered(created)).ConfigureAwait(false);
         Log(st, $"buys {row.ItemCount} x item {row.ItemId} from shop {row.Shop} row {row.Id} of NPC {request.NpcType} for {price} coins ({coins} left)");
     });
 
@@ -475,7 +484,10 @@ internal sealed class HarconController : IDisposable
                 await EndAsync(room, state, state.TargetDestroyed && !state.Lost, tables, now).ConfigureAwait(false);
                 continue;
             }
-            foreach (var order in state.Run.DueSpawns(now)) await SpawnAsync(state.Monsters, playMap, order).ConfigureAwait(false);
+            foreach (var order in state.Run.DueSpawns(now))
+            {
+                if (HarconRules.SpawnsAsWave(_monsters.Param(order.MonsterId)?.Type ?? 0)) await SpawnAsync(state.Monsters, playMap, order).ConfigureAwait(false);
+            }
             var alive = Alive(state);
             if (state.Run.NextWaveIfDone(now, alive) is not null)
             {
@@ -557,8 +569,8 @@ internal sealed class HarconController : IDisposable
         _runs[room.Key] = state;
         foreach (var (monsterId, regionId, count) in tables.DefendedSpawns.GetValueOrDefault(_mapMonsterTable(room.Stage.PlayMap)) ?? Array.Empty<(int, int, int)>())
         {
-            var owned = HarconRules.IsTarget(_monsters.Param(monsterId)?.Type ?? 0) ? state.Targets : state.Defended;
-            await SpawnAsync(owned, (ushort)room.Stage.PlayMap, new HarconSpawnOrder(monsterId, regionId, count)).ConfigureAwait(false);
+            var target = HarconRules.IsTarget(_monsters.Param(monsterId)?.Type ?? 0);
+            await SpawnAsync(target ? state.Targets : state.Defended, (ushort)room.Stage.PlayMap, new HarconSpawnOrder(monsterId, regionId, count), !target).ConfigureAwait(false);
         }
         var gauges = GaugeEntries(state).Select(monster => (monster.EntityId, monster.MaxHp)).ToArray();
         await SendLobbyAsync(Opcode.S2C_HARCON_ROOM_PROGRESS, HarconFrames.RoomValue(room.Key, 1), null).ConfigureAwait(false);
@@ -649,11 +661,11 @@ internal sealed class HarconController : IDisposable
         }
     }
 
-    private async Task SpawnAsync(List<ushort> owned, ushort mapId, HarconSpawnOrder order)
+    private async Task SpawnAsync(List<ushort> owned, ushort mapId, HarconSpawnOrder order, bool defended = false)
     {
         _geometry.TryGetValue(mapId, out var geometry);
         var points = HarconSpawnPlaces.PointsOf(geometry, order.RegionId);
-        ZoneRegion? area = geometry?.Regions.Where(candidate => candidate.Id == order.RegionId).Select(candidate => (ZoneRegion?)candidate).FirstOrDefault();
+        ZoneRegion? area = geometry?.RegionOf(order.RegionId);
         if (points.Count == 0 && area is null)
         {
             Console.WriteLine($"{_logTag} [harcon] map {mapId} has no region {order.RegionId} for monster {order.MonsterId}");
@@ -678,6 +690,7 @@ internal sealed class HarconController : IDisposable
                 }
             }
             if (_monsters.Spawn(order.MonsterId, mapId, x, y, null, null, order.RegionId) is not { } monster) continue;
+            monster.IsDefended = defended;
             owned.Add(monster.EntityId);
             await _sendToMap(mapId, Opcode.NPC_SPAWN, _spawnFrame(monster)).ConfigureAwait(false);
         }
@@ -755,8 +768,9 @@ internal sealed class HarconController : IDisposable
         return new BagOperation(QuestResultFrames.Removed, itemClass, (uint)held.ItemIndex, BagItemIds.OnWire(held.ItemUid), 0);
     }
 
-    private BagOperation? Grant(ulong characterId, int itemId, ushort count)
+    private BagOperation? Grant(ulong characterId, int itemId, ushort count, out Item? created)
     {
+        created = null;
         var definition = _catalog.GetById(itemId);
         var itemClass = definition?.ObjectClass ?? (byte)ItemParamEntry.StackableClass;
         var bag = _items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory);
@@ -768,6 +782,7 @@ internal sealed class HarconController : IDisposable
         }
         if (bag.Count >= _bagCapacity) return null;
         var minted = _itemManager.GrantRewardItem(characterId, itemId, count, itemClassOverride: itemClass);
+        created = minted;
         return new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);
     }
 

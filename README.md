@@ -8,7 +8,7 @@
   <a href="https://github.com/DeltaForceT/tPoseidon/actions/workflows/ci.yml"><img alt="Build" src="https://github.com/DeltaForceT/tPoseidon/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://github.com/DeltaForceT/tPoseidon/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/DeltaForceT/tPoseidon?include_prereleases&label=release"></a>
   <a href="LICENSE"><img alt="License: beta license" src="https://img.shields.io/badge/license-beta%20license-blue"></a>
-  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-lightgrey">
+  <img alt="Platforms: Windows, Linux" src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux-lightgrey">
   <a href="https://discord.gg/RAfSMmBm7"><img alt="Discord" src="https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white"></a>
 </p>
 
@@ -45,7 +45,7 @@ You can make a character and play through a good part of the game, but you will 
 
 | You need | Notes |
 |---|---|
-| **Windows 10 or 11, 64-bit** | Linux and macOS packages come with version 1.0, once I have tested them. |
+| **Windows 10 or 11, 64-bit, or Linux x64** | The Linux package runs the servers and the `tposeidon` command; players confirmed it works. The control panel on Linux and the game client under Wine are less tested. macOS packages come with version 1.0. |
 | **PostgreSQL 14 or newer** | Installed by you, or run in Docker. It holds the accounts and characters. Steps: [Installing](https://github.com/DeltaForceT/tPoseidon/wiki/Installing). |
 | **Your own KR 2014 client (2014.01.28)** | Not included, and never shared here. Every player uses their own copy. |
 
@@ -63,8 +63,8 @@ The details are in the wiki: [Client check](https://github.com/DeltaForceT/tPose
 ## Getting started
 
 1. Install PostgreSQL if you don't have it yet. Note the admin login and its password.
-2. Download the Windows package from the [Releases](https://github.com/DeltaForceT/tPoseidon/releases) page and unpack it somewhere you can write to, like your home folder.
-3. Run setup in a terminal in that folder: `tposeidon setup`.
+2. Download the package for your system (Windows or Linux) from the [Releases](https://github.com/DeltaForceT/tPoseidon/releases) page and unpack it somewhere you can write to, like your home folder.
+3. Run setup in a terminal in that folder: `tposeidon setup` (`./tposeidon setup` on Linux).
 4. Setup asks where your client is, who is going to play (this PC, your LAN or the internet), how to reach PostgreSQL, a name and password for your game account, and which account Play logs in with (the one you just made, unless you pick another that already exists). It then reads the game data it needs from your client and creates the database tables. The PostgreSQL admin password is only used for that and isn't saved.
 5. Start the servers:
 
@@ -143,7 +143,7 @@ Opening your server to the internet? Read [Hosting securely](docs/install/hostin
 
 ## The control panel
 
-`tposeidon-panel` (`tposeidon-panel.cmd`) opens a control panel. It does what the commands do (setup, start, stop, backup), shows every server's log, and has a security window for the connection guard.
+`tposeidon-panel` (`tposeidon-panel.cmd` on Windows) opens a control panel. On Linux it is packaged but less tested; the `tposeidon` command works on both. It does what the commands do (setup, start, stop, backup), shows every server's log, and has a security window for the connection guard.
 
 ### The quick-access bubble
 

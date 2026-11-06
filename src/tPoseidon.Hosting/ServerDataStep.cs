@@ -48,7 +48,8 @@ public static class ServerDataStep
         }
 
         progress?.Report(new StepProgress(2, Steps, "Reading maps, NPC points, portals and monster tables from the client..."));
-        var summary = ServerDataGenerator.Generate(libconfig, mapFolder, paths.ServerData);
+        var catalog = tPoseidon.Core.DataCatalog.SharedCatalog.For(libconfig, tPoseidon.Core.DataCatalog.SharedCatalog.DefaultCacheDirectory());
+        var summary = ServerDataGenerator.Generate(catalog.Maps.ToMapInfo(), catalog.Zones.ToMonsterPools(), mapFolder, paths.ServerData);
         progress?.Report(new StepProgress(2, Steps, $"{summary.Maps} maps, {summary.Portals} portals on {summary.PortalMaps} maps, {summary.PoolRows} monster rows on {summary.PoolMaps} maps."));
 
         var routing = Path.Combine(paths.ServerData, ZoneRoutingFile);

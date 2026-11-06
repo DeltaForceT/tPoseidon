@@ -19,6 +19,7 @@ public static class ServerEnvironment
             ["MT_LOG_FILE"] = paths.LogFile(server.Name),
             ["MT_CRASH_DIR"] = paths.CrashDumps,
             ["MT_DATA_DIR"] = paths.ServerData,
+            ["MT_CATALOG_CACHE"] = paths.CatalogCache,
             [PostgresMigrations.MigrationsDirectoryVariable] = paths.Migrations,
             ["MT_VARIANT_DATA_ROOT"] = clientData,
             ["MT_LIBCONFIG_PATH"] = ClientFolder.LibConfigFor(settings),

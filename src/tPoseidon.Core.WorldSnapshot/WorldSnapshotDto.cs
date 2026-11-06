@@ -35,6 +35,15 @@ public sealed record CharacterCombatInfoDto
     public required int AttackMs { get; init; }
     public required int Attack2Ms { get; init; }
     public required int AttackReadyMs { get; init; }
+    public BodyBoxDto? Box { get; init; }
+}
+
+public sealed record BodyBoxDto
+{
+    public required int Left { get; init; }
+    public required int Top { get; init; }
+    public required int Right { get; init; }
+    public required int Bottom { get; init; }
 }
 
 public sealed record ZoneDto

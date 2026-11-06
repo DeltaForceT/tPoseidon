@@ -44,7 +44,7 @@ public static class ScriptDialogMarkup
         foreach (var c in text)
         {
             if (c == Separator || c == '\r') continue;
-            cleaned.Append(c is >= ' ' and <= '~' ? c : '?');
+            cleaned.Append(char.IsControl(c) ? '?' : c);
         }
         return cleaned.ToString();
     }

@@ -1,4 +1,5 @@
 using tPoseidon.Core.Common;
+using tPoseidon.Core.Data;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Skills;
@@ -47,7 +48,8 @@ public static class SkillActions
         actionId is Punch or FairyOfMagic or StoneThrowing or WarmingUp or ManaArrow or SkillAreaRules.ManaRing or TornadoBomb or Cure
         || SkillHitShapes.Find(actionId) is not null || SkillAreaShapes.Find(actionId) is not null
         || PolarBearHits.CountOf(actionId) > 0 || ChainHits.IsChain(actionId) || SupportSkills.TargetsPlayers(actionId) || GroundSkills.IsGround(actionId) || GunSkills.NeedsGun(actionId) || ThrowSkills.IsThrow(actionId)
-        || ObjectHits.IsObjectHit(actionId) || EventSkills.IsBuilt(actionId);
+        || ObjectHits.IsObjectHit(actionId) || EventSkills.IsBuilt(actionId)
+        || Effects.SkillEffectKinds.Find(actionId) is { OnTarget: true };
 
     public static int EnhancerOf(int actionId) =>
         actionId switch
@@ -72,6 +74,12 @@ public static class SkillActions
     {
         ArgumentNullException.ThrowIfNull(monster);
         return monster.Type != RefusedMonsterType && monster.Type != OtherRefusedMonsterType;
+    }
+
+    public static bool MayTarget(MonsterEntity monster, MonsterParamEntry definition)
+    {
+        ArgumentNullException.ThrowIfNull(monster);
+        return !monster.IsDefended && MayTarget(definition);
     }
 
     public static int ElementOf(int actionId) =>

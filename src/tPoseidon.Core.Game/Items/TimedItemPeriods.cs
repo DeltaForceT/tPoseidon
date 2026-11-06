@@ -16,6 +16,8 @@ public static class TimedItemPeriods
     public static IReadOnlyList<TimedItem> Registered(IEnumerable<Item> items) =>
         items.Where(TimedItemRules.IsTimed).Select(item => new TimedItem(item.ItemUid, item.ItemIndex, item.BreakedAt)).ToList();
 
+    public static IReadOnlyList<TimedItem> Registered(Item? item) => item is null ? [] : Registered([item]);
+
     public static IReadOnlyList<TimedItem> Registered(IEnumerable<EquipUpgradeItem> rows) =>
         rows.Where(row => row.Action == EquipUpgradeAction.Insert && row.BreakedAt is not null)
             .Select(row => new TimedItem(row.ItemUid, row.ItemIndex, row.BreakedAt!.Value))

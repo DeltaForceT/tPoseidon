@@ -42,14 +42,13 @@ public static class S2SessionContextExtensions
     {
         ArgumentNullException.ThrowIfNull(ctx);
         ArgumentNullException.ThrowIfNull(payload);
-        var frame = ctx.Cipher.Encrypt(
+        return ctx.Session.SendAsync(() => ctx.Cipher.Encrypt(
             opcode: op,
             sequence: blockId,
             randKey: randKey,
             flags: PackingFlags.PayloadEncrypted,
             plaintextPayload: payload,
-            session: ctx.SessionInfo);
-        return ctx.Session.SendAsync(frame, ct);
+            session: ctx.SessionInfo), ct);
     }
 
     public static Task SendUnencryptedFrameAsync(
@@ -60,13 +59,12 @@ public static class S2SessionContextExtensions
     {
         ArgumentNullException.ThrowIfNull(ctx);
         ArgumentNullException.ThrowIfNull(payload);
-        var frame = ctx.Cipher.Encrypt(
+        return ctx.Session.SendAsync(() => ctx.Cipher.Encrypt(
             opcode: op,
             sequence: 0,
             randKey: 0,
             flags: PackingFlags.None,
             plaintextPayload: payload,
-            session: ctx.SessionInfo);
-        return ctx.Session.SendAsync(frame, ct);
+            session: ctx.SessionInfo), ct);
     }
 }

@@ -48,7 +48,7 @@ public sealed class MasterRoutedCharStore : ICharStore
             }
             return CharStoreWire.DecodeCharacterList(reply);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"char GetCharactersForAccount account {accountId}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.GetCharactersForAccount(accountId);
@@ -70,7 +70,7 @@ public sealed class MasterRoutedCharStore : ICharStore
             if (!present) return null;
             return CharStoreWire.DecodeCharacter(reply.AsSpan(1));
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"char GetCharacterById char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.GetCharacterById(characterId);
@@ -88,7 +88,7 @@ public sealed class MasterRoutedCharStore : ICharStore
                 _fallback.AddCharacter(character);
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"char AddCharacter char 0x{character.CharacterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             _fallback.AddCharacter(character);
@@ -108,7 +108,7 @@ public sealed class MasterRoutedCharStore : ICharStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"char DeleteCharacter char 0x{characterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.DeleteCharacter(characterId, ownerAccountId);
@@ -128,7 +128,7 @@ public sealed class MasterRoutedCharStore : ICharStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"char SetCharacterMap char 0x{characterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.SetCharacterMap(characterId, mapId);
@@ -148,7 +148,7 @@ public sealed class MasterRoutedCharStore : ICharStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"char SetCharacterHome char 0x{characterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.SetCharacterHome(characterId, homeMapId);
@@ -170,7 +170,7 @@ public sealed class MasterRoutedCharStore : ICharStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"char SetCharacterPosition char 0x{characterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.SetCharacterPosition(characterId, mapId, positionX, positionY);
@@ -189,7 +189,7 @@ public sealed class MasterRoutedCharStore : ICharStore
             }
             return true;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"char SaveCharacterStats char 0x{characterId:X16}: master send failed ({ex.GetType().Name}); using local fallback");
             return _fallback.SaveCharacterStats(characterId, snapshot);
@@ -206,7 +206,12 @@ public sealed class MasterRoutedCharStore : ICharStore
             _log($"char EditCharacter char 0x{characterId:X16}: master CANCEL; using local fallback");
             return _fallback.EditCharacter(characterId, edit);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (MasterCallTimedOutException ex)
+        {
+            _log($"char EditCharacter: master did not answer in time ({ex.Subject}); not applied locally");
+            throw;
+        }
+        catch (Exception ex)
         {
             _log($"char EditCharacter char 0x{characterId:X16}: master failed ({ex.GetType().Name}); using local fallback");
             return _fallback.EditCharacter(characterId, edit);
@@ -222,9 +227,17 @@ public sealed class MasterRoutedCharStore : ICharStore
         }
 
         var request = BuildRequest(charUid, subOp, body);
-        var reply = _client
-            .SendAndAwaitReplyAsync(request, AckOpcodes, _timeout, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        InterServerFrame reply;
+        try
+        {
+            reply = _client
+                .SendAndAwaitReplyAsync(request, AckOpcodes, _timeout, CancellationToken.None)
+                .GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException ex)
+        {
+            throw new MasterCallTimedOutException(subOp.ToString(), $"0x{charUid:X16}", ex);
+        }
         ok = reply.Opcode == InterServerOpcode.TpCharStoreCallAckOk;
         return reply.Body;
     }

@@ -339,12 +339,18 @@ public static class EquipmentRules
     public static EffectiveStats WithEquipment(EffectiveStats stats, IEnumerable<ItemParamEntry> worn, IReadOnlyList<int> extra)
     {
         ArgumentNullException.ThrowIfNull(worn);
+        return WithItemStats(stats, worn.Select(definition => definition.StatBonuses), extra);
+    }
+
+    public static EffectiveStats WithItemStats(EffectiveStats stats, IEnumerable<IReadOnlyList<int>> wornStats, IReadOnlyList<int> extra)
+    {
+        ArgumentNullException.ThrowIfNull(wornStats);
         ArgumentNullException.ThrowIfNull(extra);
         var bonus = new int[ItemStatCount];
         for (var stat = 0; stat < ItemStatCount && stat < extra.Count; stat++) bonus[stat] = extra[stat];
-        foreach (var definition in worn)
+        foreach (var itemStats in wornStats)
         {
-            for (var stat = 0; stat < ItemStatCount && stat < definition.StatBonuses.Count; stat++) bonus[stat] += definition.StatBonuses[stat];
+            for (var stat = 0; stat < ItemStatCount && stat < itemStats.Count; stat++) bonus[stat] += itemStats[stat];
         }
         return new EffectiveStats(
             stats.Ap + bonus[0], stats.Ac + bonus[1], stats.Dx + bonus[2],

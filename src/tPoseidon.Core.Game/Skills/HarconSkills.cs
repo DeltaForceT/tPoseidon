@@ -13,6 +13,13 @@ public enum HarconStep
     Fire,
 }
 
+public enum HarconDamageKind
+{
+    Magic,
+    Physical,
+    Pure,
+}
+
 public static class HarconSkills
 {
     public const int Hurricane = 1510;
@@ -36,6 +43,16 @@ public static class HarconSkills
 
     public static bool IsHarcon(int actionId) =>
         actionId is Hurricane or HurricaneStorm or Pressure or GiantPressure or TimeBreak or TimeBomb or BrillantLight or CronosImpact;
+
+    public static HarconDamageKind DamageOf(int actionId) => actionId switch
+    {
+        TimeBreak or TimeBomb => HarconDamageKind.Physical,
+        CronosImpact => HarconDamageKind.Pure,
+        _ => HarconDamageKind.Magic,
+    };
+
+    public static SkillHit PureHit(long power) =>
+        new(Math.Max(0L, power), SkillDamage.PhysicalType, SkillDamage.KindHit, SkillActions.NoElement, 0);
 
     public static IReadOnlyList<HarconSlot> Slots(SkillTableRow row, (int X, int Y) centre)
     {

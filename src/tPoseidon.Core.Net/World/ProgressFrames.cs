@@ -17,7 +17,7 @@ public static class ProgressFrames
     public const int LevelUpSize = CharacterStatBlock.Size + 13;
     public const byte GeneralGuideList = 0;
 
-    public const double SpeedUnit = 4.0;
+    public const double SpeedUnit = tPoseidon.Core.Game.Monsters.ClientSpeed.Unit;
 
     public static byte[] ExpGained(long gain)
     {
@@ -128,9 +128,9 @@ public static class ProgressFrames
         return w.ToArray();
     }
 
-    public static byte SpeedQuarter(float speed) => unchecked((byte)(int)(speed / SpeedUnit));
+    public static byte SpeedQuarter(float speed) => tPoseidon.Core.Game.Monsters.ClientSpeed.Quarter(speed);
 
-    public static float DrawnSpeed(float speed) => SpeedQuarter(speed) * (float)SpeedUnit;
+    public static float DrawnSpeed(float speed) => tPoseidon.Core.Game.Monsters.ClientSpeed.Drawn(speed);
 
     public static byte[] Speed(ushort entityId, float speed)
     {

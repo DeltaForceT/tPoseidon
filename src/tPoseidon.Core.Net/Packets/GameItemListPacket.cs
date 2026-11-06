@@ -63,6 +63,25 @@ public sealed class GameItemListPacket
         return w.ToArray();
     }
 
+    public static ItemRecord RecordOf(tPoseidon.Core.Data.Item item, IReadOnlyList<tPoseidon.Core.Data.ItemProperty> options)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(options);
+        return new ItemRecord
+        {
+            Class = item.ItemClass,
+            ItemIndex = (uint)item.ItemIndex,
+            ItemUid = (uint)(item.ItemUid & 0xFFFFFFFFu),
+            StackCount = item.Stack,
+            EquipmentCount = item.Stack,
+            RefineType = (byte)item.RefineType,
+            RefineLevel = item.RefineLevel,
+            RefineState = item.RefineState,
+            MixSlot = item.ItemSlot,
+            Options = options,
+        };
+    }
+
     public static void WriteRecord(PacketWriter w, ItemRecord r)
     {
         ArgumentNullException.ThrowIfNull(w);

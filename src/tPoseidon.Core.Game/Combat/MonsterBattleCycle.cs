@@ -1,6 +1,7 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Monsters;
+using tPoseidon.Core.Game.Skills;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Combat;
@@ -12,6 +13,8 @@ public enum MonsterBattleLeaveReason
     ChaseTimeSpent,
     ApproachRefused,
     TargetNotVisible,
+    TargetUnreachable,
+    DestinationsCrowded,
 }
 
 public abstract record MonsterBattleEvent(ushort EntityId);
@@ -79,6 +82,10 @@ public sealed class MonsterBattleCycle
 {
     public const byte StoredMoveType = MeleeApproach.DefaultMoveType;
     public const int DefaultChaseTimeMs = 3000;
+    public const int UnreachableSameSpotOrders = 10;
+    public const int MaxDestinationShifts = 5;
+    public const int MaxReapproachFailures = 3;
+    public static readonly TimeSpan UnreachableMemory = TimeSpan.FromSeconds(20);
 
     public static readonly TimeSpan LongestCountedTick = TimeSpan.FromSeconds(1);
 
@@ -90,8 +97,12 @@ public sealed class MonsterBattleCycle
     private readonly Random _rng;
     private readonly object _gate = new();
     private readonly Dictionary<ushort, Fight> _fights = new();
+    private readonly Dictionary<ushort, UnreachableSpot> _unreachable = new();
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<MonsterEntity, MonsterTactics> _timedTactics = new();
     private readonly Func<int, IReadOnlyList<MonsterTacticEntry>>? _tacticsOf;
     private readonly Func<int, int, bool>? _castable;
+    private readonly Func<int, int, MonsterSkillTiming>? _skillTimingOf;
+    private readonly Dictionary<(ushort Monster, int Skill), DateTimeOffset> _skillCooling = new();
     private readonly Func<MonsterEntity, int?>? _attackerLimitOf;
 
     public MonsterBattleCycle(
@@ -100,7 +111,8 @@ public sealed class MonsterBattleCycle
         Random? rng = null,
         Func<int, IReadOnlyList<MonsterTacticEntry>>? tacticsOf = null,
         Func<int, int, bool>? castable = null,
-        Func<MonsterEntity, int?>? attackerLimitOf = null)
+        Func<MonsterEntity, int?>? attackerLimitOf = null,
+        Func<int, int, MonsterSkillTiming>? skillTimingOf = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(reachByType);
@@ -110,6 +122,7 @@ public sealed class MonsterBattleCycle
         _tacticsOf = tacticsOf;
         _castable = castable;
         _attackerLimitOf = attackerLimitOf;
+        _skillTimingOf = skillTimingOf;
     }
 
     public bool AtAttackerLimit(MonsterEntity monster, ushort targetEntityId)
@@ -152,6 +165,36 @@ public sealed class MonsterBattleCycle
         lock (_gate)
         {
             _fights.Remove(monsterEntityId);
+            _unreachable.Remove(monsterEntityId);
+            foreach (var key in _skillCooling.Keys.Where(key => key.Monster == monsterEntityId).ToArray()) _skillCooling.Remove(key);
+        }
+    }
+
+    public bool IgnoresSpot(ushort monsterEntityId, int x, int y, DateTimeOffset now)
+    {
+        lock (_gate)
+        {
+            if (!_unreachable.TryGetValue(monsterEntityId, out var spot)) return false;
+            if (now >= spot.Until)
+            {
+                _unreachable.Remove(monsterEntityId);
+                return false;
+            }
+            return spot.X == x && spot.Y == y;
+        }
+    }
+
+    public void HoldFor(MonsterEntity monster, DateTimeOffset now, int skillMs)
+    {
+        ArgumentNullException.ThrowIfNull(monster);
+        var definition = _catalog.GetById(monster.MonsterParamId);
+        lock (_gate)
+        {
+            if (definition is null
+                || !_reachByType.TryGetValue(monster.MonsterParamId, out var reach)
+                || !_fights.TryGetValue(monster.EntityId, out var fight)) return;
+            var until = now.AddMilliseconds(skillMs + reach.MonsterSwingDelayMs(definition.DxLv + monster.StatDelta(MonsterStat.Dx)));
+            if (until > fight.NextSwingAt) fight.NextSwingAt = until;
         }
     }
 
@@ -176,13 +219,20 @@ public sealed class MonsterBattleCycle
                 NextSwingAt = now,
                 LastTick = now,
                 ChaseBudgetMs = chase is { } chaseFor ? (int)Math.Clamp(chaseFor.TotalMilliseconds, 1, int.MaxValue) : ChaseTimeMs(definition),
-                Tactics = _tacticsOf?.Invoke(monster.MonsterParamId) is { Count: > 0 } tactics ? new MonsterTactics(tactics) : null,
+                Tactics = TacticsOf(monster),
             };
             var haltedType = monster.MoveType == MeleeApproach.DefaultMoveType
                 ? MeleeApproach.WalkMoveType
                 : monster.MoveType;
             return new MonsterBattleHalted(monster.EntityId, x, y, haltedType);
         }
+    }
+
+    private MonsterTactics? TacticsOf(MonsterEntity monster)
+    {
+        if (_tacticsOf?.Invoke(monster.MonsterParamId) is not { Count: > 0 } tactics) return null;
+        if (!tactics.Any(MonsterTactics.IsTimed)) return new MonsterTactics(tactics);
+        return _timedTactics.GetValue(monster, _ => new MonsterTactics(tactics));
     }
 
     public bool Retarget(MonsterEntity monster, ushort targetEntityId)
@@ -199,6 +249,9 @@ public sealed class MonsterBattleCycle
             fight.Settled = false;
             fight.SettlesOnArrival = false;
             fight.ChaseBudgetMs = ChaseTimeMs(definition);
+            fight.DestinationShifts = 0;
+            fight.Reapproaching = false;
+            fight.ReapproachFailures = 0;
             return true;
         }
     }
@@ -241,7 +294,14 @@ public sealed class MonsterBattleCycle
                 if (monster.IsHeld(now))
                 {
                     fight.LastTick = now;
+                    fight.Legs.Clear();
                     continue;
+                }
+
+                while (fight.Legs.Count > 0 && now >= fight.Legs.Peek().At)
+                {
+                    var leg = fight.Legs.Dequeue();
+                    events.Add(new MonsterBattleMoved(monsterId, leg.FromX, leg.FromY, leg.ToX, leg.ToY, leg.MoveType));
                 }
 
                 var countedFrom = fight.LastTick > fight.NextSwingAt ? fight.LastTick : fight.NextSwingAt;
@@ -265,6 +325,13 @@ public sealed class MonsterBattleCycle
                     continue;
                 }
                 if (now < fight.NextSwingAt) continue;
+
+                if (fight.PendingCast is { } pendingCast)
+                {
+                    fight.PendingCast = null;
+                    CompleteCast(monster, fight, definition, reach, pendingCast, now, events);
+                    continue;
+                }
 
                 var counted = now - countedFrom;
                 if (counted > LongestCountedTick) counted = LongestCountedTick;
@@ -319,8 +386,38 @@ public sealed class MonsterBattleCycle
                         decision = decision with { X = sideX, Y = sideY };
                     }
                 }
+                if (!orderDue && canMove) continue;
+                var reapproaching = orderDue && !backingOff && fight.Reapproaching;
+                var shifted = orderDue && !backingOff && !reapproaching && reach.Box is { } ownBox && AimOverlapsAnother(monster, monsters, ownBox, decision, now);
+                if (shifted) fight.DestinationShifts++;
                 var ordered = orderDue
+                    && !shifted
                     && TryMove(Observer, geometry, monster, fight, definition, reach, target, decision, moveType, backingOff, now, events);
+                if (reapproaching)
+                {
+                    if (ordered)
+                    {
+                        fight.Reapproaching = false;
+                    }
+                    else if (++fight.ReapproachFailures >= MaxReapproachFailures)
+                    {
+                        Leave(monsterId, MonsterBattleLeaveReason.DestinationsCrowded, events);
+                    }
+                    continue;
+                }
+                if (orderDue && !ordered && !backingOff && fight.DestinationShifts > MaxDestinationShifts)
+                {
+                    fight.DestinationShifts = 0;
+                    fight.Reapproaching = true;
+                    fight.ReapproachFailures = 0;
+                    continue;
+                }
+                if (shifted) continue;
+                if (orderDue && !ordered && !backingOff && fight.Settled && NoteRefusedOrder(monsterId, fight, target, now))
+                {
+                    Leave(monsterId, MonsterBattleLeaveReason.TargetUnreachable, events);
+                    continue;
+                }
                 if (!ordered && !backingOff && !fight.Settled)
                 {
                     Leave(monsterId, MonsterBattleLeaveReason.ApproachRefused, events);
@@ -349,11 +446,19 @@ public sealed class MonsterBattleCycle
 
         if (fight.Tactics is { Usable: true } tactics
             && tactics.Pick(sum => _rng.Next(sum)) is { ActionType: MonsterTactics.CastActionType } tactic
-            && (_castable?.Invoke(tactic.SkillId, tactic.SkillLevel) ?? false))
+            && (_castable?.Invoke(tactic.SkillId, tactic.SkillLevel) ?? false)
+            && !IsCooling(monster.EntityId, tactic.SkillId, now))
         {
+            var timing = _skillTimingOf?.Invoke(tactic.SkillId, tactic.SkillLevel) ?? default;
+            var cast = new PendingCast(tactic.SkillId, tactic.SkillLevel, tactic.Speech, timing.CoolMs);
             fight.Settled = true;
-            fight.NextSwingAt = now.AddMilliseconds(reach.MonsterSwingDelayMs(definition.DxLv + monster.StatDelta(MonsterStat.Dx)));
-            events.Add(new MonsterBattleCast(monster.EntityId, fight.TargetEntityId, tactic.SkillId, tactic.SkillLevel, tactic.Speech));
+            if (timing.CastMs > 0)
+            {
+                fight.PendingCast = cast;
+                fight.NextSwingAt = now.AddMilliseconds(timing.CastMs);
+                return;
+            }
+            CompleteCast(monster, fight, definition, reach, cast, now, events);
             return;
         }
 
@@ -416,13 +521,13 @@ public sealed class MonsterBattleCycle
             ? (walkSpeed + runSpeed) / ChaseSpeedDivisor
             : runSpeed;
         if (geometry is null || speed <= 0) return false;
+        speed = ClientSpeed.Drawn(speed);
+        if (speed <= 0) return false;
 
-        var route = WanderRoute.FindToPoint(geometry, monster.DestinationX, monster.DestinationY, decision.X, decision.Y);
+        var route = WanderRoute.FindToApproachPoint(geometry, monster.DestinationX, monster.DestinationY, decision.X, decision.Y);
         if (route is null) return false;
 
         var travelMs = (int)Math.Ceiling(route.Length / speed * MillisecondsPerSecond);
-        var destinationX = (ushort)route.DestinationX;
-        var destinationY = (ushort)route.DestinationY;
         if (monster.TakeOrder(effectiveType, speed))
         {
             events.Add(new MonsterBattleSpeedChanged(monster.EntityId, speed));
@@ -431,11 +536,65 @@ public sealed class MonsterBattleCycle
 
         fight.MoveEndsAt = now.AddMilliseconds(travelMs);
         fight.SettlesOnArrival = backingOff;
-        events.Add(new MonsterBattleMoved(monster.EntityId, fromX, fromY, destinationX, destinationY, moveType));
+        fight.Legs.Clear();
+        var legs = WanderRoute.Legs(geometry, fromX, fromY, route.Points);
+        for (var i = 0; i < legs.Count; i++)
+        {
+            var leg = legs[i];
+            var started = new PendingLeg(
+                now.AddMilliseconds(Math.Ceiling(leg.StartDistance / speed * MillisecondsPerSecond)),
+                (ushort)leg.FromX, (ushort)leg.FromY, (ushort)leg.ToX, (ushort)leg.ToY, moveType);
+            if (i == 0) events.Add(new MonsterBattleMoved(monster.EntityId, started.FromX, started.FromY, started.ToX, started.ToY, moveType));
+            else fight.Legs.Enqueue(started);
+        }
         observer?.Invoke(new MonsterBattleReachSample(
             monster.EntityId,
             backingOff ? MonsterBattleReachKind.BackOff : MonsterBattleReachKind.CloseIn,
             distance, reach.MinAttackRange, reach.MaxAttackRange, reach.ApproachRadius));
+        return true;
+    }
+
+    private bool AimOverlapsAnother(
+        MonsterEntity monster, IReadOnlyCollection<MonsterEntity> monsters, BodyBox ownBox, MeleeApproachDecision aim, DateTimeOffset now)
+    {
+        foreach (var other in monsters)
+        {
+            if (other.EntityId == monster.EntityId || other.IsDead || other.MapId != monster.MapId) continue;
+            if (!_reachByType.TryGetValue(other.MonsterParamId, out var otherReach) || otherReach.Box is not { } otherBox) continue;
+            var (otherX, otherY) = other.GetInterpolatedPosition(now);
+            if (ownBox.Overlaps(aim.X, aim.Y, otherBox, otherX, otherY)) return true;
+        }
+        return false;
+    }
+
+    private bool IsCooling(ushort monsterEntityId, int skillId, DateTimeOffset now) =>
+        _skillCooling.TryGetValue((monsterEntityId, skillId), out var until) && now < until;
+
+    private void CompleteCast(
+        MonsterEntity monster,
+        Fight fight,
+        MonsterParamEntry definition,
+        CharacterCombatInfo reach,
+        PendingCast cast,
+        DateTimeOffset now,
+        List<MonsterBattleEvent> events)
+    {
+        if (cast.CoolMs > 0) _skillCooling[(monster.EntityId, cast.SkillId)] = now.AddMilliseconds(cast.CoolMs);
+        fight.NextSwingAt = now.AddMilliseconds(reach.MonsterSwingDelayMs(definition.DxLv + monster.StatDelta(MonsterStat.Dx)));
+        events.Add(new MonsterBattleCast(monster.EntityId, fight.TargetEntityId, cast.SkillId, cast.Level, cast.Speech));
+    }
+
+    private bool NoteRefusedOrder(ushort monsterEntityId, Fight fight, MonsterBattleTarget target, DateTimeOffset now)
+    {
+        if (!fight.RefusedAt.HasValue)
+        {
+            fight.RefusedAt = (target.X, target.Y);
+            return false;
+        }
+        if (fight.RefusedAt.Value != (target.X, target.Y)) return false;
+        fight.RefusedAtSameSpot++;
+        if (fight.RefusedAtSameSpot < UnreachableSameSpotOrders) return false;
+        _unreachable[monsterEntityId] = new UnreachableSpot(target.X, target.Y, now + UnreachableMemory);
         return true;
     }
 
@@ -458,5 +617,18 @@ public sealed class MonsterBattleCycle
         public DateTimeOffset LastTick;
         public int ChaseBudgetMs;
         public MonsterTactics? Tactics;
+        public Queue<PendingLeg> Legs { get; } = new();
+        public PendingCast? PendingCast;
+        public (int X, int Y)? RefusedAt;
+        public int RefusedAtSameSpot;
+        public int DestinationShifts;
+        public bool Reapproaching;
+        public int ReapproachFailures;
     }
+
+    private readonly record struct PendingCast(int SkillId, int Level, string Speech, int CoolMs);
+
+    private readonly record struct UnreachableSpot(int X, int Y, DateTimeOffset Until);
+
+    private readonly record struct PendingLeg(DateTimeOffset At, ushort FromX, ushort FromY, ushort ToX, ushort ToY, byte MoveType);
 }

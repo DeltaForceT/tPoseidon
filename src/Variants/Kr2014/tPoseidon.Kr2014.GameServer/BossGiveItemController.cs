@@ -66,6 +66,6 @@ internal sealed class BossGiveItemController
         }
         if (bag.Count >= _bagCapacity) return null;
         var minted = _itemManager.GrantRewardItem(characterId, itemId, 1, itemClassOverride: itemClass);
-        return new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);
+        return new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot, Options: minted.Rolled);
     }
 }

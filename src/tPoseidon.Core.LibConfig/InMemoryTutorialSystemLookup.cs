@@ -35,12 +35,6 @@ public sealed class InMemoryTutorialSystemLookup : ITutorialSystemLookup
         }
     }
 
-        public static InMemoryTutorialSystemLookup LoadFromXml(string xmlPath)
-    {
-        var reader = new LibConfigXmlReader(xmlPath);
-        var entries = reader.LoadTutorialSystem();
-        return new InMemoryTutorialSystemLookup(entries);
-    }
 
     public TutorialSystemEntry? GetById(int tutorialId) =>
         _byId.TryGetValue(tutorialId, out var entry) ? entry : null;

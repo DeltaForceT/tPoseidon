@@ -32,13 +32,4 @@ public sealed class ItemNames
 
     public string? Of(int itemIndex) => _names.TryGetValue(itemIndex, out var name) ? name.Name : null;
 
-    public static ItemNames Load(string libconfigPath)
-    {
-        var reader = new LibConfigXmlReader(libconfigPath);
-        return new ItemNames(
-            reader.LoadItemParam2().Select(entry => (ItemTable, entry))
-                .Concat(reader.LoadItemParamExtended().Select(entry => (ExtendedTable, entry)))
-                .Concat(reader.LoadItemParamEx2().Select(entry => (Extended2Table, entry)))
-                .Concat(reader.LoadItemParamCm2().Select(entry => (CashTable, entry))));
-    }
 }

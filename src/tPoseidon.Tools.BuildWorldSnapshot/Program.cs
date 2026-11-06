@@ -133,17 +133,17 @@ IMonItemDropInfoLookup dropCatalog;
 INpcTalkLookup npcTalkCatalog;
 try
 {
-    var reader = new LibConfigXmlReader(libconfigPath);
+    var catalog = tPoseidon.Core.DataCatalog.SharedCatalog.For(libconfigPath);
 
-    var monsterEntries = reader.LoadMonsterParamEx2();
+    var monsterEntries = catalog.Monsters.MonsterParamEx2;
     monsterCatalog = new InMemoryMonsterParamLookup(monsterEntries);
     Console.WriteLine($"{LogTag} monsters libconfig: {monsterCatalog.Count} entries");
 
-    var dropEntries = reader.LoadMonItemDropInfo();
+    var dropEntries = catalog.Monsters.MonItemDropInfo;
     dropCatalog = new InMemoryMonItemDropInfoLookup(dropEntries);
     Console.WriteLine($"{LogTag} drops libconfig: {dropCatalog.Count} entries");
 
-    npcTalkCatalog = new InMemoryNpcTalkLookup(reader.LoadAllNpcTalkTables());
+    npcTalkCatalog = new InMemoryNpcTalkLookup(catalog.Npcs.NpcTalkTables);
     Console.WriteLine($"{LogTag} NpcTalk libconfig: {npcTalkCatalog.Count} entries");
 }
 catch (Exception ex)
@@ -243,7 +243,7 @@ Console.WriteLine($"{LogTag} zone geometry read for {zoneGeometry.Count} of {zon
 System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 var clientRoot = Path.GetFullPath(Path.Combine(md3Dir, "..", ".."));
 var combatInfos = CharacterCombatInfo.Build(
-    new LibConfigXmlReader(libconfigPath).LoadCharacterInfo(),
+    tPoseidon.Core.DataCatalog.SharedCatalog.For(libconfigPath).Npcs.CharacterInfo,
     clientRoot,
     System.Text.Encoding.GetEncoding(NoriAnimationReader.NameCodePage));
 Console.WriteLine($"{LogTag} combat info for {combatInfos.Count} character types ({combatInfos.Count(c => c.AttackMs > 0)} with attack timing) from {clientRoot}");

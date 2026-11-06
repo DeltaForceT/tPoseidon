@@ -3,7 +3,9 @@ using System.Text;
 
 namespace tPoseidon.Core.LibConfig;
 
-public readonly record struct NoriAnimation(string Name, int FrameCount, int TotalMs);
+public readonly record struct NoriFrameBox(int X, int Y, int Width, int Height);
+
+public readonly record struct NoriAnimation(string Name, int FrameCount, int TotalMs, NoriFrameBox? FirstBox = null);
 
 public static class NoriAnimationReader
 {
@@ -24,6 +26,12 @@ public static class NoriAnimationReader
     private const int PalettePairCountOffset = 0x18;
     private const int PalettePairSize = 8;
     private const int SubImageHeaderSize = 24;
+    private const int SubImageWidthOffset = 4;
+    private const int SubImageHeightOffset = 8;
+    private const int FrameLayerCountOffset = 4;
+    private const int FrameLayersOffset = 8;
+    private const int LayerXOffset = 4;
+    private const int LayerYOffset = 8;
     private const int AnimationNameSize = 32;
     private const int OffsetSize = 4;
 
@@ -54,11 +62,18 @@ public static class NoriAnimationReader
 
         var imageBase = imageTable + imageCount * OffsetSize;
         var animationTable = imageBase;
+        var imageWidths = new int[imageCount];
+        var imageHeights = new int[imageCount];
         for (var i = 0; i < imageCount; i++)
         {
             var cursor = imageBase + Int(data, imageTable + i * OffsetSize);
             var subImageCount = Int(data, cursor);
             cursor += OffsetSize;
+            if (subImageCount > 0)
+            {
+                imageWidths[i] = Int(data, cursor + SubImageWidthOffset);
+                imageHeights[i] = Int(data, cursor + SubImageHeightOffset);
+            }
             for (var s = 0; s < subImageCount; s++)
             {
                 cursor += SubImageHeaderSize + Int(data, cursor);
@@ -82,9 +97,33 @@ public static class NoriAnimationReader
             {
                 total += Int(data, frameBase + Int(data, frameTable + f * OffsetSize));
             }
-            animations[i] = new NoriAnimation(name, frameCount, total);
+            animations[i] = new NoriAnimation(name, frameCount, total, FirstBoxOf(data, frameTable, frameBase, frameCount, imageWidths, imageHeights));
         }
         return animations;
+    }
+
+    private static NoriFrameBox? FirstBoxOf(
+        ReadOnlySpan<byte> data, int frameTable, int frameBase, int frameCount, int[] imageWidths, int[] imageHeights)
+    {
+        if (frameCount < 1) return null;
+        var frame = frameBase + Int(data, frameTable);
+        if (Int(data, frame + FrameLayerCountOffset) < 1) return null;
+        var layer = frame + FrameLayersOffset;
+        var image = Int(data, layer);
+        if ((uint)image >= (uint)imageWidths.Length) return null;
+        return new NoriFrameBox(Int(data, layer + LayerXOffset), Int(data, layer + LayerYOffset), imageWidths[image], imageHeights[image]);
+    }
+
+    public static NoriAnimation? Find(IReadOnlyList<NoriAnimation> animations, string name)
+    {
+        ArgumentNullException.ThrowIfNull(animations);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        var withDirection = name + "_";
+        foreach (var animation in animations)
+        {
+            if (animation.Name == name || animation.Name.StartsWith(withDirection, StringComparison.Ordinal)) return animation;
+        }
+        return null;
     }
 
     public static int? TotalOf(IReadOnlyList<NoriAnimation> animations, string name)

@@ -36,6 +36,17 @@ public sealed class ItemPropertyRules
         return matching.Count == 0 ? ItemStatCheckEntry.NoRequirement : matching.Sum(property => (int)property.Value);
     }
 
+    public int[] EquipStats(ItemParamEntry definition, IReadOnlyList<ItemProperty> stored)
+    {
+        var totals = new int[BaseStatCount];
+        foreach (var property in Full(definition, stored))
+        {
+            var stat = property.Id - FirstStatId;
+            if (stat >= 0 && stat < BaseStatCount) totals[stat] += property.Value;
+        }
+        return totals;
+    }
+
     public int? CurveBin(string curveName, Random rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
@@ -145,11 +156,21 @@ public sealed class ItemPropertyRules
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(stored);
         var list = ForClient(stored, definition);
-        foreach (var attribute in AttributeDefaults(definition))
+        if (ExceedsStoredLimit(Defaults(definition))) return list.Take(ItemPropertyTypes.MaxPerItem).ToList();
+        var listedDefaults = Defaults(definition).Where(entry => entry.Id is GunApId or HpRecoveryId or MpRecoveryId || entry.Id is >= 20000 and < 22000);
+        foreach (var entry in listedDefaults)
         {
-            if (!list.Any(property => property.Type == attribute.Type && property.Id == attribute.Id)) list.Add(attribute);
+            if (!list.Any(property => property.Type == entry.Type && property.Id == entry.Id)) list.Add(entry);
         }
         return list.Take(ItemPropertyTypes.MaxPerItem).ToList();
+    }
+
+    public static bool ExceedsStoredLimit(IReadOnlyCollection<ItemProperty> created) => created.Count > ItemPropertyTypes.MaxStored;
+
+    public static IReadOnlyList<ItemProperty> Persistable(IReadOnlyList<ItemProperty> created)
+    {
+        ArgumentNullException.ThrowIfNull(created);
+        return ExceedsStoredLimit(created.ToList()) ? [] : created;
     }
 
     public static List<ItemProperty> ForClient(IEnumerable<ItemProperty> properties, ItemParamEntry? definition)

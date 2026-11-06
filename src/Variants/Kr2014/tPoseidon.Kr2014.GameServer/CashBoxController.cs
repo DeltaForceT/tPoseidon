@@ -17,12 +17,14 @@ internal sealed class CashBoxController
     private readonly MasterCashBox _master;
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
+    private readonly tPoseidon.Core.Game.Items.MixSlotRoll _mixSlots;
     private readonly string _logTag;
     private readonly Random _rng = new();
     private readonly object _rngGate = new();
 
-    public CashBoxController(MasterCashBox master, IItemStore items, IItemParamLookup catalog, string logTag)
+    public CashBoxController(MasterCashBox master, IItemStore items, IItemParamLookup catalog, tPoseidon.Core.Game.Items.MixSlotRoll mixSlots, string logTag)
     {
+        _mixSlots = mixSlots ?? throw new ArgumentNullException(nameof(mixSlots));
         _master = master ?? throw new ArgumentNullException(nameof(master));
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
@@ -93,9 +95,10 @@ internal sealed class CashBoxController
             }
             var moved = result.Moved!;
             lock (player.CashBox.Entries) player.CashBox.Entries.Remove(uid);
+            var mixSlot = !moved.JoinedStack && _items.FindByUid(moved.ItemUid) is { } taken ? _mixSlots.Apply(taken).ItemSlot : (byte)0;
             var bagSide = new BagOperation(
                 moved.JoinedStack ? QuestResultFrames.StackChanged : QuestResultFrames.Created,
-                moved.ItemClass, (uint)moved.ItemIndex, BagItemIds.OnWire(moved.ItemUid), moved.JoinedStack ? moved.Total : moved.Count);
+                moved.ItemClass, (uint)moved.ItemIndex, BagItemIds.OnWire(moved.ItemUid), moved.JoinedStack ? moved.Total : moved.Count, mixSlot);
             var boxSide = new BagOperation(
                 QuestResultFrames.Removed, CashBoxFrames.WireClass(entry), (uint)entry.ItemIndex, BagItemIds.OnWire(entry.ItemUid), CashBoxFrames.ListedCount(entry));
             var timed = moved.BreakedAt > Item.NeverBreaks ? moved.BreakedAt : (DateTimeOffset?)null;

@@ -74,7 +74,7 @@ public sealed class MasterRoutedGuideHistoryStore : IGuideHistoryStore
                 TutorialGuide = ack.TutorialGuide,
             };
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"guide-history Load char 0x{characterId:X16}: master round-trip failed ({ex.GetType().Name}: {ex.Message}); using local fallback");
             return _fallback.GetForCharacter(characterId);
@@ -109,7 +109,7 @@ public sealed class MasterRoutedGuideHistoryStore : IGuideHistoryStore
             };
             _client.SendAsync(request, CancellationToken.None).GetAwaiter().GetResult();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"guide-history UpsertSystem char 0x{characterId:X16}: master send failed ({ex.GetType().Name}: {ex.Message}); using local fallback");
             _fallback.UpsertSystemGuide(characterId, systemGuide);
@@ -143,7 +143,7 @@ public sealed class MasterRoutedGuideHistoryStore : IGuideHistoryStore
             };
             _client.SendAsync(request, CancellationToken.None).GetAwaiter().GetResult();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
             _log($"guide-history UpsertTutorial char 0x{characterId:X16}: master send failed ({ex.GetType().Name}: {ex.Message}); using local fallback");
             _fallback.UpsertTutorialGuide(characterId, tutorialGuide);

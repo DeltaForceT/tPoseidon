@@ -354,7 +354,7 @@ Both rewards go through our Master as in the original. The per-character award i
 ### GM and hosting
 - Watching a guild game room: the original waits for a match that has not started yet, here the request is ignored until the match exists; the arrival spot of a watcher is the centre of the arena (inferred), and watchers are not hidden from the fighters
 - The GM chat keywords move notice, chat colour and monster search: the original servers have no command for them (they were actions of the original GM client, which is not available), so there is no `@` command for them and such a line stays normal chat
-- Linux and macOS: releases are for Windows only; Linux and macOS packages come with version 1.0, after our own tests
+- Linux and macOS: releases are for Windows and Linux x64; the control panel on Linux is less tested; macOS packages come with version 1.0, after our own tests
 
 ## 4. Value limits
 

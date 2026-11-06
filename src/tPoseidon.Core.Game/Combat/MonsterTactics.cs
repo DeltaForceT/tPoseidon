@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common.Indexing;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Combat;
@@ -18,6 +19,7 @@ public sealed class MonsterTactics
     private readonly IReadOnlyList<MonsterTacticEntry> _tactics;
     private readonly Dictionary<int, Entry> _active = new();
     private readonly Dictionary<int, int> _timedDueMs = new();
+    private FirstIndex<int, MonsterTacticEntry>? _byId;
     private int _passMs;
     private int _battleMs;
 
@@ -27,6 +29,8 @@ public sealed class MonsterTactics
     }
 
     public bool Usable => _active.Count > 0;
+
+    private MonsterTacticEntry? TacticOf(int id) => (_byId ??= new FirstIndex<int, MonsterTacticEntry>(_tactics, tactic => tactic.Id)).Find(id);
 
     public bool Advance(int elapsedMs)
     {
@@ -69,7 +73,7 @@ public sealed class MonsterTactics
         ArgumentNullException.ThrowIfNull(randomBelow);
         var eligible = _active
             .Where(pair => pair.Value.Armed && !pair.Value.Cooling && pair.Value.ElapsedMs <= FreshArmedMs)
-            .Select(pair => (Entry: pair.Value, Tactic: _tactics.FirstOrDefault(tactic => tactic.Id == pair.Key)))
+            .Select(pair => (Entry: pair.Value, Tactic: TacticOf(pair.Key)))
             .Where(pair => pair.Tactic is not null)
             .ToList();
         var sum = 0;

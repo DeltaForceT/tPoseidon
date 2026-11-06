@@ -9,6 +9,8 @@ namespace tPoseidon.Kr2014.SystemServer;
 public sealed class PartyServer
 {
     private readonly PartyService _parties;
+    private readonly object _sessionGate = new();
+    private readonly Dictionary<ulong, SocialMember> _sessions = new();
     private readonly SocialRoom _room;
     private readonly GameServerLinks _games;
     private readonly Encoding _text;
@@ -108,13 +110,28 @@ public sealed class PartyServer
     {
         ArgumentNullException.ThrowIfNull(member);
         var c = member.Character;
-        return DeliverAsync(_parties.Login(c.CharacterId, c.Name, FriendRules.CharacterTypeOf(c), c.Level), ct);
+        PartyOutbox outbox;
+        lock (_sessionGate)
+        {
+            _sessions[c.CharacterId] = member;
+            outbox = _parties.Login(c.CharacterId, c.Name, FriendRules.CharacterTypeOf(c), c.Level);
+        }
+        return DeliverAsync(outbox, ct);
     }
 
     public Task ClosedAsync(SocialMember member, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(member);
-        return DeliverAsync(_parties.Logout(member.Character.CharacterId), ct);
+        PartyOutbox outbox;
+        lock (_sessionGate)
+        {
+            var id = member.Character.CharacterId;
+            if (!_sessions.TryGetValue(id, out var current) || !ReferenceEquals(current, member))
+                return Task.CompletedTask;
+            _sessions.Remove(id);
+            outbox = _parties.Logout(id);
+        }
+        return DeliverAsync(outbox, ct);
     }
 
     public Task ZoneEnteredAsync(ulong characterId, ushort zone, CancellationToken ct) =>

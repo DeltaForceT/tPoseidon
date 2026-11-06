@@ -82,11 +82,7 @@ public sealed class ItemManager
         byte? itemClassOverride = null,
         int? periodMinutes = null)
     {
-        var occupiedSlots = new HashSet<byte>(
-            _itemStore.GetForCharacterBySlotKind(characterId, slotKind)
-                .Select(i => i.SlotPosition));
-        byte freeSlot = 0;
-        while (occupiedSlots.Contains(freeSlot)) freeSlot++;
+        var freeSlot = EquipmentRules.FirstFreeBagPosition(_itemStore.GetForCharacterBySlotKind(characterId, slotKind));
 
         var resolvedClass = itemClassOverride ?? ResolveItemClassFromCatalog(itemIndex);
 
@@ -276,13 +272,9 @@ public sealed class ItemManager
 
     private byte NextFreeInventorySlot(ulong characterId, byte? exclude = null)
     {
-        var occupied = new HashSet<byte>(
-            _itemStore.GetForCharacterBySlotKind(characterId, SlotKind.Inventory)
-                .Select(i => i.SlotPosition));
-        if (exclude.HasValue) occupied.Remove(exclude.Value);
-        byte slot = 0;
-        while (occupied.Contains(slot)) slot++;
-        return slot;
+        var bag = _itemStore.GetForCharacterBySlotKind(characterId, SlotKind.Inventory);
+        if (exclude.HasValue) bag = bag.Where(item => item.SlotPosition != exclude.Value).ToList();
+        return EquipmentRules.FirstFreeBagPosition(bag);
     }
 }
 

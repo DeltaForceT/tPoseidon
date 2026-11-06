@@ -15,12 +15,6 @@ public sealed class InMemoryQuestInfoLookup : IQuestInfoLookup
         }
     }
 
-        public static InMemoryQuestInfoLookup LoadFromXml(string xmlPath)
-    {
-        var reader = new LibConfigXmlReader(xmlPath);
-        var entries = reader.LoadAllQuestTables();
-        return new InMemoryQuestInfoLookup(entries);
-    }
 
     public QuestInfoEntry? GetById(int questId) =>
         _byId.TryGetValue(questId, out var entry) ? entry : null;

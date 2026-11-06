@@ -12,7 +12,8 @@ public readonly record struct BagOperation(
     byte MixSlot = 0,
     byte RefineType = 0,
     byte RefineLevel = 0,
-    byte RefineState = 0);
+    byte RefineState = 0,
+    IReadOnlyList<tPoseidon.Core.Data.ItemProperty>? Options = null);
 
 public static class QuestResultFrames
 {
@@ -172,7 +173,11 @@ public static class QuestResultFrames
         w.WriteByte(operation.RefineLevel);
         w.WriteByte(operation.RefineState);
         w.WriteByte(operation.MixSlot);
-        if (operation.Kind is Moved or Created) w.WriteByte(NoOptions);
+        if (operation.Kind is not (Moved or Created)) return;
+        var options = operation.Options ?? [];
+        var listed = Math.Min(options.Count, tPoseidon.Core.Data.ItemPropertyTypes.MaxPerItem);
+        w.WriteByte((byte)listed);
+        for (var i = 0; i < listed; i++) tPoseidon.Core.Net.Packets.GameItemListPacket.WriteOption(w, options[i]);
     }
 
     public static BagOperation ReadItemOperation(ReadOnlySpan<byte> payload)
@@ -217,15 +222,20 @@ public static class QuestResultFrames
         var refineLevel = reader.ReadByte();
         var refineState = reader.ReadByte();
         var mixSlot = reader.ReadByte();
+        var listed = new List<tPoseidon.Core.Data.ItemProperty>();
         if (kind is Moved or Created)
         {
             var options = reader.ReadByte();
-            if (options != NoOptions)
+            for (var i = 0; i < options; i++)
             {
-                throw new InvalidPacketException($"The bag operation for item {itemId} lists {options} options; bag operations carry none.");
+                var type = reader.ReadUInt32();
+                var id = reader.ReadUInt16();
+                var value = (short)reader.ReadUInt16();
+                var extra = reader.ReadUInt32();
+                listed.Add(new tPoseidon.Core.Data.ItemProperty((int)type, id, value, extra));
             }
         }
-        return new BagOperation(kind, itemClass, itemId, itemUid, count, mixSlot, refineType, refineLevel, refineState);
+        return new BagOperation(kind, itemClass, itemId, itemUid, count, mixSlot, refineType, refineLevel, refineState, listed.Count == 0 ? null : listed);
     }
 
     private static void EnsureEnd(ref PacketReader reader)

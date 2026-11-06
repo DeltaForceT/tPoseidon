@@ -13,6 +13,7 @@ public enum Opcode : ushort
         S2C_NPC_STATE           = 0x0042,
     S2C_OP_01CF_TBD                = 0x01CF,
     ENTITY_EMOTE              = 0x003F,
+    ENTITY_EMOTICON           = 0x003E,
     ENTITY_FACE               = 0x0041,
     S2C_PET_SPEECH               = 0x0250,
     C2S_OP_0266_TBD              = 0x0266,
@@ -131,6 +132,7 @@ public enum Opcode : ushort
     S2C_COMMAND_BLOCK_END   = 0x079F,
 
     S2C_MOB_TARGET_INFO     = 0x0121,
+    S2C_MOB_TARGET_LOST     = 0x0122,
 
         S2C_ITEM_PICKED_UP      = 0x0022,
         S2C_ITEM_ON_GROUND      = 0x000A,
@@ -571,6 +573,7 @@ public enum Opcode : ushort
         S2C_EQUIP_REFORM_RESULT = 0x038B,
         S2C_EQUIP_REFORM_REFUSED = 0x038C,
         C2S_EQUIP_REFORM_CLOSE  = 0x038D,
+        S2C_EQUIP_REFORM_CLOSED = 0x038E,
         C2S_PET_LEVELUP_OPEN    = 0x036D,
         S2C_PET_LEVELUP_OPENED  = 0x036E,
         C2S_PET_LEVELUP         = 0x0370,

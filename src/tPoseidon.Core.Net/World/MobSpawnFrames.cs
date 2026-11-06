@@ -16,7 +16,7 @@ public static class MobSpawnFrames
     private const int TrailerPvpModeOffset = TrailerSize - 1;
     private const int TrailerFlagOffset = 7;
     private const byte TrailerFlag = 0x01;
-    private const uint SpawnReserved = 0x00000001;
+    private const uint MoveTypeMask = 7;
 
     public static byte[] Encode(MonsterEntity mob, MonsterParamEntry? definition, DateTimeOffset now)
     {
@@ -38,7 +38,7 @@ public static class MobSpawnFrames
             TemplateId = (ushort)(mob.MonsterParamId & 0xFFFF),
             UnknownField6 = 0,
             UnknownField8 = (ushort)Math.Clamp(definition?.Level ?? 1, 1, ushort.MaxValue),
-            Reserved10 = SpawnReserved,
+            Reserved10 = mob.IsMoving(now) ? mob.MoveType & MoveTypeMask : 0,
             PositionX = positionX,
             PositionY = positionY,
             DestinationX = mob.DestinationX,

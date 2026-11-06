@@ -137,7 +137,7 @@ internal sealed class MissionController
         var spawned = new List<ushort>();
         foreach (var (monsterId, regionId) in wave.Monsters)
         {
-            var region = geometry?.Regions.FirstOrDefault(candidate => candidate.Id == regionId);
+            var region = geometry is null ? (ZoneRegion?)null : geometry.RegionOf(regionId) ?? default(ZoneRegion);
             if (region is not { } area)
             {
                 Console.WriteLine($"{_logTag} [mission] map {mapId} has no region {regionId} for monster {monsterId}");

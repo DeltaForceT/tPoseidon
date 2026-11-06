@@ -1,3 +1,5 @@
+using tPoseidon.Core.Common.Indexing;
+
 namespace tPoseidon.Core.LibConfig;
 
 public sealed record MonsterMatchEntry(int TriggerId, int MonsterId, int Point);
@@ -8,5 +10,7 @@ public sealed record MonsterMatchTables(IReadOnlyDictionary<int, MonsterMatchEnt
 
     public static MonsterMatchTables Empty { get; } = new(new Dictionary<int, MonsterMatchEntry>());
 
-    public MonsterMatchEntry? ByMonster(int monsterId) => ByTrigger.Values.FirstOrDefault(entry => entry.MonsterId == monsterId);
+    private readonly SourceBoundIndex<int, MonsterMatchEntry> _byMonster = new(entry => entry.MonsterId);
+
+    public MonsterMatchEntry? ByMonster(int monsterId) => _byMonster.Over(ByTrigger, ByTrigger.Values).Find(monsterId);
 }

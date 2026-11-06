@@ -6,6 +6,8 @@ public static class EntityMotionFrames
 
     public static byte[] Emote(ushort entityId, byte code) => Encode(entityId, code);
 
+    public static byte[] Emoticon(ushort entityId, byte code) => Encode(entityId, code);
+
     public static byte[] Posture(ushort entityId, byte code) => Encode(entityId, code);
 
     public const int FaceRequestSize = 4;

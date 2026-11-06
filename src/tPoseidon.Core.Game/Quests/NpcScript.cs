@@ -113,6 +113,8 @@ public static class NpcScript
     public const int Pending = -2;
     public const int Silent = 0;
 
+    public static bool ClosesDialogWhenSilent(NpcScriptOperation operation) => operation == NpcScriptOperation.HarconPlay;
+
     public static NpcScriptCall Classify(uint functionId) => functionId switch
     {
         1 => new(NpcScriptOperation.Exit, 0),

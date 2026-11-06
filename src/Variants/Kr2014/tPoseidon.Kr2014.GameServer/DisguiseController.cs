@@ -39,7 +39,7 @@ internal sealed class DisguiseController
     public async Task<bool> UseKitAsync(InGameSessionState player, int itemId)
     {
         ArgumentNullException.ThrowIfNull(player);
-        var real = player.PlayerCharacterType;
+        var real = player.PlayerLookType;
         int? kitType = _kits().TryGetValue(itemId, out var shown) ? shown : null;
         var outcome = player.Disguise.UseKit(kitType, real, !player.Disguise.Disguised && !_otherForm(player));
         if (outcome != DisguiseUse.Disguised)
@@ -56,7 +56,7 @@ internal sealed class DisguiseController
     public async Task RemoveAsync(InGameSessionState player)
     {
         ArgumentNullException.ThrowIfNull(player);
-        if (!player.Disguise.Remove(player.PlayerCharacterType))
+        if (!player.Disguise.Remove(player.PlayerLookType))
         {
             await SendAsync(player, Opcode.S2C_DISGUISE_REMOVE_REFUSED, Array.Empty<byte>()).ConfigureAwait(false);
             return;
@@ -69,7 +69,7 @@ internal sealed class DisguiseController
     {
         ArgumentNullException.ThrowIfNull(player);
         if (player.Disguise.LooksDifferent) return;
-        if (player.Disguise.Wear(dressType, player.PlayerCharacterType, !_otherForm(player)) != DisguiseUse.Disguised)
+        if (player.Disguise.Wear(dressType, player.PlayerLookType, !_otherForm(player)) != DisguiseUse.Disguised)
         {
             Console.WriteLine($"{_logTag} [disguise] 0x{player.PlayerEntityId:X4} wedding dress {dressType} stored, not shown (other form)");
             return;
@@ -81,7 +81,7 @@ internal sealed class DisguiseController
     public async Task RemoveDressAsync(InGameSessionState player)
     {
         ArgumentNullException.ThrowIfNull(player);
-        if (!player.Disguise.WearsDress || !player.Disguise.Remove(player.PlayerCharacterType)) return;
+        if (!player.Disguise.WearsDress || !player.Disguise.Remove(player.PlayerLookType)) return;
         await _sendToArea(player, Opcode.S2C_DISGUISE_REMOVED, DisguiseFrames.Removed(player.PlayerEntityId, DisguiseRules.RemovedByCostumeEnd)).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [disguise] 0x{player.PlayerEntityId:X4} wedding dress removed");
     }

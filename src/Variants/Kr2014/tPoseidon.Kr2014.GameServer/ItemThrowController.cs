@@ -60,7 +60,7 @@ internal sealed class ItemThrowController
         if (outcome == ThrowOutcome.PartOfStack)
         {
             var left = _items.AdjustStack(held.ItemUid, -request.Count);
-            operation = new BagOperation(QuestResultFrames.StackChanged, held.ItemClass, (uint)held.ItemIndex, BagItemIds.OnWire(held.ItemUid), left, held.ItemSlot);
+            operation = ItemDropOperations.Part(held, left);
         }
         else
         {
@@ -70,7 +70,7 @@ internal sealed class ItemThrowController
                 await SendAsync(thrower, Opcode.S2C_ITEM_THROW_REFUSED, Array.Empty<byte>()).ConfigureAwait(false);
                 return;
             }
-            operation = new BagOperation(QuestResultFrames.Removed, held.ItemClass, (uint)held.ItemIndex, BagItemIds.OnWire(held.ItemUid), held.Stack, held.ItemSlot);
+            operation = ItemDropOperations.Whole(held);
         }
         await SendAsync(thrower, Opcode.S2C_ITEM_OPERATION, QuestResultFrames.ItemOperation(operation)).ConfigureAwait(false);
 

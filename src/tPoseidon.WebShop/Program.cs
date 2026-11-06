@@ -12,7 +12,7 @@ var options = ShopOptions.FromEnvironment();
 Console.WriteLine($"{LogTag} urls {options.Urls}, libconfig {LogPaths.Scrub(options.LibConfigPath)} (exists={File.Exists(options.LibConfigPath)})");
 
 var bootstrap = await PostgresStoreBootstrap.InitializeAsync().ConfigureAwait(false);
-var names = File.Exists(options.LibConfigPath) ? ItemNames.Load(options.LibConfigPath) : new ItemNames([]);
+var names = File.Exists(options.LibConfigPath) ? tPoseidon.Core.DataCatalog.SharedCatalog.For(options.LibConfigPath).Items.ToItemNames() : new ItemNames([]);
 Console.WriteLine($"{LogTag} {names.Count} item names loaded");
 
 var shop = new ShopApp(

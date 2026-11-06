@@ -39,7 +39,6 @@ public static class HarconRules
     public const byte EnterFull = 12;
     public const byte EnterStageState = 13;
     public const byte LeaveInvalidPlayerState = 15;
-    public const byte LeaveNoStage = 16;
     public const byte BanInvalidPlayerState = 17;
     public const byte BanNoStage = 18;
     public const byte BanNotMaster = 19;
@@ -60,6 +59,8 @@ public static class HarconRules
     public const int SealedHarconMonsterType = 18;
 
     public static bool IsTarget(int monsterType) => monsterType == SealedHarconMonsterType;
+
+    public static bool SpawnsAsWave(int monsterType) => !IsTarget(monsterType);
 
     public static bool KeepsRecords(HarconStageEntry stage) => stage is not null && stage.Category != EventCategory;
 
@@ -128,6 +129,15 @@ public sealed class HarconRoom
 }
 
 public readonly record struct HarconCreate(int StageId, string Title, byte MaxPlayers);
+
+public enum HarconLeaveKind
+{
+    LeaveRoom,
+    CloseLobby,
+    Refuse,
+}
+
+public readonly record struct HarconLeaveOutcome(HarconLeaveKind Kind, byte Code = 0);
 
 public sealed class HarconLobby
 {
@@ -208,6 +218,13 @@ public sealed class HarconLobby
         ArgumentNullException.ThrowIfNull(room);
         _rooms.Remove(room.Key);
         foreach (var member in room.Members) _byCharacter.Remove(member.CharacterId);
+    }
+
+    public static HarconLeaveOutcome DecideLeave(HarconRoom? room)
+    {
+        if (room is null) return new HarconLeaveOutcome(HarconLeaveKind.CloseLobby);
+        if (room.State != HarconRoomState.Waiting) return new HarconLeaveOutcome(HarconLeaveKind.Refuse, HarconRules.LeaveInvalidPlayerState);
+        return new HarconLeaveOutcome(HarconLeaveKind.LeaveRoom);
     }
 
     public static byte? CheckBan(HarconRoom? room, ulong masterId, HarconMember? target)

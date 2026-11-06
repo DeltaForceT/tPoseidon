@@ -78,7 +78,7 @@ public static class EquipReformRules
     public const uint ElixirMismatch = 0x18;
 
     public const int RemainingId = 27000;
-    public const int NotReformOption = 0x1000000;
+    public const int NotReformOption = ItemParamEntry.NotReformOption;
     public const int GunApSlot = ItemPropertyRules.BaseStatCount;
     public const int ResetMaterialEffect = 0x26;
     public const double FeeMarkup = 0.75;

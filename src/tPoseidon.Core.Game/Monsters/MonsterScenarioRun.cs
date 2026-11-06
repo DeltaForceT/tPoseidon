@@ -15,8 +15,16 @@ public interface IScenarioHost
     void Announce(string comment);
 }
 
+public enum ScenarioEnding
+{
+    None,
+    Won,
+    Lost,
+}
+
 public sealed class MonsterScenarioRun
 {
+    public const int HarconMonsterType = 8;
     public const int FirstStepIndex = 1;
     public const long MillisecondsPerSecond = 1000;
     public const long PendingRefillSlowMilliseconds = 5000;
@@ -52,6 +60,13 @@ public sealed class MonsterScenarioRun
     public int StepIndex => _index;
     public int PendingCount => _pending.Count;
     public bool Finished => !_byId.ContainsKey(_index);
+
+    public static ScenarioEnding EndingOf(int killedMonsterType) => killedMonsterType switch
+    {
+        HarconMonsterType => ScenarioEnding.Lost,
+        ShadowBossMonsterType or UncappedMonsterType => ScenarioEnding.Won,
+        _ => ScenarioEnding.None,
+    };
 
     public void RecordKill(int monsterId) => _killsByMonster[monsterId] = _killsByMonster.GetValueOrDefault(monsterId) + 1;
 

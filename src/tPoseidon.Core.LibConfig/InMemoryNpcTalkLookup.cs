@@ -29,18 +29,12 @@ public sealed class InMemoryNpcTalkLookup : INpcTalkLookup
             list.Add(entry);
         }
 
-        foreach (var list in _byMap.Values)
+        foreach (var map in _byMap.Keys.ToArray())
         {
-            list.Sort((a, b) => a.PosId.CompareTo(b.PosId));
+            _byMap[map] = _byMap[map].OrderBy(row => row.PosId).ToList();
         }
     }
 
-        public static InMemoryNpcTalkLookup LoadFromXml(string xmlPath)
-    {
-        var reader = new LibConfigXmlReader(xmlPath);
-        var entries = reader.LoadAllNpcTalkTables();
-        return new InMemoryNpcTalkLookup(entries);
-    }
 
     public NpcTalkEntry? GetByPosOnMap(int posId, string mapName)
     {

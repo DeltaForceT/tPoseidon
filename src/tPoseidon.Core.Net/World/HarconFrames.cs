@@ -37,6 +37,15 @@ public static class HarconFrames
         return w.ToArray();
     }
 
+    public static IReadOnlyList<(Opcode Opcode, byte[] Payload)> LobbyOpening(
+        byte category, int coins, IReadOnlyCollection<int> cleared, HarconDefTotals totals, IReadOnlyCollection<HarconRoom> rooms, Encoding text) =>
+    [
+        (Opcode.C2S_TRIGGER_75, Array.Empty<byte>()),
+        (Opcode.S2C_HARCON_LOBBY, Lobby(category, coins, cleared)),
+        (Opcode.S2C_HARCON_TOTAL_RECORD, TotalRecord(totals)),
+        (Opcode.S2C_HARCON_ROOM_LIST, RoomList(rooms, text)),
+    ];
+
     public static byte[] RoomList(IReadOnlyCollection<HarconRoom> rooms, Encoding text)
     {
         ArgumentNullException.ThrowIfNull(rooms);

@@ -265,6 +265,9 @@ public static class EnterWorldBatchSynthesizer
             TmExp = tPoseidon.Core.Common.WireLimits.Int32FieldUnsigned(character.TmExp),
             Exp = tPoseidon.Core.Common.WireLimits.Int32FieldUnsigned(character.Exp),
             Hair = (byte)(character.Hair & 0xFF),
+            SecondHair = (byte)(character.Hair2 & 0xFF),
+            LookTier = tPoseidon.Core.Data.OccupationRules.LookStateOf(character),
+            ThirdHair = (byte)(character.Hair3 & 0xFF),
             WarehouseSlots = character.WarehouseSlots,
         };
     }
@@ -281,37 +284,11 @@ public static class EnterWorldBatchSynthesizer
         var inventory = itemStore.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
         var records = new List<GameItemListPacket.ItemRecord>(equipment.Count + inventory.Count);
 
-        foreach (var item in equipment)
+        foreach (var item in equipment.Concat(inventory))
         {
-            records.Add(new GameItemListPacket.ItemRecord
-            {
-                Class = item.ItemClass,
-                ItemIndex = (uint)item.ItemIndex,
-                ItemUid = (uint)(item.ItemUid & 0xFFFFFFFFu),
-                EquipmentCount = item.Stack,
-                RefineType = (byte)item.RefineType,
-                RefineLevel = item.RefineLevel,
-                RefineState = item.RefineState,
-                MixSlot = item.ItemSlot,
-                Options = item.ItemClass == ItemParamEntry.RareClass && itemOptions is not null ? itemOptions(item) : Array.Empty<ItemProperty>(),
-            });
-        }
-
-        foreach (var item in inventory)
-        {
-            records.Add(new GameItemListPacket.ItemRecord
-            {
-                Class = item.ItemClass,
-                ItemIndex = (uint)item.ItemIndex,
-                ItemUid = (uint)(item.ItemUid & 0xFFFFFFFFu),
-                StackCount = item.Stack,
-                EquipmentCount = item.Stack,
-                RefineType = (byte)item.RefineType,
-                RefineLevel = item.RefineLevel,
-                RefineState = item.RefineState,
-                MixSlot = item.ItemSlot,
-                Options = item.ItemClass == ItemParamEntry.RareClass && itemOptions is not null ? itemOptions(item) : Array.Empty<ItemProperty>(),
-            });
+            records.Add(GameItemListPacket.RecordOf(
+                item,
+                item.ItemClass == ItemParamEntry.RareClass && itemOptions is not null ? itemOptions(item) : Array.Empty<ItemProperty>()));
         }
 
         return new GameItemListPacket { Records = records };
@@ -480,27 +457,8 @@ public static class EnterWorldBatchSynthesizer
             {
                 var (mobX, mobY) = mob.GetInterpolatedPosition(mobsNow);
                 if (!inView(mobX, mobY)) continue;
-                var trailer = new byte[23];
-                trailer[2] = 0x15;
-                trailer[7] = 0x01;
-                var def = monsterCatalog?.GetById(mob.MonsterParamId);
-                var mobLevel = (ushort)Math.Clamp(def?.Level ?? 1, 1, ushort.MaxValue);
-                var spawnPkt = new NpcSpawnPacket
-                {
-                    EntityId = mob.EntityId,
-                    Kind = NpcSpawnPacket.EntityKind.Mob,
-                    TemplateId = (ushort)(mob.MonsterParamId & 0xFFFF),
-                    UnknownField6 = 0,
-                    UnknownField8 = mobLevel,
-                    Reserved10 = 0x00000001,
-                    PositionX = mobX,
-                    PositionY = mobY,
-                    DestinationX = mob.DestinationX,
-                    DestinationY = mob.DestinationY,
-                    Name = mob.Name,
-                    Trailer = trailer,
-                };
-                await SendFrameAsync(ctx, Opcode.NPC_SPAWN, randKey: rk, spawnPkt.EncodePayload(), ct);
+                var spawnPayload = tPoseidon.Core.Net.World.MobSpawnFrames.Encode(mob, monsterCatalog?.GetById(mob.MonsterParamId), mobsNow);
+                await SendFrameAsync(ctx, Opcode.NPC_SPAWN, randKey: rk, spawnPayload, ct);
                 rk = (byte)(rk + 0x2B);
             }
         }

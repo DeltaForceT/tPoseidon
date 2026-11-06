@@ -14,11 +14,6 @@ public sealed class InMemoryCharacterInfoLookup : ICharacterInfoLookup
         }
     }
 
-    public static InMemoryCharacterInfoLookup LoadFromXml(string xmlPath)
-    {
-        var reader = new LibConfigXmlReader(xmlPath);
-        return new InMemoryCharacterInfoLookup(reader.LoadCharacterInfo());
-    }
 
     public CharacterInfoEntry? GetById(int id)
         => _byId.TryGetValue(id, out var entry) ? entry : null;

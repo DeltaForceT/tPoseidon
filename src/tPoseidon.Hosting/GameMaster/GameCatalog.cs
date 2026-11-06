@@ -30,10 +30,14 @@ public sealed class GameCatalog
         Monsters = monsters;
         Npcs = npcs;
         Maps = maps;
+        _mapsById = new Dictionary<int, CatalogMap>();
+        foreach (var map in maps) _mapsById.TryAdd(map.Id, map);
         Skills = skills;
         CampItems = campItems;
         ChatCommands = GameMasterChat.Commands.Select(command => new ChatCommandHelp(command.Name, command.Keyword, command.Arguments, command.Description)).ToList();
     }
+
+    private readonly Dictionary<int, CatalogMap> _mapsById;
 
     public string? Source { get; }
 
@@ -68,12 +72,12 @@ public sealed class GameCatalog
     public static GameCatalog Load(string libconfigPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(libconfigPath);
-        var reader = new LibConfigXmlReader(libconfigPath);
-        var characters = reader.LoadCharacterInfo();
+        var catalog = tPoseidon.Core.DataCatalog.SharedCatalog.For(libconfigPath);
+        var characters = catalog.Npcs.CharacterInfo;
         var pictures = characters
             .GroupBy(entry => entry.Id)
             .ToDictionary(group => group.Key, group => group.First().FileName.Trim());
-        var monsters = reader.LoadMonsterParamEx2()
+        var monsters = catalog.Monsters.MonsterParamEx2
             .Where(entry => entry.Id >= 0 && GameMasterFrames.IsSummonableMonster((uint)entry.Id) && !string.IsNullOrWhiteSpace(entry.Name))
             .GroupBy(entry => entry.Id)
             .Select(group => group.First())
@@ -87,36 +91,36 @@ public sealed class GameCatalog
             .Select(entry => new CatalogNpc((uint)entry.Id, entry.DisplayName, entry.FileName.Trim()))
             .OrderBy(npc => npc.Type)
             .ToList();
-        var pools = reader.LoadAllMonsterPoolTables();
-        var maps = reader.LoadMapInfo()
+        var pools = catalog.Zones.ToMonsterPools();
+        var maps = catalog.Maps.ToMapInfo()
             .GroupBy(map => map.Id)
             .Select(group => group.First())
             .Where(map => !string.IsNullOrWhiteSpace(map.Name))
             .Select(map => new CatalogMap(map.Id, map.Name.Trim(), MonstersOf(map, pools)))
             .OrderBy(map => map.Id)
             .ToList();
-        var skills = reader.LoadSkillParam2()
+        var skills = catalog.Skills.SkillParam2
             .Where(entry => entry.Id > 0 && !string.IsNullOrWhiteSpace(entry.Name))
             .GroupBy(entry => entry.Id)
             .Select(group => group.First())
             .Select(entry => new CatalogSkill(entry.Id, entry.Name.Trim(), Math.Min(entry.MaxSkillLevel, SkillDefinition.HighestLevel), entry.IconFile, entry.IconBundle))
             .OrderBy(skill => skill.Id)
             .ToList();
-        var campItems = reader.LoadMyCampItems()
+        var campItems = catalog.ItemSystems.MyCampItems
             .Where(entry => MyCampGifts.IsItemIndex(entry.Id) && entry.Name.Length > 0)
             .GroupBy(entry => entry.Id)
             .Select(group => group.First())
             .OrderBy(entry => entry.Id)
             .ToList();
-        return new GameCatalog(libconfigPath, null, ItemNames.Load(libconfigPath), monsters, npcs, maps, skills, campItems);
+        return new GameCatalog(libconfigPath, null, catalog.Items.ToItemNames(), monsters, npcs, maps, skills, campItems);
     }
 
-    public string? MapName(int id) => Maps.FirstOrDefault(map => map.Id == id)?.Name;
+    public string? MapName(int id) => _mapsById.GetValueOrDefault(id)?.Name;
 
     public IEnumerable<CatalogMonster> FindMonsters(string text, int minimumLevel, int maximumLevel, ushort? mapId)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var onMap = mapId is { } id ? Maps.FirstOrDefault(map => map.Id == id)?.Monsters : null;
+        var onMap = mapId is { } id ? _mapsById.GetValueOrDefault(id)?.Monsters : null;
         return Monsters.Where(monster =>
             monster.Level >= minimumLevel && monster.Level <= maximumLevel
             && (onMap is null || onMap.Contains(monster.Type))

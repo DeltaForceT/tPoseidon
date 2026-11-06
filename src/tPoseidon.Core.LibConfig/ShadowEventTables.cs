@@ -1,3 +1,5 @@
+using tPoseidon.Core.Common.Indexing;
+
 namespace tPoseidon.Core.LibConfig;
 
 public sealed record ShadowRewardEntry(
@@ -29,10 +31,13 @@ public sealed record ShadowEventTables(
         new Dictionary<int, int>(),
         Array.Empty<ShadowRewardEntry>());
 
-    public ShadowRewardEntry? Reward(string scenario, int rank) =>
-        Rewards.FirstOrDefault(entry => entry.Rank == rank && string.Equals(entry.Scenario, scenario, StringComparison.Ordinal));
+    private readonly SourceBoundIndex<int, ShadowRewardEntry> _byId = new(entry => entry.Id);
 
-    public ShadowRewardEntry? RewardById(int id) => Rewards.FirstOrDefault(entry => entry.Id == id);
+    private readonly SourceBoundIndex<(string Scenario, int Rank), ShadowRewardEntry> _byScenarioRank = new(entry => (entry.Scenario, entry.Rank));
+
+    public ShadowRewardEntry? Reward(string scenario, int rank) => scenario is null ? null : _byScenarioRank.Over(Rewards, Rewards).Find((scenario, rank));
+
+    public ShadowRewardEntry? RewardById(int id) => _byId.Over(Rewards, Rewards).Find(id);
 
     public int HealthCountOf(int mapId) => HarconHealthCounts.GetValueOrDefault(mapId);
 }

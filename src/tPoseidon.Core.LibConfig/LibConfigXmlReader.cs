@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using System.Text.Unicode;
@@ -10,24 +9,23 @@ namespace tPoseidon.Core.LibConfig;
 
 public sealed class LibConfigXmlReader
 {
-    private static readonly ConcurrentDictionary<string, Lazy<byte[]>> DecodedXmlCache =
-        new(StringComparer.Ordinal);
-
     static LibConfigXmlReader()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
     }
 
-    public static Func<byte[], byte[]>? Supplement { get; set; }
-
     private readonly byte[] _decodedXmlBytes;
 
     private readonly TranslationOverrides _overrides;
 
+    public ReadOnlyMemory<byte> DecodedXml => _decodedXmlBytes;
+
+    public TranslationOverrides Overrides => _overrides;
+
     public LibConfigXmlReader(string xmlOrDatPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(xmlOrDatPath);
-        _decodedXmlBytes = GetOrLoadDecodedXmlBytes(xmlOrDatPath);
+        _decodedXmlBytes = DecodeXmlBytes(Path.GetFullPath(xmlOrDatPath));
         _overrides = TranslationOverrides.ForLibConfigSource(xmlOrDatPath);
     }
 
@@ -43,25 +41,6 @@ public sealed class LibConfigXmlReader
         ArgumentNullException.ThrowIfNull(overrides);
         return new LibConfigXmlReader(utf8Xml, overrides);
     }
-
-    private static byte[] GetOrLoadDecodedXmlBytes(string xmlOrDatPath)
-    {
-        var absolutePath = Path.GetFullPath(xmlOrDatPath);
-        var info = new FileInfo(absolutePath);
-        var cacheKey = string.Create(
-            CultureInfo.InvariantCulture,
-            $"{absolutePath}|{info.LastWriteTimeUtc.Ticks}|{info.Length}");
-
-        var lazy = DecodedXmlCache.GetOrAdd(
-            cacheKey,
-            _ => new Lazy<byte[]>(
-                () => Supplemented(DecodeXmlBytes(absolutePath)),
-                LazyThreadSafetyMode.ExecutionAndPublication));
-
-        return lazy.Value;
-    }
-
-    private static byte[] Supplemented(byte[] decoded) => Supplement is { } supplement ? supplement(decoded) : decoded;
 
     public static byte[] DecodeFile(string xmlOrDatPath)
     {
@@ -1221,10 +1200,10 @@ public sealed class LibConfigXmlReader
                 switch (table)
                 {
                     case HarconDefTables.StageTable:
-                        stages.TryAdd(ReadInt(row, "ID"), new HarconStageEntry(
+                        stages.TryAdd(ReadInt(row, "ID"), HarconDefTables.Corrected(new HarconStageEntry(
                             ReadInt(row, "ID"), ReadString(row, "Name"), ReadInt(row, "Level"), ReadInt(row, "Item"), ReadInt(row, "UnlockID"),
                             ReadInt(row, "MinP"), ReadInt(row, "MaxP"), ReadInt(row, "WaitMap"), ReadInt(row, "PlayMap"),
-                            ReadString(row, "LinkSrc").Trim(), ReadInt(row, "DropItem"), ReadInt(row, "Category")));
+                            ReadString(row, "LinkSrc").Trim(), ReadInt(row, "DropItem"), ReadInt(row, "Category"))));
                         return;
                     case HarconDefTables.DropTable:
                         drops.TryAdd(ReadInt(row, "ID"), new HarconDropEntry(
@@ -2012,7 +1991,7 @@ public sealed class LibConfigXmlReader
         CompoundSlot = ReadInt(row, "CompoundSlot"),
         Mp = ReadInt(row, "MP"),
         Money = ReadInt(row, "Money"),
-        Options = ReadFlags(row, "Options"),
+        Options = ItemParamEntry.OptionsOf(ReadInt(row, "Type"), ReadInt(row, "ReformCount"), ReadFlags(row, "Options")),
         Life = ReadInt(row, "Life"),
         CardNum = ReadInt(row, "CardNum"),
         ItemFType = ReadInt(row, "ItemFType"),
@@ -2024,7 +2003,7 @@ public sealed class LibConfigXmlReader
         MinStatLevel = ReadInt(row, "MinStatLv"),
         StatBonuses = ItemStatColumns.Select(column => ReadInt(row, column)).ToArray(),
         GroupId = ReadInt(row, "GroupId"),
-        ReformCount = ReadInt(row, "ReformCount"),
+        ReformCount = ItemParamEntry.ReformCountOf(ReadInt(row, "Type"), ReadInt(row, "ReformCount")),
     };
 
     private static readonly string[] ItemStatColumns =

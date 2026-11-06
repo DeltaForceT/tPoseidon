@@ -50,5 +50,7 @@ public static class ElementSlots
         return slot >= FirstResistSlot ? Math.Min(total, ResistCap) : total;
     }
 
+    public static int Shown(int equipment, int bonus) => equipment + bonus;
+
     public static int Boost(int total, float ratio) => (int)(total * (double)ratio / 100.0);
 }

@@ -55,12 +55,13 @@ internal sealed class EquipReformController
         return NpcScript.Silent;
     }
 
-    public Task CloseAsync(InGameSessionState player)
+    public async Task CloseAsync(InGameSessionState player)
     {
         ArgumentNullException.ThrowIfNull(player);
-        if (player.Upgrade is UpgradeWindow.EquipReform or UpgradeWindow.ReformReset) player.Upgrade = UpgradeWindow.None;
+        if (player.Upgrade is not (UpgradeWindow.EquipReform or UpgradeWindow.ReformReset)) return;
+        player.Upgrade = UpgradeWindow.None;
+        await SendAsync(player, Opcode.S2C_EQUIP_REFORM_CLOSED, Array.Empty<byte>()).ConfigureAwait(false);
         Log(player, "window closed");
-        return Task.CompletedTask;
     }
 
     public async Task ReformAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)

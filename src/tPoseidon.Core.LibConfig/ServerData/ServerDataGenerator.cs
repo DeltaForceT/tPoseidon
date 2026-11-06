@@ -18,15 +18,14 @@ public static class ServerDataGenerator
 
     private static readonly JsonWriterOptions WriterOptions = new() { Indented = true };
 
-    public static ServerDataSummary Generate(string libconfigPath, string mapDirectory, string outputDirectory)
+    public static ServerDataSummary Generate(IReadOnlyList<MapInfoEntry> mapInfo, IReadOnlyDictionary<string, IReadOnlyList<MonsterPoolRow>> pools, string mapDirectory, string outputDirectory)
     {
-        ArgumentException.ThrowIfNullOrEmpty(libconfigPath);
+        ArgumentNullException.ThrowIfNull(mapInfo);
+        ArgumentNullException.ThrowIfNull(pools);
         ArgumentException.ThrowIfNullOrEmpty(mapDirectory);
         ArgumentException.ThrowIfNullOrEmpty(outputDirectory);
 
-        var reader = new LibConfigXmlReader(libconfigPath);
-        var maps = reader.LoadMapInfo().GroupBy(map => map.Id).Select(group => group.First()).OrderBy(map => map.Id).ToList();
-        var pools = reader.LoadAllMonsterPoolTables();
+        var maps = mapInfo.GroupBy(map => map.Id).Select(group => group.First()).OrderBy(map => map.Id).ToList();
         var md3ByMap = new Dictionary<ushort, Md3Map>();
         foreach (var map in maps)
         {
@@ -40,7 +39,7 @@ public static class ServerDataGenerator
 
         Directory.CreateDirectory(outputDirectory);
         WriteMapInfo(Path.Combine(outputDirectory, MapInfoFile), maps);
-        var (portalMaps, portals) = WritePortals(Path.Combine(outputDirectory, PortalsFile), maps, md3ByMap);
+        var (portalMaps, portals) = WritePortals(Path.Combine(outputDirectory, PortalsFile), maps, md3ByMap, mapDirectory);
         var (poolMaps, poolRows) = WriteZonePools(Path.Combine(outputDirectory, ZonePoolsFile), maps, pools);
         WriteEmptyObject(Path.Combine(outputDirectory, MonsterSpawnsFile));
         return new ServerDataSummary(maps.Count, portalMaps, portals, poolMaps, poolRows);
@@ -72,7 +71,7 @@ public static class ServerDataGenerator
         json.WriteEndObject();
     }
 
-    private static (int Maps, int Portals) WritePortals(string path, IReadOnlyList<MapInfoEntry> maps, Dictionary<ushort, Md3Map> md3ByMap)
+    private static (int Maps, int Portals) WritePortals(string path, IReadOnlyList<MapInfoEntry> maps, Dictionary<ushort, Md3Map> md3ByMap, string mapDirectory)
     {
         var mapCount = 0;
         var portalCount = 0;
@@ -82,7 +81,14 @@ public static class ServerDataGenerator
         foreach (var map in maps)
         {
             if (!md3ByMap.TryGetValue(map.Id, out var md3)) continue;
-            var entrances = md3.Ranges.Where(range => range.Type == PortalEntranceRangeType && range.Destination > 0).ToList();
+            var entrances = md3.Ranges.Where(range => range.Type == PortalEntranceRangeType && range.Destination > 0)
+                .Select(range => new Md3RangeObject(range.Type, range.Id, range.Destination, range.X1, range.Y1, range.X2, range.Y2, range.Options)).ToList();
+            var nextId = entrances.Count == 0 ? 1 : entrances.Max(range => range.Id) + 1;
+            foreach (var portal in JsonPortalLookup.LyrPortalsOf(mapDirectory, map.Md3FileName))
+            {
+                if (entrances.Any(range => range.Destination == portal.DestinationMap)) continue;
+                entrances.Add(new Md3RangeObject(PortalEntranceRangeType, nextId++, portal.DestinationMap, portal.X1, portal.Y1, portal.X2, portal.Y2, 0));
+            }
             var arrivals = md3.Points.Where(point => point.Type == PortalArrivalPointType && point.MapId > 0).ToList();
             if (entrances.Count == 0 && arrivals.Count == 0) continue;
 
