@@ -89,6 +89,16 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How bad is it?
+      options:
+        - "Major bug: a crash, lost items or progress, or a feature that can't be used"
+        - "Minor bug: a visual, text or small behaviour problem, or there is a workaround"
+    validations:
+      required: true
+
   - type: textarea
     id: summary
     attributes:
