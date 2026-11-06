@@ -26,12 +26,20 @@ For a bigger feature or a new system, open an issue first so we can talk it thro
 
 How it works:
 
-1. Fork the repository and make your change on a branch.
-2. Keep each pull request to one change, and link the issue it fixes.
-3. Sign off every commit with `git commit -s`. The `Signed-off-by` line confirms you wrote the code (or have the right to send it) and accept section 4 of the [license](LICENSE). Pull requests without it fail the checks.
-4. If your change touches game behaviour, say how you know the original worked that way: your own captures, screenshots, videos or your memory of playing it.
-5. The build has to come out clean and the tests have to pass.
-6. Open the pull request and fill in the checklist.
+1. Pick an issue that doesn't carry the **in progress** label. That label means it's already being fixed; the working copy runs a few days ahead of the public code, so a fix may exist already. Comment on the issue that you're looking at it before you start.
+2. Fork the repository and make your change on a branch.
+3. Keep each pull request to one change, and link the issue it fixes.
+4. Sign off every commit with `git commit -s`. The `Signed-off-by` line confirms you wrote the code (or have the right to send it) and accept section 4 of the [license](LICENSE). Pull requests without it fail the checks.
+5. If your change touches game behaviour, say how you know the original worked that way: your own captures, screenshots, videos or your memory of playing it.
+6. The build has to come out clean and the tests have to pass.
+7. Open the pull request and fill in the checklist.
+
+Code style:
+
+- No code comments (`//`, `///`, `/* */`). Explanations go in the commit message and the pull request description.
+- Tests go in the existing test projects under `tests/`, as xUnit tests that `dotnet test tPoseidon.sln` runs. No standalone console programs.
+- Match the code around your change: one statement per line, normal indentation, no packed one-line methods. Packet fields go in the packet classes, not patched into the byte array afterwards.
+- Don't change files under `.github/`.
 
 We review every pull request. The project's public history is rebuilt for each release, so pull requests are not merged on GitHub. When we accept one, the change ships in the next release with you as the commit author, and we close the pull request with the version it went into. We may adjust a change before including it, and we may decline one; if we do, we'll say why.
 
