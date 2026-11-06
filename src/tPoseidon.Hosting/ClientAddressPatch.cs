@@ -108,7 +108,10 @@ public static class ClientAddressPatch
                 null);
         }
 
-        if (slots.All(slot => string.Equals(ReadAddress(bytes, slot), address, StringComparison.Ordinal)))
+        var imeSite = ClientImePatch.FindUnpatched(bytes);
+        var minimapPlan = ClientMinimapPatch.FindUnpatched(bytes);
+        var tooltipPlan = ClientTooltipPatch.FindUnpatched(bytes);
+        if (imeSite < 0 && minimapPlan is null && tooltipPlan is null && slots.All(slot => string.Equals(ReadAddress(bytes, slot), address, StringComparison.Ordinal)))
         {
             return new ClientAddressResult(address, false, null);
         }
@@ -126,6 +129,21 @@ public static class ClientAddressPatch
             foreach (var slot in slots)
             {
                 WriteAddress(bytes, slot, address);
+            }
+
+            if (imeSite >= 0)
+            {
+                ClientImePatch.Write(bytes, imeSite);
+            }
+
+            if (minimapPlan is not null)
+            {
+                ClientMinimapPatch.Write(bytes, minimapPlan);
+            }
+
+            if (tooltipPlan is not null)
+            {
+                ClientTooltipPatch.Write(bytes, tooltipPlan);
             }
 
             File.WriteAllBytes(executablePath, bytes);

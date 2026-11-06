@@ -65,6 +65,9 @@ public sealed record MonsterBattleLeft(ushort EntityId, MonsterBattleLeaveReason
 public sealed record MonsterBattleCast(ushort EntityId, ushort TargetEntityId, int SkillId, int Level, string Speech)
     : MonsterBattleEvent(EntityId);
 
+public sealed record MonsterBattleCastStarted(ushort EntityId, ushort TargetEntityId, int SkillId, int Level)
+    : MonsterBattleEvent(EntityId);
+
 public readonly record struct MonsterBattleTarget(
     ushort X,
     ushort Y,
@@ -353,9 +356,10 @@ public sealed class MonsterBattleCycle
                     }
                 }
 
-                var decision = MeleeApproach.Decide(
-                    reach, monster.DestinationX, monster.DestinationY, target.X, target.Y, fight.Settled, _rng);
                 var canMove = monster.WalkSpeedOf(definition.WalkSpeed) > 0 && monster.RunSpeedOf(definition.RunSpeed) > 0 && !monster.IsRooted(now);
+                var decision = MeleeApproach.Decide(
+                    reach, monster.DestinationX, monster.DestinationY, target.X, target.Y, fight.Settled, _rng,
+                    immobile: monster.WalkSpeedOf(definition.WalkSpeed) <= 0 || monster.RunSpeedOf(definition.RunSpeed) <= 0);
                 var backingOff = decision.Kind == MeleeApproachKind.BackOff;
 
                 if (decision.Kind == MeleeApproachKind.GiveUp)
@@ -456,6 +460,7 @@ public sealed class MonsterBattleCycle
             {
                 fight.PendingCast = cast;
                 fight.NextSwingAt = now.AddMilliseconds(timing.CastMs);
+                events.Add(new MonsterBattleCastStarted(monster.EntityId, fight.TargetEntityId, cast.SkillId, cast.Level));
                 return;
             }
             CompleteCast(monster, fight, definition, reach, cast, now, events);

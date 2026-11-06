@@ -40,7 +40,10 @@ public sealed class AggressiveMonsterScan
         return engagements;
     }
 
-    public static bool Scans(MonsterAType atype) => atype is MonsterAType.AggressiveMonster or MonsterAType.BossMonster;
+    public static bool Scans(MonsterAType atype) =>
+        atype is MonsterAType.AggressiveMonster or MonsterAType.BossMonster or MonsterAType.NonresidentBossMonster;
+
+    public static int RangeOf(MonsterEntity monster) => ViewRange;
 
     public void Forget(ushort monsterEntityId)
     {
@@ -52,7 +55,8 @@ public sealed class AggressiveMonsterScan
 
     private static ushort? Nearest(MonsterEntity monster, IReadOnlyList<AggroPlayer> players, DateTimeOffset now, Func<MonsterEntity, AggroPlayer, bool>? ignores)
     {
-        var radiusSquared = (long)ViewRange * ViewRange;
+        var range = RangeOf(monster);
+        var radiusSquared = (long)range * range;
         var (monsterX, monsterY) = monster.GetInterpolatedPosition(now);
         ushort? best = null;
         var bestDistance = long.MaxValue;

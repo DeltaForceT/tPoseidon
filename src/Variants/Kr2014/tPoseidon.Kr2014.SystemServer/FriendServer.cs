@@ -205,7 +205,6 @@ public sealed class FriendServer
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member || payload.Length < sizeof(ulong)) return;
         var friendId = new PacketReader(payload.Span).ReadUInt64();
-        if (!_friends.GetFriends(member.Character.CharacterId).Any(f => f.FriendCharacterId == friendId)) return;
         if (_room.Find(friendId) is not { FriendLoggedIn: true } || ZoneInfoOf?.Invoke(friendId) is not { } friendZone)
         {
             await SendAsync(ctx, FriendFrames.NotOnline, Array.Empty<byte>(), ct).ConfigureAwait(false);

@@ -26,6 +26,8 @@ public sealed class BossLifeCycle
         _rng = rng ?? new Random();
     }
 
+    public Func<MonsterEntity, bool>? PlayerNear { get; set; }
+
     public IReadOnlyList<ushort> ChildrenOf(ushort bossEntityId) =>
         _families.TryGetValue(bossEntityId, out var family) ? family.Children.ToArray() : Array.Empty<ushort>();
 
@@ -38,7 +40,8 @@ public sealed class BossLifeCycle
             live.Add(boss.EntityId);
             var elapsed = _lastTickMs.TryGetValue(boss.EntityId, out var last) ? (int)Math.Min(nowMs - last, int.MaxValue) : 0;
             _lastTickMs[boss.EntityId] = nowMs;
-            var engaged = boss.SnapshotAttackers().Count > 0;
+            var engaged = boss.SnapshotAttackers().Count > 0
+                || (boss.Atype == MonsterAType.NonresidentBossMonster && PlayerNear?.Invoke(boss) == true);
             var family = FamilyOf(boss.EntityId);
             family.Children.RemoveAll(child => _monsters.Get(child) is not { IsDead: false });
             var called = boss.TickBoss(

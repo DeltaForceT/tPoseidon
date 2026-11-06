@@ -13,6 +13,12 @@ public static class TimedItemPeriods
             : 0;
     }
 
+    public static short? HoursOf(ItemParamEntry? definition, IReadOnlyDictionary<int, int> timerMinutes)
+    {
+        var minutes = MinutesOf(definition, timerMinutes);
+        return minutes > 0 ? (short)Math.Min((minutes + ItemRechargeRules.MinutesPerHour - 1) / ItemRechargeRules.MinutesPerHour, short.MaxValue) : null;
+    }
+
     public static IReadOnlyList<TimedItem> Registered(IEnumerable<Item> items) =>
         items.Where(TimedItemRules.IsTimed).Select(item => new TimedItem(item.ItemUid, item.ItemIndex, item.BreakedAt)).ToList();
 

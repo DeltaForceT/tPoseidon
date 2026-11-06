@@ -31,6 +31,9 @@ public sealed class LauncherWindow : Window
     private readonly TextBox _clientFolder = Field("Folder with Trickster.bin");
     private readonly TextBlock _clientStatus = Tokens.Caption();
     private readonly ComboBox _servers = new() { Height = FieldHeight, Width = 280, MinHeight = 0 };
+    private readonly ComboBox _displayResolution = new() { Height = FieldHeight, MinHeight = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly CheckBox _displayFullScreen = new() { Content = "Full screen", VerticalAlignment = VerticalAlignment.Center };
+    private readonly Grid _displayRow = new() { IsVisible = false };
     private readonly ComboBox _language = new() { Height = FieldHeight, MinHeight = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly Button _addServer = Small("Add...");
     private readonly Button _importServer = Small("Import file...");
@@ -107,6 +110,17 @@ public sealed class LauncherWindow : Window
             _language.Items.Add(new ComboBoxItem { Content = choice.Label, Tag = choice.Service });
         }
 
+        foreach (var resolution in ClientDisplay.Resolutions)
+        {
+            _displayResolution.Items.Add(resolution.Label);
+        }
+
+        _displayRow.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        _displayRow.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        _displayFullScreen.Margin = new Thickness(12, 0, 0, 0);
+        Grid.SetColumn(_displayFullScreen, 1);
+        _displayRow.Children.Add(_displayResolution);
+        _displayRow.Children.Add(_displayFullScreen);
         Content = Build();
         Wire();
         Refresh();
@@ -160,6 +174,12 @@ public sealed class LauncherWindow : Window
     internal TextBox PasswordBox => _password;
 
     internal ComboBox LanguageBox => _language;
+
+    internal ComboBox DisplayResolution => _displayResolution;
+
+    internal CheckBox DisplayFullScreen => _displayFullScreen;
+
+    internal Grid DisplayRow => _displayRow;
 
     internal Button PlayButton => _play;
 
@@ -424,6 +444,7 @@ public sealed class LauncherWindow : Window
         var stack = new StackPanel { Margin = new Thickness(22, 20), Spacing = 14 };
         stack.Children.Add(_signIn);
         stack.Children.Add(_updateSummary);
+        stack.Children.Add(_displayRow);
         stack.Children.Add(_play);
         stack.Children.Add(_signOut);
         stack.Children.Add(_progress);
@@ -558,6 +579,8 @@ public sealed class LauncherWindow : Window
                 Close();
             }
         };
+        _displayResolution.SelectionChanged += (_, _) => CommitDisplay();
+        _displayFullScreen.IsCheckedChanged += (_, _) => CommitDisplay();
         _play.Click += async (_, _) => await PrimaryAsync().ConfigureAwait(true);
         _signOut.Click += (_, _) => _model.SignOut();
         _password.KeyDown += async (_, e) =>
@@ -786,8 +809,35 @@ public sealed class LauncherWindow : Window
         }
     }
 
+    private void CommitDisplay()
+    {
+        if (_loading || _displayResolution.SelectedIndex < 0)
+        {
+            return;
+        }
+
+        var resolution = ClientDisplay.Resolutions[_displayResolution.SelectedIndex];
+        _model.ChooseDisplay(new ClientDisplay(resolution.Width, resolution.Height, _displayFullScreen.IsChecked == true));
+    }
+
+    private void RefreshDisplay()
+    {
+        _displayRow.IsVisible = _model.DisplayAvailable;
+        if (!_displayRow.IsVisible)
+        {
+            return;
+        }
+
+        var current = _model.CurrentDisplay();
+        _displayResolution.PlaceholderText = $"Client setting: {current.Resolution.Label}";
+        _displayResolution.SelectedIndex = current.IsOffered ? ClientDisplay.Resolutions.ToList().IndexOf(current.Resolution) : -1;
+        _displayFullScreen.IsChecked = current.FullScreen;
+        _displayFullScreen.IsEnabled = _displayResolution.SelectedIndex >= 0;
+    }
+
     private void RefreshPlay()
     {
+        RefreshDisplay();
         RefreshLinks();
         if (!_account.IsFocused && string.IsNullOrEmpty(_account.Text))
         {

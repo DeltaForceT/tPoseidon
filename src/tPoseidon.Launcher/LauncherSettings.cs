@@ -18,6 +18,8 @@ public sealed class LauncherSettings
 
     public string Language { get; set; } = Hosting.ClientFolder.AutomaticService;
 
+    public ClientDisplay? Display { get; set; }
+
     public static string DefaultPath { get; } = PathFor(null);
 
     public static string PathFor(Branding? branding) =>
@@ -36,6 +38,11 @@ public sealed class LauncherSettings
         {
             var loaded = JsonSerializer.Deserialize<LauncherSettings>(File.ReadAllText(path), JsonOptions) ?? new LauncherSettings();
             loaded.Servers = (loaded.Servers ?? []).Select(server => server.Validated()).ToList();
+            if (loaded.Display is { IsOffered: false })
+            {
+                loaded.Display = null;
+            }
+
             return loaded;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException or HostingException)

@@ -12,6 +12,7 @@ internal sealed class ItemThrowController
     private readonly GroundItemField _groundItems;
     private readonly Func<ushort> _newEntityId;
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
+    private readonly Func<ushort, ZoneGeometry?> _geometry;
     private readonly string _logTag;
     private readonly Random _rng = new();
     private readonly object _lock = new();
@@ -22,6 +23,7 @@ internal sealed class ItemThrowController
         GroundItemField groundItems,
         Func<ushort> newEntityId,
         Func<ushort, Opcode, byte[], Task> sendToMap,
+        Func<ushort, ZoneGeometry?> geometry,
         string logTag)
     {
         _items = items ?? throw new ArgumentNullException(nameof(items));
@@ -29,6 +31,7 @@ internal sealed class ItemThrowController
         _groundItems = groundItems ?? throw new ArgumentNullException(nameof(groundItems));
         _newEntityId = newEntityId ?? throw new ArgumentNullException(nameof(newEntityId));
         _sendToMap = sendToMap ?? throw new ArgumentNullException(nameof(sendToMap));
+        _geometry = geometry ?? throw new ArgumentNullException(nameof(geometry));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
 
@@ -74,7 +77,7 @@ internal sealed class ItemThrowController
         }
         await SendAsync(thrower, Opcode.S2C_ITEM_OPERATION, QuestResultFrames.ItemOperation(operation)).ConfigureAwait(false);
 
-        var (x, y) = ItemThrowRules.Landing(thrower.PlayerX, thrower.PlayerY, request.X, request.Y);
+        var (x, y) = ItemThrowRules.Landing(thrower.PlayerX, thrower.PlayerY, request.X, request.Y, CellOpen(_geometry(thrower.MapId)));
         var item = new FieldItem(
             _newEntityId(),
             thrower.MapId,
@@ -94,6 +97,11 @@ internal sealed class ItemThrowController
         await _sendToMap(thrower.MapId, Opcode.S2C_ITEM_THROWN, GroundItemFrames.Thrown(item, thrower.PlayerX, thrower.PlayerY)).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [items] 0x{thrower.PlayerEntityId:X4} throws item {held.ItemIndex} x{item.Count} as 0x{item.EntityId:X4} at ({x},{y})");
     }
+
+    private static Func<int, int, bool> CellOpen(ZoneGeometry? geometry)
+        => geometry is null
+            ? (_, _) => true
+            : (cellX, cellY) => geometry.ContainsCell(cellX, cellY) && !geometry.IsBlocked(cellX, cellY);
 
     private Task SendAsync(InGameSessionState player, Opcode opcode, byte[] payload)
     {

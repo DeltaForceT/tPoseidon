@@ -5,11 +5,6 @@ using tPoseidon.Hosting;
 
 namespace tPoseidon.Launcher;
 
-public sealed record ResolutionChoice(int Width, int Height)
-{
-    public string Label => $"{Width} x {Height}";
-}
-
 public sealed record QualityChoice(int Value, string Label);
 
 public sealed record SoundChannelChoice(string Label, int Samples2D, int Samples3D, int SamplesStream);
@@ -27,7 +22,7 @@ public sealed record ClientSetup(
     string ScreenShotFormat,
     int JpgQuality)
 {
-    public static readonly IReadOnlyList<ResolutionChoice> Resolutions = [new(800, 600), new(1024, 768)];
+    public static IReadOnlyList<ClientResolution> Resolutions => ClientDisplay.Resolutions;
 
     public static readonly IReadOnlyList<int> SampleRates = [22050, 44100];
 
@@ -69,14 +64,18 @@ public interface IClientSetupStore
     ClientSetup Load(ClientSetupProfile profile);
 
     void Save(ClientSetupProfile profile, ClientSetup setup);
+
+    ClientDisplay ReadDisplay(ClientSetupProfile profile);
+
+    void SaveDisplay(ClientSetupProfile profile, ClientDisplay display);
 }
 
 [SupportedOSPlatform("windows")]
 public sealed class RegistryClientSetupStore : IClientSetupStore
 {
-    public const string Width = "widthPixel";
-    public const string Height = "heightPixel";
-    public const string FullScreen = "Full Screen";
+    public const string Width = RegistryClientDisplay.WidthValue;
+    public const string Height = RegistryClientDisplay.HeightValue;
+    public const string FullScreen = RegistryClientDisplay.FullScreenValue;
     public const string UseSound = "UseSound";
     public const string SoundStereo = "SoundStereo";
     public const string SoundFrequency = "SoundFrequency";
@@ -157,6 +156,10 @@ public sealed class RegistryClientSetupStore : IClientSetupStore
             throw new HostingException($"The client settings could not be saved: {ex.Message}", ex);
         }
     }
+
+    public ClientDisplay ReadDisplay(ClientSetupProfile profile) => RegistryClientDisplay.Read(profile);
+
+    public void SaveDisplay(ClientSetupProfile profile, ClientDisplay display) => RegistryClientDisplay.Write(profile, display);
 
     private static int Int(RegistryKey key, string name, int fallback) =>
         key.GetValue(name) is int value ? value : fallback;

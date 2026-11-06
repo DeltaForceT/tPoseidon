@@ -10,7 +10,7 @@ public static class ServerDataStep
 {
     public const string SnapshotBuilderAssembly = "tPoseidon.Tools.BuildWorldSnapshot";
     public const int Steps = 3;
-    public const int DataVersion = 2;
+    public const int DataVersion = 3;
     public const string DataVersionFile = "data-version.txt";
     private const string SnapshotVariant = "kr2014";
     private const string ZoneRoutingFile = "master-zone-routing.json";
@@ -26,6 +26,8 @@ public static class ServerDataStep
         if (!RunningClient.IsRunning(clientExecutable))
         {
             ShadowSanctuaryClientData.Apply(libconfig, clientExecutable);
+            ReferencedTablesClientData.Apply(libconfig, clientExecutable);
+            ReferencedItemRows.Data.Apply(libconfig, clientExecutable);
         }
 
         var builder = paths.AppExecutable(SnapshotBuilderAssembly);

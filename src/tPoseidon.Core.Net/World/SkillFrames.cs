@@ -43,6 +43,7 @@ public static class SkillFrames
     public const int TargetAskedSize = 4;
     public const int CompletedSize = 3;
     public const int EffectHeaderSize = 14;
+    public const int ModeRadiusPointDurationTailSize = 11;
     public const int HitResultSize = 30;
     public const int MonsterHitRecordSize = 32;
     public const int PositionTailSize = 10;
@@ -250,6 +251,17 @@ public static class SkillFrames
         w.WriteByte(unchecked((byte)effectClass));
         w.WriteUInt16(skillId);
         w.WriteUInt16(effectState);
+        return w.ToArray();
+    }
+
+    public static byte[] ModeRadiusPointDurationTail(byte mode, ushort radius, ushort pointX, ushort pointY, int durationMs)
+    {
+        var w = new PacketWriter(ModeRadiusPointDurationTailSize);
+        w.WriteByte(mode);
+        w.WriteUInt16(radius);
+        w.WriteUInt16(pointX);
+        w.WriteUInt16(pointY);
+        w.WriteInt32(durationMs);
         return w.ToArray();
     }
 
@@ -631,6 +643,18 @@ public static class SkillFrames
         return frames;
     }
 
+    public static IReadOnlyList<SwingFrame> EncodeImmediateAreaVictim(PlayerStrike strike, SkillHit hit, ushort blockId, SwingAdditions additions)
+    {
+        ArgumentNullException.ThrowIfNull(additions);
+        var frames = new List<SwingFrame>();
+        if (additions.OwnerTaken is { } ownerTaken)
+        {
+            frames.Add(new(Opcode.S2C_OP_016D_TBD, ownerTaken, MeleeSwingFrames.NoBlock, SwingAudience.Everyone));
+        }
+        AppendVictim(frames, strike, HitResult(strike.TargetEntityId, hit), blockId, additions, hitOpcode: Opcode.S2C_HIT_RESULT_IMMEDIATE);
+        return frames;
+    }
+
     public static IReadOnlyList<SwingFrame> EncodeAreaEnd(ushort blockId, IReadOnlyList<(Opcode Opcode, byte[] Payload)> afterBlock)
     {
         ArgumentNullException.ThrowIfNull(afterBlock);
@@ -639,9 +663,9 @@ public static class SkillFrames
         return frames;
     }
 
-    private static void AppendVictim(List<SwingFrame> frames, PlayerStrike strike, byte[] hitResult, ushort blockId, SwingAdditions additions, byte[]? monsterHitRecord = null)
+    private static void AppendVictim(List<SwingFrame> frames, PlayerStrike strike, byte[] hitResult, ushort blockId, SwingAdditions additions, byte[]? monsterHitRecord = null, Opcode hitOpcode = Opcode.S2C_OP_002A_TBD)
     {
-        frames.Add(new(Opcode.S2C_OP_002A_TBD, hitResult, blockId, SwingAudience.Everyone));
+        frames.Add(new(hitOpcode, hitResult, blockId, SwingAudience.Everyone));
         if (monsterHitRecord is not null)
         {
             frames.Add(new(Opcode.S2C_MONSTER_HIT_RECORD, monsterHitRecord, blockId, SwingAudience.Everyone));
@@ -699,6 +723,30 @@ public static class SkillFrames
                 break;
             case SkillTail.TargetOnly:
                 w.WriteUInt16(strike.TargetEntityId);
+                break;
+        }
+        return w.ToArray();
+    }
+
+    public static byte[] MonsterTailFor(SkillTail tail, ushort targetEntityId, (int X, int Y) casterAt, (int X, int Y) targetAt, int count)
+    {
+        var w = new PacketWriter(PositionTailSize + 1);
+        switch (tail)
+        {
+            case SkillTail.Positions:
+            case SkillTail.PositionsAndFlag:
+                w.WriteUInt16(targetEntityId);
+                w.WriteUInt16((ushort)casterAt.X);
+                w.WriteUInt16((ushort)casterAt.Y);
+                w.WriteUInt16((ushort)targetAt.X);
+                w.WriteUInt16((ushort)targetAt.Y);
+                if (tail == SkillTail.PositionsAndFlag) w.WriteByte(0);
+                break;
+            case SkillTail.Count:
+                w.WriteUInt16((ushort)count);
+                break;
+            case SkillTail.TargetOnly:
+                w.WriteUInt16(targetEntityId);
                 break;
         }
         return w.ToArray();

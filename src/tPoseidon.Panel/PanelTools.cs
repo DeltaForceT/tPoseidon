@@ -18,6 +18,7 @@ public sealed class PanelTools
     private readonly Window _main;
     private readonly Action _openSetup;
     private readonly (string Service, MenuItem Item)[] _languages;
+    private readonly MenuItem[] _displays;
 
     public PanelTools(PanelHost host, Window main, Action openSetup)
     {
@@ -25,6 +26,7 @@ public sealed class PanelTools
         _main = main ?? throw new ArgumentNullException(nameof(main));
         _openSetup = openSetup ?? throw new ArgumentNullException(nameof(openSetup));
         _languages = BuildLanguages();
+        _displays = BuildDisplays();
     }
 
     public PanelHost Host { get; }
@@ -114,6 +116,44 @@ public sealed class PanelTools
         }
 
         menu.Open(source);
+    }
+
+    public IReadOnlyList<MenuItem> DisplayItems => _displays;
+
+    public void MarkDisplays()
+    {
+        var current = Host.ClientDisplay;
+        _displays[0].Icon = current is null ? Tokens.Glyphs(Glyph.Check, 12, Tokens.Accent) : null;
+        for (var index = 0; index < ClientDisplay.Resolutions.Count; index++)
+        {
+            _displays[index + 1].Icon = current?.Resolution == ClientDisplay.Resolutions[index] ? Tokens.Glyphs(Glyph.Check, 12, Tokens.Accent) : null;
+        }
+
+        _displays[^1].Icon = current is { FullScreen: true } ? Tokens.Glyphs(Glyph.Check, 12, Tokens.Accent) : null;
+        _displays[^1].IsEnabled = current is not null;
+    }
+
+    private MenuItem[] BuildDisplays()
+    {
+        var items = new List<MenuItem> { new() { Header = "Keep the client's own setting" } };
+        items[0].Click += async (_, _) => await Host.ChooseClientDisplayAsync(null).ConfigureAwait(true);
+        foreach (var resolution in ClientDisplay.Resolutions)
+        {
+            var item = new MenuItem { Header = resolution.Label };
+            item.Click += async (_, _) => await Host.ChooseClientDisplayAsync(new ClientDisplay(resolution.Width, resolution.Height, Host.ClientDisplay?.FullScreen ?? false)).ConfigureAwait(true);
+            items.Add(item);
+        }
+
+        var fullScreen = new MenuItem { Header = "Full screen" };
+        fullScreen.Click += async (_, _) =>
+        {
+            if (Host.ClientDisplay is { } current)
+            {
+                await Host.ChooseClientDisplayAsync(current with { FullScreen = !current.FullScreen }).ConfigureAwait(true);
+            }
+        };
+        items.Add(fullScreen);
+        return [.. items];
     }
 
     public void MarkLanguages()

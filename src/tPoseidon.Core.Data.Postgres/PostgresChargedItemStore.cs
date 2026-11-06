@@ -83,17 +83,18 @@ public sealed class PostgresChargedItemStore : IChargedItemStore
                 ? DateTimeOffset.UtcNow.AddHours(waiting.UseTimeHours)
                 : Item.NeverBreaks;
             var itemClass = common ? ChargedItemRules.CommonClass : ChargedItemRules.RareClass;
+            long newUid;
             using (var insert = new NpgsqlCommand("""
-                INSERT INTO items (item_uid, item_index, item_class, item_attr, item_charged, item_breaked, refine_type, refine_level, refine_state, item_slot, item_stack)
-                VALUES (@u, @i, @c, 0, 1, @b, 0, 0, 0, 0, @n)
+                INSERT INTO items (item_index, item_class, item_attr, item_charged, item_breaked, refine_type, refine_level, refine_state, item_slot, item_stack)
+                VALUES (@i, @c, 0, 1, @b, 0, 0, 0, 0, @n)
+                RETURNING item_uid
                 """, conn, tx))
             {
-                insert.Parameters.AddWithValue("u", (long)move.ItemUid);
                 insert.Parameters.AddWithValue("i", waiting.ItemIndex);
                 insert.Parameters.AddWithValue("c", (short)itemClass);
                 insert.Parameters.AddWithValue("b", breaked);
                 insert.Parameters.AddWithValue("n", (int)count);
-                if (insert.ExecuteNonQuery() != 1) return new ChargedItemMoveResult(null, ChargedItemRules.MoveFailed);
+                newUid = (long)insert.ExecuteScalar()!;
             }
             using (var own = new NpgsqlCommand("""
                 INSERT INTO item_char (char_uid, item_uid, item_where, item_pos)
@@ -102,11 +103,11 @@ public sealed class PostgresChargedItemStore : IChargedItemStore
                 """, conn, tx))
             {
                 own.Parameters.AddWithValue("ch", (long)move.CharacterId);
-                own.Parameters.AddWithValue("u", (long)move.ItemUid);
+                own.Parameters.AddWithValue("u", newUid);
                 own.Parameters.AddWithValue("w", (short)SlotKind.Inventory);
                 if (own.ExecuteNonQuery() != 1) return new ChargedItemMoveResult(null, ChargedItemRules.MoveFailed);
             }
-            moved = new ChargedItemMoved(move.ItemUid, false, itemClass, waiting.ItemIndex, count, count, breaked);
+            moved = new ChargedItemMoved((ulong)newUid, false, itemClass, waiting.ItemIndex, count, count, breaked);
         }
         tx.Commit();
         return new ChargedItemMoveResult(moved, 0);

@@ -12,7 +12,7 @@ public static class SkillEffectFrames
     private const byte OneStat = 1;
     private const byte VisibleFlag = 0;
     private const byte FailedFlag = 1;
-    private const int LongestTailSize = 9;
+    private const int LongestTailSize = SkillFrames.ModeRadiusPointDurationTailSize;
 
     public static byte[] Started(SkillEffect effect, ushort targetEntityId)
     {
@@ -45,6 +45,10 @@ public static class SkillEffectFrames
                 tail.WriteUInt16Field(effect.Magnitude);
                 tail.WriteUInt16(effect.Point?.X ?? 0);
                 tail.WriteUInt16(effect.Point?.Y ?? 0);
+                break;
+            case SkillEffectTail.ModeRadiusPointDuration:
+                tail.WriteBytes(SkillFrames.ModeRadiusPointDurationTail(
+                    (byte)effect.Mode, unchecked((ushort)effect.Magnitude), effect.Point?.X ?? 0, effect.Point?.Y ?? 0, effect.DurationMs));
                 break;
             case SkillEffectTail.RadiusOnly:
                 tail.WriteInt32Field(effect.Magnitude);

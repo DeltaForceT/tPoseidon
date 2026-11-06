@@ -93,6 +93,7 @@ public enum SkillEffectTail
     ModeThenTarget,
     IntervalThenHeal,
     ModeRadiusPoint,
+    ModeRadiusPointDuration,
     RadiusOnly,
     ModeThenDuration,
     ModeThenPoint,
@@ -248,6 +249,10 @@ public sealed record SkillEffectKind(
     public int StrikeMagicLoss { get; init; }
 
     public bool EndsWhenOwnerHit { get; init; }
+
+    public bool EndsWhenOwnerMoves { get; init; }
+
+    public bool BlocksOwnerAttack { get; init; }
 
     public int ThirdStat { get; init; } = SkillEffectKinds.NoStat;
 
@@ -633,6 +638,7 @@ public static class SkillEffectKinds
         new(Bind, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: false)
         {
             MonsterSpread = BindOnMonster, SpreadRadiusColumn = RadiusColumn, MonsterSpreadLimit = BindMonsters, EndsWhenOwnerHit = true,
+            EndsWhenOwnerMoves = true, BlocksOwnerAttack = true, PlayerCondition = MonsterSkills.BoundCondition,
         },
         new(BindOnMonster, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: true)
         {
@@ -669,7 +675,7 @@ public static class SkillEffectKinds
         GroundHit(GroundSkills.ManaStormHit, ManaStormDelayMs, SkillActions.NoPropertyElement, 0),
         GroundHit(GroundSkills.EarthDivideHit, EarthDivideDelayMs, SkillActions.EarthElement, EarthMagicLoss),
         GroundHit(GroundSkills.EarthquakeDo, EarthDivideDelayMs, SkillActions.EarthElement, EarthMagicLoss),
-        new(FireField, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeRadiusPoint, RadiusColumn, OnTarget: false)
+        new(FireField, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeRadiusPointDuration, RadiusColumn, OnTarget: false)
         {
             Periodic = SkillPeriodicHit.FieldScan, PeriodMs = FieldScanMs, FieldChild = FireFieldOnMonster,
             FieldLimitColumn = KillNumColumn, FieldLimitCap = FireFieldVictims, FieldTracks = true,
@@ -736,7 +742,7 @@ public static class SkillEffectKinds
             StrikeGatesMode = true, StrikePowerColumn = ObjectEffects.PowerColumn, StrikeAddsElement = true, Holds = true, HeaderClass = 1,
             LowersResistElement = SkillActions.ElectricElement, ResistDropByOwnerMagic = true,
         },
-        new(ObjectEffects.SwampField, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeRadiusPoint, RadiusColumn, OnTarget: false)
+        new(ObjectEffects.SwampField, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeRadiusPointDuration, RadiusColumn, OnTarget: false)
         {
             Periodic = SkillPeriodicHit.FieldScan, PeriodMs = FieldScanMs, FieldChild = ObjectEffects.SwampFieldDo,
             FieldLimitColumn = KillNumColumn, FieldLimitCap = ObjectEffects.SwampFieldVictims, FieldTracks = true,
@@ -829,11 +835,11 @@ public static class SkillEffectKinds
         },
         new(FormSkills.Bunker, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: false)
         {
-            SpreadsAs = FormSkills.BunkerDo, SpreadLimit = 0, TmOnSpread = true,
+            SpreadsAs = FormSkills.BunkerDo, SpreadLimit = 0, TmOnSpread = true, BlocksOwnerAttack = true,
         },
         new(FormSkills.BunkerDo, NoStat, SkillEffectRule.NoChange, SkillEffectTail.CurrentThenMax, RatioColumn, OnTarget: false)
         {
-            HeaderClass = 0, AbsorbsHits = true, PoolFromDig = true, GrantsTm = false,
+            HeaderClass = 0, AbsorbsHits = true, PoolFromDig = true, GrantsTm = false, PlayerCondition = MonsterSkills.FrozenCondition, BlocksOwnerAttack = true,
         },
         new(FormSkills.SummonGuardian, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeThenDuration, RatioColumn, OnTarget: false, FormSkills.SecondColumn)
         {

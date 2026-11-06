@@ -22,8 +22,12 @@ public sealed record ChatCommandHelp(string Name, string Keyword, string Argumen
 
 public sealed class GameCatalog
 {
-    private GameCatalog(string? source, string? problem, ItemNames items, IReadOnlyList<CatalogMonster> monsters, IReadOnlyList<CatalogNpc> npcs, IReadOnlyList<CatalogMap> maps, IReadOnlyList<CatalogSkill> skills, IReadOnlyList<MyCampItemEntry> campItems)
+    private GameCatalog(string? source, string? problem, ItemNames items, IReadOnlyList<CatalogMonster> monsters, IReadOnlyList<CatalogNpc> npcs, IReadOnlyList<CatalogMap> maps, IReadOnlyList<CatalogSkill> skills, IReadOnlyList<MyCampItemEntry> campItems, Func<IReadOnlyDictionary<string, string>>? words = null, Func<IReadOnlyDictionary<int, DrillParamEntry>>? drills = null, Func<CharacterTypeNames>? characterTypes = null, Func<IReadOnlyDictionary<int, int>>? timerMinutes = null)
     {
+        _words = new Lazy<IReadOnlyDictionary<string, string>>(words ?? (() => new Dictionary<string, string>()));
+        _characterTypes = new Lazy<CharacterTypeNames>(characterTypes ?? (() => CharacterTypeNames.Empty));
+        _timerMinutes = new Lazy<IReadOnlyDictionary<int, int>>(timerMinutes ?? (() => new Dictionary<int, int>()));
+        _drills = new Lazy<IReadOnlyDictionary<int, DrillParamEntry>>(drills ?? (() => new Dictionary<int, DrillParamEntry>()));
         Source = source;
         Problem = problem;
         Items = items;
@@ -38,6 +42,10 @@ public sealed class GameCatalog
     }
 
     private readonly Dictionary<int, CatalogMap> _mapsById;
+    private readonly Lazy<IReadOnlyDictionary<string, string>> _words;
+    private readonly Lazy<IReadOnlyDictionary<int, DrillParamEntry>> _drills;
+    private readonly Lazy<CharacterTypeNames> _characterTypes;
+    private readonly Lazy<IReadOnlyDictionary<int, int>> _timerMinutes;
 
     public string? Source { get; }
 
@@ -112,8 +120,11 @@ public sealed class GameCatalog
             .Select(group => group.First())
             .OrderBy(entry => entry.Id)
             .ToList();
-        return new GameCatalog(libconfigPath, null, catalog.Items.ToItemNames(), monsters, npcs, maps, skills, campItems);
+        return new GameCatalog(libconfigPath, null, catalog.Items.ToItemNames(), monsters, npcs, maps, skills, campItems, () => catalog.Texts.WordStrings, () => catalog.WorldSystems.DrillTables.Drills, () => catalog.Texts.CharacterTypes, () => catalog.ItemSystems.GeneralTimerItems);
     }
+
+    public ItemDetails DescribeItem(ItemName item) =>
+        ItemDetailBuilder.Build(item, new ItemDetailData(_words.Value, _drills.Value, _characterTypes.Value, _timerMinutes.Value));
 
     public string? MapName(int id) => _mapsById.GetValueOrDefault(id)?.Name;
 

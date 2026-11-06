@@ -54,6 +54,14 @@ public static class FormSkills
     public const string BeastHvColumn = "HV_Ratio";
     public const string BeastLkColumn = "LK_Ratio";
 
+    public const int FormNormal = 1;
+    public const int FormWildMutation = 4;
+    public const int FormChange = 8;
+    public const int FormDisguised = 0x10;
+    public const int FormBeast = 0x40;
+    public const byte NormalFormNotice = 0xE;
+    public const byte OtherFormNotice = 0xF;
+
     public const int MorphTrailingMs = 3000;
     public const int MorphDrainMs = 2000;
     public const int SoldierStrikeMs = 2000;
@@ -78,6 +86,28 @@ public static class FormSkills
     };
 
     public static MorphRule MorphOf(int actionId) => Morphs.TryGetValue(actionId, out var rule) ? rule : MorphRule.None;
+
+    public static int FormFlagOf(bool disguised, MorphRule morph) => disguised
+        ? FormDisguised
+        : morph switch
+        {
+            MorphRule.WildMutation => FormWildMutation,
+            MorphRule.WildChange => FormChange,
+            MorphRule.Beast => FormBeast,
+            _ => FormNormal,
+        };
+
+    public static bool StateTypeAllows(int stateType, int formFlag) => stateType switch
+    {
+        1 => (formFlag & FormNormal) != 0,
+        2 => (formFlag & FormWildMutation) != 0,
+        3 => (formFlag & FormChange) != 0,
+        4 => (formFlag & (FormNormal | FormDisguised)) != 0,
+        5 => (formFlag & FormBeast) != 0,
+        _ => true,
+    };
+
+    public static byte StateTypeRefusalNotice(int stateType) => stateType == 1 ? NormalFormNotice : OtherFormNotice;
 
     public static bool IsSelf(int actionId) => actionId is EscapeBunker or CardIdentification;
 

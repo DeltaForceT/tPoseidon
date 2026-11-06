@@ -467,6 +467,27 @@ public sealed class MonsterEntity
         return actual;
     }
 
+    public int HpRecoveryAmount { get; init; }
+
+    private int _hpRecoveryElapsedMs;
+    private DateTimeOffset? _hpRecoveryClockAt;
+
+    public long RecoverHp(DateTimeOffset now, bool paused, int periodMs)
+    {
+        lock (_lock)
+        {
+            var elapsedMs = _hpRecoveryClockAt is { } last ? (int)Math.Clamp((now - last).TotalMilliseconds, 0, int.MaxValue) : 0;
+            _hpRecoveryClockAt = now;
+            if (paused || DeadLocked) return 0;
+            _hpRecoveryElapsedMs += elapsedMs;
+            if (_hpRecoveryElapsedMs < periodMs) return 0;
+            _hpRecoveryElapsedMs = 0;
+            var before = _hp;
+            _hp = before < MaxHp ? Math.Min(MaxHp, before + HpRecoveryAmount) : MaxHp;
+            return _hp - before;
+        }
+    }
+
     public long Heal(long amount)
     {
         lock (_lock)

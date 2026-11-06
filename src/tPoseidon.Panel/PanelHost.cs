@@ -368,6 +368,39 @@ public sealed class PanelHost
 
     public string ClientLanguage => Settings?.Launch.ServiceName is { Length: > 0 } service ? service : ClientFolder.AutomaticService;
 
+    public ClientDisplay? ClientDisplay => Settings?.Launch.Display;
+
+    public async Task ChooseClientDisplayAsync(ClientDisplay? display)
+    {
+        if (Settings is not { } settings)
+        {
+            return;
+        }
+
+        try
+        {
+            if (display is not null)
+            {
+                ClientDisplay.Validated(display);
+            }
+
+            await Task.Run(() =>
+            {
+                settings.Launch.Display = display;
+                settings.Save(Paths);
+            }).ConfigureAwait(true);
+            var text = display is null
+                ? "Play keeps whatever the client has stored."
+                : $"Play starts the client at {display.Resolution.Label}{(display.FullScreen ? ", full screen" : ", in a window")}.";
+            LogHub.Write(LogHub.PanelSource, LogLevel.Info, text);
+            Notify(BannerKind.Success, "Game window", text);
+        }
+        catch (HostingException ex)
+        {
+            Fail(LogHub.PanelSource, ex);
+        }
+    }
+
     public async Task ChooseClientLanguageAsync(string service)
     {
         if (Settings is not { } settings)

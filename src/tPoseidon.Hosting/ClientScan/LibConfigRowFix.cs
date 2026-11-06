@@ -46,6 +46,21 @@ public sealed class LibConfigRowFix : IClientFix
         ReferencedMapRows.Patches,
         new LibConfigRowPatchData(ReferencedMapRows.Patches, "maps the game data leads to"));
 
+    public static LibConfigRowFix ReferencedItems { get; } = Create(
+        ReferencedRows.Id,
+        ReferencedRows.Title,
+        ReferencedRows.Patches,
+        ReferencedItemRows.Data);
+
+    public static LibConfigRowFix MissingTables { get; } = new(
+        ReferencedTablesClientData.Id,
+        ReferencedTablesClientData.Title,
+        [],
+        ReferencedTablesClientData.Check,
+        ReferencedTablesClientData.Apply,
+        ShadowSanctuaryClientData.CanRestore,
+        ShadowSanctuaryClientData.Restore);
+
     public string Id { get; }
 
     public string Title { get; }

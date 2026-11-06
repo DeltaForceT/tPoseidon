@@ -125,6 +125,7 @@ public enum Opcode : ushort
     S2C_OP_011D_TBD = 0x011D,
 
     S2C_OP_002A_TBD         = 0x002A,
+    S2C_HIT_RESULT_IMMEDIATE = 0x051B,
     S2C_OP_002B_TBD         = 0x002B,
     S2C_OP_011E_TBD         = 0x011E,
     S2C_OP_016D_TBD         = 0x016D,
@@ -195,6 +196,7 @@ public enum Opcode : ushort
         S2C_KEYBOX_OPENED       = 0x0513,
         S2C_KEYBOX_OPEN_REFUSED = 0x0514,
         S2C_KEYBOX_CLOSED       = 0x0516,
+        C2S_ENTITY_RIGHT_CLICK  = 0x0519,
         S2C_GUILD_DEPOT_ERROR   = 0x051C,
         C2S_GUILD_DEPOT_TAB     = 0x051D,
         S2C_GUILD_DEPOT_TAB     = 0x051E,

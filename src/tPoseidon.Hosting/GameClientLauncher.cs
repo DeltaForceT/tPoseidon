@@ -40,6 +40,20 @@ public static class GameClientLauncher
         }
     }
 
+    public static bool ApplyDisplay(HostSettings settings, string executable, string service)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        if (settings.Launch.Display is not { } display || !OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        var company = ClientSetupProfile.CompanyIn(File.ReadAllBytes(executable))
+            ?? throw new HostingException("This client does not say where it keeps its settings, so the game window cannot be set.", "Use the KR 2014 client.", null);
+        RegistryClientDisplay.Write(new ClientSetupProfile(company, ClientSetupProfile.NameFor(service)), display);
+        return true;
+    }
+
     private static string Start(HostSettings settings)
     {
         var check = ClientFolder.Check(settings.ClientFolder);
@@ -51,7 +65,10 @@ public static class GameClientLauncher
         var plan = ClientFolder.Prepare(settings);
         var executable = Path.Combine(settings.ClientFolder, check.Executable);
         ShadowSanctuaryClientData.Apply(plan.LibConfig, executable);
+        ReferencedTablesClientData.Apply(plan.LibConfig, executable);
+        ReferencedItemRows.Data.Apply(plan.LibConfig, executable);
         ClientAddressPatch.Apply(executable, settings.Network.PublicAddress, settings.Ports.Lobby);
+        ApplyDisplay(settings, executable, plan.Service);
         ProcessStartInfo info;
         if (OperatingSystem.IsWindows())
         {

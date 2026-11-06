@@ -33,7 +33,7 @@ public static class CashBoxFrames
     public static ushort ListedCount(ChargedItem item)
     {
         ArgumentNullException.ThrowIfNull(item);
-        return (ushort)Math.Clamp((int)item.ItemAttr, 1, ushort.MaxValue);
+        return item.ItemClass == ChargedItemRules.CommonClass ? (ushort)Math.Clamp((int)item.ItemAttr, 1, ushort.MaxValue) : (ushort)1;
     }
 
     public static byte[] Header(int entries)

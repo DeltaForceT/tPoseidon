@@ -7,6 +7,8 @@ public interface IGameMasterTimedEvent
     long StartTime { get; }
 
     long EndTime { get; }
+
+    bool SharesSlotWith(object other);
 }
 
 public readonly record struct GameMasterScheduleStep<T>(T? Expired, T? Applied, bool ListsChanged) where T : struct;
@@ -38,6 +40,26 @@ public sealed class GameMasterSchedule<T> where T : struct, IGameMasterTimedEven
         lock (_gate) _waiting.Add(entry);
     }
 
+    public void ReserveOrChange(T entry)
+    {
+        lock (_gate)
+        {
+            var running = _running.FindIndex(held => held.SharesSlotWith(entry));
+            if (running >= 0)
+            {
+                _running[running] = entry;
+                return;
+            }
+            var waiting = _waiting.FindIndex(held => held.SharesSlotWith(entry));
+            if (waiting >= 0)
+            {
+                _waiting[waiting] = entry;
+                return;
+            }
+            _waiting.Add(entry);
+        }
+    }
+
     public void Restore(IEnumerable<T> running, IEnumerable<T> waiting)
     {
         ArgumentNullException.ThrowIfNull(running);
@@ -63,6 +85,23 @@ public sealed class GameMasterSchedule<T> where T : struct, IGameMasterTimedEven
                 return true;
             }
             var waiting = _waiting.IndexOf(entry);
+            if (waiting < 0) return false;
+            _waiting.RemoveAt(waiting);
+            return true;
+        }
+    }
+
+    public bool DeleteSlot(T entry)
+    {
+        lock (_gate)
+        {
+            var running = _running.FindIndex(held => held.SharesSlotWith(entry));
+            if (running >= 0)
+            {
+                _running.RemoveAt(running);
+                return true;
+            }
+            var waiting = _waiting.FindIndex(held => held.SharesSlotWith(entry));
             if (waiting < 0) return false;
             _waiting.RemoveAt(waiting);
             return true;
@@ -102,6 +141,8 @@ public readonly record struct GameMasterExpEvent(ushort ExpPercent, ushort TmPer
 {
     public const int Length = sizeof(ushort) * 2 + sizeof(long) * 2;
 
+    public bool SharesSlotWith(object other) => other is GameMasterExpEvent entry && entry.StartTime == StartTime && entry.EndTime == EndTime;
+
     public static bool TryRead(ReadOnlySpan<byte> body, out GameMasterExpEvent entry)
     {
         entry = default;
@@ -124,6 +165,8 @@ public readonly record struct GameMasterExpEvent(ushort ExpPercent, ushort TmPer
 public readonly record struct GameMasterAbilityEvent(byte Stat, ushort Percent, long StartTime, long EndTime) : IGameMasterTimedEvent
 {
     public const int Length = sizeof(byte) + sizeof(ushort) + sizeof(long) * 2;
+
+    public bool SharesSlotWith(object other) => other is GameMasterAbilityEvent entry && entry.Stat == Stat && entry.StartTime == StartTime && entry.EndTime == EndTime;
 
     public static bool TryRead(ReadOnlySpan<byte> body, out GameMasterAbilityEvent entry)
     {
@@ -332,14 +375,14 @@ public sealed class GameMasterRateControl
 
     public byte[] ReserveAbility(GameMasterAbilityEvent entry)
     {
-        Abilities.Reserve(entry);
+        Abilities.ReserveOrChange(entry);
         Persist();
         return GameMasterEventFrames.AbilityListBody(null, Abilities.Running, Abilities.Waiting);
     }
 
     public byte[] DeleteAbility(GameMasterAbilityEvent entry)
     {
-        if (Abilities.Delete(entry)) Persist();
+        if (Abilities.DeleteSlot(entry)) Persist();
         return GameMasterEventFrames.AbilityListBody(null, Abilities.Running, Abilities.Waiting);
     }
 
@@ -348,14 +391,14 @@ public sealed class GameMasterRateControl
 
     public byte[] ReserveExp(GameMasterExpEvent entry)
     {
-        Exp.Reserve(entry);
+        Exp.ReserveOrChange(entry);
         Persist();
         return GameMasterEventFrames.ExpListBody(null, null, Exp.Running, Exp.Waiting);
     }
 
     public byte[] DeleteExp(GameMasterExpEvent entry)
     {
-        if (Exp.Delete(entry)) Persist();
+        if (Exp.DeleteSlot(entry)) Persist();
         return GameMasterEventFrames.ExpListBody(null, Exp.Current, Exp.Running, Exp.Waiting);
     }
 

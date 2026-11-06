@@ -13,6 +13,7 @@ public sealed partial class NpcTables
     private readonly Lazy<IReadOnlyList<NpcActionScriptEntry>> _skillShopNpcActionScript;
     private readonly Lazy<IReadOnlyList<NpcMoveEntry>> _npcMoves;
     private readonly Lazy<IReadOnlyList<NpcTimerEntry>> _npcTimers;
+    private readonly Lazy<IReadOnlyList<QuestNpcMsgEntry>> _questNpcMessages;
     private readonly Lazy<IReadOnlyList<CharacterInfoEntry>> _characterInfo;
     private readonly Lazy<IReadOnlyList<TutorialSystemEntry>> _tutorialSystem;
 
@@ -27,6 +28,7 @@ public sealed partial class NpcTables
         _skillShopNpcActionScript = new Lazy<IReadOnlyList<NpcActionScriptEntry>>(reader.LoadSkillShopNpcActionScript);
         _npcMoves = new Lazy<IReadOnlyList<NpcMoveEntry>>(reader.LoadNpcMoves);
         _npcTimers = new Lazy<IReadOnlyList<NpcTimerEntry>>(reader.LoadNpcTimers);
+        _questNpcMessages = new Lazy<IReadOnlyList<QuestNpcMsgEntry>>(reader.LoadQuestNpcMessages);
         _characterInfo = new Lazy<IReadOnlyList<CharacterInfoEntry>>(reader.LoadCharacterInfo);
         _tutorialSystem = new Lazy<IReadOnlyList<TutorialSystemEntry>>(reader.LoadTutorialSystem);
     }
@@ -46,6 +48,8 @@ public sealed partial class NpcTables
     public IReadOnlyList<NpcTimerEntry> NpcTimers => _npcTimers.Value;
 
     public IReadOnlyDictionary<int, IReadOnlyList<(int MonsterId, int Count)>> NpcSummonSets(string tableName, int columns) => _reader.LoadNpcSummonSets(tableName, columns);
+
+    public IReadOnlyList<QuestNpcMsgEntry> QuestNpcMessages => _questNpcMessages.Value;
 
     public IReadOnlyList<CharacterInfoEntry> CharacterInfo => _characterInfo.Value;
 

@@ -26,7 +26,7 @@ public sealed class BossGiveItemRoller
         return monster.Atype != MonsterAType.DoppelGanger && Gives(monster.MonsterParamId);
     }
 
-    public int? Roll(int monsterId, Random rng)
+    public int? Roll(int monsterId, Random rng, Func<int, bool>? isDefined = null)
     {
         ArgumentNullException.ThrowIfNull(rng);
         if (!_byMonster.TryGetValue(monsterId, out var entry)) return null;
@@ -38,7 +38,9 @@ public sealed class BossGiveItemRoller
         foreach (var slot in slots)
         {
             reached += WeightOf(slot.Rate);
-            if (reached > pick) return slot.ItemId == 0 ? null : slot.ItemId;
+            if (reached <= pick) continue;
+            if (slot.ItemId == 0) return null;
+            return isDefined is null || isDefined(slot.ItemId) ? slot.ItemId : null;
         }
         return null;
     }

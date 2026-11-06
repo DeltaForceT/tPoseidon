@@ -15,7 +15,9 @@ public enum ThrowOutcome
 public static class ItemThrowRules
 {
     public const int BodySize = 18;
-    public const double LandingReach = 80.0;
+    public const float LandingReach = 80f;
+    public const float BackoffStep = 4f;
+    public const int CellSize = 16;
 
     public static bool TryRead(ReadOnlySpan<byte> body, out ItemThrow request)
     {
@@ -38,12 +40,41 @@ public static class ItemThrowRules
         return count == held.WeightUnits ? ThrowOutcome.WholeItem : ThrowOutcome.PartOfStack;
     }
 
-    public static (ushort X, ushort Y) Landing(ushort fromX, ushort fromY, short toX, short toY)
+    public static (ushort X, ushort Y) Landing(ushort fromX, ushort fromY, short toX, short toY, Func<int, int, bool> isCellOpen)
     {
-        var dx = (double)toX - fromX;
-        var dy = (double)toY - fromY;
-        return toX >= 0 && toY >= 0 && Math.Sqrt(dx * dx + dy * dy) <= LandingReach
-            ? ((ushort)toX, (ushort)toY)
-            : (fromX, fromY);
+        ArgumentNullException.ThrowIfNull(isCellOpen);
+        var dx = (float)(toX - fromX);
+        var dy = (float)(toY - fromY);
+        var distance = MathF.Sqrt(dx * dx + dy * dy);
+        var aimX = (int)toX;
+        var aimY = (int)toY;
+        if (LandingReach < distance)
+        {
+            var scale = LandingReach / distance;
+            dx *= scale;
+            dy *= scale;
+            aimX = fromX + (int)dx;
+            aimY = fromY + (int)dy;
+            distance = LandingReach;
+        }
+        if (IsOpen(aimX, aimY, isCellOpen)) return Pack(aimX, aimY, fromX, fromY);
+        var remaining = distance;
+        while (true)
+        {
+            remaining -= BackoffStep;
+            var fraction = remaining / distance;
+            if (remaining <= 0f || fraction <= 0f) return (fromX, fromY);
+            aimX = fromX + (int)(dx * fraction);
+            aimY = fromY + (int)(dy * fraction);
+            if (IsOpen(aimX, aimY, isCellOpen)) return Pack(aimX, aimY, fromX, fromY);
+        }
     }
+
+    private static bool IsOpen(int x, int y, Func<int, int, bool> isCellOpen)
+        => isCellOpen(x / CellSize, y / CellSize);
+
+    private static (ushort X, ushort Y) Pack(int x, int y, ushort fallbackX, ushort fallbackY)
+        => x is >= 0 and <= ushort.MaxValue && y is >= 0 and <= ushort.MaxValue
+            ? ((ushort)x, (ushort)y)
+            : (fallbackX, fallbackY);
 }

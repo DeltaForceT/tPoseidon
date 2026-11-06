@@ -44,6 +44,7 @@ public static class EnterWorldBatchSynthesizer
         uint profileFlags = tPoseidon.Core.Game.Progression.ProfileViewRules.DefaultFlags,
         byte[]? bossKillWindow = null,
         byte[]? coverLetter = null,
+        AngelResult? angel = null,
         uint gameClock = 0,
         CancellationToken ct = default)
     {
@@ -51,7 +52,7 @@ public static class EnterWorldBatchSynthesizer
         await SendPhase2Async(
             ctx, character, entityId, dialogService,
             worldEntities, characterInfoCatalog,
-            monsterProvider, itemStore, rates, shops, skillShops, inView, activation, gameClock, ct).ConfigureAwait(false);
+            monsterProvider, itemStore, rates, shops, skillShops, inView, activation, angel, gameClock, ct).ConfigureAwait(false);
     }
 
     public static async Task SendPhase1Async(
@@ -136,6 +137,9 @@ public static class EnterWorldBatchSynthesizer
         await SendFrameAsync(ctx, Opcode.S2C_PROFILE_COVER_LETTER, randKey: 0xB1, coverLetter ?? ListCountPacket.Empty.EncodePayload(), ct);
     }
 
+    private static bool AngelWingOf(AngelResult? angel) =>
+        angel is not null && tPoseidon.Core.Game.Angel.AngelRules.WingActive(angel.LatestGraduation, DateTimeOffset.UtcNow);
+
     public static async Task SendPhase2Async(
         S2SessionContext ctx,
         Character character,
@@ -150,6 +154,7 @@ public static class EnterWorldBatchSynthesizer
         SkillShopManager? skillShops = null,
         Func<int, int, bool>? inView = null,
         NpcActivation? activation = null,
+        AngelResult? angel = null,
         uint gameClock = 0,
         CancellationToken ct = default)
     {
@@ -158,7 +163,7 @@ public static class EnterWorldBatchSynthesizer
         ArgumentNullException.ThrowIfNull(dialogService);
         inView ??= EverywhereInView;
 
-        await SendFrameAsync(ctx, Opcode.S2C_OP_2E29_TBD, randKey: 0x3B, AngelPairingStatusPacket.NoPairing.EncodePayload(), ct);
+        await SendFrameAsync(ctx, Opcode.S2C_OP_2E29_TBD, randKey: 0x3B, AngelWingPacket.Of(angel, DateTimeOffset.UtcNow).EncodePayload(), ct);
 
         if (worldEntities is not null && characterInfoCatalog is not null)
         {
@@ -175,7 +180,7 @@ public static class EnterWorldBatchSynthesizer
 
         _ = monsterProvider;
 
-        var playerSpawn = Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(character, entityId, itemStore);
+        var playerSpawn = Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(character, entityId, itemStore, null, angelWing: AngelWingOf(angel));
         await SendFrameAsync(ctx, Opcode.PLAYER_SPAWN_LOGIN, randKey: 0x11, playerSpawn.EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_UNK_135, randKey: 0x28, EmptyPacket.EncodePayload(), ct);
@@ -419,6 +424,7 @@ public static class EnterWorldBatchSynthesizer
         Func<int, int, bool>? inView = null,
         NpcActivation? activation = null,
         uint entityFlags = Kr2014.Wire.PlayerSpawnLoginPacket.DefaultEntityFlags,
+        AngelResult? angel = null,
         uint gameClock = 0,
         CancellationToken ct = default)
     {
@@ -430,7 +436,9 @@ public static class EnterWorldBatchSynthesizer
         };
         await SendFrameAsync(ctx, Opcode.GAME_PLAYER_SPAWN_POSITION, randKey: 0xC8, spawnPos.EncodePayload(), ct);
 
-        var playerSpawn = Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(character, entityId, itemStore, null, entityFlags: entityFlags);
+        await SendFrameAsync(ctx, Opcode.S2C_OP_2E29_TBD, randKey: 0x3B, AngelWingPacket.Of(angel, DateTimeOffset.UtcNow).EncodePayload(), ct);
+
+        var playerSpawn = Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(character, entityId, itemStore, null, entityFlags: entityFlags, angelWing: AngelWingOf(angel));
         await SendFrameAsync(ctx, Opcode.S2C_PLAYER_SPAWN_POST_WARP, randKey: 0x11, playerSpawn.EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_PLAYER_PRESENCE_RESET, randKey: 0xCE, PlayerPresenceResetPacket.Zero.EncodePayload(), ct);

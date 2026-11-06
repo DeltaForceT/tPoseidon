@@ -84,7 +84,7 @@ public static class GmWorldPage
         var (expStart, expEnd, expTimes) = Schedule();
         var expSection = GmKit.Section(
             "EXP events",
-            "Every player gets the extra EXP and TM EXP percent from monsters, drilling and skills between start and end. To delete an event, enter the same four values.",
+            "Every player gets the extra EXP and TM EXP percent from monsters, drilling and skills between start and end. Planning an event with the same start and end as an existing one changes that event. To delete an event, enter its start and end.",
             GmKit.Line(GmKit.Field("Extra EXP %", exp), GmKit.Field("Extra TM EXP %", tm)),
             expTimes,
             GmKit.Line(

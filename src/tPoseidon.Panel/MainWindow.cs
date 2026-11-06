@@ -256,6 +256,12 @@ public sealed class MainWindow : Window
             language.Items.Add(choice.Item);
         }
 
+        var gameWindow = new MenuItem { Header = "Game window (Play)" };
+        foreach (var item in Tools.DisplayItems)
+        {
+            gameWindow.Items.Add(item);
+        }
+
         var guildCoins = new MenuItem { Header = "Guild coins per win..." };
         guildCoins.Click += (_, _) => Tools.EditGuildCoins();
         var characterSlots = new MenuItem { Header = "Character slots per account..." };
@@ -286,6 +292,7 @@ public sealed class MainWindow : Window
                 share,
                 launcherDrawer,
                 language,
+                gameWindow,
                 guildCoins,
                 characterSlots,
                 folder,
@@ -308,6 +315,8 @@ public sealed class MainWindow : Window
             characterSlots.IsEnabled = _host.IsSetUp;
             language.IsEnabled = _host.IsSetUp;
             Tools.MarkLanguages();
+            gameWindow.IsEnabled = _host.IsSetUp;
+            Tools.MarkDisplays();
             splash.IsEnabled = !_motion.Reduced;
         };
         menu.ContextMenu = contextMenu;

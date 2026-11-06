@@ -35,7 +35,7 @@ public static class GmPickers
                     text,
                     table.SelectedIndex > 0 ? ItemNames.Tables[table.SelectedIndex - 1] : null,
                     category.SelectedIndex > 0 ? ItemCategories.All[category.SelectedIndex - 1].Id : null)
-                .Select(item => new GmPick(Text(item.Id), $"{item.Name} · {item.Id} · {item.Table}", Icon(item.Definition))),
+                .Select(item => new GmPick(Text(item.Id), $"{item.Name} · {item.Id} · {item.Table}", Icon(item.Definition), () => catalog.DescribeItem(item))),
             true,
             GmKit.Field("Category", category),
             GmKit.Field("Game data table", table));
@@ -55,13 +55,13 @@ public static class GmPickers
             "items",
             "Item id",
             (catalog, text) => Camp()
-                ? catalog.FindCampItems(text).Select(item => new GmPick(Text(item.Id), $"{item.Name} · {item.Id} · My Camp", CampIcon(item)))
+                ? catalog.FindCampItems(text).Select(item => new GmPick(Text(item.Id), $"{item.Name} · {item.Id} · My Camp", CampIcon(item), () => ItemDetailBuilder.Build(item)))
                 : catalog
                     .FindItems(
                         text,
                         table.SelectedIndex > 0 ? ItemNames.Tables[table.SelectedIndex - 1] : null,
                         category.SelectedIndex > 0 ? ItemCategories.All[category.SelectedIndex - 1].Id : null)
-                    .Select(item => new GmPick(Text(item.Id), $"{item.Name} · {item.Id} · {item.Table}", Icon(item.Definition))),
+                    .Select(item => new GmPick(Text(item.Id), $"{item.Name} · {item.Id} · {item.Table}", Icon(item.Definition), () => catalog.DescribeItem(item))),
             true,
             GmKit.Field("Category", category),
             GmKit.Field("Game data table", table));

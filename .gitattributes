@@ -16,3 +16,5 @@
 *.bat        text eol=crlf
 
 *.sh         text eol=lf
+CHANGELOG.md merge=union
+progress.md merge=union

@@ -104,13 +104,14 @@ public sealed class MonsterManager : IMonsterEntityProvider
             IsBoss = isBoss,
             Atype = atype,
             AiViewRange = def.AiViewRange,
+            HpRecoveryAmount = MonsterNaturalRecovery.Amounts(MonsterNaturalRecovery.SpawnFType, def.HpRegen, def.MpRegen).Hp,
             DamageLimit = _damageLimit,
             DamageObserver = _damageObserver,
         };
         entity.InitHp(maxHp);
         entity.InitPosition(x, y);
         entity.InitSpeed(ClientSpeed.Drawn(def.WalkSpeed));
-        if (atype is MonsterAType.BossMonster or MonsterAType.DoppelGanger && BossLives.TryGetValue(monsterParamId, out var bossProfile))
+        if (HasBossLives(atype) && BossLives.TryGetValue(monsterParamId, out var bossProfile))
         {
             entity.AttachBoss(bossProfile, BossEvents, BossElements.CodeOf);
         }
@@ -126,6 +127,10 @@ public sealed class MonsterManager : IMonsterEntityProvider
         MonsterSpawned?.Invoke(entity);
         return entity;
     }
+
+    public static bool HasBossLives(MonsterAType atype) =>
+        atype is MonsterAType.BossMonster or MonsterAType.DoppelGanger
+            or MonsterAType.NonresidentBossMonster or MonsterAType.LowHarconAttackBosMonster;
 
     public IMonsterStrategy? GetStrategy(ushort entityId) =>
         _strategyByEntityId.TryGetValue(entityId, out var s) ? s : null;

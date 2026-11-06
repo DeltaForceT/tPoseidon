@@ -5,10 +5,16 @@ namespace tPoseidon.Core.Data.Postgres;
 public sealed class PostgresQuestHistoryStore : IQuestHistoryStore
 {
     private readonly NpgsqlDataSource _dataSource;
+    private readonly TimeZoneInfo _dayZone;
 
-    public PostgresQuestHistoryStore(NpgsqlDataSource dataSource)
+    public PostgresQuestHistoryStore(NpgsqlDataSource dataSource) : this(dataSource, TimeZoneInfo.Local)
+    {
+    }
+
+    public PostgresQuestHistoryStore(NpgsqlDataSource dataSource, TimeZoneInfo dayZone)
     {
         _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+        _dayZone = dayZone ?? throw new ArgumentNullException(nameof(dayZone));
     }
 
     public QuestHistory? Find(ulong characterId, byte questType, int questId, int monsterId)
@@ -129,14 +135,17 @@ public sealed class PostgresQuestHistoryStore : IQuestHistoryStore
               AND quest_type = @quest_type
               AND quest_id = @quest_id
               AND monster_id = @monster_id
-              AND DATE(quest_completed_date AT TIME ZONE 'UTC') = @ref_date
+              AND quest_completed_date >= @day_start
+              AND quest_completed_date < @day_end
             """,
             conn);
         cmd.Parameters.AddWithValue("char_uid", unchecked((long)characterId));
         cmd.Parameters.AddWithValue("quest_type", (short)questType);
         cmd.Parameters.AddWithValue("quest_id", questId);
         cmd.Parameters.AddWithValue("monster_id", monsterId);
-        cmd.Parameters.AddWithValue("ref_date", referenceUtc.Date);
+        var (dayStart, dayEnd) = QuestDay.Bounds(referenceUtc, _dayZone);
+        cmd.Parameters.AddWithValue("day_start", NpgsqlTypes.NpgsqlDbType.TimestampTz, dayStart);
+        cmd.Parameters.AddWithValue("day_end", NpgsqlTypes.NpgsqlDbType.TimestampTz, dayEnd);
         using var reader = cmd.ExecuteReader();
         return reader.Read();
     }

@@ -1,5 +1,6 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
+using tPoseidon.Core.Game.Notices;
 using tPoseidon.Core.Game.Quests;
 using tPoseidon.Core.Game.SoulSeed;
 using tPoseidon.Core.InterServer;
@@ -13,6 +14,8 @@ internal sealed class SoulSeedController
     private readonly IItemStore _items;
     private readonly Func<SoulSeedTables> _tables;
     private readonly Func<InGameSessionState, CancellationToken, Task> _showGuardians;
+    private readonly Func<ServerNoticeTexts> _notices;
+    private readonly MasterSystemNotice _announce;
     private readonly string _logTag;
     private readonly Random _rng = new();
     private readonly object _rngGate = new();
@@ -23,6 +26,8 @@ internal sealed class SoulSeedController
         IItemStore items,
         Func<SoulSeedTables> tables,
         Func<InGameSessionState, CancellationToken, Task> showGuardians,
+        Func<ServerNoticeTexts> notices,
+        MasterSystemNotice announce,
         string logTag)
     {
         _master = master ?? throw new ArgumentNullException(nameof(master));
@@ -30,6 +35,8 @@ internal sealed class SoulSeedController
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _tables = tables ?? throw new ArgumentNullException(nameof(tables));
         _showGuardians = showGuardians ?? throw new ArgumentNullException(nameof(showGuardians));
+        _notices = notices ?? throw new ArgumentNullException(nameof(notices));
+        _announce = announce ?? throw new ArgumentNullException(nameof(announce));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
 
@@ -230,6 +237,10 @@ internal sealed class SoulSeedController
             player.Guardians = await _guardians.LoadAsync(awakening.CharacterId, CancellationToken.None).ConfigureAwait(false);
             await _showGuardians(player, CancellationToken.None).ConfigureAwait(false);
             Console.WriteLine($"{_logTag} [awaken] 0x{player.PlayerEntityId:X4} guardian {awakened.GuardianUid} ({awakening.Name}) in slot {awakened.SlotNum}");
+            if (player.Character is { } awakener && _notices().Awakened((byte)awakened.SlotNum, awakener.Name) is { } notice)
+            {
+                await _announce.SendAsync(notice, CancellationToken.None).ConfigureAwait(false);
+            }
         }
         finally
         {

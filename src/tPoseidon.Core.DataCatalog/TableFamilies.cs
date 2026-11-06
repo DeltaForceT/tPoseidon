@@ -27,6 +27,8 @@ public static class TableFamilies
         ("Shop", "Shops"),
         ("Skill", "Skills"),
         ("ESAII_", "Skills"),
+        ("ESAll_", "Skills"),
+        ("ESActoin_", "Skills"),
         ("ESAction_", "Skills"),
         ("ScenarioQuest", "Quests"),
         ("Quest", "Quests"),

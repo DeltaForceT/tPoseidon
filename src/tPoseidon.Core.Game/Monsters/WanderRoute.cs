@@ -6,23 +6,15 @@ public readonly record struct RouteLeg(int FromX, int FromY, int ToX, int ToY, d
 
 public sealed record WanderRoute(int DestinationX, int DestinationY, double Length, IReadOnlyList<(int X, int Y)> Points)
 {
-    public const int SearchNodeLimit = 4096;
     public const int MaxWaypoints = 128;
     public const int FreeDestinationRadius = 24;
+    public const int BlockedStartRadius = 32;
     public const int FreeDestinationCandidates = 6;
 
-    private const int StraightStepCost = 2;
-    private const int DiagonalStepCost = 3;
     private const int HeuristicWeight = 2;
 
     private const int ReplacementColumnOffset = 1;
     private static readonly int[] ReplacementRowOffsets = { 0, 1, -1, 2, -2, 3 };
-
-    private static readonly (int X, int Y)[] Neighbours =
-    {
-        (1, 0), (-1, 0), (0, 1), (0, -1),
-        (1, 1), (1, -1), (-1, 1), (-1, -1),
-    };
 
     public static WanderRoute? Find(ZoneGeometry geometry, int fromX, int fromY, int toX, int toY) =>
         Route(geometry, fromX, fromY, toX, toY, keepsPoint: false, nearestFree: false);
@@ -154,6 +146,7 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
 
         if (!geometry.ContainsCell(startX, startY)) return null;
         if (!geometry.ContainsCell(goalX, goalY)) return null;
+        if (geometry.IsBlocked(startX, startY)) return PlanFromBlockedStart(geometry, startX, startY, toX, toY, keepsPoint, nearestFree);
         var goalIsFree = geometry.IsFreeDestination(goalX, goalY);
         if (startX == goalX && startY == goalY)
         {
@@ -206,6 +199,58 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
         var destinationX = keepsPoint && goalIsFree ? toX : ZoneGeometry.CentreOf(goalX);
         var destinationY = keepsPoint && goalIsFree ? toY : ZoneGeometry.CentreOf(goalY);
         return new RoutePlan(cells, destinationX, destinationY);
+    }
+
+    private static RoutePlan? PlanFromBlockedStart(ZoneGeometry geometry, int startX, int startY, int toX, int toY, bool keepsPoint, bool nearestFree)
+    {
+        if (NearestFreeCell(geometry, startX, startY) is not { } exit) return null;
+        var escape = StraightCells(startX, startY, exit.X, exit.Y);
+        var exitCentreX = ZoneGeometry.CentreOf(exit.X);
+        var exitCentreY = ZoneGeometry.CentreOf(exit.Y);
+        if (exit.X == ZoneGeometry.CellOf(toX) && exit.Y == ZoneGeometry.CellOf(toY))
+        {
+            return new RoutePlan(escape, exitCentreX, exitCentreY);
+        }
+        if (Plan(geometry, exitCentreX, exitCentreY, toX, toY, keepsPoint, nearestFree) is not { } onward) return null;
+        var cells = new List<(int X, int Y)>(escape);
+        cells.AddRange(onward.Cells.Skip(1));
+        return cells.Count - 1 > MaxWaypoints ? null : new RoutePlan(cells, onward.DestinationX, onward.DestinationY);
+    }
+
+    private static (int X, int Y)? NearestFreeCell(ZoneGeometry geometry, int cellX, int cellY)
+    {
+        for (var radius = 1; radius <= BlockedStartRadius; radius++)
+        {
+            (int X, int Y)? best = null;
+            long bestDistance = long.MaxValue;
+            for (var offsetY = -radius; offsetY <= radius; offsetY++)
+            {
+                for (var offsetX = -radius; offsetX <= radius; offsetX++)
+                {
+                    if (Math.Max(Math.Abs(offsetX), Math.Abs(offsetY)) != radius) continue;
+                    var candidateX = cellX + offsetX;
+                    var candidateY = cellY + offsetY;
+                    if (!geometry.ContainsCell(candidateX, candidateY) || !geometry.IsFreeDestination(candidateX, candidateY)) continue;
+                    var distance = SquaredCellDistance((candidateX, candidateY), cellX, cellY);
+                    if (distance >= bestDistance) continue;
+                    best = (candidateX, candidateY);
+                    bestDistance = distance;
+                }
+            }
+            if (best is not null) return best;
+        }
+        return null;
+    }
+
+    private static List<(int X, int Y)> StraightCells(int fromX, int fromY, int toX, int toY)
+    {
+        var steps = Math.Max(Math.Abs(toX - fromX), Math.Abs(toY - fromY));
+        var cells = new List<(int X, int Y)>(steps + 1) { (fromX, fromY) };
+        for (var step = 1; step <= steps; step++)
+        {
+            cells.Add((fromX + (int)Math.Round((double)(toX - fromX) * step / steps), fromY + (int)Math.Round((double)(toY - fromY) * step / steps)));
+        }
+        return cells;
     }
 
     private static bool Closed(ZoneGeometry geometry, int cellX, int cellY) =>
@@ -290,61 +335,147 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
         return dx * dx + dy * dy;
     }
 
+    public const int NodePoolSize = 256;
+    private const int PlainCellCost = 2;
+    private const int ReservedCellCost = 3;
+    private const int TurnCost = 1;
+
+    private sealed class SearchNode
+    {
+        public int Cell;
+        public int X;
+        public int Y;
+        public SearchNode? Parent;
+        public int G;
+        public int H;
+        public int F;
+        public bool Closed;
+        public readonly List<SearchNode> Children = new(8);
+    }
+
     private static List<(int X, int Y)>? Search(ZoneGeometry geometry, int startX, int startY, int goalX, int goalY)
     {
         var width = geometry.CellsX;
-        var start = startY * width + startX;
         var goal = goalY * width + goalX;
+        var nodes = new Dictionary<int, SearchNode>();
+        var open = new List<SearchNode>();
 
-        var open = new PriorityQueue<int, int>();
-        var costTo = new Dictionary<int, int> { [start] = 0 };
-        var cameFrom = new Dictionary<int, int>();
-        var closed = new HashSet<int>();
-        open.Enqueue(start, Heuristic(startX, startY, goalX, goalY));
-
-        while (open.TryDequeue(out var current, out _))
+        var start = new SearchNode
         {
-            if (current == goal) return Rebuild(cameFrom, start, goal, width);
-            if (!closed.Add(current)) continue;
-            if (closed.Count > SearchNodeLimit) return null;
+            Cell = startY * width + startX,
+            X = startX,
+            Y = startY,
+            H = Heuristic(startX, startY, goalX, goalY),
+        };
+        start.F = start.H;
+        nodes[start.Cell] = start;
+        open.Add(start);
 
-            var currentX = current % width;
-            var currentY = current / width;
-            foreach (var (stepX, stepY) in Neighbours)
+        while (open.Count > 0)
+        {
+            var current = open[0];
+            open.RemoveAt(0);
+            current.Closed = true;
+            if (current.Cell == goal) return Rebuild(current, width);
+
+            for (var stepX = -1; stepX <= 1; stepX++)
             {
-                var nextX = currentX + stepX;
-                var nextY = currentY + stepY;
-                if (!geometry.ContainsCell(nextX, nextY)) continue;
-                if (geometry.IsBlocked(nextX, nextY)) continue;
-
-                var diagonal = stepX != 0 && stepY != 0;
-                var next = nextY * width + nextX;
-                if (closed.Contains(next)) continue;
-
-                var cost = costTo[current] + (diagonal ? DiagonalStepCost : StraightStepCost);
-                if (costTo.TryGetValue(next, out var known) && known <= cost) continue;
-
-                costTo[next] = cost;
-                cameFrom[next] = current;
-                open.Enqueue(next, cost + Heuristic(nextX, nextY, goalX, goalY));
+                for (var stepY = -1; stepY <= 1; stepY++)
+                {
+                    if (stepX == 0 && stepY == 0) continue;
+                    var nextX = current.X + stepX;
+                    var nextY = current.Y + stepY;
+                    if (!geometry.ContainsCell(nextX, nextY) || geometry.IsBlocked(nextX, nextY)) continue;
+                    if (nodes.Count >= NodePoolSize) return null;
+                    Relax(geometry, nodes, open, current, nextX, nextY, goalX, goalY);
+                }
             }
         }
         return null;
     }
 
+    private static void Relax(
+        ZoneGeometry geometry,
+        Dictionary<int, SearchNode> nodes,
+        List<SearchNode> open,
+        SearchNode current,
+        int nextX,
+        int nextY,
+        int goalX,
+        int goalY)
+    {
+        var cell = nextY * geometry.CellsX + nextX;
+        var g = StepCost(geometry, current, cell, nextX, nextY) + current.G;
+        if (nodes.TryGetValue(cell, out var known))
+        {
+            current.Children.Add(known);
+            if (g >= known.G) return;
+            known.Parent = current;
+            known.G = g;
+            known.F = g + known.H;
+            if (known.Closed) Propagate(geometry, known);
+            return;
+        }
+
+        var created = new SearchNode
+        {
+            Cell = cell,
+            X = nextX,
+            Y = nextY,
+            Parent = current,
+            G = g,
+            H = Heuristic(nextX, nextY, goalX, goalY),
+        };
+        created.F = created.G + created.H;
+        nodes[cell] = created;
+        var at = 0;
+        while (at < open.Count && created.F > open[at].F) at++;
+        open.Insert(at, created);
+        current.Children.Add(created);
+    }
+
+    private static int StepCost(ZoneGeometry geometry, SearchNode from, int toCell, int toX, int toY)
+    {
+        var cost = geometry.AttributeAt(toX, toY) == 0 ? PlainCellCost : ReservedCellCost;
+        if (from.Parent is { } before && before.Cell - from.Cell != from.Cell - toCell) cost += TurnCost;
+        return cost;
+    }
+
+    private static void Propagate(ZoneGeometry geometry, SearchNode changed)
+    {
+        foreach (var child in changed.Children)
+        {
+            if (changed.G + 1 >= child.G) continue;
+            child.G = changed.G + 1;
+            child.F = child.G + child.H;
+            child.Parent = changed;
+        }
+        var pending = new Stack<SearchNode>();
+        foreach (var child in changed.Children)
+        {
+            if (child.Parent == changed) pending.Push(child);
+        }
+        while (pending.Count > 0)
+        {
+            var node = pending.Pop();
+            foreach (var child in node.Children)
+            {
+                if (node.G + 1 >= child.G) continue;
+                child.G = StepCost(geometry, node, child.Cell, child.X, child.Y) + node.G;
+                child.F = child.G + child.H;
+                child.Parent = node;
+                pending.Push(child);
+            }
+        }
+    }
+
     private static int Heuristic(int cellX, int cellY, int goalX, int goalY)
         => (Math.Abs(cellX - goalX) + Math.Abs(cellY - goalY)) * HeuristicWeight;
 
-    private static List<(int X, int Y)> Rebuild(Dictionary<int, int> cameFrom, int start, int goal, int width)
+    private static List<(int X, int Y)> Rebuild(SearchNode goal, int width)
     {
         var cells = new List<(int X, int Y)>();
-        var node = goal;
-        while (true)
-        {
-            cells.Add((node % width, node / width));
-            if (node == start) break;
-            node = cameFrom[node];
-        }
+        for (var node = goal; node is not null; node = node.Parent) cells.Add((node.Cell % width, node.Cell / width));
         cells.Reverse();
         return cells;
     }

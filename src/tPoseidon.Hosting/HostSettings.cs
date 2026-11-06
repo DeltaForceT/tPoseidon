@@ -94,6 +94,14 @@ public sealed class HostSettings
                 null);
         }
 
+        if (settings.Launch.Display is { IsOffered: false } display)
+        {
+            throw new HostingException(
+                $"{paths.SettingsFile} has a game window of {display.Resolution.Label}, which the client does not offer.",
+                "Use 800 x 600 or 1024 x 768, or remove the \"display\" line to keep the client's own setting.",
+                null);
+        }
+
         if (!CharacterSlotRules.IsValid(settings.CharacterSlots))
         {
             throw new HostingException(
@@ -189,6 +197,8 @@ public sealed class ClientLaunchSettings
     public string ServiceName { get; set; } = ClientFolder.AutomaticService;
 
     public string Account { get; set; } = "";
+
+    public ClientDisplay? Display { get; set; }
 
     public string ServerDescription { get; set; } = "desc";
 

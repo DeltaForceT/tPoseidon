@@ -21,6 +21,7 @@ public sealed record NpcScriptCatalogs
     public required IMonsterQuestInfoLookup MonsterQuests { get; init; }
     public required IMonsterQuestResultTables MonsterQuestResults { get; init; }
     public IRandomResultTables RandomResults { get; init; } = InMemoryRandomResultLookup.Empty;
+    public IReadOnlyDictionary<int, PreCheckInfoEntry> PreChecks { get; init; } = new Dictionary<int, PreCheckInfoEntry>();
     public IMonsterQuestResultTables PartyQuestResults { get; init; } = new InMemoryMonsterQuestResultLookup(Array.Empty<MonsterQuestResultEntry>());
     public required INpcMsgLookup NpcMessages { get; init; }
     public required IItemParamLookup Items { get; init; }
@@ -1708,21 +1709,39 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         var argument = talk.PreCheckArg;
         if (talk.PreCheckType == NpcGreeting.Always) return 0;
         if (argument == 0) return talk.PreCheckNo;
-        bool? passed = talk.PreCheckType switch
-        {
-            NpcGreeting.QuestDone => HistoryCount(characterId, QuestTypes.Normal, argument) >= 1,
-            NpcGreeting.QuestActive => IsNormalListActive(argument),
-            NpcGreeting.ItemHeld => _stores.Items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory).Any(item => item.ItemIndex == argument),
-            NpcGreeting.ScenarioQuestDone => HistoryCount(characterId, QuestTypes.Scenario, argument) >= 1,
-            NpcGreeting.ScenarioQuestActive => QuestOf(argument, QuestTypes.Scenario) is not null && IsActive(QuestTypes.Scenario, argument),
-            _ => null,
-        };
+        if (talk.PreCheckType == NpcPreCheck.GreetingMultiCheck) return MultiCheckIndex(characterId, argument);
+        bool? passed = GreetingHolds(characterId, talk.PreCheckType, argument);
         if (passed is null)
         {
             Console.WriteLine($"{_logTag} {_ctx.Remote}   greeting pre-check {talk.PreCheckType} is not implemented; message {talk.PreCheckNo} used");
             return talk.PreCheckNo;
         }
         return passed.Value ? talk.PreCheckYes : talk.PreCheckNo;
+    }
+
+    private bool? GreetingHolds(ulong characterId, int type, int argument) => type switch
+    {
+        NpcGreeting.QuestDone => HistoryCount(characterId, QuestTypes.Normal, argument) >= 1,
+        NpcGreeting.QuestActive => IsNormalListActive(argument),
+        NpcGreeting.ItemHeld => _stores.Items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory).Any(item => item.ItemIndex == argument),
+        NpcGreeting.ScenarioQuestDone => HistoryCount(characterId, QuestTypes.Scenario, argument) >= 1,
+        NpcGreeting.ScenarioQuestActive => QuestOf(argument, QuestTypes.Scenario) is not null && IsActive(QuestTypes.Scenario, argument),
+        _ => null,
+    };
+
+    private int MultiCheckIndex(ulong characterId, int checkId)
+    {
+        if (!_catalogs.PreChecks.TryGetValue(checkId, out var entry))
+        {
+            Console.WriteLine($"{_logTag} {_ctx.Remote}   PreCheckInfo row {checkId} does not exist; message 0 used");
+            return 0;
+        }
+        return NpcPreCheck.Evaluate(entry, clause =>
+        {
+            if (GreetingHolds(characterId, clause.Type, clause.Argument) is { } held) return held;
+            Console.WriteLine($"{_logTag} {_ctx.Remote}   PreCheckInfo row {checkId} clause type {clause.Type} is not implemented; it does not hold");
+            return false;
+        });
     }
 
     private bool HoldsRequiredItems(ulong characterId, QuestInfoEntry quest, byte type)

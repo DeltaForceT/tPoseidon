@@ -469,6 +469,7 @@ public sealed class LauncherModel
         try
         {
             await _tickets.RequestAsync(server.TicketEndpoint(ShopPort), _settings.Account, _password, ct).ConfigureAwait(true);
+            ApplyDisplay();
             var target = _client.Start(Launch(server));
             Notice = new LauncherNotice(BannerKind.Success, "Started", $"The game client is starting and connecting to {target}.");
             started = true;
@@ -536,6 +537,8 @@ public sealed class LauncherModel
         try
         {
             store.Save(SetupProfile(), setup);
+            _settings.Display = new ClientDisplay(setup.Width, setup.Height, setup.FullScreen);
+            Save();
             Notice = new LauncherNotice(BannerKind.Success, "Options saved", "They apply the next time the game starts.");
             return true;
         }
@@ -547,6 +550,46 @@ public sealed class LauncherModel
         finally
         {
             Changed?.Invoke();
+        }
+    }
+
+    public bool DisplayAvailable => _setupStore is not null && ClientCheck.Ok;
+
+    public ClientDisplay CurrentDisplay()
+    {
+        if (_settings.Display is { } chosen)
+        {
+            return chosen;
+        }
+
+        if (_setupStore is null || !ClientCheck.Ok)
+        {
+            return ClientDisplay.Default;
+        }
+
+        try
+        {
+            return _setupStore.ReadDisplay(SetupProfile());
+        }
+        catch (HostingException ex)
+        {
+            Notice = LauncherNotice.From(ex);
+            return ClientDisplay.Default;
+        }
+    }
+
+    public void ChooseDisplay(ClientDisplay display)
+    {
+        ArgumentNullException.ThrowIfNull(display);
+        _settings.Display = ClientDisplay.Validated(display);
+        Save();
+    }
+
+    private void ApplyDisplay()
+    {
+        if (_setupStore is { } store && _settings.Display is { } display)
+        {
+            store.SaveDisplay(SetupProfile(), display);
         }
     }
 

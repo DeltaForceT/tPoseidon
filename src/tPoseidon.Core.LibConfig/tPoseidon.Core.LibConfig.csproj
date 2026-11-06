@@ -10,4 +10,9 @@
     <ProjectReference Include="..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Supplement\ReferencedTables.json" LogicalName="ReferencedTables.json" />
+    <EmbeddedResource Include="Supplement\ReferencedRows.json" LogicalName="ReferencedRows.json" />
+  </ItemGroup>
+
 </Project>

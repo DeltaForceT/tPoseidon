@@ -20,7 +20,7 @@ public sealed class ClientScanner
     public static ClientScanner Create(ClientPatchCatalog? catalog = null, IReadOnlyList<LibConfigRowFix>? rowFixes = null)
     {
         var patches = catalog ?? ClientPatchCatalog.Default;
-        var rows = rowFixes ?? [LibConfigRowFix.ShadowSanctuary, LibConfigRowFix.ReferencedMaps];
+        var rows = rowFixes ?? [LibConfigRowFix.ShadowSanctuary, LibConfigRowFix.ReferencedMaps, LibConfigRowFix.ReferencedItems, LibConfigRowFix.MissingTables];
         return new ClientScanner(
             [new ClientProgramCheck(), new ClientDataFilesCheck(), new ClientAddressCheck(), new ClientRegistryCheck(), new ClientRowsCheck(rows), new ClientWorldCheck(patches, rows), new ClientRunningCheck()],
             new IClientFix[] { new LibConfigFilesFix(), new AddressPatchFix() }.Concat(rows).Append(new Md3PointsFix(patches)));

@@ -50,6 +50,8 @@ public static class MonsterSkills
     public const int StunnedCondition = 0xF;
     public const int ParalysedCondition = 0x10;
     public const int FrozenCondition = 1;
+    public const int BoundCondition = 0xA;
+    public const int MovementBlockingCondition = 1;
     public const int SkillBlockingCondition = 8;
     public const int ItemBlockingCondition = 4;
     private const int ChargingDistanceBase = 40;
@@ -109,7 +111,8 @@ public static class MonsterSkills
         actionId is Heal or ChainArrow or MagicRing or FireBreath or ThunderBreath or SharpBrandish or Thunderbolt or WindSlash or Siren
             or DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
             or Destruction or Vampiric or Poison or Charging or Warp or MagicStorm or EarthDivide or Guard
-        || SingleMagic.ContainsKey(actionId) || HarconSkills.IsHarcon(actionId);
+        || SingleMagic.ContainsKey(actionId) || HarconSkills.IsHarcon(actionId)
+        || SkillAreaShapes.Find(actionId) is not null || SkillHitShapes.Find(actionId) is { NeedsGun: false };
 
     public static bool IsObject(int actionId) =>
         actionId is DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
@@ -119,6 +122,8 @@ public static class MonsterSkills
         WireLimits.Saturate(unchecked((pushed + ChargingDistanceBase) * casterHp) * (double)ratio / ChargingDivisor);
 
     public static bool BlocksSkill(int condition, int skillId) => (condition & SkillBlockingCondition) != 0 && skillId != StunCancelSkill;
+
+    public static bool BlocksMovement(int condition) => (condition & MovementBlockingCondition) != 0;
 
     public static bool BlocksItems(int condition) => (condition & ItemBlockingCondition) != 0;
 

@@ -1,6 +1,7 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Characters;
 using tPoseidon.Core.Game.Posture;
+using tPoseidon.Core.Game.Skills;
 using tPoseidon.Core.Net.World;
 
 internal sealed class DisguiseController
@@ -8,6 +9,7 @@ internal sealed class DisguiseController
     private readonly Func<IReadOnlyDictionary<int, int>> _kits;
     private readonly Func<InGameSessionState, bool> _otherForm;
     private readonly Func<InGameSessionState, Opcode, byte[], Task> _sendToArea;
+    private readonly Func<InGameSessionState, byte[]> _appearance;
     private readonly string _logTag;
     private readonly Random _rng = new();
     private readonly object _rngGate = new();
@@ -16,11 +18,13 @@ internal sealed class DisguiseController
         Func<IReadOnlyDictionary<int, int>> kits,
         Func<InGameSessionState, bool> otherForm,
         Func<InGameSessionState, Opcode, byte[], Task> sendToArea,
+        Func<InGameSessionState, byte[]> appearance,
         string logTag)
     {
         _kits = kits ?? throw new ArgumentNullException(nameof(kits));
         _otherForm = otherForm ?? throw new ArgumentNullException(nameof(otherForm));
         _sendToArea = sendToArea ?? throw new ArgumentNullException(nameof(sendToArea));
+        _appearance = appearance ?? throw new ArgumentNullException(nameof(appearance));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
 
@@ -28,6 +32,13 @@ internal sealed class DisguiseController
     {
         ArgumentNullException.ThrowIfNull(player);
         return player.Disguise.Disguised ? BodyForm.Disguised : _otherForm(player) ? BodyForm.Other : BodyForm.Normal;
+    }
+
+    public static int FormFlagOf(InGameSessionState player)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        var morph = player.Effects.Snapshot().Where(held => held.IsApplied).Select(held => held.Kind.Morph).FirstOrDefault(rule => rule != MorphRule.None);
+        return FormSkills.FormFlagOf(player.Disguise.Disguised, morph);
     }
 
     public byte? DigRefusal(InGameSessionState player)
@@ -62,6 +73,7 @@ internal sealed class DisguiseController
             return;
         }
         await _sendToArea(player, Opcode.S2C_DISGUISE_REMOVED, DisguiseFrames.Removed(player.PlayerEntityId, DisguiseRules.RemovedByRequest)).ConfigureAwait(false);
+        await _sendToArea(player, (Opcode)SkillShopFrames.AppearanceChanged, _appearance(player)).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [disguise] 0x{player.PlayerEntityId:X4} disguise removed");
     }
 
@@ -83,6 +95,7 @@ internal sealed class DisguiseController
         ArgumentNullException.ThrowIfNull(player);
         if (!player.Disguise.WearsDress || !player.Disguise.Remove(player.PlayerLookType)) return;
         await _sendToArea(player, Opcode.S2C_DISGUISE_REMOVED, DisguiseFrames.Removed(player.PlayerEntityId, DisguiseRules.RemovedByCostumeEnd)).ConfigureAwait(false);
+        await _sendToArea(player, (Opcode)SkillShopFrames.AppearanceChanged, _appearance(player)).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [disguise] 0x{player.PlayerEntityId:X4} wedding dress removed");
     }
 

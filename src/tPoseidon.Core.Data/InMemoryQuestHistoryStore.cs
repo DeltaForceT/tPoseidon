@@ -6,9 +6,19 @@ public sealed class InMemoryQuestHistoryStore : IQuestHistoryStore
 {
     private readonly record struct HistoryKey(ulong CharacterId, byte QuestType, int QuestId, int MonsterId);
 
+    private readonly TimeZoneInfo _dayZone;
     private readonly ConcurrentDictionary<HistoryKey, QuestHistory> _history = new();
     private readonly object _logSync = new();
     private readonly List<QuestHistory> _log = new();
+
+    public InMemoryQuestHistoryStore() : this(TimeZoneInfo.Local)
+    {
+    }
+
+    public InMemoryQuestHistoryStore(TimeZoneInfo dayZone)
+    {
+        _dayZone = dayZone ?? throw new ArgumentNullException(nameof(dayZone));
+    }
 
     public QuestHistory? Find(ulong characterId, byte questType, int questId, int monsterId)
     {
@@ -59,7 +69,7 @@ public sealed class InMemoryQuestHistoryStore : IQuestHistoryStore
     {
         var row = Find(characterId, questType, questId, monsterId);
         if (row is null) return false;
-        return row.CompletedAt.UtcDateTime.Date == referenceUtc.Date;
+        return QuestDay.Contains(row.CompletedAt, referenceUtc, _dayZone);
     }
 
     public bool HasCompletedAtLeast(ulong characterId, byte questType, int questId, int monsterId, byte threshold)

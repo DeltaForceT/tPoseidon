@@ -9,6 +9,7 @@ public sealed partial class TextTables
     private readonly Lazy<IReadOnlyDictionary<string, string>> _wordStrings;
     private readonly Lazy<IReadOnlyDictionary<int, string>> _potionEffects;
     private readonly Lazy<IReadOnlyDictionary<string, string>> _stringTable;
+    private readonly Lazy<CharacterTypeNames> _characterTypes;
 
     public TextTables(FastLibConfigReader reader)
     {
@@ -16,10 +17,13 @@ public sealed partial class TextTables
         _reader = reader;
         _wordStrings = new Lazy<IReadOnlyDictionary<string, string>>(reader.LoadWordStrings);
         _potionEffects = new Lazy<IReadOnlyDictionary<int, string>>(reader.LoadPotionEffects);
+        _characterTypes = new Lazy<CharacterTypeNames>(reader.LoadCharacterTypeNames);
         _stringTable = new Lazy<IReadOnlyDictionary<string, string>>(reader.LoadStringTable);
     }
 
     public IReadOnlyDictionary<string, string> WordStrings => _wordStrings.Value;
+
+    public CharacterTypeNames CharacterTypes => _characterTypes.Value;
 
     public IReadOnlyDictionary<int, string> PotionEffects => _potionEffects.Value;
 

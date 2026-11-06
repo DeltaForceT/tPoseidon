@@ -12,6 +12,9 @@ public static class GunFrames
     public const int ShotRequestSize = 7;
     public const ushort KeyMask = 0xFFFE;
     private const int RefusedSize = 4;
+    private const int PowStartShift = 5;
+    private const int PowRangeShift = 8;
+    private const int GaugeSpeedShift = 12;
 
     public static bool TryReadShot(ReadOnlySpan<byte> payload, out GunShotRequest request)
     {
@@ -21,6 +24,12 @@ public static class GunFrames
         request = new GunShotRequest(r.ReadUInt16(), r.ReadUInt16(), r.ReadUInt16(), r.ReadByte());
         return true;
     }
+
+    public static ushort CheckMask(int powStartPoint, int powRange, int gaugeSpeed) =>
+        (ushort)((powStartPoint << PowStartShift) ^ (powRange << PowRangeShift) ^ (gaugeSpeed << GaugeSpeedShift));
+
+    public static bool CheckWordMatches(ushort checkWord, ushort key, int powStartPoint, int powRange, int gaugeSpeed) =>
+        ((checkWord ^ CheckMask(powStartPoint, powRange, gaugeSpeed)) & KeyMask) == (key & KeyMask);
 
     public static byte[] Key(ushort key)
     {

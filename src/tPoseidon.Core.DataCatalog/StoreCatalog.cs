@@ -1,6 +1,7 @@
 using tPoseidon.Core.DataCatalog.Families;
 using tPoseidon.Core.DataCatalog.Fast;
 using tPoseidon.Core.DataCatalog.Maps;
+using tPoseidon.Core.DataCatalog.References;
 using tPoseidon.Core.DataCatalog.Rules;
 using tPoseidon.Core.DataCatalog.Store;
 
@@ -53,6 +54,8 @@ public sealed class StoreCatalog
     }
 
     public OpenedStore Opened { get; }
+
+    public ReferenceReport CheckReferences() => ReferenceCheck.Run(Reader.Store);
 
     public FastLibConfigReader Reader { get; }
 

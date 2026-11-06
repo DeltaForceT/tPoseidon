@@ -6,13 +6,17 @@ public sealed class LibConfigRowPatchData
 {
     private readonly IReadOnlyList<LibConfigRowPatch> _patches;
     private readonly string _subject;
+    private readonly string _rowKind;
+    private readonly string _consequence;
 
-    public LibConfigRowPatchData(IReadOnlyList<LibConfigRowPatch> patches, string subject)
+    public LibConfigRowPatchData(IReadOnlyList<LibConfigRowPatch> patches, string subject, string rowKind = "maps", string consequence = "entered")
     {
         ArgumentNullException.ThrowIfNull(patches);
         ArgumentException.ThrowIfNullOrWhiteSpace(subject);
         _patches = patches;
         _subject = subject;
+        _rowKind = rowKind;
+        _consequence = consequence;
     }
 
     public ClientDataCheck Check(string libconfigPath)
@@ -34,7 +38,7 @@ public sealed class LibConfigRowPatchData
             .ToList();
         return missing.Count == 0
             ? new ClientDataCheck(false, $"The {_subject} are already in the client data.")
-            : new ClientDataCheck(true, "The client data has no " + string.Join(" and ", missing.Select(entry => $"{entry.Table} rows for maps {string.Join(", ", entry.Keys)}")) + $", so the {_subject} cannot be entered.");
+            : new ClientDataCheck(true, "The client data has no " + string.Join(" and ", missing.Select(entry => $"{entry.Table} rows for {_rowKind} {string.Join(", ", entry.Keys)}")) + $", so the {_subject} cannot be {_consequence}.");
     }
 
     public ClientDataOutcome Apply(string libconfigPath, string? executablePath = null)
@@ -73,6 +77,6 @@ public sealed class LibConfigRowPatchData
             throw new PlayFailure(PlayFailureReason.ClientRunning, $"Could not update {libconfigPath}: {ex.Message}", "Close the game client, then try again.", ex);
         }
 
-        return new ClientDataOutcome(true, $"Added {added} map rows to {Path.GetFileName(libconfigPath)}; the original is kept as {Path.GetFileName(libconfigPath)}{ClientAddressPatch.BackupSuffix}.");
+        return new ClientDataOutcome(true, $"Added {added} rows to {Path.GetFileName(libconfigPath)}; the original is kept as {Path.GetFileName(libconfigPath)}{ClientAddressPatch.BackupSuffix}.");
     }
 }

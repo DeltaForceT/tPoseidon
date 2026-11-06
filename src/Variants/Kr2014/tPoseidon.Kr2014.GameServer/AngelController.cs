@@ -12,7 +12,6 @@ internal sealed class AngelController
     private readonly IAngelStore _store;
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
     private readonly string _logTag;
-    private readonly Random _rng = new();
 
     public AngelController(SystemServerLink link, Func<ulong, InGameSessionState?> playerById, IAngelStore store, Func<ushort, Opcode, byte[], Task> sendToMap, string logTag)
     {
@@ -45,34 +44,16 @@ internal sealed class AngelController
         }
     }
 
-    public Task LoginAsync(InGameSessionState st)
-    {
-        ArgumentNullException.ThrowIfNull(st);
-        if (st.Character is not { } character) return Task.CompletedTask;
-        var result = _store.Result(character.CharacterId);
-        var wing = result is not null && AngelRules.WingActive(result.LatestGraduation, DateTimeOffset.UtcNow);
-        var w = new tPoseidon.Core.Net.PacketWriter(3);
-        w.WriteByte(wing ? (byte)1 : (byte)0);
-        w.WriteUInt16((ushort)Math.Clamp(result?.GraduationCount ?? 0, 0, ushort.MaxValue));
-        return SendAsync(st, Opcode.S2C_OP_2E29_TBD, w.ToArray());
-    }
-
     private async Task RewardAsync(ulong angelId)
     {
         if (_playerById(angelId) is not { } angel) return;
-        var count = _store.Result(angelId)?.GraduationCount ?? 0;
+        angel.Angel = _store.Result(angelId);
+        var count = angel.Angel?.GraduationCount ?? 0;
         var w = new tPoseidon.Core.Net.PacketWriter(4);
         w.WriteUInt16(angel.PlayerEntityId);
         w.WriteUInt16((ushort)Math.Clamp(count, 0, ushort.MaxValue));
         await _sendToMap(angel.MapId, Opcode.S2C_OP_2E2A_TBD, w.ToArray()).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [angel] 0x{angelId:X} rewarded: wing mark for 7 days, {count} graduations");
-    }
-
-    private Task SendAsync(InGameSessionState player, Opcode opcode, byte[] payload)
-    {
-        byte randKey;
-        lock (_rng) randKey = (byte)_rng.Next(1, 256);
-        return player.SendFrameAsync(opcode, payload, randKey, default);
     }
 
     private Task MessageAsync(ushort opcode, ReadOnlyMemory<byte> payload, CancellationToken ct)

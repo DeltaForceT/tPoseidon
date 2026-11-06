@@ -3,6 +3,7 @@ namespace tPoseidon.Core.Game.Skills;
 public sealed class SkillCooldowns
 {
     public const float StartedEarlierBy = 0.5f;
+    public const float DefaultSpeed = 1f;
 
     private readonly Dictionary<int, (int Elapsed, int Total)> _running = new();
 
@@ -18,7 +19,7 @@ public sealed class SkillCooldowns
 
     public void Stop(int skillId) => _running.Remove(skillId);
 
-    public void Tick(int elapsedMs)
+    public void Tick(int elapsedMs, float speed = DefaultSpeed)
     {
         if (_running.Count == 0) return;
         List<int>? over = null;
@@ -30,7 +31,7 @@ public sealed class SkillCooldowns
         foreach (var skillId in _running.Keys.ToArray())
         {
             var (elapsed, total) = _running[skillId];
-            if (elapsed < total) _running[skillId] = (elapsed + elapsedMs, total);
+            if (elapsed < total) _running[skillId] = (elapsed + (int)(elapsedMs * (double)speed), total);
         }
         if (over is null) return;
         foreach (var skillId in over) _running.Remove(skillId);

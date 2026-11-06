@@ -38,7 +38,17 @@ internal sealed class BossGiveItemController
             var player = players.FirstOrDefault(candidate => candidate.PlayerEntityId == attackerId && candidate.Character is not null);
             if (player?.Character is not { } character) continue;
             int? rolled;
-            lock (_rng) rolled = _roller.Roll(monster.MonsterParamId, _rng);
+            var undefinedItem = 0;
+            lock (_rng)
+            {
+                rolled = _roller.Roll(monster.MonsterParamId, _rng, id =>
+                {
+                    var defined = _catalog.GetById(id) is not null;
+                    if (!defined) undefinedItem = id;
+                    return defined;
+                });
+            }
+            if (undefinedItem != 0) Console.WriteLine($"{_logTag} [boss-give] item {undefinedItem} of boss {monster.MonsterParamId} has no definition in the data; not given");
             if (rolled is not int itemId) continue;
             if (Grant(character.CharacterId, itemId) is not { } operation)
             {

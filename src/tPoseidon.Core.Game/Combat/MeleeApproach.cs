@@ -73,7 +73,8 @@ public static class MeleeApproach
         int targetX,
         int targetY,
         bool afterFirstSwing,
-        Random rng)
+        Random rng,
+        bool immobile = false)
     {
         ArgumentNullException.ThrowIfNull(reach);
         ArgumentNullException.ThrowIfNull(rng);
@@ -83,7 +84,7 @@ public static class MeleeApproach
         var distanceSquared = dx * dx + dy * dy;
         long max = reach.MaxAttackRange;
         long min = reach.MinAttackRange;
-        long chase = reach.ChaseRange;
+        long chase = immobile ? Math.Max(reach.ChaseRange, max) : reach.ChaseRange;
 
         if (afterFirstSwing && distanceSquared > chase * chase)
         {

@@ -25,6 +25,9 @@ public static class PvpHitRules
     public static long Damage(long attackerAp, long targetDp, float factor) =>
         Math.Max(0L, WireLimits.Saturate(WireLimits.Saturate(attackerAp - targetDp * DefenceShare) * factor));
 
+    public static long ScaledDamage(long skillDamage, byte attackerPvpMode) =>
+        skillDamage <= 0 ? 0L : Math.Max(0L, WireLimits.Saturate(skillDamage * (double)DamageFactor(attackerPvpMode)));
+
     public static bool Dodges(long targetHv, int roll) => roll < Math.Min(targetHv, DodgeCap);
 
     public static MeleeOutcome Strike(

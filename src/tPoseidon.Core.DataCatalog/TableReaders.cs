@@ -14,6 +14,7 @@ public static class TableReaders
         ("Card_SpecialSet", "LoadCardSpecialSets"),
         ("CharacterInfo", "LoadCharacterInfo"),
         ("CharacterPetReinforceInfo", "LoadCharacterPetReinforceTables"),
+        ("ChrTypeInfo", "LoadCharacterTypeNames"),
         ("Compounder_Info", "LoadCompounderLists"),
         ("DrillGradeExpRate", "LoadDrillTables"),
         ("ESAction_CompoundMaster", "LoadGrowthTables"),
@@ -33,6 +34,7 @@ public static class TableReaders
         ("Guardian_GrowthTable", "LoadGuardianTables"),
         ("GuildGameRewardInfo", "LoadGuildGameRewardTables"),
         ("GuildGameTypeInfo", "LoadGuildGameTypeTables"),
+        ("JobTypeInfo", "LoadCharacterTypeNames"),
         ("GuildShopGoodsTable", "LoadGuildShopTables"),
         ("HonorTitleInfo", "LoadHonorTitles"),
         ("ImprintSkillInfo", "LoadImprints"),
@@ -105,6 +107,7 @@ public static class TableReaders
         ("PortalInfo", "LoadPortalLevelBands"),
         ("PostBoxLevelUpGiftInfo", "LoadLevelUpGifts"),
         ("PostSetupInfo", "LoadPostSetup"),
+        ("PreCheckInfo", "LoadPreCheckInfo"),
         ("PresentItemParam2", "LoadPresentItems"),
         ("QuestInfo", "LoadAllQuestTables"),
         ("QuestInfo", "LoadQuestInfo"),
@@ -164,6 +167,7 @@ public static class TableReaders
         ("MonAI_Tactics_Mon", "LoadAllMonAITacticsTables"),
         ("SkillShopTalk_", "LoadAllSkillShopZoneTables"),
         ("ESAII_", "LoadSkillInvocationRows"),
+        ("ESAll_", "LoadSkillInvocationRows"),
     };
 
     private static readonly Dictionary<string, string[]> ByName = Exact

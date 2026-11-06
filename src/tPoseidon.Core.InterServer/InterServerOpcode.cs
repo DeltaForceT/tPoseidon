@@ -86,6 +86,7 @@ public enum InterServerOpcode : ushort
     CcmdMegaphone = 0x0E6D,
     CcmdMegaphoneAckOk = 0x0E6E,
     CcmdMegaphoneAckCancel = 0x0E6F,
+    CcmdSysMegaphone = 0x0E73,
     SysCmdMegaphoneMessage = 0x15A7,
     SysCmdMegaphoneMessageAckOk = 0x15A8,
     SysCmdCheckValidity = 0x15AA,

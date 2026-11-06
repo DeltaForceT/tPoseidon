@@ -337,7 +337,7 @@ public sealed class GmKit
     }
 }
 
-public sealed record GmPick(string Id, string Text, GmArt? Art = null);
+public sealed record GmPick(string Id, string Text, GmArt? Art = null, Func<ItemDetails>? Describe = null);
 
 public sealed class GmPicker : StackPanel
 {
@@ -345,6 +345,7 @@ public sealed class GmPicker : StackPanel
     public const double SpriteRowBox = 56;
     public const double PreviewBox = 120;
     public const int PreviewZoom = 4;
+    public const double DetailsWidth = 260;
 
     private readonly GmModel _model;
     private readonly Func<GameCatalog, string, IEnumerable<GmPick>> _query;
@@ -352,6 +353,7 @@ public sealed class GmPicker : StackPanel
     private readonly TextBlock _count = new() { FontSize = Tokens.FontSizeCaption, Foreground = Tokens.TextMuted, TextWrapping = TextWrapping.Wrap };
     private readonly DispatcherTimer _debounce = new() { Interval = TimeSpan.FromMilliseconds(220) };
     private readonly GmPictureSlot? _preview;
+    private readonly Border _details = new() { Width = DetailsWidth, Margin = new Thickness(8, 0, 0, 0), Background = Tokens.Surface0, BorderBrush = Tokens.BorderSubtle, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), IsVisible = false };
     private GameCatalog? _catalog;
 
     public GmPicker(GmModel model, string what, string idLabel, Func<GameCatalog, string, IEnumerable<GmPick>> query, bool pictures, params Control[] filters)
@@ -377,6 +379,7 @@ public sealed class GmPicker : StackPanel
             {
                 Id.Text = pick.Id;
                 _preview?.Show(pick.Art);
+                ShowDetails(pick);
                 Picked?.Invoke(pick);
             }
         };
@@ -388,10 +391,13 @@ public sealed class GmPicker : StackPanel
         {
             _preview = new GmPictureSlot(model, PreviewBox, PreviewZoom);
             var frame = new Border { Child = _preview, Background = Tokens.Surface0, BorderBrush = Tokens.BorderSubtle, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top };
-            var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            var body = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
             body.Children.Add(_list);
             Grid.SetColumn(frame, 1);
             body.Children.Add(frame);
+            _details.Height = _list.Height;
+            Grid.SetColumn(_details, 2);
+            body.Children.Add(_details);
             Children.Add(body);
         }
         else
@@ -431,7 +437,53 @@ public sealed class GmPicker : StackPanel
         _debounce.Start();
     }
 
+    private void ShowDetails(GmPick? pick)
+    {
+        if (!_details.IsVisible)
+        {
+            return;
+        }
+
+        if (pick?.Describe is not { } describe)
+        {
+            _details.Child = new TextBlock { Text = "Hover over or pick an item to see its details.", Foreground = Tokens.TextMuted, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(10), FontSize = Tokens.FontSizeCaption };
+            return;
+        }
+
+        var details = describe();
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(10, 8, 10, 8) };
+        var title = new TextBlock { Text = details.Title, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) };
+        var rows = new StackPanel { Spacing = 2 };
+        rows.Children.Add(title);
+        foreach (var line in details.Lines)
+        {
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("96,*") };
+            row.Children.Add(new TextBlock { Text = line.Label, Foreground = Tokens.TextMuted, FontSize = Tokens.FontSizeCaption, TextWrapping = TextWrapping.Wrap });
+            var value = new TextBlock { Text = line.Value, FontSize = Tokens.FontSizeCaption, TextWrapping = TextWrapping.Wrap };
+            Grid.SetColumn(value, 1);
+            row.Children.Add(value);
+            rows.Children.Add(row);
+        }
+
+        grid.Children.Add(rows);
+        _details.Child = new ScrollViewer { Content = grid, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+    }
+
     private Control Row(GmPick pick)
+    {
+        var row = RowContent(pick);
+        if (pick.Describe is null)
+        {
+            return row;
+        }
+
+        var hover = new Border { Background = Brushes.Transparent, Child = row };
+        hover.PointerEntered += (_, _) => ShowDetails(pick);
+        hover.PointerExited += (_, _) => ShowDetails(_list.SelectedItem as GmPick);
+        return hover;
+    }
+
+    private Control RowContent(GmPick pick)
     {
         var text = new TextBlock { Text = pick.Text, Margin = new Thickness(8, 3), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         if (pick.Art is not { } art)
@@ -455,6 +507,8 @@ public sealed class GmPicker : StackPanel
 
         var matches = _query(_catalog, Search.Text ?? "").ToList();
         _list.ItemsSource = matches;
+        _details.IsVisible = _preview is not null && matches.Count > 0 && matches[0].Describe is not null;
+        ShowDetails(_list.SelectedItem as GmPick);
         _count.Text = _catalog.Problem
             ?? (matches.Count == 0 ? "Nothing matches. You can still type an id."
             : string.Create(CultureInfo.InvariantCulture, $"{matches.Count} match(es)."));

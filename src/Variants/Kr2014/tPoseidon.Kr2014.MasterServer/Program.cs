@@ -107,6 +107,7 @@ IUniqueItemStore? uniqueItemStore = null;
 ISoulStore? soulStore = null;
 IShadowBonusStore? shadowBonusStore = null;
 IMegaphoneQueueStore megaphoneStore = new InMemoryMegaphoneQueueStore();
+Func<string> islandName = () => string.Empty;
 try
 {
     var pg = await PostgresStoreBootstrap.InitializeAsync().ConfigureAwait(false);
@@ -133,6 +134,8 @@ try
     soulStore = new PostgresSoulStore(pg.DataSource);
     shadowBonusStore = new PostgresShadowBonusStore(pg.DataSource);
     megaphoneStore = new PostgresMegaphoneQueueStore(pg.DataSource);
+    var serverRegistry = new PostgresServerRegistryStore(pg.DataSource);
+    islandName = () => serverRegistry.GetWorldSelect(1, 1, 1)?.IslandName ?? string.Empty;
     Log($"postgres bootstrap OK; cXxxStore family backed by Postgres impls");
 }
 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -230,6 +233,7 @@ if (occupationStore is not null)
 
 var megaphonePacer = new MegaphonePacer(megaphoneStore, new tPoseidon.Kr2014.MasterServer.MegaphoneDelivery(host), TimeProvider.System, megaphoneDelay, Log);
 dispatcher.Register(MegaphoneHandler.Requests, new MegaphoneHandler(megaphonePacer));
+dispatcher.Register(SystemNoticeHandler.Requests, new SystemNoticeHandler(megaphoneStore, islandName, Log));
 var interruptedMegaphones = new MegaphoneRecovery(megaphoneStore, itemStore, Log).Run();
 Log($"megaphone queue: delay {megaphoneDelay} ms{(megaphonePacer.Enabled ? string.Empty : " (delivery off)")}, {interruptedMegaphones} interrupted by the restart");
 

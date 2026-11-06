@@ -24,6 +24,7 @@ public sealed class PlayerSpawnLoginPacket
     public const int GmFlagsOffset = 20;
     public const byte GmEagleFlag = 0x01;
     public const byte GmEagleWingsFlag = 0x08;
+    public const int AngelWingTailBytes = 3;
     public const int CompactFooterBytes = LookMaskOffset + 4 + 2 * 4 + 4 + LookRestBytes;
 
     public static byte GmFlagsOf(bool eagle, bool flying, bool inShop = false) =>
@@ -63,6 +64,7 @@ public sealed class PlayerSpawnLoginPacket
     public uint ClassChainMirror { get; init; }
     public byte GmFlags { get; init; }
     public byte PostureCode { get; init; }
+    public bool AngelWing { get; init; }
 
     public IReadOnlyDictionary<byte, uint> LookItems { get; init; } = new Dictionary<byte, uint>();
 
@@ -83,18 +85,20 @@ public sealed class PlayerSpawnLoginPacket
         byte gmFlags = 0,
         byte postureCode = 0,
         GuildTag? guild = null,
-        uint entityFlags = DefaultEntityFlags)
+        uint entityFlags = DefaultEntityFlags,
+        bool angelWing = false)
     {
         ArgumentNullException.ThrowIfNull(character);
         var makeUp = LookChangeRules.MakeUpOf(character, OccupationRules.LookStateOf(character))
             ?? new MakeUp((ushort)character.Species, (byte)character.Species, (byte)character.Hair);
 
-        var looks = new Dictionary<byte, uint>
+        var looks = new Dictionary<byte, uint>();
+        if (itemStore is null)
         {
-            [EquipmentSlot.Ear] = character.StarterEarItemIndex,
-            [EquipmentSlot.Tail] = character.StarterTailItemIndex,
-        };
-        if (itemStore is not null)
+            looks[EquipmentSlot.Ear] = character.StarterEarItemIndex;
+            looks[EquipmentSlot.Tail] = character.StarterTailItemIndex;
+        }
+        else
         {
             foreach (var item in itemStore.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Equipment))
             {
@@ -118,6 +122,7 @@ public sealed class PlayerSpawnLoginPacket
             ClassChainMirror = makeUp.Type,
             GmFlags = gmFlags,
             PostureCode = postureCode,
+            AngelWing = angelWing,
             EntityFlags = entityFlags,
             Guild = guild ?? new GuildTag(string.Empty, string.Empty, default),
             LookItems = looks,
@@ -125,6 +130,18 @@ public sealed class PlayerSpawnLoginPacket
     }
 
     public uint LookMask => MaskOf(LookBits, LookItems) | EarAndTailBits;
+
+    public byte[] EncodeAppearance()
+    {
+        var lookMask = LookMask;
+        var overrideMask = LookOverrideMask;
+        var buf = new byte[sizeof(ushort) + 4 + 4 * CountBits(lookMask) + 4 + 4 * CountBits(overrideMask)];
+        WriteUInt16Le(buf, 0, EntityId);
+        var at = sizeof(ushort);
+        at = WriteLooks(buf, at, LookBits, lookMask, LookItems);
+        WriteLooks(buf, at, LookOverrideBits, overrideMask, LookOverrides);
+        return buf;
+    }
 
     public uint LookOverrideMask => MaskOf(LookOverrideBits, LookOverrides);
 
@@ -172,6 +189,7 @@ public sealed class PlayerSpawnLoginPacket
         buf[at++] = Guild.Emblem.Template;
         buf[at++] = Guild.Emblem.Colour;
         WriteUInt32Le(buf, at, Guild.Emblem.Icon);
+        buf[buf.Length - 1 - AngelWingTailBytes] = AngelWing ? (byte)1 : (byte)0;
         return buf;
     }
 
@@ -225,6 +243,7 @@ public sealed class PlayerSpawnLoginPacket
             UnknownB = ReadUInt32Le(payload, f + 7),
             ClassChainMirror = ReadUInt32Le(payload, f + 21),
             GmFlags = payload[f + GmFlagsOffset],
+            AngelWing = payload[^(1 + AngelWingTailBytes)] != 0,
             Guild = guild,
             LookItems = looks,
             LookOverrides = overrides,

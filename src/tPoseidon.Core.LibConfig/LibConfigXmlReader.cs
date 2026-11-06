@@ -220,6 +220,23 @@ public sealed class LibConfigXmlReader
         return entries;
     }
 
+    public IReadOnlyList<PreCheckInfoEntry> LoadPreCheckInfo()
+    {
+        var entries = new List<PreCheckInfoEntry>();
+        LoadTable("PreCheckInfo", row =>
+        {
+            var clauses = new List<PreCheckClause>(PreCheckInfoEntry.Slots);
+            for (var slot = 0; slot < PreCheckInfoEntry.Slots; slot++)
+            {
+                var type = ReadInt(row, $"PreCheckType_{slot}");
+                if (type == 0) break;
+                clauses.Add(new PreCheckClause(type, ReadInt(row, $"PreCheckArg_{slot}"), ReadInt(row, $"PreCheckYes_{slot}"), ReadInt(row, $"PreCheckNo_{slot}")));
+            }
+            entries.Add(new PreCheckInfoEntry(ReadInt(row, "ID"), ReadInt(row, "PreCheckClass"), clauses));
+        });
+        return entries;
+    }
+
     public IReadOnlyList<RandomResultTable> LoadRandomResultTables()
     {
         var tables = new List<RandomResultTable>();
@@ -1302,6 +1319,13 @@ public sealed class LibConfigXmlReader
         return new ScenarioTables(
             tablesOfMap,
             steps.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<ScenarioStep>)pair.Value.OrderBy(step => step.Id).ToArray(), StringComparer.Ordinal));
+    }
+
+    public IReadOnlyList<QuestNpcMsgEntry> LoadQuestNpcMessages()
+    {
+        var entries = new List<QuestNpcMsgEntry>();
+        LoadTable(QuestNpcMsgEntry.TableName, row => entries.Add(new QuestNpcMsgEntry(ReadInt(row, "ID"), ReadString(row, "NPCTable").Trim())));
+        return entries;
     }
 
     public IReadOnlyList<NpcTimerEntry> LoadNpcTimers()
@@ -2971,14 +2995,28 @@ public sealed class LibConfigXmlReader
         return entries;
     }
 
-    public IReadOnlyList<SkillTableRow> LoadSkillInvocationRows() => LoadSkillTableRows("ESAII_");
+    public IReadOnlyList<SkillTableRow> LoadSkillInvocationRows() => LoadSkillTableRows(SkillTableNames.InvocationColumn);
 
-    public IReadOnlyList<SkillTableRow> LoadSkillActionRows() => LoadSkillTableRows("ESAction_");
+    public IReadOnlyList<SkillTableRow> LoadSkillActionRows() => LoadSkillTableRows(SkillTableNames.ActionColumn);
 
-    private List<SkillTableRow> LoadSkillTableRows(string tableNamePrefix)
+    private HashSet<string> SkillTableNamesIn(string referenceColumn)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var paramTable in SkillTableNames.ParameterTables)
+        {
+            LoadTable(paramTable, row =>
+            {
+                var name = ReadString(row, referenceColumn).Trim();
+                if (name.Length > 0) names.Add(name);
+            });
+        }
+        return names;
+    }
+
+    private List<SkillTableRow> LoadSkillTableRows(string referenceColumn)
     {
         var rows = new List<SkillTableRow>(3000);
-        LoadTablesWithPrefix(tableNamePrefix, (tableName, row) => rows.Add(new SkillTableRow
+        LoadTablesNamed(SkillTableNamesIn(referenceColumn), (tableName, row) => rows.Add(new SkillTableRow
         {
             Table = tableName,
             Level = ReadInt(row, "Level"),
