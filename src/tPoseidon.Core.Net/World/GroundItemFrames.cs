@@ -87,15 +87,6 @@ public static class GroundItemFrames
         return w.ToArray();
     }
 
-    public static ushort ReadRemoved(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != RemovedSize)
-        {
-            throw new InvalidPacketException($"Removal payload must be exactly {RemovedSize} bytes, got {payload.Length}.");
-        }
-        return new PacketReader(payload).ReadUInt16();
-    }
-
     public static byte[] PickedUp(ushort playerEntityId, FieldItem item, ushort count)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -157,15 +148,6 @@ public static class GroundItemFrames
         var w = new PacketWriter(MoneySize);
         w.WriteUInt32Field(total);
         return w.ToArray();
-    }
-
-    public static uint ReadMoney(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != MoneySize)
-        {
-            throw new InvalidPacketException($"Money payload must be exactly {MoneySize} bytes, got {payload.Length}.");
-        }
-        return new PacketReader(payload).ReadUInt32();
     }
 
     public static byte[] MoneyFull()

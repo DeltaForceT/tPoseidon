@@ -1,4 +1,3 @@
-using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Skills.Effects;
 
 namespace tPoseidon.Core.Net.World;
@@ -124,19 +123,6 @@ public static class SkillEffectFrames
             w.WriteInt32(delta);
         }
         return w.ToArray();
-    }
-
-    public static IReadOnlyList<(int Stat, int Delta)> ReadStatsChanged(ReadOnlySpan<byte> payload)
-    {
-        var r = new PacketReader(payload);
-        var count = r.ReadByte();
-        var changes = new List<(int Stat, int Delta)>(count);
-        for (var index = 0; index < count; index++) changes.Add((r.ReadByte(), r.ReadInt32()));
-        if (r.Remaining != 0)
-        {
-            throw new InvalidPacketException($"The stat change payload has {r.Remaining} bytes after its {count} changes.");
-        }
-        return changes;
     }
 
     public static byte[] ShieldGauge(ushort objectId, long current, long max)

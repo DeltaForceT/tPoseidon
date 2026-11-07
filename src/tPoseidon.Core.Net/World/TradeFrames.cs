@@ -92,12 +92,6 @@ public static class TradeFrames
         return w.ToArray();
     }
 
-    public static (uint Money, IReadOnlyList<BagOperation> Operations) ReadSettled(ReadOnlySpan<byte> payload)
-    {
-        var money = new PacketReader(payload).ReadUInt32();
-        return (money, QuestResultFrames.ReadItemOperations(payload[sizeof(uint)..]));
-    }
-
     private static void WriteRecord(PacketWriter w, TradeRecordView record)
     {
         w.WriteByte(record.Ready ? (byte)1 : (byte)0);

@@ -15,8 +15,6 @@ internal sealed class TradeSide
     public bool Ready { get; set; }
     public uint Money { get; set; }
     public TradeOfferSlot[] Slots { get; } = new TradeOfferSlot[TradeFrames.SlotsPerSide];
-    public bool Checked { get; set; }
-    public bool Locked { get; set; }
 
     public IEnumerable<TradeOfferSlot> Offered => Slots.Where(slot => !slot.IsEmpty);
 }
@@ -33,10 +31,12 @@ internal sealed class TradeSession
     public TradeSide Inviter { get; }
     public TradeSide Invitee { get; }
     public bool Joined { get; set; }
-    public TradeSide? FirstChecker { get; set; }
+    public TradeExchange Exchange { get; } = new();
     public bool Committing { get; set; }
 
     public TradeSide SideOf(InGameSessionState player) => ReferenceEquals(Inviter.Player, player) ? Inviter : Invitee;
+
+    public TradeParty PartyOf(InGameSessionState player) => ReferenceEquals(Inviter.Player, player) ? TradeParty.Inviter : TradeParty.Invitee;
 
     public TradeSide OppositeOf(InGameSessionState player) => ReferenceEquals(Inviter.Player, player) ? Invitee : Inviter;
 }
@@ -124,7 +124,11 @@ internal sealed class TradeController
             return;
         }
         var opposite = session.OppositeOf(self).Player;
-        Detach(session);
+        lock (session.Gate)
+        {
+            if (session.Committing) return;
+            Detach(session);
+        }
         Console.WriteLine($"{_logTag} [trade] 0x{self.PlayerEntityId:X4} closes the trade with 0x{opposite.PlayerEntityId:X4}");
         await SendAsync(self, Opcode.TRADE_CLOSED).ConfigureAwait(false);
         await SendAsync(opposite, Opcode.TRADE_CLOSED).ConfigureAwait(false);
@@ -134,7 +138,11 @@ internal sealed class TradeController
     {
         if (self.Trade is not { } session) return;
         var opposite = session.OppositeOf(self).Player;
-        Detach(session);
+        lock (session.Gate)
+        {
+            if (session.Committing) return;
+            Detach(session);
+        }
         await SendAsync(opposite, Opcode.TRADE_CLOSED).ConfigureAwait(false);
     }
 
@@ -152,7 +160,8 @@ internal sealed class TradeController
         ushort code;
         lock (session.Gate)
         {
-            code = own.Checked ? TradeFrames.CodeAlreadyChecked
+            if (session.Committing) return;
+            code = session.Exchange.IsChecked(session.PartyOf(self)) ? TradeFrames.CodeAlreadyChecked
                 : !slots.Where(slot => !slot.IsEmpty).All(slot => Holds(bag, slot)) ? TradeFrames.CodeBagMismatch
                 : slots.Where(slot => !slot.IsEmpty).Select(slot => slot.WireUid).Distinct().Count() != slots.Count(slot => !slot.IsEmpty) ? TradeFrames.CodeBagMismatch
                 : !slots.Where(slot => !slot.IsEmpty).All(slot => Exchangeable(bag, slot)) ? TradeFrames.CodeNotExchangeable
@@ -178,34 +187,29 @@ internal sealed class TradeController
     public async Task CheckAsync(InGameSessionState self, ReadOnlyMemory<byte> body)
     {
         if (self.Trade is not { Joined: true } session || !TradeFrames.TryReadFlag(body.Span, out var isChecked)) return;
-        var own = session.SideOf(self);
-        var opposite = session.OppositeOf(self);
+        var party = session.PartyOf(self);
+        TradeCheckView actorView;
+        TradeCheckView partnerView;
         lock (session.Gate)
         {
-            own.Checked = isChecked;
-            if (isChecked)
-            {
-                session.FirstChecker ??= own;
-            }
-            else
-            {
-                opposite.Checked = false;
-                session.FirstChecker = null;
-            }
+            if (session.Committing) return;
+            session.Exchange.SetChecked(party, isChecked);
+            actorView = session.Exchange.CheckViewFor(party);
+            partnerView = session.Exchange.CheckViewFor(TradeExchange.Opposite(party));
         }
-        foreach (var (recipient, partner) in new[] { (own, opposite), (opposite, own) })
+        foreach (var (recipient, view) in new[] { (self, actorView), (session.OppositeOf(self).Player, partnerView) })
         {
-            await SendAsync(recipient.Player, Opcode.TRADE_PARTNER_CHECK,
-                TradeFrames.CheckState(partner.Checked, ReferenceEquals(session.FirstChecker, partner))).ConfigureAwait(false);
-            await SendAsync(recipient.Player, Opcode.TRADE_CHECK,
-                TradeFrames.CheckState(recipient.Checked, ReferenceEquals(session.FirstChecker, recipient))).ConfigureAwait(false);
+            await SendAsync(recipient, Opcode.TRADE_PARTNER_CHECK, TradeFrames.CheckState(view.OwnChecked, view.OwnIsFirstChecker)).ConfigureAwait(false);
+            await SendAsync(recipient, Opcode.TRADE_CHECK, TradeFrames.CheckState(view.PartnerChecked, view.OwnIsFirstChecker)).ConfigureAwait(false);
         }
     }
 
     public async Task ConfirmAsync(InGameSessionState self)
     {
         if (self.Trade is not { Joined: true } session) return;
-        if (!ReferenceEquals(session.FirstChecker, session.SideOf(self)))
+        bool mayProceed;
+        lock (session.Gate) mayProceed = !session.Committing && session.Exchange.MayProceedToConfirm(session.PartyOf(self));
+        if (!mayProceed)
         {
             await CloseAsync(self).ConfigureAwait(false);
             return;
@@ -217,7 +221,11 @@ internal sealed class TradeController
     public async Task LockAsync(InGameSessionState self)
     {
         if (self.Trade is not { Joined: true } session) return;
-        lock (session.Gate) session.SideOf(self).Locked = true;
+        lock (session.Gate)
+        {
+            if (session.Committing) return;
+            session.Exchange.Lock(session.PartyOf(self));
+        }
         await SendAsync(session.OppositeOf(self).Player, Opcode.TRADE_PARTNER_LOCKED).ConfigureAwait(false);
     }
 
@@ -234,35 +242,37 @@ internal sealed class TradeController
     public async Task ExecuteAsync(InGameSessionState self)
     {
         if (self.Trade is not { Joined: true } session || self.Character is not { } character) return;
-        var own = session.SideOf(self);
-        var opposite = session.OppositeOf(self);
-        bool commit;
+        var sender = session.SideOf(self);
+        var executor = session.OppositeOf(self);
+        TradeExecutionResult decision;
         lock (session.Gate)
         {
-            if (own.Locked || session.Committing) return;
-            own.Locked = true;
-            commit = opposite.Locked && own.Checked && opposite.Checked && ReferenceEquals(session.FirstChecker, own);
-            if (commit) session.Committing = true;
+            if (session.Committing) return;
+            decision = session.Exchange.Execute(session.PartyOf(self));
+            if (decision.Outcome == TradeExecution.Commit) session.Committing = true;
         }
-        if (!commit || opposite.Player.Character is not { } partner)
+        if (decision.Outcome == TradeExecution.Ignored) return;
+        if (decision.Outcome == TradeExecution.Cancelled || executor.Player.Character is not { } partner)
         {
-            Console.WriteLine($"{_logTag} [trade] 0x{self.PlayerEntityId:X4} executes before both sides locked and checked: cancelled");
+            Console.WriteLine($"{_logTag} [trade] 0x{self.PlayerEntityId:X4} executes before the first checker locked, or both sides checked: cancelled");
+            lock (session.Gate) session.Committing = false;
             await CloseAsync(self).ConfigureAwait(false);
             return;
         }
-        var result = await _master.TradeAsync(OfferOf(character.CharacterId, own), OfferOf(partner.CharacterId, opposite), _bagCapacity, default).ConfigureAwait(false);
-        if (!result.Succeeded || result.First is not { } mine || result.Second is not { } theirs)
+        var result = await _master.TradeAsync(OfferOf(partner.CharacterId, executor), OfferOf(character.CharacterId, sender), _bagCapacity, default).ConfigureAwait(false);
+        if (!result.Succeeded || result.First is not { } theirs || result.Second is not { } mine)
         {
-            Console.WriteLine($"{_logTag} [trade] 0x{self.PlayerEntityId:X4} with 0x{opposite.Player.PlayerEntityId:X4}: store refused with code {result.Error}");
+            Console.WriteLine($"{_logTag} [trade] 0x{self.PlayerEntityId:X4} with 0x{executor.Player.PlayerEntityId:X4}: store refused with code {result.Error}");
+            lock (session.Gate) session.Committing = false;
             await CloseAsync(self).ConfigureAwait(false);
             return;
         }
         Detach(session);
         Settle(self, mine);
-        Settle(opposite.Player, theirs);
-        Console.WriteLine($"{_logTag} [trade] 0x{self.PlayerEntityId:X4} and 0x{opposite.Player.PlayerEntityId:X4} traded: {mine.Changes.Count} / {theirs.Changes.Count} item changes, money {mine.Money} / {theirs.Money}");
-        await SendAsync(self, Opcode.TRADE_COMPLETED, TradeFrames.Settled(mine.Money, Operations(mine))).ConfigureAwait(false);
-        await SendAsync(opposite.Player, Opcode.TRADE_RECEIVED, TradeFrames.Settled(theirs.Money, Operations(theirs))).ConfigureAwait(false);
+        Settle(executor.Player, theirs);
+        Console.WriteLine($"{_logTag} [trade] 0x{executor.Player.PlayerEntityId:X4} and 0x{self.PlayerEntityId:X4} traded: {theirs.Changes.Count} / {mine.Changes.Count} item changes, money {theirs.Money} / {mine.Money}");
+        await SendAsync(executor.Player, Opcode.TRADE_COMPLETED, TradeFrames.Settled(theirs.Money, Operations(theirs))).ConfigureAwait(false);
+        await SendAsync(self, Opcode.TRADE_RECEIVED, TradeFrames.Settled(mine.Money, Operations(mine))).ConfigureAwait(false);
     }
 
     private async Task UnlockAsync(InGameSessionState self, Opcode reply)
@@ -270,8 +280,8 @@ internal sealed class TradeController
         if (self.Trade is not { Joined: true } session) return;
         lock (session.Gate)
         {
-            session.Inviter.Locked = false;
-            session.Invitee.Locked = false;
+            if (session.Committing) return;
+            session.Exchange.ReleaseLocks();
         }
         await SendAsync(self, reply).ConfigureAwait(false);
         await SendAsync(session.OppositeOf(self).Player, reply).ConfigureAwait(false);

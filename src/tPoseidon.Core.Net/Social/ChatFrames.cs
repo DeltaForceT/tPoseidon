@@ -1,12 +1,6 @@
-using System.Buffers.Binary;
 using System.Text;
-using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Net.Social;
-
-public readonly record struct SpokenLine(ushort EntityId, string Name, string Text);
-
-public readonly record struct SpokenHead(ushort EntityId, string Text);
 
 public static class ChatFrames
 {
@@ -31,41 +25,6 @@ public static class ChatFrames
         ArgumentNullException.ThrowIfNull(encoding);
         var end = body.IndexOf((byte)0);
         return encoding.GetString(end < 0 ? body : body[..end]);
-    }
-
-    public static byte[] Text(string text, Encoding encoding)
-    {
-        var w = new PacketWriter(64);
-        w.WriteNulTerminated(text, encoding);
-        return w.ToArray();
-    }
-
-    public static SpokenLine ReadLine(ReadOnlySpan<byte> body, Encoding encoding)
-    {
-        ArgumentNullException.ThrowIfNull(encoding);
-        var entityId = EntityOf(body);
-        var strings = body[sizeof(ushort)..];
-        var nameEnd = strings.IndexOf((byte)0);
-        if (nameEnd < 0 || strings[(nameEnd + 1)..].IndexOf((byte)0) < 0)
-        {
-            throw new InvalidPacketException("A chat line needs a NUL-terminated name and text.");
-        }
-        return new SpokenLine(entityId, encoding.GetString(strings[..nameEnd]), ReadText(strings[(nameEnd + 1)..], encoding));
-    }
-
-    public static SpokenHead ReadHead(ReadOnlySpan<byte> body, Encoding encoding)
-    {
-        ArgumentNullException.ThrowIfNull(encoding);
-        var entityId = EntityOf(body);
-        var text = body[sizeof(ushort)..];
-        if (text.IndexOf((byte)0) < 0) throw new InvalidPacketException("A head message needs a NUL-terminated text.");
-        return new SpokenHead(entityId, ReadText(text, encoding));
-    }
-
-    private static ushort EntityOf(ReadOnlySpan<byte> body)
-    {
-        if (body.Length < sizeof(ushort)) throw new InvalidPacketException($"A chat frame needs an entity id, got {body.Length} bytes.");
-        return BinaryPrimitives.ReadUInt16LittleEndian(body);
     }
 
     public static byte[] Line(ushort entityId, string name, string text, Encoding encoding)

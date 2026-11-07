@@ -83,11 +83,11 @@ public static class CardIdentifyFrames
         return w.ToArray();
     }
 
-    public static byte[] Taken(uint itemId, bool ok)
+    public static byte[] Taken(uint itemId, bool droppedOnGround)
     {
         var w = new PacketWriter(5);
         w.WriteUInt32(itemId);
-        w.WriteByte(ok ? (byte)1 : (byte)0);
+        w.WriteByte(droppedOnGround ? (byte)1 : (byte)0);
         return w.ToArray();
     }
 }

@@ -69,7 +69,21 @@ internal sealed class CardIdentifyController
     public async Task DealAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)
     {
         ArgumentNullException.ThrowIfNull(player);
-        if (!CardIdentifyFrames.TryReadCard(payload.Span, out var cardItemId) || !player.CardIdentify || player.CardGame is not { } game) return;
+        if (!CardIdentifyFrames.TryReadCard(payload.Span, out var cardItemId))
+        {
+            Log(player, $"deal ignored: payload of {payload.Length} bytes is too short to hold a card item id");
+            return;
+        }
+        if (!player.CardIdentify)
+        {
+            Log(player, $"deal with card {cardItemId} ignored: card identification is not running");
+            return;
+        }
+        if (player.CardGame is not { } game)
+        {
+            Log(player, $"deal with card {cardItemId} ignored: no card identification game is open");
+            return;
+        }
         if (player.PendingMonsterCard is not { } card || card.Id != (int)cardItemId)
         {
             Log(player, $"deal with card {cardItemId} refused: no such monster card was used since the last deal");
@@ -123,11 +137,11 @@ internal sealed class CardIdentifyController
         ArgumentNullException.ThrowIfNull(player);
         if (!CardIdentifyFrames.TryReadPosition(payload.Span, out var position) || !player.CardIdentify || player.CardGame is not { } game) return;
         if (game.Take(position) is not { } taken) return;
-        await GiveAsync(player, taken.ItemId).ConfigureAwait(false);
+        var dropped = await GiveAsync(player, taken.ItemId).ConfigureAwait(false);
         if (taken.LifeChanged) await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_LIFE, CardIdentifyFrames.Life(game.Life)).ConfigureAwait(false);
-        await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_TAKEN, CardIdentifyFrames.Taken((uint)taken.ItemId, true)).ConfigureAwait(false);
+        await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_TAKEN, CardIdentifyFrames.Taken((uint)taken.ItemId, dropped)).ConfigureAwait(false);
         if (SoulSeedRules.SecretCardEvent(taken.ItemId) is { } secretEvent) await _seedEvent(player, secretEvent, 1).ConfigureAwait(false);
-        Log(player, $"single card {position} taken: item {taken.ItemId}, life {game.Life}");
+        Log(player, $"single card {position} taken: item {taken.ItemId}, life {game.Life}{(dropped ? ", dropped at the feet" : string.Empty)}");
     }
 
     public async Task EndAsync(InGameSessionState player)

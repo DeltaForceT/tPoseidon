@@ -52,15 +52,6 @@ public static class PlayerDeathFrames
         return w.ToArray();
     }
 
-    public static uint ReadExpValue(ReadOnlySpan<byte> payload)
-    {
-        if (payload.Length != ExpValueSize)
-        {
-            throw new InvalidPacketException($"Exp value payload must be exactly {ExpValueSize} bytes, got {payload.Length}.");
-        }
-        return new PacketReader(payload).ReadUInt32();
-    }
-
     private static byte[] Death(ushort playerId)
     {
         var w = new PacketWriter(MeleeSwingFrames.DeathSize);

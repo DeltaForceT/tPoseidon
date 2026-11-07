@@ -25,9 +25,6 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
     public static WanderRoute? FindToApproachPoint(ZoneGeometry geometry, int fromX, int fromY, int toX, int toY) =>
         Route(geometry, fromX, fromY, toX, toY, keepsPoint: true, nearestFree: true);
 
-    public static IReadOnlyList<(int X, int Y)>? FindPathToPoint(ZoneGeometry geometry, int fromX, int fromY, int toX, int toY) =>
-        Plan(geometry, fromX, fromY, toX, toY, keepsPoint: true, nearestFree: false) is { } plan ? Waypoints(plan) : null;
-
     public static IReadOnlyList<(int X, int Y)>? FindWaypoints(ZoneGeometry geometry, int fromX, int fromY, int toX, int toY) =>
         Plan(geometry, fromX, fromY, toX, toY, keepsPoint: false, nearestFree: false) is { } plan ? Waypoints(plan) : null;
 

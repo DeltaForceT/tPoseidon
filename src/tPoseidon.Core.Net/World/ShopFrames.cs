@@ -53,12 +53,6 @@ public static class ShopFrames
         return w.ToArray();
     }
 
-    public static (uint Money, IReadOnlyList<BagOperation> Operations) ReadTraded(ReadOnlySpan<byte> payload)
-    {
-        var money = new PacketReader(payload).ReadUInt32();
-        return (money, QuestResultFrames.ReadItemOperations(payload[sizeof(uint)..]));
-    }
-
     public static byte[] MoneyFull()
     {
         var w = new PacketWriter(2);

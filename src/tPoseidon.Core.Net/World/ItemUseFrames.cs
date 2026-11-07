@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Net.World;
 
@@ -100,21 +99,4 @@ public static class ItemUseFrames
         w.WriteUInt64(wireItemUid);
         return w.ToArray();
     }
-
-    public static ulong ReadConsumed(ReadOnlySpan<byte> payload) => ReadItemUid(payload, ConsumedSize);
-
-    public static ulong ReadUsed(ReadOnlySpan<byte> payload) => ReadItemUid(payload, UsedSize);
-
-    private static ulong ReadItemUid(ReadOnlySpan<byte> payload, int size)
-    {
-        if (payload.Length != size)
-        {
-            throw new InvalidPacketException($"The item use payload must be exactly {size} bytes, got {payload.Length}.");
-        }
-        return BinaryPrimitives.ReadUInt64LittleEndian(payload);
-    }
-
-    public const int ConsumedSize = sizeof(ulong);
-    public const int UsedSize = sizeof(ulong) + ReplySize;
-    public const int ReplySize = sizeof(ushort) + sizeof(ushort);
 }

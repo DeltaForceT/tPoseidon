@@ -1,5 +1,3 @@
-using tPoseidon.Core.Common;
-
 namespace tPoseidon.Core.Net.World;
 
 public static class ProgressFrames
@@ -76,42 +74,6 @@ public static class ProgressFrames
         foreach (var points in statPoints) w.WriteInt16(points);
         return w.ToArray();
     }
-
-    public static uint ReadExpGained(ReadOnlySpan<byte> payload) =>
-        new PacketReader(Sized(payload, ExpGainedSize, "exp gain")).ReadUInt32();
-
-    public static (CharacterStatBlock Stats, uint Hp, uint Mp, uint Exp) ReadLevelUp(ReadOnlySpan<byte> payload)
-    {
-        var r = new PacketReader(Sized(payload, LevelUpSize, "level-up"));
-        var stats = CharacterStatBlock.Read(ref r);
-        return (stats, r.ReadUInt32(), r.ReadUInt32(), r.ReadUInt32());
-    }
-
-    public static (byte Source, uint TmExp) ReadTmTotal(ReadOnlySpan<byte> payload)
-    {
-        var r = new PacketReader(Sized(payload, TmTotalSize, "TM total"));
-        return (r.ReadByte(), r.ReadUInt32());
-    }
-
-    public static (byte CharacterType, ushort TmLevel, uint TmExp, ushort TmPoint) ReadTmLevelUp(ReadOnlySpan<byte> payload)
-    {
-        var r = new PacketReader(Sized(payload, TmLevelUpSize, "TM level-up"));
-        return (r.ReadByte(), r.ReadUInt16(), r.ReadUInt32(), r.ReadUInt16());
-    }
-
-    public static (ushort BonusPoints, IReadOnlyList<short> StatPoints) ReadStatPoints(ReadOnlySpan<byte> payload)
-    {
-        var r = new PacketReader(Sized(payload, StatPointsSize, "stat points"));
-        var bonusPoints = r.ReadUInt16();
-        var statPoints = new short[CharacterStatBlock.StatCount];
-        for (var stat = 0; stat < statPoints.Length; stat++) statPoints[stat] = r.ReadInt16();
-        return (bonusPoints, statPoints);
-    }
-
-    private static ReadOnlySpan<byte> Sized(ReadOnlySpan<byte> payload, int size, string what) =>
-        payload.Length == size
-            ? payload
-            : throw new InvalidPacketException($"The {what} payload must be exactly {size} bytes, got {payload.Length}.");
 
     public static byte[] OwnerTaken(ushort monsterId, ushort ownerId)
     {

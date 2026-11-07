@@ -41,8 +41,6 @@ public sealed class CharInfoPacket
 
     public readonly record struct EquipSlot(uint ItemUid, uint Flags);
 
-    public readonly record struct Placement(ushort MapId, int X, int Y);
-
     public static CharInfoPacket DecodePayload(ReadOnlySpan<byte> payload)
     {
         if (payload.Length != PayloadSize)

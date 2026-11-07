@@ -43,10 +43,6 @@ public sealed class NpcSpawnPacket
 
         public ReadOnlyMemory<byte> Trailer { get; init; }
 
-    public const int TrailerSpeedOffset = 2;
-
-    public byte TrailerSpeedQuarter => Trailer.Length > TrailerSpeedOffset ? Trailer.Span[TrailerSpeedOffset] : (byte)0;
-
         public byte ReservedByte3 { get; init; }
 
         public uint Reserved10 { get; init; }
