@@ -111,7 +111,8 @@ public static class ClientAddressPatch
         var imeSite = ClientImePatch.FindUnpatched(bytes);
         var minimapPlan = ClientMinimapPatch.FindUnpatched(bytes);
         var tooltipPlan = ClientTooltipPatch.FindUnpatched(bytes);
-        if (imeSite < 0 && minimapPlan is null && tooltipPlan is null && slots.All(slot => string.Equals(ReadAddress(bytes, slot), address, StringComparison.Ordinal)))
+        var gmIconSite = ClientGmMailIconPatch.FindUnpatched(bytes);
+        if (imeSite < 0 && minimapPlan is null && tooltipPlan is null && gmIconSite < 0 && slots.All(slot => string.Equals(ReadAddress(bytes, slot), address, StringComparison.Ordinal)))
         {
             return new ClientAddressResult(address, false, null);
         }
@@ -144,6 +145,11 @@ public static class ClientAddressPatch
             if (tooltipPlan is not null)
             {
                 ClientTooltipPatch.Write(bytes, tooltipPlan);
+            }
+
+            if (gmIconSite >= 0)
+            {
+                ClientGmMailIconPatch.Write(bytes, gmIconSite);
             }
 
             File.WriteAllBytes(executablePath, bytes);

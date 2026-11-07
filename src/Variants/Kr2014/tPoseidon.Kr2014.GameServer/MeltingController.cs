@@ -41,6 +41,7 @@ internal sealed class MeltingController
         ArgumentNullException.ThrowIfNull(player);
         player.Upgrade = UpgradeWindow.Melting;
         player.UpgradeBusy = false;
+        await SendAsync(player, Opcode.C2S_TRIGGER_75, Array.Empty<byte>()).ConfigureAwait(false);
         await SendAsync(player, Opcode.S2C_MELTING_OPENED, Array.Empty<byte>()).ConfigureAwait(false);
         Log(player, "window opened");
         return NpcScript.Silent;

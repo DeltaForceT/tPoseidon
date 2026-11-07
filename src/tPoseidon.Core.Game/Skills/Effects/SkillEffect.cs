@@ -41,6 +41,7 @@ public sealed class SkillEffect
     public double LifeRatio { get; set; }
     public int PeriodCount { get; set; }
     public bool EndRequested { get; private set; }
+    public bool ConditionSuppressed { get; set; }
 
     public void EndNow() => EndRequested = true;
 

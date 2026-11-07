@@ -64,12 +64,12 @@ public static class CardIdentifyFrames
         return w.ToArray();
     }
 
-    public static byte[] Flipped(uint itemId, uint group, ushort position)
+    public static byte[] Flipped(uint position, uint itemId, ushort group)
     {
         var w = new PacketWriter(10);
+        w.WriteUInt32(position);
         w.WriteUInt32(itemId);
-        w.WriteUInt32(group);
-        w.WriteUInt16(position);
+        w.WriteUInt16(group);
         return w.ToArray();
     }
 

@@ -245,7 +245,7 @@ public static class MeleeSwingFrames
         w.WriteInt32(strike.ElementMask);
         w.WriteInt32(0);
         w.WriteInt32(PlayerHitPresentation);
-        w.WriteInt32(0);
+        w.WriteInt32(strike.GuardLeft);
         return w.ToArray();
     }
 

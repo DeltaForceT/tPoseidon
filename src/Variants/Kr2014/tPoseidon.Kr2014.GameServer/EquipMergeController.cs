@@ -151,7 +151,7 @@ internal sealed class EquipMergeController
         player.TimedItems.Forget(sub.ItemUid);
         await _timedGrants.AnnounceAsync(player, result).ConfigureAwait(false);
         await SendAsync(player, (Opcode)EquipMergeFrames.Merged, EquipMergeFrames.Result(success, result.RemainMoney,
-            result.Items.Select(EquipUpgradeOperations.ToBag).ToArray())).ConfigureAwait(false);
+            result.Items.Select(row => row.ItemUid == merged.ItemUid ? EquipUpgradeOperations.ToBag(row) with { Options = properties } : EquipUpgradeOperations.ToBag(row)).ToArray())).ConfigureAwait(false);
         Log(player, $"fusion of item {main.ItemIndex} {(success ? "succeeded" : "failed")} (chance {chance} %, mode {mode}, fee {cost}, support {(support is null ? "none" : support.ItemIndex.ToString(System.Globalization.CultureInfo.InvariantCulture))}): {properties.Count} properties, mix slot {mixSlot}");
     }
 

@@ -82,6 +82,12 @@ public static class EquipmentFrames
         return w.ToArray();
     }
 
+    public static IReadOnlyList<byte[]> SetRings(ushort playerEntityId, IEnumerable<int> activeSetIds)
+    {
+        ArgumentNullException.ThrowIfNull(activeSetIds);
+        return activeSetIds.Order().Select(setId => SetChanged(playerEntityId, setId, true)).ToArray();
+    }
+
     public static byte[] SetChanged(ushort playerEntityId, int setId, bool on)
     {
         var w = new PacketWriter(9);

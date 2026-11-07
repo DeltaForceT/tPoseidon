@@ -85,6 +85,7 @@ public sealed record NpcScriptPlayer
     public Func<CancellationToken, Task<int>>? OpenChargeTimer { get; init; }
     public Func<CancellationToken, Task<int>>? OpenPhantomRefine { get; init; }
     public Func<CancellationToken, Task<int>>? OpenPetRetrain { get; init; }
+    public Func<CancellationToken, Task<int>>? OpenPetMerge { get; init; }
     public Func<CancellationToken, Task<int>>? OpenPetLevelUp { get; init; }
     public Func<CancellationToken, Task<int>>? OpenPetReinforce { get; init; }
     public Func<CancellationToken, Task<int>>? OpenPetReinforceReset { get; init; }
@@ -525,6 +526,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
             case NpcScriptOperation.OpenChargeTimer:
             case NpcScriptOperation.OpenPhantomRefine:
             case NpcScriptOperation.OpenPetRetrain:
+            case NpcScriptOperation.OpenPetMerge:
             case NpcScriptOperation.OpenPetLevelUp:
             case NpcScriptOperation.OpenPetReinforce:
             case NpcScriptOperation.OpenPetReinforceReset:
@@ -533,6 +535,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
                     NpcScriptOperation.OpenPetReinforceReset => _player.OpenPetReinforceReset,
                     NpcScriptOperation.OpenPetReinforce => _player.OpenPetReinforce,
                     NpcScriptOperation.OpenPetRetrain => _player.OpenPetRetrain,
+                    NpcScriptOperation.OpenPetMerge => _player.OpenPetMerge,
                     NpcScriptOperation.OpenPetLevelUp => _player.OpenPetLevelUp,
                     NpcScriptOperation.OpenMelting => _player.OpenMelting,
                     NpcScriptOperation.OpenEquipComposing => _player.OpenEquipComposing,

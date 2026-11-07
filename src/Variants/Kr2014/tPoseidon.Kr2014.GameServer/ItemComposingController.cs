@@ -115,7 +115,7 @@ internal sealed class ItemComposingController
             await RefuseAsync(player, request.Kind, code, $"base 0x{request.BaseWireUid:X} material 0x{request.MaterialWireUid:X} support 0x{request.SupportWireUid:X}").ConfigureAwait(false);
             return;
         }
-        var usesCatalyst = ItemComposingRules.NeedsCatalyst(baseDefinition, baseProperties) ? support : null;
+        var usesCatalyst = materialDefinition is not null && ItemComposingRules.NeedsCatalyst(materialDefinition, materialProperties) ? support : null;
         var look = ItemComposingRules.Look(baseDefinition, baseProperties, material.ItemIndex, materialProperties);
         var rows = new List<EquipUpgradeItem>(2) { EquipUpgradeOperations.Delete(material) };
         if (usesCatalyst is not null) rows.Add(EquipUpgradeOperations.Take(usesCatalyst, 1));
@@ -131,7 +131,7 @@ internal sealed class ItemComposingController
         }
         if (!result.Succeeded)
         {
-            Log(player, $"store refused with code {result.Error}; nothing composed");
+            await RefuseAsync(player, request.Kind, ItemComposingRules.AlreadyRequesting, $"store refused with code {result.Error}; nothing composed").ConfigureAwait(false);
             return;
         }
         _properties.Replace(baseItem.ItemUid, ItemComposingRules.Apply(baseProperties, look));
@@ -246,7 +246,7 @@ internal sealed class ItemComposingController
         if (skinProperties.Count > 0) _properties.Replace(skinRow.ItemUid, skinProperties);
         var catalystOperation = EquipUpgradeOperations.ToBag(result.Items.First(row => row.ItemUid == catalyst.ItemUid));
         await SendAsync(player, (Opcode)ItemComposingFrames.Decomposed, ItemComposingFrames.DecomposeResult(
-            BagItemIds.OnWire(item.ItemUid), catalystOperation, EquipUpgradeOperations.ToBag(skinRow), kept)).ConfigureAwait(false);
+            BagItemIds.OnWire(item.ItemUid), catalystOperation, EquipUpgradeOperations.ToBag(skinRow) with { Options = skinProperties.Count == 0 ? null : skinProperties }, kept)).ConfigureAwait(false);
         Log(player, $"item {item.ItemIndex} decomposed: look {lookItemId} back as item {skinItemId}, {kept.Length} properties kept, catalyst {catalyst.ItemIndex}");
     }
 

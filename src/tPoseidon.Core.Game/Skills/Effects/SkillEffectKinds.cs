@@ -290,6 +290,8 @@ public sealed record SkillEffectKind(
 
     public int PlayerCondition { get; init; }
 
+    public bool HeldDebuff { get; init; }
+
     public int? RequiresWornSlot { get; init; }
 
     public bool GmStats { get; init; }
@@ -799,12 +801,12 @@ public static class SkillEffectKinds
         },
         new(ObjectEffects.PoisonBaggageDo, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: true)
         {
-            Periodic = SkillPeriodicHit.PoisonTick, PeriodMs = ObjectEffects.PoisonBaggagePeriodMs, HeaderClass = 0, GrantsTm = false,
+            Periodic = SkillPeriodicHit.PoisonTick, PeriodMs = ObjectEffects.PoisonBaggagePeriodMs, HeaderClass = 0, GrantsTm = false, HeldDebuff = true,
         },
         new(ObjectEffects.PoisonAssaultDo, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: true)
         {
             Periodic = SkillPeriodicHit.FixedPoison, TickColumn = ObjectEffects.DamagePerSecColumn, TickScale = SkillEffect.MillisecondsPerSecond,
-            HeaderClass = 0, GrantsTm = false,
+            HeaderClass = 0, GrantsTm = false, HeldDebuff = true,
         },
         new(UtilitySkills.Hiding, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: false, UtilitySkills.SecondColumn)
         {
@@ -940,11 +942,11 @@ public static class SkillEffectKinds
         },
         new(ObjectHits.ElectroShock, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: true)
         {
-            Holds = true, HeaderClass = 1, PlayerCondition = MonsterSkills.FrozenCondition,
+            Holds = true, HeaderClass = 1, PlayerCondition = MonsterSkills.FrozenCondition, HeldDebuff = true,
         },
         new(ObjectEffects.FullHouseHit, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: true, ObjectEffects.SecondColumn)
         {
-            HeaderClass = 1, GrantsTm = false,
+            HeaderClass = 1, GrantsTm = false, PlayerCondition = MonsterSkills.StunnedCondition, HeldDebuff = true,
         },
         new(ObjectHits.FireBurnDo, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: true)
         {

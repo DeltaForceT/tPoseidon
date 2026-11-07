@@ -20,7 +20,7 @@ public sealed partial class NpcScriptExecutor
     public static bool IsWindowFunction(uint functionId) => NpcScript.Classify(functionId).Operation is
         NpcScriptOperation.OpenBank or NpcScriptOperation.OpenWarehouse or NpcScriptOperation.OpenRefine or NpcScriptOperation.OpenGrowth
         or NpcScriptOperation.OpenResetMix or NpcScriptOperation.OpenCashBox or NpcScriptOperation.OpenLookChange or NpcScriptOperation.OpenCouponExchange or NpcScriptOperation.OpenItemRecycle or NpcScriptOperation.OpenMyCampRecycle
-        or NpcScriptOperation.OpenSlotExtend or NpcScriptOperation.OpenMelting or NpcScriptOperation.OpenEquipComposing or NpcScriptOperation.OpenChargeTimer or NpcScriptOperation.OpenPetRetrain
+        or NpcScriptOperation.OpenSlotExtend or NpcScriptOperation.OpenMelting or NpcScriptOperation.OpenEquipComposing or NpcScriptOperation.OpenChargeTimer or NpcScriptOperation.OpenPetRetrain or NpcScriptOperation.OpenPetMerge
         or NpcScriptOperation.OpenPetLevelUp or NpcScriptOperation.OpenPetReinforce or NpcScriptOperation.OpenPetReinforceReset or NpcScriptOperation.OpenSoulWindow or NpcScriptOperation.OpenEquipReform or NpcScriptOperation.OpenGhostExchange
         or NpcScriptOperation.EnterFortuneHouse or NpcScriptOperation.OpenCompound or NpcScriptOperation.OpenExchangeShop or NpcScriptOperation.OpenVipShop;
 
@@ -143,6 +143,7 @@ public sealed partial class NpcScriptExecutor
             NpcScriptOperation.OpenEquipComposing => await Optional(_player.OpenEquipComposing, ct).ConfigureAwait(false),
             NpcScriptOperation.OpenChargeTimer => await Optional(_player.OpenChargeTimer, ct).ConfigureAwait(false),
             NpcScriptOperation.OpenPetRetrain => await Optional(_player.OpenPetRetrain, ct).ConfigureAwait(false),
+            NpcScriptOperation.OpenPetMerge => await Optional(_player.OpenPetMerge, ct).ConfigureAwait(false),
             NpcScriptOperation.OpenPetLevelUp => await Optional(_player.OpenPetLevelUp, ct).ConfigureAwait(false),
             NpcScriptOperation.OpenPetReinforce => await Optional(_player.OpenPetReinforce, ct).ConfigureAwait(false),
             NpcScriptOperation.OpenPetReinforceReset => await Optional(_player.OpenPetReinforceReset, ct).ConfigureAwait(false),

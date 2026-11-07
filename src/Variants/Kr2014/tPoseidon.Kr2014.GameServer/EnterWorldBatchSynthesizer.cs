@@ -46,9 +46,10 @@ public static class EnterWorldBatchSynthesizer
         byte[]? coverLetter = null,
         AngelResult? angel = null,
         uint gameClock = 0,
+        byte[]? harconLobby = null,
         CancellationToken ct = default)
     {
-        await SendPhase1Async(ctx, character, entityId, questLists, itemStore, skillStore, rates, itemOptions, timedItems, titles, fortune, fortuneTitleId, abilityPercents, petBag, profileFlags, bossKillWindow, coverLetter, gameClock, ct).ConfigureAwait(false);
+        await SendPhase1Async(ctx, character, entityId, questLists, itemStore, skillStore, rates, itemOptions, timedItems, titles, fortune, fortuneTitleId, abilityPercents, petBag, profileFlags, bossKillWindow, coverLetter, gameClock, harconLobby, ct).ConfigureAwait(false);
         await SendPhase2Async(
             ctx, character, entityId, dialogService,
             worldEntities, characterInfoCatalog,
@@ -74,6 +75,7 @@ public static class EnterWorldBatchSynthesizer
         byte[]? bossKillWindow = null,
         byte[]? coverLetter = null,
         uint gameClock = 0,
+        byte[]? harconLobby = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ctx);
@@ -91,6 +93,11 @@ public static class EnterWorldBatchSynthesizer
 
         var charStats = BuildCharInfo(character, itemStore);
         await SendFrameAsync(ctx, Opcode.GAME_CHAR_STATS, randKey: 0x2D, charStats.EncodePayload(), ct);
+
+        if (harconLobby is not null)
+        {
+            await SendFrameAsync(ctx, Opcode.S2C_HARCON_LOBBY, randKey: 0x37, harconLobby, ct);
+        }
 
         await SendFrameAsync(ctx, Opcode.GAME_UNK_EA, randKey: 0xD0, questLists.Normal, ct);
         await SendFrameAsync(ctx, Opcode.GAME_MONSTER_QUEST, randKey: 0xC2, questLists.Monster, ct);

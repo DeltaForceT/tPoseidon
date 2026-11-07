@@ -48,7 +48,9 @@ public static class GunSkills
         Random rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        var hitChance = Math.Clamp(WireLimits.Saturate((attacker.Lk - target.Lk + LuckOffset) * HitScale * hitCoefficient), LowestHit, HighestHit);
+        var hitChance = targetIsPlayer
+            ? PvP.PvpSkillRules.MagicHitChance(attacker.Lk, target.Lk)
+            : Math.Clamp(WireLimits.Saturate((attacker.Lk - target.Lk + LuckOffset) * HitScale * hitCoefficient), LowestHit, HighestHit);
         if (rng.Next(Percent) >= hitChance) return new SkillHit(0, GunType, SkillDamage.KindMiss, SkillActions.GunElement, 0);
         var criticalChance = Math.Clamp(
             WireLimits.Saturate((attacker.Ac + attacker.Lk * CriticalShare - (target.Hv + target.Lk)) / CriticalDivisor), LowestCritical, HighestCritical);

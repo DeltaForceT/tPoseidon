@@ -387,6 +387,12 @@ internal sealed class HarconController : IDisposable
         }
     }
 
+    public byte[] LoginLobby(ulong characterId)
+    {
+        var held = _store.Load(characterId);
+        return HarconFrames.Lobby(0, held.Coins, held.Cleared.Order().ToArray());
+    }
+
     public Task EnteredZoneAsync(InGameSessionState st) => Locked(async () =>
     {
         if (st.Character is not { } character) return;

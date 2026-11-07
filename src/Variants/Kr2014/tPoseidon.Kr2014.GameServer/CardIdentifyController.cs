@@ -89,7 +89,7 @@ internal sealed class CardIdentifyController
         ArgumentNullException.ThrowIfNull(player);
         if (!CardIdentifyFrames.TryReadPosition(payload.Span, out var position) || !player.CardIdentify || player.CardGame is not { } game) return;
         if (game.Flip(position) is not { } card) return;
-        await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_FLIPPED, CardIdentifyFrames.Flipped((uint)card.ItemId, card.Group, (ushort)position)).ConfigureAwait(false);
+        await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_FLIPPED, CardIdentifyFrames.Flipped((uint)position, (uint)card.ItemId, (ushort)card.Group)).ConfigureAwait(false);
     }
 
     public async Task PairAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)

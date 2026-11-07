@@ -40,13 +40,18 @@ internal sealed class SoulSeedController
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
 
-    public async Task LoadAsync(InGameSessionState player, ulong characterId, CancellationToken ct)
+    public async Task LoadAsync(InGameSessionState player, ulong characterId, bool loggingIn, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(player);
         var (loaded, state) = await _master.LoadAsync(characterId, ct).ConfigureAwait(false);
-        if (!loaded || state is null) return;
-        player.Seed.Restore(new SoulSeedRecord(true, state.SeedItemIndex, state.StartAt, state.LastUpdateAt, state.Points));
-        Console.WriteLine($"{_logTag} [soul seed] char 0x{characterId:X16} seed {state.SeedItemIndex} planted, points {string.Join(",", state.Points)}");
+        if (!loaded) return;
+        if (state is not null)
+        {
+            player.Seed.Restore(new SoulSeedRecord(true, state.SeedItemIndex, state.StartAt, state.LastUpdateAt, state.Points));
+            Console.WriteLine($"{_logTag} [soul seed] char 0x{characterId:X16} seed {state.SeedItemIndex} planted, points {string.Join(",", state.Points)}");
+            if (loggingIn) await SendAsync(player, Opcode.S2C_SOUL_SEED_PLANTED, SoulSeedFrames.Planted(player.Seed.Record())).ConfigureAwait(false);
+        }
+        await SendAsync(player, Opcode.S2C_SOUL_SEED_STATE, SoulSeedFrames.StateOf(player.Seed)).ConfigureAwait(false);
     }
 
     public async Task<bool> PlantAsync(InGameSessionState player, Item item, ulong wireUid, CancellationToken ct)
@@ -102,7 +107,7 @@ internal sealed class SoulSeedController
                 if (outcome.BuffChanged) frames.Add((Opcode.S2C_SOUL_SEED_BUFF, SoulSeedFrames.Buff(player.Seed.Buff())));
             }
         }
-        frames.Add((Opcode.S2C_SOUL_SEED_STATE, SoulSeedFrames.State(player.Seed.Record(), player.Seed.SessionPoints, player.Seed.Counters)));
+        frames.Add((Opcode.S2C_SOUL_SEED_STATE, SoulSeedFrames.StateOf(player.Seed)));
         if (player.Character is { } character)
         {
             foreach (var backup in outcome.Backups)

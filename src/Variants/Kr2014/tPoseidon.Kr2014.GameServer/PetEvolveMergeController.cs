@@ -2,6 +2,7 @@ using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.Game.Pets;
+using tPoseidon.Core.Game.Quests;
 using tPoseidon.Core.InterServer;
 using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.World;
@@ -40,6 +41,25 @@ internal sealed class PetEvolveMergeController
         _timedGrants = timedGrants ?? throw new ArgumentNullException(nameof(timedGrants));
         _bagCapacity = bagCapacity;
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
+    }
+
+    public async Task<int> OpenMergeAsync(InGameSessionState player)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        player.Upgrade = UpgradeWindow.PetLevelUp;
+        player.UpgradeBusy = false;
+        await SendAsync(player, Opcode.C2S_TRIGGER_75, Array.Empty<byte>()).ConfigureAwait(false);
+        await SendAsync(player, Opcode.S2C_PET_MERGE_OPENED, Array.Empty<byte>()).ConfigureAwait(false);
+        Log(player, "fusion window opened");
+        return NpcScript.Silent;
+    }
+
+    public async Task CloseMergeAsync(InGameSessionState player)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        if (player.Upgrade == UpgradeWindow.PetLevelUp) player.Upgrade = UpgradeWindow.None;
+        await SendAsync(player, Opcode.S2C_PET_MERGE_CLOSED, Array.Empty<byte>()).ConfigureAwait(false);
+        Log(player, "fusion window closed");
     }
 
     public async Task EvolveAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)

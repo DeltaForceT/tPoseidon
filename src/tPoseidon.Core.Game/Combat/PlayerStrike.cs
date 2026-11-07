@@ -18,4 +18,5 @@ public readonly record struct PlayerStrike(
     long MobHpBefore = 0,
     int ElementMask = 0,
     ushort MobBars = 0,
-    bool MobBoss = false);
+    bool MobBoss = false,
+    ushort GuardLeft = 0);

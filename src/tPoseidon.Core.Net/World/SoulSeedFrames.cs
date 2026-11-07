@@ -23,6 +23,12 @@ public static class SoulSeedFrames
         return w.ToArray();
     }
 
+    public static byte[] StateOf(SoulSeedGrowth seed)
+    {
+        ArgumentNullException.ThrowIfNull(seed);
+        return State(seed.Record(), seed.SessionPoints, seed.Counters);
+    }
+
     public static byte[] State(SoulSeedRecord record, IReadOnlyList<short> sessionPoints, IReadOnlyList<short> counters)
     {
         ArgumentNullException.ThrowIfNull(record);
@@ -69,8 +75,8 @@ public static class SoulSeedFrames
     {
         w.WriteByte(record.Planted ? (byte)1 : (byte)0);
         w.WriteInt32(record.SeedItemId);
-        w.WriteInt64(record.StartAt.ToUnixTimeSeconds());
-        w.WriteInt64(record.LastUpdateAt.ToUnixTimeSeconds());
+        w.WriteInt64(record.Planted ? record.StartAt.ToUnixTimeSeconds() : 0);
+        w.WriteInt64(record.Planted ? record.LastUpdateAt.ToUnixTimeSeconds() : 0);
         for (var i = 0; i < SoulSeedRules.TypeCount; i++) w.WriteInt16(i < record.SavedPoints.Count ? record.SavedPoints[i] : (short)0);
     }
 }

@@ -8,7 +8,7 @@ public readonly record struct AggroPlayer(ushort EntityId, int X, int Y, bool Se
 public sealed class AggressiveMonsterScan
 {
     public const int ScanIntervalMs = 500;
-    public const int ViewRange = 200;
+    public const int DefaultViewRange = 200;
 
     private readonly object _gate = new();
     private readonly Dictionary<ushort, DateTimeOffset> _nextScanAt = new();
@@ -43,7 +43,11 @@ public sealed class AggressiveMonsterScan
     public static bool Scans(MonsterAType atype) =>
         atype is MonsterAType.AggressiveMonster or MonsterAType.BossMonster or MonsterAType.NonresidentBossMonster;
 
-    public static int RangeOf(MonsterEntity monster) => ViewRange;
+    public static int RangeOf(MonsterEntity monster)
+    {
+        ArgumentNullException.ThrowIfNull(monster);
+        return monster.Atype == MonsterAType.AggressiveMonster && monster.AiViewRange > 0 ? monster.AiViewRange : DefaultViewRange;
+    }
 
     public void Forget(ushort monsterEntityId)
     {

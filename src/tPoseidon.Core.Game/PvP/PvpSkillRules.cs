@@ -18,7 +18,23 @@ public static class PvpSkillRules
     public static bool HitsPlayers(int actionId) =>
         actionId is SkillActions.Punch or SkillActions.FairyOfMagic or SkillActions.ManaArrow
         || (actionId != SkillHitShapes.HeavyHit && SkillHitShapes.Find(actionId) is not null)
-        || SkillAreaShapes.Find(actionId) is not null;
+        || SkillAreaShapes.Find(actionId) is not null
+        || HitsSinglePlayer(actionId)
+        || actionId is ChainHits.BlazingStrike or ThrowSkills.FanOfKnives
+        || HitsAimedPlayer(actionId);
+
+    public static bool HitsAimedPlayer(int actionId) =>
+        actionId is ObjectHits.SharpBrandish or ObjectHits.ThunderBolt or ObjectHits.SkyRay or ObjectHits.CardThrow
+            or ObjectHits.GellderHit or ObjectHits.MultiGellder or ObjectHits.FireBurn
+            or ObjectHits.FlashAttacking or ObjectHits.PowerFlashAttack
+            or ObjectEffects.PoisonBaggage or ObjectEffects.PoisonAssault;
+
+    public static bool HitsSinglePlayer(int actionId) =>
+        (ChainHits.IsChain(actionId) && actionId != ChainHits.BlazingStrike)
+        || PolarBearHits.CountOf(actionId) > 0
+        || actionId is ThrowSkills.OnePair or ThrowSkills.FuriousGalderThrow or GunSkills.PowerShot or GunSkills.DoubleShot;
+
+    public static bool GrantsSkillTm(byte casterPvpMode) => casterPvpMode == 0;
 
     public static bool Attackable(byte attackerMode, byte attackerRecordMode, byte targetMode, bool sameParty, bool duelOpponents) =>
         attackerMode switch
@@ -41,8 +57,11 @@ public static class PvpSkillRules
     public static bool PhysicalHits(long attackerAc, long targetHv, int roll) =>
         roll < Math.Clamp(WireLimits.SaturateInt32(attackerAc - targetHv + PhysicalHitBase), HitFloor, HitCeiling);
 
+    public static int MagicHitChance(long attackerLk, long targetLk) =>
+        Math.Clamp(WireLimits.SaturateInt32(attackerLk - targetLk + MagicHitBase), HitFloor, HitCeiling);
+
     public static bool MagicHits(long attackerLk, long targetLk, int roll) =>
-        roll < Math.Clamp(WireLimits.SaturateInt32(attackerLk - targetLk + MagicHitBase), HitFloor, HitCeiling);
+        roll < MagicHitChance(attackerLk, targetLk);
 
     public static bool Hits(int hitType, long attackerAc, long attackerLk, long targetHv, long targetLk, int roll) =>
         hitType == SkillDamage.PhysicalType

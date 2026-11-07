@@ -510,6 +510,14 @@ public sealed class MonsterEntity
         }
     }
 
+    public int GuardChargesLeft
+    {
+        get
+        {
+            lock (_lock) return _guardCharges;
+        }
+    }
+
     public bool ConsumeGuard(DateTimeOffset now)
     {
         lock (_lock)

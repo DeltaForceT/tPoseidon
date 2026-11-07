@@ -92,14 +92,14 @@ public static class ItemComposingRules
         return presents.FirstOrDefault(row => row.MinLevel <= petLevel && petLevel < row.MaxLevel && row.CashPet == cashPet)?.ItemId;
     }
 
-    public static bool NeedsCatalyst(ItemParamEntry baseDefinition, IReadOnlyList<ItemProperty> baseProperties) =>
-        (Options(baseDefinition, baseProperties) & NoCatalystOption) == 0;
+    public static bool NeedsCatalyst(ItemParamEntry materialDefinition, IReadOnlyList<ItemProperty> materialProperties) =>
+        (Options(materialDefinition, materialProperties) & NoCatalystOption) == 0;
 
     public static byte Check(ComposingCandidate candidate)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         if (candidate.Base is not { } baseDefinition || candidate.Material is not { } material) return NotInBag;
-        var needsCatalyst = NeedsCatalyst(baseDefinition, candidate.BaseProperties);
+        var needsCatalyst = NeedsCatalyst(material, candidate.MaterialProperties);
         if (needsCatalyst && candidate.SupportGiven && candidate.Support is null) return NotInBag;
         var pets = candidate.Kind == PetKind;
         Func<ItemParamEntry, IReadOnlyList<ItemProperty>, bool> composable = pets ? IsComposablePet : IsComposableEquipment;

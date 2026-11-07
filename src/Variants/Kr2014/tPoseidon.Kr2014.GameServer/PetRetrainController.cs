@@ -51,12 +51,12 @@ internal sealed class PetRetrainController
         return NpcScript.Silent;
     }
 
-    public Task CloseAsync(InGameSessionState player)
+    public async Task CloseAsync(InGameSessionState player)
     {
         ArgumentNullException.ThrowIfNull(player);
         if (player.Upgrade == UpgradeWindow.PetRetrain) player.Upgrade = UpgradeWindow.None;
+        await SendAsync(player, Opcode.S2C_PET_RETRAIN_CLOSED, Array.Empty<byte>()).ConfigureAwait(false);
         Log(player, "window closed");
-        return Task.CompletedTask;
     }
 
     public async Task RetrainAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)

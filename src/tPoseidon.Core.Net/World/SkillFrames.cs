@@ -274,7 +274,7 @@ public static class SkillFrames
         return w.ToArray();
     }
 
-    public static byte[] HitResult(ushort targetEntityId, SkillHit hit)
+    public static byte[] HitResult(ushort targetEntityId, SkillHit hit, ushort guardLeft = 0)
     {
         var w = new PacketWriter(HitResultSize);
         w.WriteUInt16(targetEntityId);
@@ -284,7 +284,7 @@ public static class SkillFrames
         w.WriteInt32(hit.Element);
         w.WriteInt32(hit.Flags);
         w.WriteInt32(0);
-        w.WriteInt32(0);
+        w.WriteInt32(guardLeft);
         return w.ToArray();
     }
 
@@ -639,7 +639,7 @@ public static class SkillFrames
         {
             frames.Add(new(Opcode.S2C_OP_016D_TBD, ownerTaken, MeleeSwingFrames.NoBlock, SwingAudience.Everyone));
         }
-        AppendVictim(frames, strike, HitResult(strike.TargetEntityId, hit), blockId, additions);
+        AppendVictim(frames, strike, HitResult(strike.TargetEntityId, hit, strike.GuardLeft), blockId, additions);
         return frames;
     }
 
@@ -651,7 +651,7 @@ public static class SkillFrames
         {
             frames.Add(new(Opcode.S2C_OP_016D_TBD, ownerTaken, MeleeSwingFrames.NoBlock, SwingAudience.Everyone));
         }
-        AppendVictim(frames, strike, HitResult(strike.TargetEntityId, hit), blockId, additions, hitOpcode: Opcode.S2C_HIT_RESULT_IMMEDIATE);
+        AppendVictim(frames, strike, HitResult(strike.TargetEntityId, hit, strike.GuardLeft), blockId, additions, hitOpcode: Opcode.S2C_HIT_RESULT_IMMEDIATE);
         return frames;
     }
 
