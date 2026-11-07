@@ -281,7 +281,7 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
                 g.guild_point_increase, g.guild_ranking, g.guild_ranking_point, g.guild_max_members, COALESCE(c.name, ''),
                 COALESCE(l.guild_ladder, 0), COALESCE(l.match_count, 0::smallint), COALESCE(l.win_count, 0::smallint), COALESCE(l.lose_count, 0::smallint),
                 COALESCE(l.draw_count, 0::smallint), COALESCE(l.disc_count, 0::smallint), g.depot_tabs, g.guild_coin,
-                g.icon_purchase, g.icon_times, g.icon_background, g.icon_color, g.icon_item, g.icon_changed_at
+                g.icon_purchase, g.icon_times, g.icon_background, g.icon_color, g.icon_item, g.icon_changed_at, g.guild_auth
             FROM guild g
             LEFT JOIN characters c ON c.character_id = g.master_char_uid
             LEFT JOIN guild_ladder l ON l.guild_code = g.guild_code
@@ -326,7 +326,8 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
                     new GuildEmblem((byte)r.GetInt16(30), (byte)r.GetInt16(31), (uint)r.GetInt64(32)),
                     (byte)r.GetInt16(28),
                     (uint)r.GetInt32(29),
-                    r.IsDBNull(33) ? null : r.GetFieldValue<DateTimeOffset>(33))), ("g", guild));
+                    r.IsDBNull(33) ? null : r.GetFieldValue<DateTimeOffset>(33)),
+                Auth: r.IsDBNull(34) ? null : r.GetFieldValue<byte[]>(34)), ("g", guild));
         if (head is not { } found) return null;
         var grades = Rows(conn, tx, "SELECT grade_code, grade_point, grade_name FROM guild_grade WHERE guild_code = @g ORDER BY grade_code",
             r => new GuildGrade { GuildCode = guildCode, GradeCode = (byte)r.GetInt16(0), GradePoint = r.GetInt32(1), GradeName = r.GetString(2) }, ("g", guild));
@@ -341,7 +342,7 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
                 NoticeContent = r.GetString(2),
                 NoticeCreatedAt = r.GetFieldValue<DateTimeOffset>(3),
             }, ("g", guild), ("n", GuildRules.NoticesShown));
-        return new GuildDetail(found.Guild, found.Max, found.MasterName, found.Ladder, grades, notices, found.DepotTabs, found.Coins, found.Emblem);
+        return new GuildDetail(found.Guild, found.Max, found.MasterName, found.Ladder, grades, notices, found.DepotTabs, found.Coins, found.Emblem, found.Auth);
     }
 
     public IReadOnlyList<GuildRosterEntry> Members(uint guildCode)
@@ -425,6 +426,42 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
             """, ("g", guild), ("n", GuildRules.NoticesShown));
         tx.Commit();
         return GuildResult.Ok(created);
+    }
+
+    public int UpdateGreeting(uint guildCode, string text) => UpdateGuildColumn("guild_notice", guildCode, text);
+
+    public int UpdateIntro(uint guildCode, string text) => UpdateGuildColumn("guild_intro", guildCode, text);
+
+    public int UpdateUrl(uint guildCode, string text) => UpdateGuildColumn("guild_url", guildCode, text);
+
+    public int ChangePassword(uint guildCode, string oldPassword, string newPassword)
+    {
+        ArgumentNullException.ThrowIfNull(oldPassword);
+        ArgumentNullException.ThrowIfNull(newPassword);
+        if (newPassword.Any(c => c < 21 || c > 126)) return GuildRules.MissingGuild;
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        var stored = Row(conn, tx, "SELECT guild_pw FROM guild WHERE guild_code = @g FOR UPDATE", r => r.GetString(0), ("g", (long)guildCode));
+        if (stored is null) return GuildRules.MissingGuild;
+        if (stored != oldPassword) return GuildRules.PasswordMismatch;
+        Execute(conn, tx, "UPDATE guild SET guild_pw = @p WHERE guild_code = @g", ("p", newPassword), ("g", (long)guildCode));
+        tx.Commit();
+        return GuildRules.Ok;
+    }
+
+    public int UpdateAuth(uint guildCode, byte[] table)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        return UpdateGuildColumn("guild_auth", guildCode, table);
+    }
+
+    private int UpdateGuildColumn(string column, uint guildCode, object value)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        var changed = Execute(conn, tx, $"UPDATE guild SET {column} = @v WHERE guild_code = @g", ("v", value), ("g", (long)guildCode));
+        tx.Commit();
+        return changed == 1 ? GuildRules.Ok : GuildRules.MissingGuild;
     }
 
     public int DeleteNotice(uint guildCode, long noticeCode)

@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.Social;
 
 namespace tPoseidon.Kr2014.SystemServer;
@@ -8,10 +8,10 @@ public sealed class GameServerLinks
 {
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(5);
 
-    private readonly ConcurrentDictionary<ulong, (S2SessionContext Link, ushort Zone)> _whereabouts = new();
+    private readonly ConcurrentDictionary<ulong, (TridentSessionContext Link, ushort Zone)> _whereabouts = new();
     private readonly ConcurrentDictionary<ulong, (ushort From, ushort To)> _transit = new();
     private readonly ConcurrentDictionary<(ulong CharacterId, ushort OrderType), (ushort AgencyId, ushort OrderId)> _outstanding = new();
-    private readonly ConcurrentDictionary<S2SessionContext, byte> _links = new();
+    private readonly ConcurrentDictionary<TridentSessionContext, byte> _links = new();
     private readonly string _keyTablePath;
     private readonly Action<string> _log;
     private int _lastOrderId;
@@ -26,9 +26,9 @@ public sealed class GameServerLinks
 
     public Func<ulong, CancellationToken, Task>? OnLeaveZone { get; set; }
 
-    public Action<S2SessionContext>? OnConnected { get; set; }
+    public Action<TridentSessionContext>? OnConnected { get; set; }
 
-    public Func<S2SessionContext, CancellationToken, Task>? OnLinked { get; set; }
+    public Func<TridentSessionContext, CancellationToken, Task>? OnLinked { get; set; }
 
     public Func<PartyQuestBegin, bool>? OnBeginPartyQuest { get; set; }
 
@@ -55,7 +55,7 @@ public sealed class GameServerLinks
 
     public Func<ReadOnlyMemory<byte>, CancellationToken, Task>? OnGuildRoomInvalid { get; set; }
 
-    public Func<S2SessionContext, ReadOnlyMemory<byte>, CancellationToken, Task>? OnGameMasterChat { get; set; }
+    public Func<TridentSessionContext, ReadOnlyMemory<byte>, CancellationToken, Task>? OnGameMasterChat { get; set; }
 
     public ushort? ZoneOf(ulong characterId) => _whereabouts.TryGetValue(characterId, out var where) ? where.Zone : null;
 
@@ -71,10 +71,10 @@ public sealed class GameServerLinks
     {
         while (!ct.IsCancellationRequested)
         {
-            S2SessionContext? link = null;
+            TridentSessionContext? link = null;
             try
             {
-                await S2Client.RunAsync(host, port, _keyTablePath, "[sserver1]", async (ctx, innerCt) =>
+                await TridentClient.RunAsync(host, port, _keyTablePath, "[sserver1]", async (ctx, innerCt) =>
                 {
                     link = ctx;
                     Register(ctx);
@@ -160,7 +160,7 @@ public sealed class GameServerLinks
         }
     }
 
-    private void RegisterGuildGames(S2SessionContext link)
+    private void RegisterGuildGames(TridentSessionContext link)
     {
         link.Dispatcher.Register(GuildGameOrders.MatchResult, (_, payload, ct) =>
             OnGuildMatchResult is { } handle ? handle(payload, ct) : Task.CompletedTask);
@@ -168,7 +168,7 @@ public sealed class GameServerLinks
             OnGuildRoomInvalid is { } handle ? handle(payload, ct) : Task.CompletedTask);
     }
 
-    private void RegisterGameMasters(S2SessionContext link)
+    private void RegisterGameMasters(TridentSessionContext link)
     {
         link.Dispatcher.Register(GameMasterFrames.LinkChatCommand, (_, payload, ct) =>
             OnGameMasterChat is { } handle ? handle(link, payload, ct) : Task.CompletedTask);
@@ -183,7 +183,7 @@ public sealed class GameServerLinks
         });
     }
 
-    private void Register(S2SessionContext link)
+    private void Register(TridentSessionContext link)
     {
         link.Dispatcher.Register(SystemLinkFrames.EnterZone, async (_, payload, ct) =>
         {
@@ -218,7 +218,7 @@ public sealed class GameServerLinks
         foreach (var link in _links.Keys.ToArray()) await SendToLinkAsync(link, opcode, body, ct).ConfigureAwait(false);
     }
 
-    public async Task SendToLinkAsync(S2SessionContext link, ushort opcode, byte[] body, CancellationToken ct)
+    public async Task SendToLinkAsync(TridentSessionContext link, ushort opcode, byte[] body, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(link);
         ArgumentNullException.ThrowIfNull(body);
@@ -250,7 +250,7 @@ public sealed class GameServerLinks
         }
     }
 
-    private void RegisterReports(S2SessionContext link)
+    private void RegisterReports(TridentSessionContext link)
     {
         link.Dispatcher.Register(SystemLinkFrames.Report, (_, payload, ct) =>
         {
@@ -259,7 +259,7 @@ public sealed class GameServerLinks
         });
     }
 
-    private void RegisterNames(S2SessionContext link)
+    private void RegisterNames(TridentSessionContext link)
     {
         link.Dispatcher.Register(SystemLinkFrames.CharacterRenamed, async (opcode, payload, ct) =>
         {
@@ -269,7 +269,7 @@ public sealed class GameServerLinks
         });
     }
 
-    private void RegisterCouple(S2SessionContext link)
+    private void RegisterCouple(TridentSessionContext link)
     {
         foreach (var opcode in new[] { CoupleSocialFrames.LinkMakeCouple, CoupleSocialFrames.LinkCoupleInfoRequest, CoupleSocialFrames.LinkMarriageOption, WeddingHallFrames.LinkEndWedding })
         {
@@ -278,7 +278,7 @@ public sealed class GameServerLinks
         }
     }
 
-    private void RegisterPartyQuests(S2SessionContext link)
+    private void RegisterPartyQuests(TridentSessionContext link)
     {
         link.Dispatcher.Register(SystemLinkFrames.BeginPartyQuest, async (opcode, payload, ct) =>
         {
@@ -322,7 +322,7 @@ public sealed class GameServerLinks
         });
     }
 
-    private void Forget(S2SessionContext link)
+    private void Forget(TridentSessionContext link)
     {
         foreach (var (characterId, where) in _whereabouts)
         {
@@ -338,7 +338,7 @@ public sealed class GameServerLinks
         foreach (var key in _outstanding.Keys.Where(k => k.CharacterId == characterId).ToArray()) _outstanding.TryRemove(key, out _);
     }
 
-    private async Task SendOrderAsync((S2SessionContext Link, ushort Zone) where, OfficerOrder order, CancellationToken ct)
+    private async Task SendOrderAsync((TridentSessionContext Link, ushort Zone) where, OfficerOrder order, CancellationToken ct)
     {
         try
         {

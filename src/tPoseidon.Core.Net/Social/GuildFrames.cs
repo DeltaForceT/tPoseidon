@@ -12,7 +12,7 @@ public sealed record GuildNoticeRow(uint Code, string Created, string Content);
 
 public sealed record GuildStateView(
     GuildBlock Block, ushort MaxMembers, byte GradeIndex, ushort Rights, IReadOnlyList<string> GradeNames, byte DepotTabs = 0, uint Coins = 0,
-    IReadOnlyList<GuildNoticeRow>? Notices = null);
+    IReadOnlyList<GuildNoticeRow>? Notices = null, byte[]? Auth = null);
 
 public sealed record GuildMemberRow(
     ulong CharacterId,
@@ -54,6 +54,18 @@ public static class GuildFrames
     public const ushort NoticeDelete = 0x2BCA;
     public const ushort NoticeDeleted = 0x2BCB;
 
+    public const ushort GreetingUpdate = 0x2BBB;
+    public const ushort GreetingUpdated = 0x2BBC;
+    public const ushort IntroUpdate = 0x2BCC;
+    public const ushort IntroUpdated = 0x2BCD;
+    public const ushort UrlUpdate = 0x2BCE;
+    public const ushort UrlUpdated = 0x2BCF;
+    public const ushort DissolveByPassword = 0x2BD0;
+    public const ushort DissolvedByPassword = 0x2BD1;
+    public const ushort AuthSave = 0x2BD2;
+    public const ushort AuthSaved = 0x2BD3;
+    public const ushort PasswordChange = 0x2C47;
+    public const ushort PasswordChanged = 0x2C48;
     public const ushort GuildMemo = 0x2B89;
     public const ushort GuildMemoNoGuild = 0x2B8A;
     public const ushort GuildSms = 0x2B8B;
@@ -113,6 +125,28 @@ public static class GuildFrames
     public const int NoticeCreatedLength = 17;
     public const int NoticeContentLength = 121;
     public const int NoticeAddRequestLength = NoticeContentLength;
+    public const int GreetingRequestLength = RequestHeaderLength + GreetingLength;
+    public const int GreetingReplyLength = 2 + GreetingLength;
+    public const int IntroRequestLength = 0x65;
+    public const int AuthRequestLength = GradeCount * GradeRightsStride;
+    public const byte GreetingQueryFailed = 0;
+    public const byte GreetingInvalidGuild = 1;
+    public const byte GreetingInvalidMaster = 2;
+    public const byte IntroNotMember = 1;
+    public const byte IntroNotMaster = 2;
+    public const byte UrlFailed = 1;
+    public const byte UrlNotMaster = 2;
+    public const byte DissolveByPasswordInvalidGuild = 1;
+    public const byte DissolveByPasswordWrong = 2;
+    public const byte DissolveByPasswordNoPermission = 3;
+    public const byte AuthInvalidGuild = 1;
+    public const byte AuthNoPermission = 3;
+    public const byte AuthError = 4;
+    public const byte PasswordInvalidGuild = 1;
+    public const byte PasswordOldMismatch = 2;
+    public const byte PasswordWrongType = 3;
+    public const byte PasswordNoPermission = 4;
+    public const byte PasswordError = 5;
     public const int NoticeDeleteRequestLength = sizeof(uint);
     public const string NoticeCreatedFormat = "yyyy-MM-dd HH:mm";
 
@@ -247,7 +281,7 @@ public static class GuildFrames
         w.WriteUInt32(Ok);
         WriteBlock(w, state.Block, text);
         w.WriteZero(8);
-        WriteGradeRights(w, state.GradeIndex, state.Rights);
+        WriteGradeRights(w, state.GradeIndex, state.Rights, state.Auth);
         WriteGradeTable(w, state.GradeNames, text);
         var notices = (state.Notices ?? Array.Empty<GuildNoticeRow>()).Take(NoticeSlots).ToArray();
         w.WriteByte((byte)notices.Length);
@@ -479,6 +513,61 @@ public static class GuildFrames
 
     public static byte[] NoticeDeleteRefused(byte code) => new[] { code };
 
+    public static byte[] CodeOnly(byte code) => new[] { code };
+
+    public static byte[] GreetingUpdatedFor(string greeting, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(greeting);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(GreetingReplyLength);
+        w.WriteByte(Ok);
+        w.WriteByte(0);
+        WriteText(w, greeting, GreetingLength, text);
+        return w.ToArray();
+    }
+
+    public static byte[] GreetingRefused(byte reason)
+    {
+        var payload = new byte[GreetingReplyLength];
+        payload[0] = Failed;
+        payload[1] = reason;
+        return payload;
+    }
+
+    public static byte[] AuthSavedFor(ReadOnlySpan<byte> table)
+    {
+        var payload = new byte[1 + table.Length];
+        payload[0] = Ok;
+        table.CopyTo(payload.AsSpan(1));
+        return payload;
+    }
+
+    public static string? ReadGreetingRequest(ReadOnlySpan<byte> payload, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return payload.Length < GreetingRequestLength ? null : ReadText(payload, RequestHeaderLength, GreetingLength, text);
+    }
+
+    public static string? ReadIntroRequest(ReadOnlySpan<byte> payload, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return payload.Length < IntroRequestLength ? null : ReadText(payload, 0, IntroRequestLength, text);
+    }
+
+    public static byte[]? ReadAuthRequest(ReadOnlySpan<byte> payload) =>
+        payload.Length < AuthRequestLength ? null : payload[..AuthRequestLength].ToArray();
+
+    public static (string Old, string New)? ReadPasswordChange(ReadOnlySpan<byte> payload, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var firstEnd = payload.IndexOf((byte)0);
+        if (firstEnd < 0) return null;
+        var rest = payload[(firstEnd + 1)..];
+        var secondEnd = rest.IndexOf((byte)0);
+        if (secondEnd < 0) return null;
+        return (text.GetString(payload[..firstEnd]), text.GetString(rest[..secondEnd]));
+    }
+
     public static byte[] NoticeDeletedFor(uint noticeCode)
     {
         var w = new PacketWriter(1 + sizeof(uint));
@@ -646,18 +735,9 @@ public static class GuildFrames
         w.WriteZero(NoticeEntryLength - sizeof(uint) - NoticeCreatedLength - NoticeContentLength);
     }
 
-    private static void WriteGradeRights(PacketWriter w, byte gradeIndex, ushort rights)
+    private static void WriteGradeRights(PacketWriter w, byte gradeIndex, ushort rights, byte[]? auth = null)
     {
-        for (var grade = 0; grade < GradeCount; grade++)
-        {
-            var own = grade == gradeIndex;
-            w.WriteByte(own && (rights & RightEditMembers) != 0 ? (byte)1 : (byte)0);
-            w.WriteByte(own && (rights & RightVolunteers) != 0 ? (byte)1 : (byte)0);
-            w.WriteZero(RightShopIndex - 2);
-            w.WriteByte(own && (rights & RightShop) != 0 ? (byte)1 : (byte)0);
-            w.WriteByte(own && (rights & RightDepot) != 0 ? (byte)1 : (byte)0);
-            w.WriteByte(own && (rights & RightEmblem) != 0 ? (byte)1 : (byte)0);
-        }
+        w.WriteBytes(auth is { Length: GradeCount * GradeRightsStride } ? auth : GuildAuthTable.OwnRow(gradeIndex, rights));
     }
 
     private static void WriteGradeTable(PacketWriter w, IReadOnlyList<string> gradeNames, Encoding text)

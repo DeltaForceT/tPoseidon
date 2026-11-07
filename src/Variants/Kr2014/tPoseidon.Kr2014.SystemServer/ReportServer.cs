@@ -1,7 +1,7 @@
 using System.Text;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Net;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.Social;
 
 namespace tPoseidon.Kr2014.SystemServer;
@@ -35,7 +35,7 @@ public sealed class ReportServer
 
     public Func<ulong, bool>? IsGameMaster { get; set; }
 
-    public void Register(OpcodeDispatcher dispatcher, S2SessionContext ctx)
+    public void Register(OpcodeDispatcher dispatcher, TridentSessionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(ctx);
@@ -49,13 +49,13 @@ public sealed class ReportServer
         dispatcher.Register((Core.Common.Opcode)ReportFrames.IsOnline, (_, payload, ct) => IsOnlineAsync(ctx, payload, ct));
     }
 
-    private Task Open(S2SessionContext ctx)
+    private Task Open(TridentSessionContext ctx)
     {
         if (_room.Find(ctx) is { } member) member.Reports ??= new ReportSlot?[ReportRules.Slots];
         return Task.CompletedTask;
     }
 
-    private async Task TryReportAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task TryReportAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { Reports: { } slots } member) return;
         var defendant = ReportFrames.ReadName(payload.Span, _text);
@@ -93,7 +93,7 @@ public sealed class ReportServer
         await SendAsync(ctx, ReportFrames.SlotGranted, ReportFrames.U32AndName((uint)index, defendant, _text), ct).ConfigureAwait(false);
     }
 
-    private Task AttachChat(S2SessionContext ctx, ReadOnlyMemory<byte> payload)
+    private Task AttachChat(TridentSessionContext ctx, ReadOnlyMemory<byte> payload)
     {
         if (_room.Find(ctx) is not { Reports: { } slots }) return Task.CompletedTask;
         var (slot, lines) = ReportFrames.ReadChat(payload.Span, _text);
@@ -101,7 +101,7 @@ public sealed class ReportServer
         return Task.CompletedTask;
     }
 
-    private Task Fill(S2SessionContext ctx, ReadOnlyMemory<byte> payload)
+    private Task Fill(TridentSessionContext ctx, ReadOnlyMemory<byte> payload)
     {
         if (_room.Find(ctx) is not { Reports: { } slots }) return Task.CompletedTask;
         var form = ReportFrames.ReadForm(payload.Span, _text);
@@ -112,7 +112,7 @@ public sealed class ReportServer
         return Task.CompletedTask;
     }
 
-    private async Task SubmitAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task SubmitAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { Reports: { } slots } member || payload.Length < 2) return;
         var index = new PacketReader(payload.Span).ReadUInt16();
@@ -131,7 +131,7 @@ public sealed class ReportServer
         _log($"[report] 0x{member.Character.CharacterId:X} '{member.Character.Name}' reported '{report.Defendant}': report {code}, {report.Chat.Count} chat lines");
     }
 
-    private async Task CancelAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task CancelAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { Reports: { } slots }) return;
         var (slot, name) = ReportFrames.ReadSlotAndName(payload.Span, _text);
@@ -151,13 +151,13 @@ public sealed class ReportServer
         await SendAsync(ctx, ReportFrames.Cancelled, ReportFrames.SlotAndName((ushort)match, name, _text), ct).ConfigureAwait(false);
     }
 
-    private async Task IsOnlineAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task IsOnlineAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         var name = ReportFrames.ReadName(payload.Span, _text);
         var online = _room.FindNamed(name) is not null;
         await SendAsync(ctx, ReportFrames.OnlineAnswer, ReportFrames.U32AndName(online ? 1u : 0u, name, _text), ct).ConfigureAwait(false);
     }
 
-    private static Task SendAsync(S2SessionContext ctx, ushort opcode, byte[] payload, CancellationToken ct) =>
+    private static Task SendAsync(TridentSessionContext ctx, ushort opcode, byte[] payload, CancellationToken ct) =>
         ctx.SendFrameAsync(opcode, payload, (byte)Random.Shared.Next(1, 256), ct);
 }

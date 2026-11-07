@@ -44,7 +44,7 @@ public sealed class InstallPaths
 
     public string CatalogCache => Path.Combine(ServerData, "catalog-cache");
 
-    public string KeyTable => Path.Combine(ServerData, "keytable-s2v2010.bin");
+    public string KeyTable => Path.Combine(ServerData, "trident-keytable.bin");
 
     public string Migrations => Path.Combine(App, "migrations");
 

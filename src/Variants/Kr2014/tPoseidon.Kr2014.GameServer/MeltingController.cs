@@ -13,6 +13,8 @@ internal sealed class MeltingController
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
     private readonly IItemPropertyStore _properties;
+    private readonly Func<ItemPropertyTables> _propertyTables;
+    private readonly Func<GrowthTables> _growthTables;
     private readonly int _bagCapacity;
     private readonly string _logTag;
     private readonly Random _rng = new();
@@ -24,6 +26,8 @@ internal sealed class MeltingController
         IItemStore items,
         IItemParamLookup catalog,
         IItemPropertyStore properties,
+        Func<ItemPropertyTables> propertyTables,
+        Func<GrowthTables> growthTables,
         int bagCapacity,
         string logTag)
     {
@@ -32,6 +36,8 @@ internal sealed class MeltingController
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _properties = properties ?? throw new ArgumentNullException(nameof(properties));
+        _propertyTables = propertyTables ?? throw new ArgumentNullException(nameof(propertyTables));
+        _growthTables = growthTables ?? throw new ArgumentNullException(nameof(growthTables));
         _bagCapacity = bagCapacity;
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
@@ -95,8 +101,8 @@ internal sealed class MeltingController
             await RefuseAsync(player, MeltingRules.NoMeltingInfo, "no MeltingInfo row").ConfigureAwait(false);
             return;
         }
-        var total = melted.Sum(entry => MeltingRules.Score(info, entry.Definition, entry.Item,
-            MeltingRules.StatQuality(entry.Definition, _properties.ForItem(entry.Item.ItemUid), tables.RandomStatMinPercent, tables.RandomStatMaxPercent)));
+        var reference = MeltingReference.Of(tables, _propertyTables(), _growthTables());
+        var total = melted.Sum(entry => MeltingRules.Score(info, entry.Definition, entry.Item, _properties.ForItem(entry.Item.ItemUid), reference));
         if (MeltingRules.Band(tables.Drops, total) is not { } band || _catalog.GetById(band.DropItem) is not { } box)
         {
             await RefuseAsync(player, MeltingRules.NoMeltingInfo, $"no MeltingDropInfo band for score {total}").ConfigureAwait(false);

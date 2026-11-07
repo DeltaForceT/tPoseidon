@@ -34,6 +34,8 @@ public static class UtilitySkills
 
     public static bool IsSelf(int actionId) => actionId == BasicDetector;
 
+    public static bool NeedsNoActionRow(int actionId) => actionId == Dash;
+
     public static bool IsGround(int actionId) => actionId is Dash or ItemDetector or Mine or MineMaster;
 
     public static int BlastOf(int actionId) => actionId == MineMaster ? MineMasterBlast : MineBlast;

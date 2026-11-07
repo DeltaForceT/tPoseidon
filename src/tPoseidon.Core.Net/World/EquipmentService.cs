@@ -2,7 +2,7 @@ using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.LibConfig;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 
 namespace tPoseidon.Core.Net.World;
 
@@ -19,7 +19,7 @@ public sealed record EquipmentPlayer
 
 public sealed class EquipmentService
 {
-    private readonly S2SessionContext _ctx;
+    private readonly TridentSessionContext _ctx;
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
     private readonly EquipmentPlayer _player;
@@ -27,7 +27,7 @@ public sealed class EquipmentService
     private readonly string _logTag;
 
     public EquipmentService(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         IItemStore items,
         IItemParamLookup catalog,
         EquipmentPlayer player,

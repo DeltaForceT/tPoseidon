@@ -1,4 +1,4 @@
-using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.Crypto.Trident;
 using tPoseidon.Core.LibConfig.ServerData;
 using tPoseidon.Hosting.Processes;
 

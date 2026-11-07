@@ -19,6 +19,12 @@ public static class TimedItemPeriods
         return minutes > 0 ? (short)Math.Min((minutes + ItemRechargeRules.MinutesPerHour - 1) / ItemRechargeRules.MinutesPerHour, short.MaxValue) : null;
     }
 
+    public static int? PresentMinutes(ItemParamEntry? definition, int requestedHours, short? shopHours)
+    {
+        if (requestedHours > 0) return requestedHours * ItemRechargeRules.MinutesPerHour;
+        return definition is { ExistType: ItemRechargeRules.TimeLimitedExistType } && shopHours is > 0 ? shopHours.Value * ItemRechargeRules.MinutesPerHour : null;
+    }
+
     public static IReadOnlyList<TimedItem> Registered(IEnumerable<Item> items) =>
         items.Where(TimedItemRules.IsTimed).Select(item => new TimedItem(item.ItemUid, item.ItemIndex, item.BreakedAt)).ToList();
 

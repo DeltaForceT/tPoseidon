@@ -92,7 +92,7 @@ public sealed class SkillEffectBook
         }
     }
 
-    public int[] Deltas(IReadOnlyList<int> bases, Func<ushort, SkillEffectCaster?> casterOf, bool ownerIsPlayer = true)
+    public int[] Deltas(IReadOnlyList<int> bases, Func<ushort, SkillEffectCaster?> casterOf, bool ownerIsPlayer = true, IReadOnlyList<int>? bareBases = null)
     {
         ArgumentNullException.ThrowIfNull(bases);
         ArgumentNullException.ThrowIfNull(casterOf);
@@ -103,18 +103,21 @@ public sealed class SkillEffectBook
             foreach (var (morphStat, morphDelta) in effect.FixedDeltas) accumulated[morphStat] += morphDelta;
             if (!effect.Kind.ChangesStat) continue;
             var stat = effect.Kind.Stat;
-            accumulated[stat] = Apply(effect, (float)bases[stat], accumulated[stat], casterOf, ownerIsPlayer, null, stat);
+            accumulated[stat] = Apply(effect, (float)BaseOf(effect.Kind, stat, bases, bareBases), accumulated[stat], casterOf, ownerIsPlayer, null, stat);
             if (effect.Kind.SecondStat is var second && second != SkillEffectKinds.NoStat)
             {
-                accumulated[second] = Apply(effect, (float)bases[second], accumulated[second], casterOf, ownerIsPlayer, effect.SecondAmount, second);
+                accumulated[second] = Apply(effect, (float)BaseOf(effect.Kind, second, bases, bareBases), accumulated[second], casterOf, ownerIsPlayer, effect.SecondAmount, second);
             }
             if (effect.Kind.ThirdStat is var third && third != SkillEffectKinds.NoStat)
             {
-                accumulated[third] = Apply(effect, (float)bases[third], accumulated[third], casterOf, ownerIsPlayer, effect.ThirdAmount, third);
+                accumulated[third] = Apply(effect, (float)BaseOf(effect.Kind, third, bases, bareBases), accumulated[third], casterOf, ownerIsPlayer, effect.ThirdAmount, third);
             }
         }
         return accumulated.Select(value => (int)Math.Truncate(value)).ToArray();
     }
+
+    private static int BaseOf(SkillEffectKind kind, int stat, IReadOnlyList<int> bases, IReadOnlyList<int>? bareBases) =>
+        bareBases is not null && kind.BareBaseStats.Contains(stat) ? bareBases[stat] : bases[stat];
 
     public static float Apply(
         SkillEffect effect, float statBase, float accumulated, Func<ushort, SkillEffectCaster?> casterOf, bool ownerIsPlayer = true,
@@ -128,15 +131,15 @@ public sealed class SkillEffectBook
             case SkillEffectRule.NoChange:
                 return accumulated;
             case SkillEffectRule.RatioOfBase:
-                return (float)(statBase * ratio + accumulated) + effect.Flat;
+                return (float)(statBase * ratio + accumulated) + (stat == effect.Kind.Stat || stat == SkillEffectKinds.NoStat ? effect.Flat : 0f);
             case SkillEffectRule.Flat:
                 return accumulated + (int)effect.Amount;
             case SkillEffectRule.BestPartyDefence:
                 return accumulated + effect.Amount;
             case SkillEffectRule.DoubleBase:
                 return (float)Math.Floor(statBase) + statBase;
-            case SkillEffectRule.FixedAtNegative:
-                return -effect.Amount - statBase;
+            case SkillEffectRule.LowerByAmount:
+                return accumulated - effect.Amount;
             case SkillEffectRule.AttackRatioMinusOne:
                 return statBase > 0f ? (float)(statBase * ratio - statBase + accumulated) : accumulated;
             case SkillEffectRule.LowLifeAttack:
@@ -207,6 +210,9 @@ public sealed class SkillEffectBook
     }
 
     public static float ProjectedDefence(int bestDefence, float percent) => (float)(bestDefence * percent / PercentDivisor);
+
+    public static float AddedDefence(int bestShieldDefence, float percent, int ownShieldDefence) =>
+        Math.Max(0f, ProjectedDefence(bestShieldDefence, percent) - ownShieldDefence);
 
     public static SkillEffectMode RollMode(float applyRatio, int resistPercent, Random rng)
     {

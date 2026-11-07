@@ -1,16 +1,16 @@
 using System.Collections.Concurrent;
 using System.Net;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 
 namespace tPoseidon.Core.Net.Social;
 
 public sealed class SystemServerLink
 {
     private readonly ConcurrentDictionary<ulong, (ushort OrderId, PartyMirror Mirror)> _mirrors = new();
-    private readonly ConcurrentDictionary<S2SessionContext, ulong> _present = new();
+    private readonly ConcurrentDictionary<TridentSessionContext, ulong> _present = new();
     private readonly Func<IPAddress, bool> _isTrusted;
     private readonly Action<string> _log;
-    private S2SessionContext? _system;
+    private TridentSessionContext? _system;
 
     public SystemServerLink(Func<IPAddress, bool> isTrusted, Action<string> log)
     {
@@ -26,7 +26,7 @@ public sealed class SystemServerLink
 
     public event Func<ushort, ReadOnlyMemory<byte>, CancellationToken, Task>? MessageReceived;
 
-    public void Register(S2SessionContext ctx)
+    public void Register(TridentSessionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(ctx);
         ctx.Dispatcher.Register(SystemLinkFrames.SystemHello, (_, _, _) =>
@@ -79,7 +79,7 @@ public sealed class SystemServerLink
         return address => IPAddress.IsLoopback(address) || known.Contains(address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address);
     }
 
-    public async Task ClosedAsync(S2SessionContext ctx, CancellationToken ct)
+    public async Task ClosedAsync(TridentSessionContext ctx, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(ctx);
         if (ReferenceEquals(_system, ctx))
@@ -99,7 +99,7 @@ public sealed class SystemServerLink
     public PartyMirror? MirrorOf(ulong characterId) =>
         _mirrors.TryGetValue(characterId, out var entry) ? entry.Mirror : null;
 
-    public Task EnteredZoneAsync(S2SessionContext ctx, ulong characterId, ushort zone, CancellationToken ct)
+    public Task EnteredZoneAsync(TridentSessionContext ctx, ulong characterId, ushort zone, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(ctx);
         _present[ctx] = characterId;
@@ -164,6 +164,7 @@ public sealed class SystemServerLink
             case SystemLinkFrames.OrderRecoverQuest:
             case SystemLinkFrames.OrderTypeBonus:
             case SystemLinkFrames.OrderGuildName:
+            case SystemLinkFrames.OrderGuildCreateFee:
             case PartyBoardFrames.OrderHeadNotice:
             case AngelFrames.OrderNewbiePosition:
             case AngelFrames.OrderAngelMove:

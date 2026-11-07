@@ -1,19 +1,19 @@
 using System.Collections.Concurrent;
 using tPoseidon.Core.Data;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 
 namespace tPoseidon.Kr2014.SystemServer;
 
 public sealed class SocialMember
 {
-    public SocialMember(S2SessionContext context, Character character)
+    public SocialMember(TridentSessionContext context, Character character)
     {
         Context = context ?? throw new ArgumentNullException(nameof(context));
         Character = character ?? throw new ArgumentNullException(nameof(character));
         CharacterType = FriendRules.CharacterTypeOf(character);
     }
 
-    public S2SessionContext Context { get; }
+    public TridentSessionContext Context { get; }
 
     public Character Character { get; private set; }
 
@@ -41,7 +41,7 @@ public sealed class SocialMember
 public sealed class SocialRoom
 {
     private readonly ConcurrentDictionary<ulong, SocialMember> _members = new();
-    private readonly ConcurrentDictionary<S2SessionContext, ulong> _bySession = new();
+    private readonly ConcurrentDictionary<TridentSessionContext, ulong> _bySession = new();
 
     public SocialMember? Enter(SocialMember member)
     {
@@ -61,7 +61,7 @@ public sealed class SocialRoom
         return displaced;
     }
 
-    public SocialMember? Leave(S2SessionContext context)
+    public SocialMember? Leave(TridentSessionContext context)
     {
         if (!_bySession.TryRemove(context, out var id)) return null;
         if (!_members.TryGetValue(id, out var member) || !ReferenceEquals(member.Context, context)) return null;
@@ -75,6 +75,6 @@ public sealed class SocialRoom
     public SocialMember? FindNamed(string name) =>
         _members.Values.FirstOrDefault(member => string.Equals(member.Character.Name, name, StringComparison.OrdinalIgnoreCase));
 
-    public SocialMember? Find(S2SessionContext context) =>
+    public SocialMember? Find(TridentSessionContext context) =>
         _bySession.TryGetValue(context, out var id) ? Find(id) : null;
 }

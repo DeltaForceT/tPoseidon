@@ -63,6 +63,7 @@ public enum SkillAreaPower
     AttackAndAvoidThreeQuarters,
     AttackAndDigRatio,
     CarriedWeight,
+    AttackTimesRatioAndDigShare,
 }
 
 public readonly record struct AreaCandidate(ushort EntityId, int X, int Y, bool IsDead, int MonsterType, ushort OwnerEntityId, bool IsShadow = false);
@@ -96,6 +97,7 @@ public static class SkillAreaShapes
     private const float LifeShare = 0.1f;
     private const double DefenceShare = 0.5;
     private const double ThreeQuarters = 0.75;
+    private const double DigShareDivisor = 100.0;
 
     private static readonly Dictionary<int, AreaShape> Shapes = new()
     {
@@ -167,7 +169,7 @@ public static class SkillAreaShapes
         {
             LimitColumn = KillNumColumn, Power = SkillAreaPower.AttackAndDigRatio, HitsOutsideBlock = true,
         },
-        [HighSpeedDrop] = new(AreaCentre.Caster, PolarBearAreaLimit, AreaTail.None, AreaTm.Flat) { LimitColumn = KillNumColumn },
+        [HighSpeedDrop] = new(AreaCentre.Caster, PolarBearAreaLimit, AreaTail.None, AreaTm.Flat) { LimitColumn = KillNumColumn, Power = SkillAreaPower.AttackTimesRatioAndDigShare },
         [1261] = new(AreaCentre.Caster, 4, AreaTail.CountThenIds, AreaTm.Flat)
         {
             Target = AreaTarget.AlwaysFirst, Cone = true, ConeFromCaster = true, CoefficientIsRatio = true,
@@ -270,6 +272,7 @@ public static class SkillAreaShapes
             SkillAreaPower.CasterLifeAndDefence => Truncate((attacker.Hp * (double)LifeShare + attacker.Dp * DefenceShare) * ratio),
             SkillAreaPower.AttackAndAvoidThreeQuarters => Truncate((attacker.Ap + 16 * attacker.Hv) * (double)ratio * ThreeQuarters),
             SkillAreaPower.AttackAndDigRatio => Truncate(attacker.Ap * ((double)ratio + attacker.Da * (double)(action.Value(DigRatioColumn) ?? 0f))),
+            SkillAreaPower.AttackTimesRatioAndDigShare => Truncate(Math.Truncate(attacker.Da / DigShareDivisor + (double)ratio) * attacker.Ap),
             SkillAreaPower.CarriedWeight => Truncate(attacker.Weight * (double)ratio),
             _ => throw new ArgumentOutOfRangeException(nameof(shape), shape.Power, "Unknown area power rule."),
         };

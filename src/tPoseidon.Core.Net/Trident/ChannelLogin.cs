@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 
-namespace tPoseidon.Core.Net.S2;
+namespace tPoseidon.Core.Net.Trident;
 
 public enum ChannelLoginRefusal : uint
 {

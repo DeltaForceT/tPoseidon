@@ -64,9 +64,9 @@ public static class NoriAnimationReader
         var animationTable = imageBase;
         var imageWidths = new int[imageCount];
         var imageHeights = new int[imageCount];
+        var cursor = imageBase;
         for (var i = 0; i < imageCount; i++)
         {
-            var cursor = imageBase + Int(data, imageTable + i * OffsetSize);
             var subImageCount = Int(data, cursor);
             cursor += OffsetSize;
             if (subImageCount > 0)
@@ -78,8 +78,8 @@ public static class NoriAnimationReader
             {
                 cursor += SubImageHeaderSize + Int(data, cursor);
             }
-            animationTable = Math.Max(animationTable, cursor);
         }
+        animationTable = cursor;
 
         var animationBase = animationTable + animationCount * OffsetSize;
         var animations = new NoriAnimation[animationCount];

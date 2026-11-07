@@ -22,6 +22,8 @@ public sealed class ItemPropertyRules
         foreach (var (name, steps) in tables.Curves) _curves[name] = Curve(steps);
     }
 
+    public RandomStatRow? RandomRow(int itemId) => _tables.RandomStats.TryGetValue(itemId, out var row) ? row : null;
+
     public int MixSlots(int itemId, int current, Random rng)
     {
         ArgumentNullException.ThrowIfNull(rng);

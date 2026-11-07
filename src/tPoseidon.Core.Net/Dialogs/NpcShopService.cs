@@ -4,7 +4,7 @@ using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.Game.Shop;
 using tPoseidon.Core.LibConfig;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Dialogs;
@@ -19,7 +19,7 @@ public sealed record ShopCatalogs
 
 public sealed class NpcShopService
 {
-    private readonly S2SessionContext _ctx;
+    private readonly TridentSessionContext _ctx;
     private readonly ShopCatalogs _catalogs;
     private readonly ShopPlayer _player;
     private readonly ShopTrade _trade;
@@ -28,7 +28,7 @@ public sealed class NpcShopService
     private readonly string _logTag;
 
     public NpcShopService(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         ShopCatalogs catalogs,
         ShopPlayer player,
         IItemStore items,

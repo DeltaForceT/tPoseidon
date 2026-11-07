@@ -1,6 +1,6 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.InterServer;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.Social;
 
 ConsoleFileLog.EnableIfConfigured();
@@ -34,7 +34,7 @@ Console.CancelKeyPress += (_, e) =>
 
 var postgres = await tPoseidon.Core.Data.Postgres.PostgresStoreBootstrap.InitializeAsync().ConfigureAwait(false);
 var accountStore = postgres.Store;
-var sessionLogins = new tPoseidon.Core.Net.S2.LoginSessionHandler(accountStore);
+var sessionLogins = new tPoseidon.Core.Net.Trident.LoginSessionHandler(accountStore);
 var socialRoom = new tPoseidon.Kr2014.SystemServer.SocialRoom();
 var friendStore = new tPoseidon.Core.Data.Postgres.PostgresFriendStore(postgres.DataSource);
 var friendServer = new tPoseidon.Kr2014.SystemServer.FriendServer(
@@ -52,7 +52,7 @@ var reportServer = new tPoseidon.Kr2014.SystemServer.ReportServer(
     tPoseidon.Core.Common.ClientText.Encoding,
     (byte)ServerIdentity.System1.ServerIndex,
     Log);
-var gameLinks = new tPoseidon.Kr2014.SystemServer.GameServerLinks(tPoseidon.Core.Net.S2.S2ServerHost.DefaultKeyTablePath(), Log)
+var gameLinks = new tPoseidon.Kr2014.SystemServer.GameServerLinks(tPoseidon.Core.Net.Trident.TridentServerHost.DefaultKeyTablePath(), Log)
 {
     Text = tPoseidon.Core.Common.ClientText.Encoding,
 };
@@ -292,11 +292,11 @@ gameMasterServer.GuildRooms = guildServer.GameRooms;
 friendServer.IsGameMaster = gameMasterServer.IsGameMaster;
 reportServer.IsGameMaster = gameMasterServer.IsGameMaster;
 
-var clientHost = new tPoseidon.Core.Net.S2.S2ServerHost
+var clientHost = new tPoseidon.Core.Net.Trident.TridentServerHost
 {
     LogTag = LogTag,
     Port = port,
-    KeyTablePath = tPoseidon.Core.Net.S2.S2ServerHost.DefaultKeyTablePath(),
+    KeyTablePath = tPoseidon.Core.Net.Trident.TridentServerHost.DefaultKeyTablePath(),
     SessionsLogIn = true,
     OnSessionAccepted = (ctx, _) =>
     {

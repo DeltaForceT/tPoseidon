@@ -1,7 +1,7 @@
 using System.Text;
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Net;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 
 namespace tPoseidon.Kr2014.Wire;
 

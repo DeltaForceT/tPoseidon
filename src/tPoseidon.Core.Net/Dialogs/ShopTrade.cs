@@ -7,7 +7,7 @@ using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.Game.Shop;
 using tPoseidon.Core.Game.Stats;
 using tPoseidon.Core.LibConfig;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Dialogs;
@@ -50,7 +50,7 @@ public sealed class ShopTrade
     public const int SellHeaderSize = 4;
 
     private readonly List<TimedItem> _timedGranted = new();
-    private readonly S2SessionContext _ctx;
+    private readonly TridentSessionContext _ctx;
     private readonly IItemParamLookup _definitions;
     private readonly ShopPlayer _player;
     private readonly IItemStore _items;
@@ -59,7 +59,7 @@ public sealed class ShopTrade
     private readonly string _logTag;
 
     public ShopTrade(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         IItemParamLookup definitions,
         ShopPlayer player,
         IItemStore items,

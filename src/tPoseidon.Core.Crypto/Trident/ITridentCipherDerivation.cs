@@ -1,6 +1,6 @@
-namespace tPoseidon.Core.Crypto.S2;
+namespace tPoseidon.Core.Crypto.Trident;
 
-public interface IS2CipherDerivation
+public interface ITridentCipherDerivation
 {
         byte ValidatePackingFlags(ReadOnlySpan<byte> frame, KeyTable table);
 

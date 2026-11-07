@@ -134,7 +134,7 @@ internal sealed class EquipReformController
         EquipReformOutcome outcome;
         lock (_rngGate)
         {
-            outcome = EquipReformRules.Reform(definition, stored, hasGunAp, target.RefineLevel, request, tables, _refineTables(), () => _rng.Next(ItemPropertyRules.CurveRolls));
+            outcome = EquipReformRules.Reform(definition, stored, hasGunAp, target.RefineLevel, request, tables, _refineTables(), () => _rng.Next(ItemPropertyRules.CurveRolls), _propertyRules().RandomRow(definition.Id));
         }
         var rows = new List<EquipUpgradeItem>(2) { EquipUpgradeOperations.Take(material, (ushort)row.ItemCount) };
         if (elixir is not null) rows.Add(EquipUpgradeOperations.Take(elixir, (ushort)needed));

@@ -1,22 +1,22 @@
 using System.Net.Sockets;
-using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.Crypto.Trident;
 
-namespace tPoseidon.Core.Net.S2;
+namespace tPoseidon.Core.Net.Trident;
 
-public static class S2Client
+public static class TridentClient
 {
     public static async Task RunAsync(
         string host,
         int port,
         string keyTablePath,
         string logTag,
-        Func<S2SessionContext, CancellationToken, Task> onConnected,
+        Func<TridentSessionContext, CancellationToken, Task> onConnected,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(host);
         ArgumentNullException.ThrowIfNull(onConnected);
-        var (keyTable, derivation) = S2ServerHost.LoadCipher(keyTablePath, logTag);
-        var cipher = new S2PacketCipher(keyTable, derivation);
+        var (keyTable, derivation) = TridentServerHost.LoadCipher(keyTablePath, logTag);
+        var cipher = new TridentPacketCipher(keyTable, derivation);
         var client = new TcpClient();
         try
         {
@@ -35,7 +35,7 @@ public static class S2Client
             return Task.CompletedTask;
         });
         var sessionInfo = new SessionInfo { IsStrict = false };
-        var ctx = new S2SessionContext
+        var ctx = new TridentSessionContext
         {
             Session = session,
             SessionInfo = sessionInfo,
@@ -47,7 +47,7 @@ public static class S2Client
             LocalPort = (ushort)(session.LocalEndpoint?.Port ?? 0),
         };
         await onConnected(ctx, cancellationToken).ConfigureAwait(false);
-        var adapter = new S2SessionAdapter(session, cipher, keyTable, derivation, dispatcher, sessionInfo);
+        var adapter = new TridentSessionAdapter(session, cipher, keyTable, derivation, dispatcher, sessionInfo);
         await adapter.RunAsync(cancellationToken).ConfigureAwait(false);
     }
 }

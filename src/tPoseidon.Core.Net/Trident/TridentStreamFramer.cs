@@ -1,17 +1,17 @@
 using tPoseidon.Core.Common;
-using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.Crypto.Trident;
 
-namespace tPoseidon.Core.Net.S2;
+namespace tPoseidon.Core.Net.Trident;
 
-public sealed class S2StreamFramer
+public sealed class TridentStreamFramer
 {
     private readonly KeyTable _table;
-    private readonly IS2CipherDerivation _derivation;
+    private readonly ITridentCipherDerivation _derivation;
     private byte[] _buffer = new byte[8192];
     private int _start;
     private int _length;
 
-    public S2StreamFramer(KeyTable table, IS2CipherDerivation derivation, byte initialSessionKey)
+    public TridentStreamFramer(KeyTable table, ITridentCipherDerivation derivation, byte initialSessionKey)
     {
         ArgumentNullException.ThrowIfNull(table);
         ArgumentNullException.ThrowIfNull(derivation);
@@ -34,12 +34,12 @@ public sealed class S2StreamFramer
         _length += incoming.Length;
     }
 
-        public bool TryDrainOne(out byte[] frame) => TryDrain(out frame) == S2FrameStatus.Frame;
+        public bool TryDrainOne(out byte[] frame) => TryDrain(out frame) == TridentFrameStatus.Frame;
 
-    public S2FrameStatus TryDrain(out byte[] frame, int maxFrameBytes = ushort.MaxValue)
+    public TridentFrameStatus TryDrain(out byte[] frame, int maxFrameBytes = ushort.MaxValue)
     {
         frame = Array.Empty<byte>();
-        if (_length < S2PacketCipher.MinimumFrameSize) return S2FrameStatus.NeedMore;
+        if (_length < TridentPacketCipher.MinimumFrameSize) return TridentFrameStatus.NeedMore;
 
         ReadOnlySpan<byte> head = _buffer.AsSpan(_start, _length);
         try
@@ -48,23 +48,23 @@ public sealed class S2StreamFramer
         }
         catch (InvalidPacketException)
         {
-            return S2FrameStatus.Malformed;
+            return TridentFrameStatus.Malformed;
         }
 
         var len = _derivation.RecoverLength(head, SessionKey, _table);
-        if (len < S2PacketCipher.MinimumFrameSize) return S2FrameStatus.Malformed;
-        if (len > maxFrameBytes) return S2FrameStatus.Oversized;
-        if (_length < len) return S2FrameStatus.NeedMore;
+        if (len < TridentPacketCipher.MinimumFrameSize) return TridentFrameStatus.Malformed;
+        if (len > maxFrameBytes) return TridentFrameStatus.Oversized;
+        if (_length < len) return TridentFrameStatus.NeedMore;
 
         frame = new byte[len];
         head[..len].CopyTo(frame);
         _start += len;
         _length -= len;
-        return S2FrameStatus.Frame;
+        return TridentFrameStatus.Frame;
     }
 
     public ushort PeekLength() =>
-        _length < S2PacketCipher.MinimumFrameSize
+        _length < TridentPacketCipher.MinimumFrameSize
             ? (ushort)0
             : _derivation.RecoverLength(_buffer.AsSpan(_start, _length), SessionKey, _table);
 
@@ -87,7 +87,7 @@ public sealed class S2StreamFramer
     }
 }
 
-public enum S2FrameStatus
+public enum TridentFrameStatus
 {
     Frame,
     NeedMore,

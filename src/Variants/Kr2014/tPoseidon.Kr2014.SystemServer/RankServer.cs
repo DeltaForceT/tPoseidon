@@ -1,7 +1,7 @@
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Ranking;
 using tPoseidon.Core.Net;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.Social;
 
 namespace tPoseidon.Kr2014.SystemServer;
@@ -24,7 +24,7 @@ public sealed class RankServer
         _log = log ?? throw new ArgumentNullException(nameof(log));
     }
 
-    public void Register(OpcodeDispatcher dispatcher, S2SessionContext ctx)
+    public void Register(OpcodeDispatcher dispatcher, TridentSessionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(ctx);

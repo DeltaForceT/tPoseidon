@@ -1,11 +1,11 @@
 using tPoseidon.Core.Common;
-using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.Crypto.Trident;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Shop;
 using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.Dialogs;
 using tPoseidon.Core.Net.Packets;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.Social;
 
 namespace tPoseidon.Kr2014.GameServer;
@@ -19,7 +19,7 @@ public static class EnterWorldBatchSynthesizer
     private static bool EverywhereInView(int x, int y) => true;
 
     public static async Task SendBatchAsync(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         Character character,
         ushort entityId,
         INpcDialogService dialogService,
@@ -57,7 +57,7 @@ public static class EnterWorldBatchSynthesizer
     }
 
     public static async Task SendPhase1Async(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         Character character,
         ushort entityId,
         QuestLoginLists questLists,
@@ -148,7 +148,7 @@ public static class EnterWorldBatchSynthesizer
         angel is not null && tPoseidon.Core.Game.Angel.AngelRules.WingActive(angel.LatestGraduation, DateTimeOffset.UtcNow);
 
     public static async Task SendPhase2Async(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         Character character,
         ushort entityId,
         INpcDialogService dialogService,
@@ -376,7 +376,7 @@ public static class EnterWorldBatchSynthesizer
         ShopSpawnFrames.EncodeSkillShop(skillShop, characterInfoCatalog.GetById(skillShop.NpcType)?.DisplayName ?? string.Empty);
 
     private static async Task SendShopSpawnsAsync(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         ushort mapId,
         ShopManager? shops,
         SkillShopManager? skillShops,
@@ -401,7 +401,7 @@ public static class EnterWorldBatchSynthesizer
     }
 
     private static async Task SendFrameAsync(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         Opcode op,
         byte randKey,
         byte[] payload,
@@ -418,7 +418,7 @@ public static class EnterWorldBatchSynthesizer
     }
 
     public static async Task SendWarpLandingBatchAsync(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         Character character,
         ushort entityId,
         WorldEntityStore? worldEntities,

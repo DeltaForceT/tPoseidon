@@ -1,23 +1,23 @@
 using tPoseidon.Core.Common;
-using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.Crypto.Trident;
 using tPoseidon.Core.Net.Security;
 
-namespace tPoseidon.Core.Net.S2;
+namespace tPoseidon.Core.Net.Trident;
 
-public sealed class S2SessionAdapter
+public sealed class TridentSessionAdapter
 {
     private readonly TcpClientSession _session;
-    private readonly S2PacketCipher _cipher;
+    private readonly TridentPacketCipher _cipher;
     private readonly KeyTable _table;
-    private readonly IS2CipherDerivation _derivation;
+    private readonly ITridentCipherDerivation _derivation;
     private readonly OpcodeDispatcher _dispatcher;
     private readonly SessionInfo _sessionInfo;
 
-    public S2SessionAdapter(
+    public TridentSessionAdapter(
         TcpClientSession session,
-        S2PacketCipher cipher,
+        TridentPacketCipher cipher,
         KeyTable table,
-        IS2CipherDerivation derivation,
+        ITridentCipherDerivation derivation,
         OpcodeDispatcher dispatcher,
         SessionInfo sessionInfo)
     {
@@ -38,7 +38,7 @@ public sealed class S2SessionAdapter
 
         public async Task RunAsync(CancellationToken cancellationToken = default)
     {
-        var framer = new S2StreamFramer(_table, _derivation, _sessionInfo.RecvKey);
+        var framer = new TridentStreamFramer(_table, _derivation, _sessionInfo.RecvKey);
 
         await foreach (var chunk in _session.ReadRawAsync(cancellationToken))
         {
@@ -48,12 +48,12 @@ public sealed class S2SessionAdapter
             while (true)
             {
                 var status = framer.TryDrain(out var frame, guard.MaxFrameBytes);
-                if (status == S2FrameStatus.NeedMore || (status != S2FrameStatus.Frame && !guard.IsGuarded))
+                if (status == TridentFrameStatus.NeedMore || (status != TridentFrameStatus.Frame && !guard.IsGuarded))
                 {
                     break;
                 }
 
-                if (status != S2FrameStatus.Frame)
+                if (status != TridentFrameStatus.Frame)
                 {
                     RejectFrame(guard, framer, status);
                     return;
@@ -61,7 +61,7 @@ public sealed class S2SessionAdapter
 
                 madeProgress = true;
                 guard.Buffered(0, madeProgress: true);
-                S2DecryptedPacket decoded;
+                TridentDecryptedPacket decoded;
                 try
                 {
                     decoded = _cipher.Decrypt(frame, _sessionInfo);
@@ -100,9 +100,9 @@ public sealed class S2SessionAdapter
         }
     }
 
-    private static void RejectFrame(SessionGuard guard, S2StreamFramer framer, S2FrameStatus status)
+    private static void RejectFrame(SessionGuard guard, TridentStreamFramer framer, TridentFrameStatus status)
     {
-        if (status == S2FrameStatus.Oversized)
+        if (status == TridentFrameStatus.Oversized)
         {
             guard.Reject(GuardIncident.OversizedFrame, $"a frame declared {framer.PeekLength()} B, the limit is {guard.MaxFrameBytes} B, closed");
             return;

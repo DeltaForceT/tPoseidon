@@ -1,0 +1,2 @@
+ALTER TABLE guild
+    ADD COLUMN IF NOT EXISTS guild_auth BYTEA;

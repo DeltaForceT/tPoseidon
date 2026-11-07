@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 
-namespace tPoseidon.Core.Crypto.S2;
+namespace tPoseidon.Core.Crypto.Trident;
 
 [Flags]
 [SuppressMessage("Naming", "CA1711", Justification = "Flags enum names ending in 'Flags' match the [Flags] attribute convention.")]

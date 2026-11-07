@@ -17,7 +17,7 @@ public enum SkillEffectRule
     CasterAccuracy,
     BestPartyDefence,
     DoubleBase,
-    FixedAtNegative,
+    LowerByAmount,
     AttackRatioMinusOne,
     LowLifeAttack,
     OwnerMagicSixteenfold,
@@ -118,9 +118,11 @@ public sealed record SkillEffectKind(
 
     public bool Holds { get; init; }
 
-    public bool Roots { get; init; }
-
     public bool ChangesSpeed { get; init; }
+
+    public IReadOnlyList<int> BareBaseStats { get; init; } = Array.Empty<int>();
+
+    public string? SetsSpeedColumn { get; init; }
 
     public string? TickColumn { get; init; }
 
@@ -181,6 +183,8 @@ public sealed record SkillEffectKind(
     public int CounterElement { get; init; }
 
     public int RequiresEffect { get; init; }
+
+    public int RefusedWhileEffect { get; init; }
 
     public byte ResistKind { get; init; }
 
@@ -550,24 +554,28 @@ public static class SkillEffectKinds
             RollsChance = true, ChanceColumn = RatioColumn, Holds = true,
         },
         new(1527, StatDp, SkillEffectRule.RatioOfBase, SkillEffectTail.Duration, RatioColumn, OnTarget: false) { FlatColumn = DpRevisionColumn },
-        new(1534, StatDp, SkillEffectRule.RatioOfBase, SkillEffectTail.Duration, RatioColumn, OnTarget: false) { FlatColumn = DpRevisionColumn },
+        new(1534, StatDp, SkillEffectRule.RatioOfBase, SkillEffectTail.Duration, RatioColumn, OnTarget: false)
+        {
+            FlatColumn = DpRevisionColumn, SecondStat = StatMd, SecondAmountColumn = RatioColumn, BareBaseStats = new[] { StatDp },
+        },
         new(1537, StatDp, SkillEffectRule.OwnerDefence, SkillEffectTail.Duration, DpReductionColumn, OnTarget: true)
         {
             RollsChance = true, TickColumn = TickColumn, Periodic = SkillPeriodicHit.DamageOverTime,
         },
-        new(1540, StatDa, SkillEffectRule.RatioOfBase, SkillEffectTail.Duration, RatioColumn, OnTarget: false),
-        new(1541, StatAp, SkillEffectRule.RatioOfBase, SkillEffectTail.Duration, RatioColumn, OnTarget: false),
+        new(1540, StatDa, SkillEffectRule.RatioOfBase, SkillEffectTail.Duration, RatioColumn, OnTarget: false) { BareBaseStats = new[] { StatDa } },
+        new(1541, StatAp, SkillEffectRule.RatioOfBase, SkillEffectTail.Duration, RatioColumn, OnTarget: false) { BareBaseStats = new[] { StatAp } },
         new(1542, StatDp, SkillEffectRule.RatioOfBase, SkillEffectTail.Duration, RatioColumn, OnTarget: false)
         {
             FlatColumn = DpRevisionColumn, HpLimitColumn = HpRatioColumn,
         },
-        new(1543, StatDp, SkillEffectRule.CasterAttack, SkillEffectTail.Duration, RatioColumn, OnTarget: true)
+        new(1543, StatDp, SkillEffectRule.OwnerDefence, SkillEffectTail.Duration, RatioColumn, OnTarget: true)
         {
             RollsChance = true, SlowColumn = SlowRatioColumn,
         },
         new(1547, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Duration, RatioColumn, OnTarget: false)
         {
             TickColumn = TickColumn, Periodic = SkillPeriodicHit.AreaAroundOwner,
+            ChangesSpeed = true, SetsSpeedColumn = SlowRatioColumn,
         },
         new(PartyGuard, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Duration, GuardCountColumn, OnTarget: false)
         {
@@ -962,7 +970,7 @@ public static class SkillEffectKinds
         },
         new(SkillRiders.QuakeParalysis, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Duration, ParalysisRatioColumn, OnTarget: true, ParalysisSecondsColumn)
         {
-            RollsChance = true, ChanceColumn = ParalysisRatioColumn, Roots = true, HeaderClass = 1, GrantsTm = false,
+            RollsChance = true, ChanceColumn = ParalysisRatioColumn, Holds = true, HeaderClass = 1, GrantsTm = false,
         },
         new(SkillRiders.ElectricSwordStun, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, StunTimeColumn, OnTarget: true, StunTimeColumn)
         {
@@ -1036,13 +1044,13 @@ public static class SkillEffectKinds
         },
         new(Boiling, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, StressColumn, OnTarget: false, SecondColumn),
         new(ThirdEye, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: false, SecondColumn),
-        new(CrazyHammerMode, StatDx, SkillEffectRule.FixedAtNegative, SkillEffectTail.Duration, DxColumn, OnTarget: false)
+        new(CrazyHammerMode, StatDx, SkillEffectRule.LowerByAmount, SkillEffectTail.Duration, DxColumn, OnTarget: false)
         {
             ChangesSpeed = true,
         },
         new(BestShield, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Duration, DpRatioColumn, OnTarget: false)
         {
-            SpreadsAs = BestShieldOnMember,
+            SpreadsAs = BestShieldOnMember, RefusedWhileEffect = BestShieldOnMember,
         },
         new(BestShieldOnMember, StatDp, SkillEffectRule.BestPartyDefence, SkillEffectTail.Duration, DpRatioColumn, OnTarget: false)
         {

@@ -1,7 +1,7 @@
 using System.Text;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Net;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.Social;
 
 namespace tPoseidon.Kr2014.SystemServer;
@@ -23,7 +23,7 @@ public sealed class GiftServer
 
     public Func<ulong, string, string?>? GiftAccepted { get; set; }
 
-    public void Register(OpcodeDispatcher dispatcher, S2SessionContext ctx)
+    public void Register(OpcodeDispatcher dispatcher, TridentSessionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(ctx);
@@ -41,7 +41,7 @@ public sealed class GiftServer
                 _gifts.Sent(account, GiftItemRules.ListRowLimit + 1) is { Count: > 0 } rows ? GiftFrames.Sent(rows, _text) : null, ct));
     }
 
-    private async Task ListAsync(S2SessionContext ctx, string what, ushort reply, Func<uint, byte[]?> build, CancellationToken ct)
+    private async Task ListAsync(TridentSessionContext ctx, string what, ushort reply, Func<uint, byte[]?> build, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { GiftOpen: true } member || member.Character.OwnerAccountId == 0)
         {
@@ -63,13 +63,13 @@ public sealed class GiftServer
         }
     }
 
-    private Task Open(S2SessionContext ctx)
+    private Task Open(TridentSessionContext ctx)
     {
         if (_room.Find(ctx) is { } member) member.GiftOpen = true;
         return Task.CompletedTask;
     }
 
-    private async Task AcceptAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task AcceptAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { GiftOpen: true } member)
         {

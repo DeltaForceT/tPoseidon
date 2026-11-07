@@ -1,9 +1,9 @@
 using System.Buffers.Binary;
 using tPoseidon.Core.Common;
 
-namespace tPoseidon.Core.Crypto.S2;
+namespace tPoseidon.Core.Crypto.Trident;
 
-public sealed class S2PacketCipher
+public sealed class TridentPacketCipher
 {
     public const int HeaderSize = 9;
     public const int PayloadChecksumSize = 2;
@@ -19,9 +19,9 @@ public sealed class S2PacketCipher
     public const int PaddingModulus = 13;
 
     private readonly KeyTable _table;
-    private readonly IS2CipherDerivation _derivation;
+    private readonly ITridentCipherDerivation _derivation;
 
-    public S2PacketCipher(KeyTable table, IS2CipherDerivation derivation)
+    public TridentPacketCipher(KeyTable table, ITridentCipherDerivation derivation)
     {
         ArgumentNullException.ThrowIfNull(table);
         ArgumentNullException.ThrowIfNull(derivation);
@@ -88,7 +88,7 @@ public sealed class S2PacketCipher
         return frame;
     }
 
-        public S2DecryptedPacket Decrypt(ReadOnlySpan<byte> frame, SessionInfo session)
+        public TridentDecryptedPacket Decrypt(ReadOnlySpan<byte> frame, SessionInfo session)
     {
         ArgumentNullException.ThrowIfNull(session);
 
@@ -98,7 +98,7 @@ public sealed class S2PacketCipher
         }
     }
 
-    private S2DecryptedPacket DecryptLocked(ReadOnlySpan<byte> frame, SessionInfo session)
+    private TridentDecryptedPacket DecryptLocked(ReadOnlySpan<byte> frame, SessionInfo session)
     {
         if (frame.Length < MinimumFrameSize)
         {
@@ -183,11 +183,11 @@ public sealed class S2PacketCipher
 
         session.IsFirstPacket = false;
 
-        return new S2DecryptedPacket(length, opcode, sequence, flags, randKey, payload);
+        return new TridentDecryptedPacket(length, opcode, sequence, flags, randKey, payload);
     }
 }
 
-public readonly record struct S2DecryptedPacket(
+public readonly record struct TridentDecryptedPacket(
     ushort DeclaredLength,
     ushort Opcode,
     ushort SequenceNumber,

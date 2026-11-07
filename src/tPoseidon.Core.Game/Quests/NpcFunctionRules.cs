@@ -4,6 +4,16 @@ public static class NpcEventTalk
 {
     public const int Talk = 0;
     public const int Scene = 1;
+
+    public static ushort? ContinuationMessage(int kind, IReadOnlyList<ushort> args, int? lastMessage, Func<int, bool> messageExists)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        ArgumentNullException.ThrowIfNull(messageExists);
+        if (args.Count > 0) return args[0];
+        if (kind != Scene || lastMessage is not int last || last >= ushort.MaxValue) return null;
+        var next = last + 1;
+        return messageExists(next) ? (ushort)next : null;
+    }
 }
 
 public sealed record GuildSetupRequirement(int MinLevel, int MinGelder)

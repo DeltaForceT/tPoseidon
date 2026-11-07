@@ -166,7 +166,8 @@ public static class EquipReformRules
         EquipReformRequest request,
         EquipReformTables tables,
         RefineTables refineTables,
-        Func<int> curveRoll)
+        Func<int> curveRoll,
+        RandomStatRow? randomRow = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(stored);
@@ -177,11 +178,20 @@ public static class EquipReformRules
         var rolled = new List<ItemProperty>(ItemPropertyRules.BaseStatCount + 1);
         for (var slot = 0; slot <= GunApSlot; slot++)
         {
-            var baseValue = slot < GunApSlot
-                ? slot < definition.StatBonuses.Count ? definition.StatBonuses[slot] : 0
-                : hasGunAp ? definition.Ap : 0;
-            if (baseValue == 0) continue;
-            var (low, high) = StatReroll.Range(baseValue, tables.RandomStatMinPercent, tables.RandomStatMaxPercent);
+            int low, high;
+            if (definition.HasRandomStats && randomRow is not null)
+            {
+                if (slot >= randomRow.Stats.Count || randomRow.Stats[slot] is not { } range) continue;
+                (low, high) = (range.Min, range.Max);
+            }
+            else
+            {
+                var baseValue = slot < GunApSlot
+                    ? slot < definition.StatBonuses.Count ? definition.StatBonuses[slot] : 0
+                    : hasGunAp ? definition.Ap : 0;
+                if (baseValue == 0) continue;
+                (low, high) = StatReroll.Range(baseValue, tables.RandomStatMinPercent, tables.RandomStatMaxPercent);
+            }
             if (ElixirFor(request, slot, tables) is { } elixir)
             {
                 low = StatReroll.Shift(low, elixir.MinShift);

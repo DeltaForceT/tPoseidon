@@ -5,7 +5,7 @@ using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.Game.Stats;
 using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.Packets;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 
 namespace tPoseidon.Core.Net.World;
 
@@ -54,7 +54,7 @@ public sealed partial class ItemUseService
     private readonly ItemManager _itemManager;
 
     public ItemUseService(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         IItemStore items,
         IItemParamLookup catalog,
         ItemUsePlayer player,
@@ -91,13 +91,13 @@ public sealed partial class ItemUseService
         _itemManager = itemManager ?? throw new ArgumentNullException(nameof(itemManager));
     }
 
-    private static Func<string> RemoteOf(S2SessionContext ctx)
+    private static Func<string> RemoteOf(TridentSessionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(ctx);
         return () => ctx.Remote?.ToString() ?? string.Empty;
     }
 
-    private static Func<Opcode, byte[], byte, ushort, CancellationToken, Task> SenderOf(S2SessionContext ctx)
+    private static Func<Opcode, byte[], byte, ushort, CancellationToken, Task> SenderOf(TridentSessionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(ctx);
         return (opcode, payload, randKey, blockId, ct) => ctx.SendFrameAsync(opcode, payload, randKey, blockId, ct);
@@ -383,9 +383,9 @@ public sealed partial class ItemUseService
         var block = _blocks.Next();
         await SendAsync(Opcode.S2C_ITEM_USE_EFFECT, ItemUseFrames.Used(wireUid, ItemUseFrames.EffectOnly((ushort)definition.Effect)), block, ct).ConfigureAwait(false);
         await _player.SendToMap(Opcode.S2C_COMMAND_BLOCK_END, Array.Empty<byte>(), block).ConfigureAwait(false);
+        _player.MonsterCardUsed?.Invoke(definition);
         await SendAsync(Opcode.S2C_MONSTER_CARD_USED, ItemUseFrames.MonsterCardUsed((uint)card.ItemIndex), ct).ConfigureAwait(false);
         Consume(card, definition);
-        _player.MonsterCardUsed?.Invoke(definition);
         Console.WriteLine($"{_logTag} {_remote()}   monster card {card.ItemIndex} used (SubType {definition.SubType})");
     }
 

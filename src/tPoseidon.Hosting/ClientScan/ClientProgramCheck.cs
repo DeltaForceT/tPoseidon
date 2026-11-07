@@ -1,4 +1,4 @@
-using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.Crypto.Trident;
 
 namespace tPoseidon.Hosting.ClientScan;
 

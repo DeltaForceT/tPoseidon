@@ -96,7 +96,8 @@ internal sealed class PetRetrainController
         lock (_rngGate)
         {
             outcome = PetRetrainRules.Retrain(petDefinition, stored, _propertyRules().Full(petDefinition, stored), row, request.LockStatId, tables,
-                () => _rng.Next(ItemPropertyRules.CurveRolls));
+                () => _rng.Next(ItemPropertyRules.CurveRolls),
+                () => _propertyRules().Create(petDefinition, true, _rng));
         }
         var rows = new List<EquipUpgradeItem>(2) { EquipUpgradeOperations.Take(material, (ushort)row.ItemCount) };
         if (lockItem is not null) rows.Add(EquipUpgradeOperations.Take(lockItem, (ushort)row.LockItemCount));

@@ -67,6 +67,7 @@ public static class SystemLinkFrames
     public const ushort OrderUpdateQuest = 0x15;
     public const ushort OrderRecoverQuest = 0x16;
     public const ushort OrderGuildName = 0xE7;
+    public const ushort OrderGuildCreateFee = 0xE8;
 
     public const int MirrorSlots = 6;
     public const int MirrorLength = 78;

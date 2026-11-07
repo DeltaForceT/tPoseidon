@@ -44,6 +44,11 @@ public static class SoulSeedRules
     public const int TmLevelUpEvent = 1;
     public const int HpPotionEvent = 0x14;
     public const int MpPotionEvent = 0x15;
+    public const int CardIdentifyDealEvent = 44;
+    public const int SecretCardEventBase = 51;
+    public const int SecretCardFirstItem = 26500;
+    public const int SecretCardLastItem = 26515;
+    public const int SecretCardKinds = 4;
     public const byte RemoveAfterUse = 0;
     public const byte DecrementAfterUse = 2;
 
@@ -54,6 +59,21 @@ public static class SoulSeedRules
         [Quests.QuestTypes.Monster] = 8,
         [Quests.QuestTypes.Party] = 9,
     };
+
+    private static readonly Dictionary<int, int> CardIdentifyComboEvents = new()
+    {
+        [3] = 45,
+        [5] = 46,
+        [7] = 47,
+        [9] = 48,
+        [10] = 49,
+        [11] = 50,
+    };
+
+    public static int? CardIdentifyComboEvent(int combo) => CardIdentifyComboEvents.TryGetValue(combo, out var eventType) ? eventType : null;
+
+    public static int? SecretCardEvent(int itemId) =>
+        itemId is >= SecretCardFirstItem and <= SecretCardLastItem ? SecretCardEventBase + (itemId - SecretCardFirstItem) % SecretCardKinds : null;
 
     public static int? QuestEvent(byte questType) => QuestEvents.TryGetValue(questType, out var eventType) ? eventType : null;
 

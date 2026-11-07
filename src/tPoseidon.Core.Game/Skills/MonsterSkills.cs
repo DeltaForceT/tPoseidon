@@ -1,4 +1,5 @@
 using tPoseidon.Core.Common;
+using tPoseidon.Core.Game.Skills.Effects;
 namespace tPoseidon.Core.Game.Skills;
 
 public static class MonsterSkills
@@ -110,13 +111,19 @@ public static class MonsterSkills
     public static bool IsBuilt(int actionId) =>
         actionId is Heal or ChainArrow or MagicRing or FireBreath or ThunderBreath or SharpBrandish or Thunderbolt or WindSlash or Siren
             or DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
-            or Destruction or Vampiric or Poison or Charging or Warp or MagicStorm or EarthDivide or Guard
+            or Destruction or Vampiric or Poison or Charging or Warp or MagicStorm or EarthDivide or Guard or Unshield or DarkSlow
+        || IsStatEffect(actionId)
         || SingleMagic.ContainsKey(actionId) || HarconSkills.IsHarcon(actionId)
         || SkillAreaShapes.Find(actionId) is not null || SkillHitShapes.Find(actionId) is { NeedsGun: false };
 
+    public static bool IsStatEffect(int actionId) =>
+        SkillEffectKinds.Find(actionId) is { ChangesStat: true, Holds: false, ChangesSpeed: false, HalvesHits: false, Periodic: SkillPeriodicHit.None } kind
+        && kind.SecondStat == SkillEffectKinds.NoStat && kind.ThirdStat == SkillEffectKinds.NoStat && kind.FlatColumn is null;
+
     public static bool IsObject(int actionId) =>
         actionId is DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
-            or Destruction or Vampiric or Poison or Charging or Warp or Unshield or DarkSlow;
+            or Destruction or Vampiric or Poison or Charging or Warp or Unshield or DarkSlow
+        || IsStatEffect(actionId);
 
     public static long ChargingPower(long pushed, long casterHp, float ratio) =>
         WireLimits.Saturate(unchecked((pushed + ChargingDistanceBase) * casterHp) * (double)ratio / ChargingDivisor);

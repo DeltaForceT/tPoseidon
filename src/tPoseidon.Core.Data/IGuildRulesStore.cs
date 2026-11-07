@@ -33,6 +33,12 @@ public static class GuildRules
     public const int NewGuildRanking = 999999;
     public const int NoticesShown = 3;
     public const int NoticeNotFound = 101;
+    public const int MissingGuild = 101;
+    public const int PasswordMismatch = 102;
+    public const int GreetingBytes = 60;
+    public const int IntroBytes = 100;
+    public const int UrlBytes = 64;
+    public const int PasswordBytes = 16;
 
     public static readonly IReadOnlyList<(string Name, int Point)> DefaultGrades = new[]
     {
@@ -75,7 +81,8 @@ public sealed record GuildDetail(
     IReadOnlyList<GuildNotice> Notices,
     int DepotTabs = 0,
     int Coins = 0,
-    GuildEmblemState Emblem = default);
+    GuildEmblemState Emblem = default,
+    byte[]? Auth = null);
 
 public sealed record GuildRosterEntry(
     ulong CharacterId,
@@ -118,4 +125,14 @@ public interface IGuildRulesStore
     GuildResult<GuildNotice> AddNotice(ulong characterId, uint guildCode, string content);
 
     int DeleteNotice(uint guildCode, long noticeCode);
+
+    int UpdateGreeting(uint guildCode, string text);
+
+    int UpdateIntro(uint guildCode, string text);
+
+    int UpdateUrl(uint guildCode, string text);
+
+    int ChangePassword(uint guildCode, string oldPassword, string newPassword);
+
+    int UpdateAuth(uint guildCode, byte[] table);
 }

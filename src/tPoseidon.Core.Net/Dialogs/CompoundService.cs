@@ -4,7 +4,7 @@ using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.Game.Quests;
 using tPoseidon.Core.Game.Stats;
 using tPoseidon.Core.LibConfig;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Dialogs;
@@ -20,7 +20,7 @@ public sealed class CompoundService
 {
     private sealed record PendingCompound(int RecipeId, int Count, IReadOnlyList<CompoundMaterial> Materials, CompoundRoll Roll);
 
-    private readonly S2SessionContext _ctx;
+    private readonly TridentSessionContext _ctx;
     private readonly MaterialExchange _exchange;
     private readonly IReadOnlyDictionary<int, CompoundRecipe> _recipes;
     private readonly IReadOnlyList<CompounderList> _lists;
@@ -30,7 +30,7 @@ public sealed class CompoundService
     private PendingCompound? _pending;
 
     public CompoundService(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         IItemStore items,
         IItemParamLookup catalog,
         IReadOnlyDictionary<int, CompoundRecipe> recipes,

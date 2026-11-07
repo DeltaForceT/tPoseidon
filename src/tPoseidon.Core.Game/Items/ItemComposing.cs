@@ -33,7 +33,6 @@ public static class ItemComposingRules
     public const byte AlreadyRequesting = 9;
     public const byte CatalystMissing = 0x0E;
     public const byte BadCatalyst = 0x0F;
-    public const byte PetLevelLow = 19;
 
     public const int AppearanceType = 12;
     public const int AppearanceId = 26000;
@@ -106,7 +105,6 @@ public static class ItemComposingRules
         if (!composable(baseDefinition, candidate.BaseProperties) || !composable(material, candidate.MaterialProperties)) return NotComposable;
         if (baseDefinition.Type != material.Type) return DifferentKind;
         if (baseDefinition.SubType != material.SubType && baseDefinition.SubType != AnySubType && material.SubType != AnySubType) return DifferentKind;
-        if (pets && material.MinLevel < baseDefinition.MinLevel) return PetLevelLow;
         if (!needsCatalyst) return Ok;
         if (candidate.Support is not { } support) return CatalystMissing;
         return support.Effect == (pets ? PetCatalystEffect : EquipmentCatalystEffect) ? Ok : BadCatalyst;

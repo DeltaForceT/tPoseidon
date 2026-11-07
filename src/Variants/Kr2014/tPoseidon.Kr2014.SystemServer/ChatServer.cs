@@ -1,6 +1,6 @@
 using System.Text;
 using tPoseidon.Core.Net;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.Social;
 
 namespace tPoseidon.Kr2014.SystemServer;
@@ -28,7 +28,7 @@ public sealed class ChatServer
         _log = log ?? throw new ArgumentNullException(nameof(log));
     }
 
-    public void Register(OpcodeDispatcher dispatcher, S2SessionContext ctx)
+    public void Register(OpcodeDispatcher dispatcher, TridentSessionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(ctx);
@@ -82,7 +82,7 @@ public sealed class ChatServer
         return true;
     }
 
-    private void Room(OpcodeDispatcher dispatcher, S2SessionContext ctx, ushort opcode,
+    private void Room(OpcodeDispatcher dispatcher, TridentSessionContext ctx, ushort opcode,
         RoomHandler handler)
     {
         dispatcher.Register((Core.Common.Opcode)opcode, async (_, payload, ct) =>
@@ -124,7 +124,7 @@ public sealed class ChatServer
         foreach (var order in outbox.OnceOrders) await _games.SendOnceAsync(order.CharacterId, order.OrderType, order.Data!, ct).ConfigureAwait(false);
     }
 
-    private async Task EnterLobbyAsync(S2SessionContext ctx, CancellationToken ct)
+    private async Task EnterLobbyAsync(TridentSessionContext ctx, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member) return;
         ushort clientId;
@@ -141,7 +141,7 @@ public sealed class ChatServer
         _log($"[chat] 0x{member.Character.CharacterId:X} '{member.Character.Name}' entered the lobby as client {clientId}");
     }
 
-    private async Task WhisperAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task WhisperAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { ChatClientId: { } senderId } sender) return;
         if (!WhisperFrames.TryRead(payload.Span, _text, out var request)) return;
@@ -205,6 +205,6 @@ public sealed class ChatServer
         }
     }
 
-    private static Task SendAsync(S2SessionContext ctx, ushort opcode, byte[] payload, CancellationToken ct) =>
+    private static Task SendAsync(TridentSessionContext ctx, ushort opcode, byte[] payload, CancellationToken ct) =>
         ctx.SendFrameAsync(opcode, payload, (byte)Random.Shared.Next(1, 256), ct);
 }

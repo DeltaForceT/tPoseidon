@@ -251,8 +251,8 @@ internal sealed class DrillController
         }
 
         var elapsed = (DateTimeOffset.UtcNow - dig.StartedAt).TotalMilliseconds;
-        var minimum = DrillRules.MinimumMilliseconds(parameters, DrillRules.ItemDepth(laid!.Value), mapDepth);
-        var tooFast = elapsed < minimum;
+        var minimum = DrillRules.MinimumMilliseconds(parameters, DrillRules.ItemDepth(laid!.Value), mapDepth, digger.AutoDrill);
+        var tooFast = DrillRules.CutsOffForSpeed(elapsed, minimum);
         if (tooFast)
         {
             Console.WriteLine($"{_logTag} [drill] 0x{digger.PlayerEntityId:X4} dug faster than possible: {elapsed:F0} ms of {minimum} ms");

@@ -1,4 +1,4 @@
-namespace tPoseidon.Core.Crypto.S2;
+namespace tPoseidon.Core.Crypto.Trident;
 
 public sealed class KeyTable
 {

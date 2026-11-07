@@ -107,6 +107,7 @@ public sealed class MonsterBattleCycle
     private readonly Func<int, int, MonsterSkillTiming>? _skillTimingOf;
     private readonly Dictionary<(ushort Monster, int Skill), DateTimeOffset> _skillCooling = new();
     private readonly Func<MonsterEntity, int?>? _attackerLimitOf;
+    private readonly List<(ushort MapId, MonsterBattleEvent Event)> _queued = new();
 
     public MonsterBattleCycle(
         IMonsterParamLookup catalog,
@@ -163,6 +164,14 @@ public sealed class MonsterBattleCycle
         }
     }
 
+    public IReadOnlyList<ushort> HeldTargets()
+    {
+        lock (_gate)
+        {
+            return _fights.Values.Select(fight => fight.TargetEntityId).Distinct().ToArray();
+        }
+    }
+
     public void Forget(ushort monsterEntityId)
     {
         lock (_gate)
@@ -198,6 +207,29 @@ public sealed class MonsterBattleCycle
                 || !_fights.TryGetValue(monster.EntityId, out var fight)) return;
             var until = now.AddMilliseconds(skillMs + reach.MonsterSwingDelayMs(definition.DxLv + monster.StatDelta(MonsterStat.Dx)));
             if (until > fight.NextSwingAt) fight.NextSwingAt = until;
+        }
+    }
+
+    public bool BeginCast(MonsterEntity monster, int skillId, int level, string speech, MonsterSkillTiming timing, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(monster);
+        ArgumentNullException.ThrowIfNull(speech);
+        if (timing.CastMs < 1) return false;
+        lock (_gate)
+        {
+            if (monster.IsDead
+                || !_fights.TryGetValue(monster.EntityId, out var fight)
+                || fight.PendingCast is not null) return false;
+            var (x, y) = monster.GetInterpolatedPosition(now);
+            monster.InitPosition(x, y);
+            fight.Legs.Clear();
+            fight.Settled = true;
+            fight.PendingCast = new PendingCast(skillId, level, speech, timing.CoolMs);
+            fight.NextSwingAt = now.AddMilliseconds(timing.CastMs);
+            var haltedType = monster.MoveType == MeleeApproach.DefaultMoveType ? MeleeApproach.WalkMoveType : monster.MoveType;
+            _queued.Add((fight.MapId, new MonsterBattleHalted(monster.EntityId, x, y, haltedType)));
+            _queued.Add((fight.MapId, new MonsterBattleCastStarted(monster.EntityId, fight.TargetEntityId, skillId, level)));
+            return true;
         }
     }
 
@@ -273,6 +305,8 @@ public sealed class MonsterBattleCycle
         var events = new List<MonsterBattleEvent>();
         lock (_gate)
         {
+            events.AddRange(_queued.Where(queued => queued.MapId == mapId).Select(queued => queued.Event));
+            _queued.RemoveAll(queued => queued.MapId == mapId);
             if (_fights.Count == 0) return events;
 
             var hpLeftByTarget = new Dictionary<ushort, long>();
@@ -356,7 +390,7 @@ public sealed class MonsterBattleCycle
                     }
                 }
 
-                var canMove = monster.WalkSpeedOf(definition.WalkSpeed) > 0 && monster.RunSpeedOf(definition.RunSpeed) > 0 && !monster.IsRooted(now);
+                var canMove = monster.WalkSpeedOf(definition.WalkSpeed) > 0 && monster.RunSpeedOf(definition.RunSpeed) > 0 && !monster.IsHeld(now);
                 var decision = MeleeApproach.Decide(
                     reach, monster.DestinationX, monster.DestinationY, target.X, target.Y, fight.Settled, _rng,
                     immobile: monster.WalkSpeedOf(definition.WalkSpeed) <= 0 || monster.RunSpeedOf(definition.RunSpeed) <= 0);
@@ -375,7 +409,7 @@ public sealed class MonsterBattleCycle
                     continue;
                 }
 
-                if (monster.IsRooted(now)) continue;
+                if (monster.IsHeld(now)) continue;
 
                 var gap = backingOff ? MeleeApproach.BackOffGap : MeleeApproach.OrderGap;
                 var moveType = !backingOff && fight.Settled ? MeleeApproach.ChaseMoveType : StoredMoveType;

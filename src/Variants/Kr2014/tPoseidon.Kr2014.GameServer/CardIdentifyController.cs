@@ -3,6 +3,7 @@ using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Cards;
 using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.Game.Monsters;
+using tPoseidon.Core.Game.SoulSeed;
 using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.World;
 
@@ -16,6 +17,7 @@ internal sealed class CardIdentifyController
     private readonly Func<ushort> _newEntityId;
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
     private readonly Func<InGameSessionState, Opcode, byte[], Task> _sendToViewers;
+    private readonly Func<InGameSessionState, int, int, Task> _seedEvent;
     private readonly int _bagCapacity;
     private readonly string _logTag;
     private readonly Random _rng = new();
@@ -30,6 +32,7 @@ internal sealed class CardIdentifyController
         Func<ushort> newEntityId,
         Func<ushort, Opcode, byte[], Task> sendToMap,
         Func<InGameSessionState, Opcode, byte[], Task> sendToViewers,
+        Func<InGameSessionState, int, int, Task> seedEvent,
         int bagCapacity,
         string logTag)
     {
@@ -41,6 +44,7 @@ internal sealed class CardIdentifyController
         _newEntityId = newEntityId ?? throw new ArgumentNullException(nameof(newEntityId));
         _sendToMap = sendToMap ?? throw new ArgumentNullException(nameof(sendToMap));
         _sendToViewers = sendToViewers ?? throw new ArgumentNullException(nameof(sendToViewers));
+        _seedEvent = seedEvent ?? throw new ArgumentNullException(nameof(seedEvent));
         _bagCapacity = bagCapacity;
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
@@ -81,6 +85,7 @@ internal sealed class CardIdentifyController
         }
         await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_LIFE, CardIdentifyFrames.Life(game.Life)).ConfigureAwait(false);
         await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_DEALT, CardIdentifyFrames.Dealt(game.Stage, game.SpecialPosition)).ConfigureAwait(false);
+        await _seedEvent(player, SoulSeedRules.CardIdentifyDealEvent, 1).ConfigureAwait(false);
         Log(player, $"stage {game.Stage} dealt with card {card.Id} (value {card.CardNum}), life {game.Life}, special {game.SpecialPosition}");
     }
 
@@ -108,6 +113,8 @@ internal sealed class CardIdentifyController
         var dropped = await GiveAsync(player, outcome.ItemId).ConfigureAwait(false);
         await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_LIFE, CardIdentifyFrames.Life(game.Life)).ConfigureAwait(false);
         await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_MATCHED, CardIdentifyFrames.Matched((uint)outcome.ItemId, game.Combo, (uint)Math.Max(0, game.Score), dropped)).ConfigureAwait(false);
+        if (SoulSeedRules.CardIdentifyComboEvent(game.Combo) is { } comboEvent) await _seedEvent(player, comboEvent, 1).ConfigureAwait(false);
+        if (SoulSeedRules.SecretCardEvent(outcome.ItemId) is { } secretEvent) await _seedEvent(player, secretEvent, 1).ConfigureAwait(false);
         Log(player, $"pair of item {outcome.ItemId}: combo {game.Combo}, score {game.Score}, life {game.Life}{(dropped ? ", dropped at the feet" : string.Empty)}");
     }
 
@@ -119,6 +126,7 @@ internal sealed class CardIdentifyController
         await GiveAsync(player, taken.ItemId).ConfigureAwait(false);
         if (taken.LifeChanged) await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_LIFE, CardIdentifyFrames.Life(game.Life)).ConfigureAwait(false);
         await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_TAKEN, CardIdentifyFrames.Taken((uint)taken.ItemId, true)).ConfigureAwait(false);
+        if (SoulSeedRules.SecretCardEvent(taken.ItemId) is { } secretEvent) await _seedEvent(player, secretEvent, 1).ConfigureAwait(false);
         Log(player, $"single card {position} taken: item {taken.ItemId}, life {game.Life}");
     }
 

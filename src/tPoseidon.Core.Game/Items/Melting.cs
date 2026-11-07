@@ -26,6 +26,7 @@ public static class MeltingRules
     public const int StatQualityFloor = 10;
     public const double FullQuality = 100.0;
     public const int PercentBase = 100;
+    public const int CashItemOption = 0x40000;
 
     public static byte CheckItem(bool inBag, bool equipped, bool busy, ItemParamEntry? definition)
     {
@@ -37,41 +38,119 @@ public static class MeltingRules
         return Ok;
     }
 
-    public static int StatQuality(ItemParamEntry definition, IReadOnlyList<ItemProperty> properties, int minPercent, int maxPercent)
+    public static int StatQuality(ItemParamEntry definition, IReadOnlyList<ItemProperty> properties, MeltingReference reference)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(properties);
-        if (definition.HasRandomStats) return 0;
-        var sum = 0.0;
+        ArgumentNullException.ThrowIfNull(reference);
+        reference.RandomStats.TryGetValue(definition.Id, out var randomRow);
+        var sum = 0f;
         var counted = 0;
-        for (var index = 0; index < definition.StatBonuses.Count; index++)
+        for (var index = 0; index < ItemPropertyRules.BaseStatCount; index++)
         {
-            var baseValue = definition.StatBonuses[index];
-            if (baseValue == 0) continue;
-            var min = baseValue + baseValue * minPercent / PercentBase;
-            var max = baseValue + baseValue * maxPercent / PercentBase;
+            var baseValue = index < definition.StatBonuses.Count ? definition.StatBonuses[index] : 0;
+            var key = StatPropertyBase + index;
+            int min, max, actual;
+            if (definition.HasRandomStats)
+            {
+                if (randomRow is null || index >= randomRow.Stats.Count || randomRow.Stats[index] is not { } range) continue;
+                actual = StoredStat(properties, key, 0);
+                if (actual == 0) continue;
+                min = range.Min;
+                max = range.Max;
+            }
+            else
+            {
+                if (baseValue == 0) continue;
+                min = baseValue + baseValue * reference.RandomStatMinPercent / PercentBase;
+                max = baseValue + baseValue * reference.RandomStatMaxPercent / PercentBase;
+                actual = StoredStat(properties, key, baseValue);
+            }
             if (min <= StatQualityFloor || max <= StatQualityFloor) continue;
-            var actual = properties
-                .Where(property => property.Type == ItemPropertyTypes.Stat && property.Id == StatPropertyBase + index)
-                .Select(property => (int?)property.Value)
-                .FirstOrDefault() ?? baseValue;
-            sum += min == max ? FullQuality : FullQuality * (actual - min) / (max - min);
-            counted++;
+            Accumulate(ref sum, ref counted, min, max, actual);
         }
-        return counted == 0 ? 0 : (int)Math.Truncate(sum / counted);
+        if (definition.SubType == ItemParamEntry.GunSubType)
+        {
+            int min, max, actual;
+            if (definition.HasRandomStats)
+            {
+                if (randomRow is null || ItemPropertyRules.GunApId - StatPropertyBase >= randomRow.Stats.Count || randomRow.Stats[ItemPropertyRules.GunApId - StatPropertyBase] is not { } range) return Average(sum, counted);
+                min = range.Min;
+                max = range.Max;
+                actual = StoredStat(properties, ItemPropertyRules.GunApId, 0);
+            }
+            else
+            {
+                min = definition.Ap + definition.Ap * reference.RandomStatMinPercent / PercentBase;
+                max = definition.Ap + definition.Ap * reference.RandomStatMaxPercent / PercentBase;
+                actual = StoredStat(properties, ItemPropertyRules.GunApId, definition.Ap);
+            }
+            if ((min > StatQualityFloor || max > StatQualityFloor) && actual > 0) Accumulate(ref sum, ref counted, min, max, actual);
+        }
+        return Average(sum, counted);
     }
 
-    public static int Score(MeltingInfoEntry info, ItemParamEntry definition, Item item, int statQuality)
+    public static int CompoundValue(Item item, IReadOnlyList<ItemProperty> properties, IReadOnlyDictionary<int, MaturingCompoundRow> materials)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        ArgumentNullException.ThrowIfNull(properties);
+        ArgumentNullException.ThrowIfNull(materials);
+        var sum = 0f;
+        var counted = 0;
+        for (var slot = 0; slot < item.ItemSlot; slot++)
+        {
+            var found = properties.Where(property => property.Type == slot).Select(property => (ItemProperty?)property).FirstOrDefault();
+            if (found is not { } mix || !materials.TryGetValue((int)mix.Extra, out var row) || row.MaxAbility == row.MinAbility) continue;
+            counted++;
+            sum = (float)(sum + (double)(row.MaxAbility - mix.Value) * FullQuality / (row.MaxAbility - row.MinAbility));
+        }
+        return counted == 0 ? 0 : (int)Math.Truncate((double)sum / counted);
+    }
+
+    public static bool IsCashItem(ItemParamEntry definition, IReadOnlyList<ItemProperty> properties)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        ArgumentNullException.ThrowIfNull(properties);
+        var options = definition.Class == EquipmentClass
+            ? properties.Where(property => property.Type == ItemPropertyTypes.Options).Select(property => (uint?)property.Extra).FirstOrDefault()
+            : null;
+        return ((long)(options ?? (uint)definition.Options) & CashItemOption) != 0;
+    }
+
+    public static int Score(MeltingInfoEntry info, ItemParamEntry definition, Item item, IReadOnlyList<ItemProperty> properties, MeltingReference reference)
     {
         ArgumentNullException.ThrowIfNull(info);
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(item);
-        return (int)Math.Truncate(
-            definition.MinLevel * (double)info.ItemGradeRate
-            + item.ItemSlot * (double)info.CompoundSlotRate
-            + statQuality * (double)info.ItemValueRate
-            + item.RefineLevel * (double)info.CraftGrade);
+        ArgumentNullException.ThrowIfNull(properties);
+        ArgumentNullException.ThrowIfNull(reference);
+        var score = (float)((double)definition.RefineIndex * info.ItemGradeRate);
+        score = (float)(score + (double)item.ItemSlot * info.CompoundSlotRate);
+        score = (float)(score + (double)CompoundValue(item, properties, reference.Materials) * info.CompoundValueRate);
+        score = (float)(score + (double)StatQuality(definition, properties, reference) * info.ItemValueRate);
+        score = (float)(score + (double)item.RefineLevel * info.CraftGrade);
+        if (IsCashItem(definition, properties)) score = (float)(score + (double)(ushort)info.CmOption);
+        return (int)Math.Truncate((double)score);
     }
+
+    private static int StoredStat(IReadOnlyList<ItemProperty> properties, int key, int fallback)
+    {
+        var stored = properties
+            .Where(property => property.Type == ItemPropertyTypes.Stat && property.Id == key)
+            .Select(property => (int?)property.Value)
+            .FirstOrDefault() ?? 0;
+        return stored != 0 ? stored : fallback;
+    }
+
+    private static void Accumulate(ref float sum, ref int counted, int min, int max, int actual)
+    {
+        var quality = min == max ? FullQuality : FullQuality / (max - min) * (actual - min);
+        sum = (float)(sum + quality);
+        counted++;
+    }
+
+    private static int Average(float sum, int counted) =>
+        counted == 0 ? 0 : (int)Math.Truncate((double)(float)((double)sum / counted));
 
     public static MeltingDropEntry? Band(IReadOnlyList<MeltingDropEntry> drops, int total)
     {
@@ -83,5 +162,20 @@ public static class MeltingRules
     {
         ArgumentNullException.ThrowIfNull(band);
         return (long)band.MeltingCost * itemCount;
+    }
+}
+
+public sealed record MeltingReference(
+    int RandomStatMinPercent,
+    int RandomStatMaxPercent,
+    IReadOnlyDictionary<int, RandomStatRow> RandomStats,
+    IReadOnlyDictionary<int, MaturingCompoundRow> Materials)
+{
+    public static MeltingReference Of(MeltingTables melting, ItemPropertyTables properties, GrowthTables growth)
+    {
+        ArgumentNullException.ThrowIfNull(melting);
+        ArgumentNullException.ThrowIfNull(properties);
+        ArgumentNullException.ThrowIfNull(growth);
+        return new MeltingReference(melting.RandomStatMinPercent, melting.RandomStatMaxPercent, properties.RandomStats, growth.Materials);
     }
 }

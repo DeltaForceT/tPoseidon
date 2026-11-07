@@ -1,7 +1,7 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Game.Quests;
 using tPoseidon.Core.Game.Stats;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Dialogs;
@@ -9,6 +9,7 @@ namespace tPoseidon.Core.Net.Dialogs;
 public sealed partial class NpcScriptExecutor
 {
     private (int Kind, ushort? Message)? _eventTalk;
+    private int? _lastMessage;
 
     private async Task<int> NotifyCardBattleRankAsync(CancellationToken ct)
     {
@@ -41,7 +42,8 @@ public sealed partial class NpcScriptExecutor
         if (_npc is not { } npc) return NpcScript.Refused;
         await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
         await SendAsync(NpcFunctionFrames.EventStartOpcode(kind), NpcFunctionFrames.EventStart(npc.ChrType), ct).ConfigureAwait(false);
-        _eventTalk = (kind, args.Count > 0 ? args[0] : null);
+        var table = _talk?.MsgTable;
+        _eventTalk = (kind, NpcEventTalk.ContinuationMessage(kind, args, _lastMessage, index => table is not null && _catalogs.NpcMessages.GetRow(table, index) is not null));
         Console.WriteLine($"{_logTag} {_ctx.Remote}   event {(kind == NpcEventTalk.Scene ? "scene" : "talk")} of NPC {npc.ChrType} started (then message {(args.Count > 0 ? args[0].ToString(System.Globalization.CultureInfo.InvariantCulture) : "none")})");
         return NpcScript.Silent;
     }
@@ -130,6 +132,7 @@ public sealed partial class NpcScriptExecutor
         _eventTalk = null;
         if (pending.Message is ushort message && _npc is not null)
         {
+            _lastMessage = message;
             await SendAsync(NpcFunctionFrames.EventEndedOpcode(kind), NpcFunctionFrames.EventEnded(_npcEntityId, message), ct).ConfigureAwait(false);
             Console.WriteLine($"{_logTag} {_ctx.Remote}   event {(kind == NpcEventTalk.Scene ? "scene" : "talk")} ended; NPC 0x{_npcEntityId:X4} goes on with message {message}");
             return;

@@ -1,9 +1,9 @@
 using tPoseidon.Core.Common;
-using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.Crypto.Trident;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Data.Postgres;
 using tPoseidon.Core.Net.Packets;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Kr2014.Common;
 using ChannelIntroPacket = tPoseidon.Kr2014.Wire.ChannelIntroPacket;
 using CharacterListBuilder = tPoseidon.Kr2014.Wire.CharacterListBuilder;
@@ -56,16 +56,16 @@ var LocalHostIp = ServerEndpointConfig.PublicIp;
 var GameServerPort = ServerEndpointConfig.GamePort;
 var LoginServerPort = ServerEndpointConfig.LoginPort;
 
-var channelSessions = new System.Collections.Concurrent.ConcurrentDictionary<uint, S2SessionContext>();
-var handedOff = new System.Collections.Concurrent.ConcurrentDictionary<S2SessionContext, byte>();
+var channelSessions = new System.Collections.Concurrent.ConcurrentDictionary<uint, TridentSessionContext>();
+var handedOff = new System.Collections.Concurrent.ConcurrentDictionary<TridentSessionContext, byte>();
 var worldStatesReset = accountStore.ResetWorldStates(ChannelLogin.World, ChannelLogin.Island);
 Console.WriteLine($"{LogTag} channel start: {worldStatesReset} account(s) still marked logged in set to 0, as the KR LoginServer restart does");
 
-var host = new S2ServerHost
+var host = new TridentServerHost
 {
     LogTag = LogTag,
     Port = port,
-    KeyTablePath = S2ServerHost.DefaultKeyTablePath(),
+    KeyTablePath = TridentServerHost.DefaultKeyTablePath(),
     SessionsLogIn = true,
     ClientsKeepAlive = true,
     OnSessionClosed = ctx =>
@@ -458,7 +458,7 @@ var host = new S2ServerHost
 
         return Task.CompletedTask;
 
-        static async Task RunHeartbeatAsync(S2SessionContext c, ClientHeartbeat beat, CancellationToken ct)
+        static async Task RunHeartbeatAsync(TridentSessionContext c, ClientHeartbeat beat, CancellationToken ct)
         {
             try
             {
@@ -481,10 +481,10 @@ var host = new S2ServerHost
             }
         }
 
-        static Task SendFrameAsync(S2SessionContext c, Opcode op, byte randKey, byte[] payload, CancellationToken ct)
+        static Task SendFrameAsync(TridentSessionContext c, Opcode op, byte randKey, byte[] payload, CancellationToken ct)
             => SendRawFrameAsync(c, (ushort)op, randKey, payload, ct);
 
-        static async Task SendRawFrameAsync(S2SessionContext c, ushort op, byte randKey, byte[] payload, CancellationToken ct)
+        static async Task SendRawFrameAsync(TridentSessionContext c, ushort op, byte randKey, byte[] payload, CancellationToken ct)
         {
             var frame = c.Cipher.Encrypt(
                 opcode: op,
@@ -498,7 +498,7 @@ var host = new S2ServerHost
     },
 };
 
-using var stopSignal = S2ServerHost.WireCtrlC();
+using var stopSignal = TridentServerHost.WireCtrlC();
 
 tPoseidon.Core.InterServer.MasterServerClient? masterClient = null;
 try

@@ -1,12 +1,12 @@
 using tPoseidon.Core.Common;
-using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.Crypto.Trident;
 
-namespace tPoseidon.Core.Net.S2;
+namespace tPoseidon.Core.Net.Trident;
 
-public static class S2SessionContextExtensions
+public static class TridentSessionContextExtensions
 {
     public static Task SendFrameAsync(
-        this S2SessionContext ctx,
+        this TridentSessionContext ctx,
         Opcode op,
         byte[] payload,
         byte randKey = 0x00,
@@ -14,7 +14,7 @@ public static class S2SessionContextExtensions
         => SendFrameAsync(ctx, (ushort)op, payload, randKey, ct);
 
         public static Task SendFrameAsync(
-        this S2SessionContext ctx,
+        this TridentSessionContext ctx,
         ushort op,
         byte[] payload,
         byte randKey = 0x00,
@@ -24,7 +24,7 @@ public static class S2SessionContextExtensions
     }
 
     public static Task SendFrameAsync(
-        this S2SessionContext ctx,
+        this TridentSessionContext ctx,
         Opcode op,
         byte[] payload,
         byte randKey,
@@ -33,7 +33,7 @@ public static class S2SessionContextExtensions
         => SendFrameAsync(ctx, (ushort)op, payload, randKey, blockId, ct);
 
     public static Task SendFrameAsync(
-        this S2SessionContext ctx,
+        this TridentSessionContext ctx,
         ushort op,
         byte[] payload,
         byte randKey,
@@ -52,7 +52,7 @@ public static class S2SessionContextExtensions
     }
 
     public static Task SendUnencryptedFrameAsync(
-        this S2SessionContext ctx,
+        this TridentSessionContext ctx,
         ushort op,
         byte[] payload,
         CancellationToken ct = default)

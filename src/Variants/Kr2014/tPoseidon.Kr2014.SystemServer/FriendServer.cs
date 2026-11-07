@@ -1,7 +1,7 @@
 using System.Text;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Net;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.Social;
 
 namespace tPoseidon.Kr2014.SystemServer;
@@ -29,7 +29,7 @@ public sealed class FriendServer
         _log = log ?? throw new ArgumentNullException(nameof(log));
     }
 
-    public void Register(OpcodeDispatcher dispatcher, S2SessionContext ctx)
+    public void Register(OpcodeDispatcher dispatcher, TridentSessionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(ctx);
@@ -57,7 +57,7 @@ public sealed class FriendServer
 
     public Task ClosedAsync(SocialMember member, CancellationToken ct) => AnnounceOfflineAsync(member, ct);
 
-    private async Task LoginAsync(S2SessionContext ctx, CancellationToken ct)
+    private async Task LoginAsync(TridentSessionContext ctx, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member)
         {
@@ -88,7 +88,7 @@ public sealed class FriendServer
         }
     }
 
-    private async Task LogoutAsync(S2SessionContext ctx, CancellationToken ct)
+    private async Task LogoutAsync(TridentSessionContext ctx, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member) return;
         await AnnounceOfflineAsync(member, ct).ConfigureAwait(false);
@@ -109,7 +109,7 @@ public sealed class FriendServer
         }
     }
 
-    private async Task ChangeGroupAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task ChangeGroupAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member) return;
         var (friendId, currentGroup, targetGroup) = FriendFrames.ReadGroupChange(payload.Span);
@@ -122,7 +122,7 @@ public sealed class FriendServer
             ct).ConfigureAwait(false);
     }
 
-    private Task RenameGroup(S2SessionContext ctx, ReadOnlyMemory<byte> payload)
+    private Task RenameGroup(TridentSessionContext ctx, ReadOnlyMemory<byte> payload)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member) return Task.CompletedTask;
         var reader = new PacketReader(payload.Span);
@@ -136,7 +136,7 @@ public sealed class FriendServer
         return Task.CompletedTask;
     }
 
-    private async Task OfflineMessageAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task OfflineMessageAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member) return;
         var (target, text) = ReadCharacterAndText(payload.Span);
@@ -161,7 +161,7 @@ public sealed class FriendServer
 
     public Func<ulong, bool>? IsGameMaster { get; set; }
 
-    private async Task RelayAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, ushort opcode, CancellationToken ct)
+    private async Task RelayAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, ushort opcode, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } || payload.Length < sizeof(ulong)) return;
         var targetId = new PacketReader(payload.Span).ReadUInt64();
@@ -171,7 +171,7 @@ public sealed class FriendServer
         }
     }
 
-    private async Task RequestShownAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task RequestShownAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member || payload.Length < sizeof(ulong)) return;
         var requesterId = new PacketReader(payload.Span).ReadUInt64();
@@ -181,7 +181,7 @@ public sealed class FriendServer
         await NotifyAsync(requester, FriendFrames.RequestShownTo, FriendFrames.Name(member.Character.Name, _text), ct).ConfigureAwait(false);
     }
 
-    private async Task PositionAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task PositionAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member || payload.Length < sizeof(ulong)) return;
         var friendId = new PacketReader(payload.Span).ReadUInt64();
@@ -201,7 +201,7 @@ public sealed class FriendServer
         }
     }
 
-    private async Task ChangeZoneToAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task ChangeZoneToAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member || payload.Length < sizeof(ulong)) return;
         var friendId = new PacketReader(payload.Span).ReadUInt64();
@@ -240,14 +240,14 @@ public sealed class FriendServer
         await SendAsync(requester.Context, reply.Opcode, reply.Payload, ct).ConfigureAwait(false);
     }
 
-    private Task StoreRequestOption(S2SessionContext ctx, ReadOnlyMemory<byte> payload)
+    private Task StoreRequestOption(TridentSessionContext ctx, ReadOnlyMemory<byte> payload)
     {
         if (_room.Find(ctx) is not { } member || payload.Length < 2) return Task.CompletedTask;
         member.FriendRequestOption = new PacketReader(payload.Span).ReadUInt16();
         return Task.CompletedTask;
     }
 
-    private async Task AddRequestAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task AddRequestAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member) return;
         var name = new PacketReader(payload.Span).ReadNulTerminated(_text);
@@ -301,7 +301,7 @@ public sealed class FriendServer
         _log($"[friend] 0x{owner:X} '{member.Character.Name}' asks 0x{found.FriendCharacterId:X} '{found.Name}' to be friends");
     }
 
-    private async Task AcceptAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task AcceptAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } acceptor) return;
         var requesterId = new PacketReader(payload.Span).ReadUInt64();
@@ -338,7 +338,7 @@ public sealed class FriendServer
         _log($"[friend] 0x{acceptorId:X} and 0x{requesterId:X} are now friends");
     }
 
-    private async Task RefuseAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task RefuseAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } refuser) return;
         var requesterId = new PacketReader(payload.Span).ReadUInt64();
@@ -354,7 +354,7 @@ public sealed class FriendServer
         await SendAsync(ctx, FriendFrames.RefusalSent, Array.Empty<byte>(), ct).ConfigureAwait(false);
     }
 
-    private async Task CancelRequestAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task CancelRequestAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member) return;
         var name = new PacketReader(payload.Span).ReadNulTerminated(_text);
@@ -369,7 +369,7 @@ public sealed class FriendServer
         await NotifyAsync(target, FriendFrames.RequestCancelled, FriendFrames.Name(member.Character.Name, _text), ct).ConfigureAwait(false);
     }
 
-    private async Task DeleteAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task DeleteAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member) return;
         var name = new PacketReader(payload.Span).ReadNulTerminated(_text);
@@ -397,7 +397,7 @@ public sealed class FriendServer
         _log($"[friend] 0x{owner:X} removed 0x{entry.FriendCharacterId:X} '{entry.Name}' ({(friend is null ? "offline" : "online")})");
     }
 
-    private async Task DeleteOfflineAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task DeleteOfflineAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member) return;
         var name = new PacketReader(payload.Span).ReadNulTerminated(_text);
@@ -447,7 +447,7 @@ public sealed class FriendServer
         }
     }
 
-    private async Task OnlineMessageAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task OnlineMessageAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { FriendLoggedIn: true } member) return;
         var (targetId, text) = ReadCharacterAndText(payload.Span);
@@ -495,6 +495,6 @@ public sealed class FriendServer
         }
     }
 
-    private static Task SendAsync(S2SessionContext ctx, ushort opcode, byte[] payload, CancellationToken ct) =>
+    private static Task SendAsync(TridentSessionContext ctx, ushort opcode, byte[] payload, CancellationToken ct) =>
         ctx.SendFrameAsync(opcode, payload, (byte)Random.Shared.Next(1, 256), ct);
 }

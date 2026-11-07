@@ -406,6 +406,7 @@ public enum StatChangeSource
     EquipUpgrade,
     Marriage,
     CardBattle,
+    Guild,
 }
 
 public sealed record MoneyChangedEvent

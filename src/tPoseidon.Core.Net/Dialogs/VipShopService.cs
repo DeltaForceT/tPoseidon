@@ -4,7 +4,7 @@ using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.Game.Quests;
 using tPoseidon.Core.LibConfig;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Dialogs;
@@ -24,7 +24,7 @@ public sealed class VipShopService
     public const ushort TooHeavy = 7;
     public const ushort Failed = 8;
 
-    private readonly S2SessionContext _ctx;
+    private readonly TridentSessionContext _ctx;
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
     private readonly MaterialExchange _exchange;
@@ -35,7 +35,7 @@ public sealed class VipShopService
     private readonly string _logTag;
 
     public VipShopService(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         IItemStore items,
         IItemParamLookup catalog,
         IReadOnlyDictionary<int, VipShopOffer> offers,

@@ -39,7 +39,7 @@ tPoseidon is in beta. These are the rules that matter. The full text is in [BETA
 
 ## Where it stands
 
-**Latest release: [0.84.6-beta](https://github.com/DeltaForceT/tPoseidon/releases/tag/v0.84.6-beta)** (2026-11-07): fixes from your reports for equipment fusion at Arein, a crash in the Card Identification game, the Soul Seed after a relog, freezes at Pet Trainer Shurin and Melting, boss set rings after a portal, the Harcon coin shop and barrier count, the GM mail icon, and PvP skills on players. Every change is in the [CHANGELOG](CHANGELOG.md).
+**Latest release: [0.85.4-beta](https://github.com/DeltaForceT/tPoseidon/releases/tag/v0.85.4-beta)** (2026-11-07): about 40 fixes from your reports: secret cards and the Soul Seed in Card Identification, the Paula and polar bear skills, the guild master menu and the guild creation fee, monster attack speed and aggro, buffs kept through a warp, tempering of Requiem and Chaos gear, the Chapter 3 ending, the melting score, and starting the client from the panel on Linux. Every change is in the [CHANGELOG](CHANGELOG.md).
 
 You can make a character and play through a good part of the game, but you will hit bugs and missing systems. [docs/beta/SYSTEMS.md](docs/beta/SYSTEMS.md) lists what works, what is built but needs testing, and what isn't built yet. Read it before you start. When something breaks, [How to report a bug](docs/beta/how-to-report-a-bug.md) explains what I need from you.
 
@@ -59,6 +59,8 @@ Nothing else: the release packages carry their own .NET runtime.
 - Points the client at your server when you press Play, and keeps the original file next to it (`.tposeidon-original`).
 - Picks Korean or English mode from the client's own data. You can change it with **Client language** in the panel.
 - Checks the folder during setup and offers a **Fix** for what the server needs (with backups and **Restore originals**).
+
+**The game client on Linux** needs Wine. When you press Play, tPoseidon writes the window settings into your Wine prefix (`WINEPREFIX`, or `~/.wine`) and keeps Wine's output in `log/client-wine.log`; if the client closes within ten seconds of starting, the panel and `tposeidon play` say so and point to that log. If the screen still flickers, run `winecfg`, open **Graphics** and enable **Emulate a virtual desktop**.
 
 The details are in the wiki: [Client check](https://github.com/DeltaForceT/tPoseidon/wiki/Client-check) and [Playing and the launcher](https://github.com/DeltaForceT/tPoseidon/wiki/Playing-and-the-launcher).
 

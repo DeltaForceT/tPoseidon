@@ -1,11 +1,11 @@
 using System.Net;
 using tPoseidon.Core.Common;
-using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.Crypto.Trident;
 using tPoseidon.Core.Net.Security;
 
-namespace tPoseidon.Core.Net.S2;
+namespace tPoseidon.Core.Net.Trident;
 
-public sealed class S2ServerHost
+public sealed class TridentServerHost
 {
         public required string LogTag { get; init; }
 
@@ -13,9 +13,9 @@ public sealed class S2ServerHost
 
         public required string KeyTablePath { get; init; }
 
-        public required Func<S2SessionContext, CancellationToken, Task> OnSessionAccepted { get; init; }
+        public required Func<TridentSessionContext, CancellationToken, Task> OnSessionAccepted { get; init; }
 
-    public Func<S2SessionContext, Task>? OnSessionClosed { get; init; }
+    public Func<TridentSessionContext, Task>? OnSessionClosed { get; init; }
 
     public bool PauseAcceptedSessions { get; set; }
 
@@ -35,7 +35,7 @@ public sealed class S2ServerHost
     {
         Console.WriteLine($"{LogTag} tPoseidon {BuildIdentity.Current}");
         var (keyTable, derivation) = LoadCipher(KeyTablePath, LogTag);
-        var cipher = new S2PacketCipher(keyTable, derivation);
+        var cipher = new TridentPacketCipher(keyTable, derivation);
 
         var endpoint = new IPEndPoint(BindAddress ?? ServerEndpointConfig.ClientBindAddress, Port);
         var ownedGuard = Guard is null ? ConnectionGuard.FromEnvironment(LogTag, Port) : null;
@@ -66,7 +66,7 @@ public sealed class S2ServerHost
             });
 
             var sessionInfo = new SessionInfo { IsStrict = false };
-            var ctx = new S2SessionContext
+            var ctx = new TridentSessionContext
             {
                 Session = session,
                 SessionInfo = sessionInfo,
@@ -82,7 +82,7 @@ public sealed class S2ServerHost
             {
                 await OnSessionAccepted(ctx, ct);
 
-                var adapter = new S2SessionAdapter(
+                var adapter = new TridentSessionAdapter(
                     session, cipher, keyTable, derivation, dispatcher, sessionInfo);
                 await adapter.RunAsync(ct);
             }
@@ -112,8 +112,9 @@ public sealed class S2ServerHost
         Console.WriteLine($"{LogTag} shutting down");
     }
 
-    internal static (KeyTable, IS2CipherDerivation) LoadCipher(string keyTablePath, string logTag)
+    internal static (KeyTable, ITridentCipherDerivation) LoadCipher(string keyTablePath, string logTag)
     {
+        KeyTableFile.MigrateLegacy(keyTablePath, message => Console.WriteLine($"{logTag} {message}"));
         if (!File.Exists(keyTablePath))
         {
             Console.WriteLine($"{logTag} WARN: KeyTable not found at {LogPaths.Scrub(keyTablePath)} — using identity. Real clients will fail to handshake.");
@@ -127,12 +128,12 @@ public sealed class S2ServerHost
             return (KeyTable.Identity(), new IdentityDerivation());
         }
 
-        Console.WriteLine($"{logTag} cipher: S2 v2010 (KeyTable from {LogPaths.Scrub(keyTablePath)})");
-        return (new KeyTable(bytes), new S2v2010Derivation());
+        Console.WriteLine($"{logTag} cipher: Trident (key table from {LogPaths.Scrub(keyTablePath)})");
+        return (new KeyTable(bytes), new TridentDerivation());
     }
 
         public static string DefaultKeyTablePath() =>
-        RepoRoot.Data("keytable-s2v2010.bin");
+        RepoRoot.Data("trident-keytable.bin");
 
         public static CancellationTokenSource WireCtrlC()
     {
@@ -146,14 +147,14 @@ public sealed class S2ServerHost
     }
 }
 
-public sealed class S2SessionContext
+public sealed class TridentSessionContext
 {
     public required TcpClientSession Session { get; init; }
     public required SessionInfo SessionInfo { get; init; }
     public required OpcodeDispatcher Dispatcher { get; init; }
-    public required S2PacketCipher Cipher { get; init; }
+    public required TridentPacketCipher Cipher { get; init; }
     public required KeyTable KeyTable { get; init; }
-    public required IS2CipherDerivation Derivation { get; init; }
+    public required ITridentCipherDerivation Derivation { get; init; }
     public required string LogTag { get; init; }
 
         public required ushort LocalPort { get; init; }

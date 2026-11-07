@@ -29,5 +29,5 @@ public sealed class LocalClientHost : IClientHost
 {
     public bool IsRunning(string executablePath) => RunningClient.IsRunning(executablePath);
 
-    public string Start(HostSettings settings) => GameClientLauncher.LaunchWithTicket(settings);
+    public string Start(HostSettings settings) => GameClientLauncher.LaunchWithTicket(settings).Target;
 }

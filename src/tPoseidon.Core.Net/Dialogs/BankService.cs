@@ -5,7 +5,7 @@ using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.Game.Quests;
 using tPoseidon.Core.Game.Stats;
 using tPoseidon.Core.LibConfig;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Dialogs;
@@ -38,7 +38,7 @@ public sealed class BankService
     public const ushort BankShort = 0;
     public const ushort AboveCarriedLimit = 1;
 
-    private readonly S2SessionContext _ctx;
+    private readonly TridentSessionContext _ctx;
     private readonly IBankStore _bank;
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
@@ -48,7 +48,7 @@ public sealed class BankService
     private bool _contentsSent;
 
     public BankService(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         IBankStore bank,
         IItemStore items,
         IItemParamLookup catalog,

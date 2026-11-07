@@ -5,7 +5,7 @@ using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.Game.Quests;
 using tPoseidon.Core.Game.Stats;
 using tPoseidon.Core.LibConfig;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Dialogs;
@@ -32,7 +32,7 @@ public sealed class WarehouseService
 
     private static readonly byte[] TabIds = { 2, 21, 22, 23, 24, 25, 26, 27, 28, 29 };
 
-    private readonly S2SessionContext _ctx;
+    private readonly TridentSessionContext _ctx;
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
     private readonly WarehousePlayer _player;
@@ -41,7 +41,7 @@ public sealed class WarehouseService
     private bool _contentsSent;
 
     public WarehouseService(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         IItemStore items,
         IItemParamLookup catalog,
         WarehousePlayer player,

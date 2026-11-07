@@ -762,6 +762,13 @@ public sealed class LibConfigXmlReader
             if (!results.TryGetValue(table, out var rows)) results[table] = rows = new List<CardIdentifyResultEntry>();
             rows.Add(new CardIdentifyResultEntry(ReadInt(row, "ItemID"), (int)ReadFloat(row, "Rate")));
         });
+        var specials = new Dictionary<int, List<CardIdentifyResultEntry>>();
+        LoadTablesWithPrefix(CardIdentifyTables.SpecialResultTablePrefix, (tableName, row) =>
+        {
+            if (!int.TryParse(tableName.AsSpan(CardIdentifyTables.SpecialResultTablePrefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out var table)) return;
+            if (!specials.TryGetValue(table, out var rows)) specials[table] = rows = new List<CardIdentifyResultEntry>();
+            rows.Add(new CardIdentifyResultEntry(ReadInt(row, "ItemID"), (int)ReadFloat(row, "Rate")));
+        });
         var combos = new SortedDictionary<int, int>();
         LoadTable(CardIdentifyTables.ComboTable, row => combos[ReadInt(row, "Combo")] = ReadInt(row, "ComboRatio"));
         float? expRatio = null;
@@ -775,6 +782,7 @@ public sealed class LibConfigXmlReader
         return new CardIdentifyTables(
             grades,
             results.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<CardIdentifyResultEntry>)pair.Value),
+            specials.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<CardIdentifyResultEntry>)pair.Value),
             combos.Values.ToArray(),
             expRatio ?? 0f,
             tmExpRatio);

@@ -2,7 +2,7 @@ using System.Text;
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.LibConfig;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Social;
@@ -16,7 +16,7 @@ public sealed record GuildDepotPlayer
 
 public sealed class GuildDepotService
 {
-    private readonly S2SessionContext _ctx;
+    private readonly TridentSessionContext _ctx;
     private readonly IGuildDepotStore _depot;
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
@@ -26,7 +26,7 @@ public sealed class GuildDepotService
     private readonly string _logTag;
 
     public GuildDepotService(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         IGuildDepotStore depot,
         IItemStore items,
         IItemParamLookup catalog,

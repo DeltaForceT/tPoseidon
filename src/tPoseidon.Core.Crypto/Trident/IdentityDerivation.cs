@@ -1,20 +1,20 @@
 using System.Buffers.Binary;
 
-namespace tPoseidon.Core.Crypto.S2;
+namespace tPoseidon.Core.Crypto.Trident;
 
-public sealed class IdentityDerivation : IS2CipherDerivation
+public sealed class IdentityDerivation : ITridentCipherDerivation
 {
     public byte ValidatePackingFlags(ReadOnlySpan<byte> frame, KeyTable table) =>
-        frame[S2PacketCipher.OffsetPackingFlags];
+        frame[TridentPacketCipher.OffsetPackingFlags];
 
     public ushort RecoverLength(ReadOnlySpan<byte> frame, byte sessionKey, KeyTable table) =>
-        BinaryPrimitives.ReadUInt16LittleEndian(frame.Slice(S2PacketCipher.OffsetLength, 2));
+        BinaryPrimitives.ReadUInt16LittleEndian(frame.Slice(TridentPacketCipher.OffsetLength, 2));
 
     public ushort RecoverOpcode(ReadOnlySpan<byte> frame, byte sessionKey, KeyTable table) =>
-        BinaryPrimitives.ReadUInt16LittleEndian(frame.Slice(S2PacketCipher.OffsetOpcode, 2));
+        BinaryPrimitives.ReadUInt16LittleEndian(frame.Slice(TridentPacketCipher.OffsetOpcode, 2));
 
     public ushort RecoverSequence(ReadOnlySpan<byte> frame, byte sessionKey, KeyTable table) =>
-        BinaryPrimitives.ReadUInt16LittleEndian(frame.Slice(S2PacketCipher.OffsetSequence, 2));
+        BinaryPrimitives.ReadUInt16LittleEndian(frame.Slice(TridentPacketCipher.OffsetSequence, 2));
 
     public void DecryptPayload(Span<byte> payload, ushort opcode, byte randKey, KeyTable table)
     {
@@ -30,12 +30,12 @@ public sealed class IdentityDerivation : IS2CipherDerivation
         byte sessionKey,
         KeyTable table)
     {
-        BinaryPrimitives.WriteUInt16LittleEndian(frame.Slice(S2PacketCipher.OffsetLength, 2), length);
-        BinaryPrimitives.WriteUInt16LittleEndian(frame.Slice(S2PacketCipher.OffsetOpcode, 2), opcode);
-        BinaryPrimitives.WriteUInt16LittleEndian(frame.Slice(S2PacketCipher.OffsetSequence, 2), sequence);
-        frame[S2PacketCipher.OffsetRandKey] = randKey;
-        frame[S2PacketCipher.OffsetPackingFlags] = (byte)flags;
-        frame[S2PacketCipher.OffsetHeaderChecksum] = 0;
+        BinaryPrimitives.WriteUInt16LittleEndian(frame.Slice(TridentPacketCipher.OffsetLength, 2), length);
+        BinaryPrimitives.WriteUInt16LittleEndian(frame.Slice(TridentPacketCipher.OffsetOpcode, 2), opcode);
+        BinaryPrimitives.WriteUInt16LittleEndian(frame.Slice(TridentPacketCipher.OffsetSequence, 2), sequence);
+        frame[TridentPacketCipher.OffsetRandKey] = randKey;
+        frame[TridentPacketCipher.OffsetPackingFlags] = (byte)flags;
+        frame[TridentPacketCipher.OffsetHeaderChecksum] = 0;
     }
 
     public void EncryptPayload(Span<byte> payload, ushort opcode, byte randKey, KeyTable table)

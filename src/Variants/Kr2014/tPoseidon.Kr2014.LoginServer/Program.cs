@@ -1,9 +1,9 @@
 using tPoseidon.Core.Common;
-using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.Crypto.Trident;
 using tPoseidon.Core.Data.Postgres;
 using tPoseidon.Core.Net;
 using tPoseidon.Core.Net.Packets;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using SessionOpenPacket = tPoseidon.Kr2014.Wire.SessionOpenPacket;
 
 ConsoleFileLog.EnableIfConfigured();
@@ -19,11 +19,11 @@ Console.WriteLine($"{LogTag} account store ready (Postgres-backed); SessionInit 
 
 var loginHandler = new LoginSessionHandler(accountStore);
 
-var host = new S2ServerHost
+var host = new TridentServerHost
 {
     LogTag = LogTag,
     Port = port,
-    KeyTablePath = S2ServerHost.DefaultKeyTablePath(),
+    KeyTablePath = TridentServerHost.DefaultKeyTablePath(),
     OnSessionAccepted = (ctx, _) =>
     {
         ctx.Dispatcher.Register(Opcode.SESSION_INIT, async (_, payload, innerCt) =>
@@ -50,7 +50,7 @@ var host = new S2ServerHost
                 PassiveSkillGainPacket.SnapshotDefault.EncodePayload(), innerCt);
             Console.WriteLine($"{LogTag} {ctx.Remote} sent 4-frame typed reply bundle");
 
-            async Task SendFrameAsync(S2SessionContext c, Opcode op, byte randKey, byte[] payload, CancellationToken ct)
+            async Task SendFrameAsync(TridentSessionContext c, Opcode op, byte randKey, byte[] payload, CancellationToken ct)
             {
                 var frame = c.Cipher.Encrypt(
                     opcode: (ushort)op,
@@ -100,5 +100,5 @@ var host = new S2ServerHost
     },
 };
 
-using var stopSignal = S2ServerHost.WireCtrlC();
+using var stopSignal = TridentServerHost.WireCtrlC();
 await host.RunAsync(stopSignal.Token);

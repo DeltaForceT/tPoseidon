@@ -43,16 +43,19 @@ public static class DrillRules
         return presses > 0 && depth <= drill.DigDepth && depth <= mapDepth;
     }
 
-    public static int MinimumMilliseconds(DrillParamEntry drill, int itemDepth, int mapDepth)
+    public static int MinimumMilliseconds(DrillParamEntry drill, int itemDepth, int mapDepth, bool automatic = false)
     {
         ArgumentNullException.ThrowIfNull(drill);
         var depth = itemDepth < 1 ? mapDepth : itemDepth;
         var scoop = drill.ScoopMass == 0 ? 1 : drill.ScoopMass;
         var dig = (float)(depth * 120 / scoop);
         var gauge = (float)((200 - drill.BarEffArea) * 100 / (drill.BarSpeed * 0.1666666716));
-        var total = dig + gauge;
+        var total = automatic ? dig : dig + gauge;
         return total < 0 ? 0 : (int)Math.Truncate(total * 0.699999988f);
     }
+
+    public static bool CutsOffForSpeed(double elapsedMilliseconds, int minimumMilliseconds) =>
+        elapsedMilliseconds < minimumMilliseconds;
 
     public static int ItemDepth(int laidDepth) => laidDepth / DepthStep * DepthStep;
 

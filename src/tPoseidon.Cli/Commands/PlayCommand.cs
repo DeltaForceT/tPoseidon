@@ -31,9 +31,9 @@ internal static class PlayCommand
         }
 
         Console.WriteLine(ClientFolder.Plan(settings).Explanation);
-        var target = GameClientLauncher.Launch(settings);
-        Console.WriteLine($"Started the game client, connecting to {target}.");
-        return 0;
+        var launch = GameClientLauncher.Launch(settings, paths);
+        Console.WriteLine($"Started the game client, connecting to {launch.Target}.");
+        return ReportQuickExit(launch);
     }
 
     private static async Task<int> RunRemoteAsync(InstallPaths paths, CommandLine commandLine, Prompt prompt, string server, CancellationToken ct)
@@ -63,8 +63,19 @@ internal static class PlayCommand
         settings.Network.PublicAddress = server;
         settings.Launch.Account = account;
         Console.WriteLine(ClientFolder.Plan(settings).Explanation);
-        var target = GameClientLauncher.LaunchWithTicket(settings);
-        Console.WriteLine($"Logged in. Started the game client, connecting to {target}.");
-        return 0;
+        var launch = GameClientLauncher.LaunchWithTicket(settings, paths);
+        Console.WriteLine($"Logged in. Started the game client, connecting to {launch.Target}.");
+        return ReportQuickExit(launch);
+    }
+
+    private static int ReportQuickExit(ClientLaunch launch)
+    {
+        if (launch.Closed.GetAwaiter().GetResult() is not { } message)
+        {
+            return 0;
+        }
+
+        Console.Error.WriteLine(message);
+        return 1;
     }
 }

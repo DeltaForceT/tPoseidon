@@ -67,6 +67,7 @@ public static class ObjectHits
     public const int GellderElement = 0x200;
 
     public const int FlashArrivalDistance = 80;
+    public const int FlashStopDistance = FlashArrivalDistance - 1;
     public const float FlashSpeed = 600f;
     public const float PowerFlashSpeed = 750f;
     public const int FlashAcStep = 8;

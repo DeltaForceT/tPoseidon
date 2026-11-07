@@ -47,6 +47,7 @@ public sealed class SkillEffect
 
     public float Extra { get; set; }
     public float SecondAmount { get; init; }
+    public float SetSpeed { get; init; }
     public float ThirdAmount { get; init; }
     public ushort BlockId { get; set; }
     public (ushort X, ushort Y)? Point { get; init; }

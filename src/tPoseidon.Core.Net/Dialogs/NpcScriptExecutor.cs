@@ -7,7 +7,7 @@ using tPoseidon.Core.Game.Quests;
 using tPoseidon.Core.Game.Stats;
 using tPoseidon.Core.LibConfig;
 using tPoseidon.Core.Net.Packets;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.World;
 
 namespace tPoseidon.Core.Net.Dialogs;
@@ -155,7 +155,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
     public const int WithEquippedItemCheck = 5;
 
     private readonly List<TimedItem> _timedGranted = new();
-    private readonly S2SessionContext _ctx;
+    private readonly TridentSessionContext _ctx;
     private readonly NpcScriptCatalogs _catalogs;
     private readonly NpcScriptStores _stores;
     private readonly NpcScriptPlayer _player;
@@ -174,7 +174,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
     private bool IsMember => _player.Character()?.IsMember == true;
 
     public NpcScriptExecutor(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         NpcScriptCatalogs catalogs,
         NpcScriptStores stores,
         NpcScriptPlayer player,
@@ -287,6 +287,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         _eventTalk = null;
 
         var index = GreetingIndex(talk, characterId);
+        _lastMessage = index;
         var row = _catalogs.NpcMessages.GetRow(talk.MsgTable, index);
         var dialog = new NpcDialogPacket
         {
@@ -303,6 +304,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
     public void Close()
     {
         _eventTalk = null;
+        _lastMessage = null;
         _npc = null;
         _talk = null;
         _npcEntityId = 0;
@@ -1667,6 +1669,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         var resolved = ResolveMessage(_talk.MsgTable, index, questId);
         if (resolved is { } message)
         {
+            _lastMessage = index;
             await SendAsync(Opcode.S2C_NPC_DIALOG_FOLLOWUP,
                 QuestFrames.NpcMessage(_npcEntityId, index, message.Text, message.Kind, questId), ct).ConfigureAwait(false);
             Console.WriteLine($"{_logTag} {_ctx.Remote}   NPC message {index} ({message.Text.Length} chars, kind {message.Kind}, quest {questId})");

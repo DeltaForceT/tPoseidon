@@ -1,9 +1,9 @@
 using tPoseidon.Core.Common;
-using tPoseidon.Core.Crypto.S2;
+using tPoseidon.Core.Crypto.Trident;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Data.Postgres;
 using tPoseidon.Core.Net.Packets;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using LoginRequestPacket = tPoseidon.Kr2014.Wire.LoginRequestPacket;
 
 ConsoleFileLog.EnableIfConfigured();
@@ -13,7 +13,7 @@ Console.WriteLine($"{LogTag} {ServerEndpointConfig.Summary()}");
 
 var serverListReply = new ServerListPacket
 {
-    PublisherUrl = "http://www.chinesegamer.com",
+    PublisherUrl = string.Empty,
     OccupiedEntry = ServerEntry.Empty,
 };
 var serverListPlaintext = serverListReply.EncodePayload();
@@ -27,13 +27,13 @@ Console.WriteLine($"{LogTag} account store ready (PostgreSQL)");
 var clientText = tPoseidon.Core.Common.ClientText.Encoding;
 var lobbyStatesReset = accountStore.ResetLobbyStates();
 Console.WriteLine($"{LogTag} lobby start: {lobbyStatesReset} account(s) left in the lobby or server-select state set to 0");
-var lobbySessions = new System.Collections.Concurrent.ConcurrentDictionary<S2SessionContext, uint>();
+var lobbySessions = new System.Collections.Concurrent.ConcurrentDictionary<TridentSessionContext, uint>();
 
-var host = new S2ServerHost
+var host = new TridentServerHost
 {
     LogTag = LogTag,
     Port = port,
-    KeyTablePath = S2ServerHost.DefaultKeyTablePath(),
+    KeyTablePath = TridentServerHost.DefaultKeyTablePath(),
     SessionsLogIn = true,
     OnSessionClosed = ctx =>
     {
@@ -185,7 +185,7 @@ var host = new S2ServerHost
     },
 };
 
-using var stopSignal = S2ServerHost.WireCtrlC();
+using var stopSignal = TridentServerHost.WireCtrlC();
 var penaltyRelease = ReleasePenaltiesAsync(stopSignal.Token);
 await host.RunAsync(stopSignal.Token);
 await penaltyRelease;

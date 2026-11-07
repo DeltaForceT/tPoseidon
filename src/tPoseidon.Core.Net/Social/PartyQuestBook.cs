@@ -2,11 +2,11 @@ using System.Collections.Concurrent;
 using System.Text;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.LibConfig;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 
 namespace tPoseidon.Core.Net.Social;
 
-public sealed record PartyQuestPlayer(S2SessionContext Context, ulong CharacterId, string Name, ushort MapId, int Level, bool Hunting);
+public sealed record PartyQuestPlayer(TridentSessionContext Context, ulong CharacterId, string Name, ushort MapId, int Level, bool Hunting);
 
 public sealed record PartyQuestStart(ulong PartyUid, IReadOnlyDictionary<ulong, int> CompletionCounts);
 
@@ -95,7 +95,7 @@ public sealed class PartyQuestBook
 
     public PartyQuestItem? Held(ulong characterId) => _items.GetValueOrDefault(characterId);
 
-    public Task SendRecordAsync(S2SessionContext context, ulong characterId, CancellationToken ct)
+    public Task SendRecordAsync(TridentSessionContext context, ulong characterId, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(context);
         return context.SendFrameAsync(PartyQuestFrames.Record, PartyQuestFrames.RecordFor(Held(characterId)), NextKey(), ct);

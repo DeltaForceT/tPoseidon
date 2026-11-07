@@ -68,19 +68,25 @@ public sealed class CardIdentifyGame
         Stage++;
         if (Stage == 1) Life = StartLife(cardValue);
         var grade = Math.Min((int)Stage, MaxGrade);
-        if (!tables.Grades.TryGetValue(grade, out var row) || !tables.Results.TryGetValue(row.Table0, out var results)) return false;
-        var distinct = results.Where(result => result.Rate > 0).Select(result => result.ItemId).Distinct().Count();
-        if (distinct < Picks) return false;
+        if (!tables.Grades.TryGetValue(grade, out var row)) return false;
+        var weights = TableWeights.Of(row);
+        if (!tables.Results.TryGetValue(row.Table0, out var results) || !results.Any(result => result.Rate > 0)) return false;
+        IReadOnlyList<CardIdentifyResultEntry>? specials = tables.SpecialResults.TryGetValue(row.SpecialTable, out var special) ? special : null;
         Array.Clear(_cards);
         Array.Clear(_states);
         var placed = new HashSet<int>();
         var single = next(Picks);
+        var groups = Enumerable.Range(1, Groups).OrderBy(_ => next(int.MaxValue)).ToArray();
         for (var pick = 0; pick < Picks; pick++)
         {
-            var group = (ushort)(next(Groups) + 1);
-            int itemId;
-            do itemId = Roll(results, next);
-            while (placed.Contains(itemId));
+            var group = (ushort)groups[pick];
+            var source = results;
+            var roll = weights.Normal == 0 ? 0 : next(weights.Normal);
+            if (pick == Picks - 1 && weights.Total > 0 && next(weights.Total) >= weights.Normal && specials is not null) source = specials;
+            else if (roll >= weights.First && weights.Second > weights.First && tables.Results.TryGetValue(row.Table1, out var second)) source = second;
+            var candidates = source.Where(result => result.Rate > 0 && !placed.Contains(result.ItemId)).ToList();
+            if (candidates.Count == 0) return false;
+            var itemId = Roll(candidates, next);
             placed.Add(itemId);
             var copies = pick == single ? 1 : 2;
             for (var copy = 0; copy < copies; copy++) _cards[FreePosition(next)] = new CardIdentifyCard(itemId, group);
@@ -133,6 +139,24 @@ public sealed class CardIdentifyGame
         var exp = Math.Truncate((1 - level / ExpLevelDivisor) * score * level * expRatio);
         var tmExp = Math.Truncate((1 - level / TmExpLevelDivisor) * score * level * tmExpRatio);
         return new CardIdentifyReward((uint)Math.Clamp(exp, 0, uint.MaxValue), (uint)Math.Clamp(tmExp, 0, uint.MaxValue));
+    }
+
+    private readonly record struct TableWeights(int First, int Second, int Normal, int Total)
+    {
+        public const double Scale = 10000.0;
+
+        public static TableWeights Of(CardIdentifyGradeEntry row)
+        {
+            var sum = 0f;
+            sum += row.Rate0;
+            sum += row.Rate1;
+            sum += row.SpecialRate;
+            var inverse = 1f / sum;
+            var first = (int)Math.Truncate((float)(row.Rate0 * inverse) * Scale);
+            var second = first + (int)Math.Truncate((float)(row.Rate1 * inverse) * Scale);
+            var total = second + (int)Math.Truncate((float)(row.SpecialRate * inverse) * Scale);
+            return new TableWeights(first, second, second, total);
+        }
     }
 
     private static bool Valid(int position) => position >= 0 && position < Positions;

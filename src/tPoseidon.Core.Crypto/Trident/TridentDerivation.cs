@@ -1,13 +1,13 @@
 using tPoseidon.Core.Common;
 
-namespace tPoseidon.Core.Crypto.S2;
+namespace tPoseidon.Core.Crypto.Trident;
 
-public sealed class S2v2010Derivation : IS2CipherDerivation
+public sealed class TridentDerivation : ITridentCipherDerivation
 {
     public byte ValidatePackingFlags(ReadOnlySpan<byte> frame, KeyTable table)
     {
-        var randKey = frame[S2PacketCipher.OffsetRandKey];
-        var packing = frame[S2PacketCipher.OffsetPackingFlags];
+        var randKey = frame[TridentPacketCipher.OffsetRandKey];
+        var packing = frame[TridentPacketCipher.OffsetPackingFlags];
         var magic = table.Lookup((randKey << 8) | packing);
         if (magic > 0x0F || (magic & 0x02) == 0)
         {
@@ -75,17 +75,17 @@ public sealed class S2v2010Derivation : IS2CipherDerivation
         frame[3] = opHi;
         frame[4] = seqLo;
         frame[5] = seqHi;
-        frame[S2PacketCipher.OffsetRandKey] = randKey;
-        frame[S2PacketCipher.OffsetPackingFlags] = (byte)flags;
+        frame[TridentPacketCipher.OffsetRandKey] = randKey;
+        frame[TridentPacketCipher.OffsetPackingFlags] = (byte)flags;
 
         var a = table.Lookup((frame[0] << 8) | frame[2]);
         var bl = table.Lookup((sessionKey << 8) | a);
         var b = table.Lookup((frame[3] << 8) | frame[1]);
         var dl = table.Lookup((frame[6] << 8) | b);
-        frame[S2PacketCipher.OffsetHeaderChecksum] = table.Lookup((bl << 8) | dl);
+        frame[TridentPacketCipher.OffsetHeaderChecksum] = table.Lookup((bl << 8) | dl);
 
         var pack = table.InverseLookup(randKey, (byte)((byte)flags | 0x02));
-        frame[S2PacketCipher.OffsetPackingFlags] = pack;
+        frame[TridentPacketCipher.OffsetPackingFlags] = pack;
 
         frame[1] = table.InverseLookup(randKey ^ pack, lenHi);
         frame[0] = table.InverseLookup(pack ^ sessionKey, lenLo);

@@ -19,7 +19,7 @@ public enum SkillPowerRule
     MagicPowerRandomTimes,
     AttackDigAndLuck,
     AttackAndDig,
-    AttackLevelAndFlat,
+    AttackTimesRatioAndFlat,
     AttackWeaponDigAndLife,
     AttackTimesFireRatio,
 }
@@ -115,7 +115,6 @@ public static class SkillHitShapes
     public const string ThunderCoefficientColumn = "ApplyRT";
     public const string FlatAttackColumn = "addAP";
     public const string LifeRatioColumn = "HPRatio";
-    public const int LevelCap = 30;
 
     public const int FireElement = 1;
     public const int WaterElement = 2;
@@ -193,7 +192,7 @@ public static class SkillHitShapes
         {
             Tail = SkillTail.None, TargetInHeader = true, FlatTm = true, BaseDefence = true, ResultFlags = ShieldPiercingFlag,
         },
-        [HammerAp] = new(SkillPowerRule.AttackLevelAndFlat, TakesOwner: true, SkillRestart.Always) { Tail = SkillTail.TargetOnly },
+        [HammerAp] = new(SkillPowerRule.AttackTimesRatioAndFlat, TakesOwner: true, SkillRestart.Always) { Tail = SkillTail.TargetOnly },
         [FlyHammer] = new(SkillPowerRule.AttackWeaponDigAndLife, TakesOwner: true, SkillRestart.Always) { Tail = SkillTail.TargetOnly },
         [RazorGale] = new(SkillPowerRule.MagicPower, TakesOwner: false, SkillRestart.Never)
         {
@@ -236,7 +235,7 @@ public static class SkillHitShapes
         SkillPowerRule.AttackDigAndLuck => Truncate((attacker.Ap + AvoidStep * (attacker.Da + attacker.Lk)) * (double)ratio),
         SkillPowerRule.AttackAndDig => Truncate((attacker.Ap + AvoidStep * attacker.Da) * (double)ratio),
         SkillPowerRule.AttackWeaponDigAndLife => Truncate(attacker.Ap + attacker.WeaponDa * (double)ratio + attacker.Hp * (double)(action?.Value(LifeRatioColumn) ?? 0f)),
-        SkillPowerRule.AttackLevelAndFlat => Truncate(attacker.Ap + Math.Min(attacker.Level, LevelCap) * (double)ratio + (action?.Amount(FlatAttackColumn) ?? 0)),
+        SkillPowerRule.AttackTimesRatioAndFlat => Truncate(attacker.Ap * (double)ratio) + (action?.Amount(FlatAttackColumn) ?? 0),
         _ => throw new ArgumentOutOfRangeException(nameof(rule), rule, "Unknown skill power rule."),
     };
 

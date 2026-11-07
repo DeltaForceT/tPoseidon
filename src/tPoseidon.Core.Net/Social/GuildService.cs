@@ -27,12 +27,17 @@ public sealed record GuildSmsPlan(GuildSmsOutcome Outcome, ulong MasterCharacter
 
 public sealed record GuildNameOrder(ulong CharacterId, string GuildName, string Alias, GuildEmblem Emblem);
 
+public sealed record GuildCreateFeeOrder(ulong CharacterId);
+
 public sealed class GuildOutbox : IReadOnlyList<GuildMessage>
 {
     private readonly List<GuildMessage> _messages = new();
     private readonly List<GuildNameOrder> _orders = new();
+    private readonly List<GuildCreateFeeOrder> _fees = new();
 
     public IReadOnlyList<GuildNameOrder> Orders => _orders;
+
+    public IReadOnlyList<GuildCreateFeeOrder> Fees => _fees;
 
     public int Count => _messages.Count;
 
@@ -41,6 +46,8 @@ public sealed class GuildOutbox : IReadOnlyList<GuildMessage>
     public void Add(GuildMessage message) => _messages.Add(message);
 
     public void Order(GuildNameOrder order) => _orders.Add(order);
+
+    public void Charge(GuildCreateFeeOrder fee) => _fees.Add(fee);
 
     public IEnumerator<GuildMessage> GetEnumerator() => _messages.GetEnumerator();
 
@@ -176,6 +183,7 @@ public sealed class GuildService
             }
             outbox.Add(new GuildMessage(characterId, GuildFrames.Created,
                 GuildFrames.CreatedFor(BlockOf(member, detail), GradeIndexOf(member.GradeCode), member.Rights, _text)));
+            outbox.Charge(new GuildCreateFeeOrder(characterId));
         }
         return outbox;
     }
@@ -722,7 +730,7 @@ public sealed class GuildService
             .ToArray();
         var state = new GuildStateView(
             BlockOf(member, detail), (ushort)detail.MaxMembers, GradeIndexOf(member.GradeCode), member.Rights, grades, (byte)detail.DepotTabs, (uint)detail.Coins,
-            detail.Notices.Select(NoticeRowOf).ToArray());
+            detail.Notices.Select(NoticeRowOf).ToArray(), detail.Auth);
         outbox.Add(new GuildMessage(member.CharacterId, GuildFrames.State, GuildFrames.StateFor(state, _text)));
         AddEmblem(outbox, member.CharacterId, detail.Emblem);
     }
@@ -756,8 +764,167 @@ public sealed class GuildService
         member.Nick = info.MemberNick;
         member.GradeCode = info.GradeCode;
         member.NewNotice = info.NewNotice;
-        member.Rights = detail.Guild.MasterCharacterId == member.CharacterId ? GuildFrames.MasterRights : (ushort)info.MemberRight;
+        member.Rights = RightsOf(member, detail, info.MemberRight);
         return detail;
+    }
+
+    private static ushort RightsOf(Member member, GuildDetail detail, short storedRight)
+    {
+        if (detail.Guild.MasterCharacterId == member.CharacterId) return GuildFrames.MasterRights;
+        return detail.Auth is { } auth ? GuildAuthTable.RightsOf(auth, GradeIndexOf(member.GradeCode)) : (ushort)storedRight;
+    }
+
+    private string Fit(string value, int bytes)
+    {
+        var length = value.Length;
+        while (length > 0 && _text.GetByteCount(value.AsSpan(0, length)) > bytes) length--;
+        return value[..length];
+    }
+
+    private GuildDetail? DetailOf(Member member) =>
+        member.State == GuildRules.Joined ? _rules.Detail(member.GuildCode) : null;
+
+    public GuildOutbox UpdateGreeting(ulong characterId, string greeting)
+    {
+        ArgumentNullException.ThrowIfNull(greeting);
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } member) return outbox;
+            if (DetailOf(member) is not { } detail)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.GreetingUpdated, GuildFrames.GreetingRefused(GuildFrames.GreetingInvalidGuild)));
+                return outbox;
+            }
+            if (detail.Guild.MasterCharacterId != characterId)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.GreetingUpdated, GuildFrames.GreetingRefused(GuildFrames.GreetingInvalidMaster)));
+                return outbox;
+            }
+            var kept = Fit(greeting, GuildRules.GreetingBytes);
+            if (_rules.UpdateGreeting(member.GuildCode, kept) != GuildRules.Ok)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.GreetingUpdated, GuildFrames.GreetingRefused(GuildFrames.GreetingQueryFailed)));
+                return outbox;
+            }
+            var payload = GuildFrames.GreetingUpdatedFor(kept, _text);
+            foreach (var recipient in OnlineMembers(member.GuildCode)) outbox.Add(new GuildMessage(recipient.CharacterId, GuildFrames.GreetingUpdated, payload));
+        }
+        return outbox;
+    }
+
+    public GuildOutbox UpdateIntro(ulong characterId, string intro)
+    {
+        ArgumentNullException.ThrowIfNull(intro);
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } member) return outbox;
+            var detail = DetailOf(member);
+            var code = detail is null ? GuildFrames.IntroNotMember
+                : detail.Guild.MasterCharacterId != characterId ? GuildFrames.IntroNotMaster
+                : _rules.UpdateIntro(member.GuildCode, Fit(intro, GuildRules.IntroBytes)) == GuildRules.Ok ? GuildFrames.Ok : GuildFrames.IntroNotMember;
+            outbox.Add(new GuildMessage(characterId, GuildFrames.IntroUpdated, GuildFrames.CodeOnly(code)));
+        }
+        return outbox;
+    }
+
+    public GuildOutbox UpdateUrl(ulong characterId, string url)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } member) return outbox;
+            var detail = DetailOf(member);
+            var code = detail is null ? GuildFrames.UrlFailed
+                : detail.Guild.MasterCharacterId != characterId ? GuildFrames.UrlNotMaster
+                : _rules.UpdateUrl(member.GuildCode, Fit(url, GuildRules.UrlBytes)) == GuildRules.Ok ? GuildFrames.Ok : GuildFrames.UrlFailed;
+            outbox.Add(new GuildMessage(characterId, GuildFrames.UrlUpdated, GuildFrames.CodeOnly(code)));
+        }
+        return outbox;
+    }
+
+    public GuildOutbox ChangePassword(ulong characterId, string oldPassword, string newPassword)
+    {
+        ArgumentNullException.ThrowIfNull(oldPassword);
+        ArgumentNullException.ThrowIfNull(newPassword);
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } member) return outbox;
+            var detail = DetailOf(member);
+            byte code;
+            if (detail is null) code = GuildFrames.PasswordInvalidGuild;
+            else if (detail.Guild.MasterCharacterId != characterId) code = GuildFrames.PasswordNoPermission;
+            else if (detail.Guild.GuildPw != oldPassword) code = GuildFrames.PasswordOldMismatch;
+            else if (newPassword.Length > GuildRules.PasswordBytes || newPassword.Any(c => c < 21 || c > 126)) code = GuildFrames.PasswordWrongType;
+            else code = _rules.ChangePassword(member.GuildCode, oldPassword, newPassword) == GuildRules.Ok ? GuildFrames.Ok : GuildFrames.PasswordError;
+            outbox.Add(new GuildMessage(characterId, GuildFrames.PasswordChanged, GuildFrames.CodeOnly(code)));
+        }
+        return outbox;
+    }
+
+    public GuildOutbox DissolveByPassword(ulong characterId, string password)
+    {
+        ArgumentNullException.ThrowIfNull(password);
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } member) return outbox;
+            var detail = DetailOf(member);
+            byte code;
+            if (detail is null) code = GuildFrames.DissolveByPasswordInvalidGuild;
+            else if (detail.Guild.MasterCharacterId != characterId) code = GuildFrames.DissolveByPasswordNoPermission;
+            else if (detail.Guild.GuildPw != password) code = GuildFrames.DissolveByPasswordWrong;
+            else code = GuildFrames.Ok;
+            if (code != GuildFrames.Ok)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.DissolvedByPassword, GuildFrames.CodeOnly(code)));
+                return outbox;
+            }
+        }
+        var dissolved = Dissolve(characterId);
+        var result = new GuildOutbox();
+        var succeeded = dissolved.Any(m => m.To == characterId && m.Opcode == GuildFrames.DissolveResult && m.Payload.Length > 0 && m.Payload[0] == 0);
+        result.Add(new GuildMessage(characterId, GuildFrames.DissolvedByPassword, GuildFrames.CodeOnly(succeeded ? GuildFrames.Ok : GuildFrames.DissolveByPasswordInvalidGuild)));
+        foreach (var message in dissolved) result.Add(message);
+        foreach (var order in dissolved.Orders) result.Order(order);
+        return result;
+    }
+
+    public GuildOutbox SaveAuth(ulong characterId, byte[] table)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } member) return outbox;
+            var detail = DetailOf(member);
+            if (detail is null)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.AuthSaved, GuildFrames.CodeOnly(GuildFrames.AuthInvalidGuild)));
+                return outbox;
+            }
+            if (detail.Guild.MasterCharacterId != characterId)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.AuthSaved, GuildFrames.CodeOnly(GuildFrames.AuthNoPermission)));
+                return outbox;
+            }
+            if (!GuildAuthTable.IsValid(table) || _rules.UpdateAuth(member.GuildCode, GuildAuthTable.WithMasterRow(table)) != GuildRules.Ok)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.AuthSaved, GuildFrames.CodeOnly(GuildFrames.AuthError)));
+                return outbox;
+            }
+            outbox.Add(new GuildMessage(characterId, GuildFrames.AuthSaved, GuildFrames.AuthSavedFor(GuildAuthTable.WithMasterRow(table))));
+            if (_rules.Detail(member.GuildCode) is not { } refreshed) return outbox;
+            foreach (var recipient in OnlineMembers(member.GuildCode))
+            {
+                recipient.Rights = RightsOf(recipient, refreshed, 0);
+                AddState(outbox, recipient, refreshed);
+            }
+        }
+        return outbox;
     }
 
     private Member? Session(ulong characterId) =>

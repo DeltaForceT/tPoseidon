@@ -1,7 +1,7 @@
 using System.Text;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Net;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.Social;
 using tPoseidon.Core.Net.World;
 
@@ -39,7 +39,7 @@ public sealed class GuildServer
 
     public GuildGameRooms GameRooms => _gameRooms;
 
-    public void Register(OpcodeDispatcher dispatcher, S2SessionContext ctx)
+    public void Register(OpcodeDispatcher dispatcher, TridentSessionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(ctx);
@@ -64,6 +64,18 @@ public sealed class GuildServer
             GuildFrames.ReadNoticeAddRequest(p, _text) is { } content ? _guilds.AddNotice(id, content) : null);
         On(dispatcher, ctx, GuildFrames.NoticeDelete, (id, p) =>
             GuildFrames.ReadNoticeDeleteRequest(p) is { } noticeCode ? _guilds.DeleteNotice(id, noticeCode) : null);
+        On(dispatcher, ctx, GuildFrames.GreetingUpdate, (id, p) =>
+            GuildFrames.ReadGreetingRequest(p, _text) is { } greeting ? _guilds.UpdateGreeting(id, greeting) : null);
+        On(dispatcher, ctx, GuildFrames.IntroUpdate, (id, p) =>
+            GuildFrames.ReadIntroRequest(p, _text) is { } intro ? _guilds.UpdateIntro(id, intro) : null);
+        On(dispatcher, ctx, GuildFrames.UrlUpdate, (id, p) =>
+            GuildFrames.ReadChat(p, _text) is { } url ? _guilds.UpdateUrl(id, url) : null);
+        On(dispatcher, ctx, GuildFrames.DissolveByPassword, (id, p) =>
+            GuildFrames.ReadChat(p, _text) is { } password ? _guilds.DissolveByPassword(id, password) : null);
+        On(dispatcher, ctx, GuildFrames.AuthSave, (id, p) =>
+            GuildFrames.ReadAuthRequest(p) is { } table ? _guilds.SaveAuth(id, table) : null);
+        On(dispatcher, ctx, GuildFrames.PasswordChange, (id, p) =>
+            GuildFrames.ReadPasswordChange(p, _text) is { } change ? _guilds.ChangePassword(id, change.Old, change.New) : null);
         On(dispatcher, ctx, GuildFrames.Chat, (id, p) =>
             GuildFrames.ReadChat(p, _text) is { } message ? _guilds.Chat(id, message) : null);
         On(dispatcher, ctx, GuildShopFrames.Buy, (id, p) =>
@@ -104,7 +116,7 @@ public sealed class GuildServer
 
     public GuildRoomCaptions RoomCaptions { get; set; } = GuildRoomCaptions.None;
 
-    private async Task MakeRoomAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task MakeRoomAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member) return;
         if (GuildGameRooms.ReadMake(payload.Span, _text) is not { } request)
@@ -126,7 +138,7 @@ public sealed class GuildServer
         _log($"[guild] game room {room.Key} type {room.GameType} mode {request.Mode} made by '{member.Character.Name}' (up to {room.MaxParticipants} per side, map choice {room.MapChoice}, ladder flag {room.NoLadderFlag})");
     }
 
-    private async Task WatchRoomAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task WatchRoomAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member) return;
         if (GuildGameRooms.ReadJoin(payload.Span, _text) is not { } request)
@@ -146,7 +158,7 @@ public sealed class GuildServer
         _log($"[guild] game room {room.Key} watched by '{member.Character.Name}'");
     }
 
-    private async Task JoinRoomAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task JoinRoomAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member) return;
         if (GuildGameRooms.ReadJoin(payload.Span, _text) is not { } request)
@@ -167,7 +179,7 @@ public sealed class GuildServer
         _log($"[guild] game room {room.Key} joined by '{member.Character.Name}' of guild {room.Sides[side].GuildCode}");
     }
 
-    private async Task InviteAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task InviteAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member || Entrant(member) is not { } inviter) return;
         if (GuildGameRooms.ReadName(payload.Span, _text) is not { } name)
@@ -189,7 +201,7 @@ public sealed class GuildServer
         _log($"[guild] game room {result.Room?.Key}: '{member.Character.Name}' invites '{invited.Name}'");
     }
 
-    private async Task AnswerAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task AnswerAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member) return;
         if (!GuildGameRooms.TryReadAnswer(payload.Span, out var accepted, out var reason))
@@ -218,7 +230,7 @@ public sealed class GuildServer
         _log($"[guild] game room {answer.Room.Key}: '{answer.Invitee.Name}' joins guild {answer.Side.GuildCode} ({answer.Side.Members.Count} of {answer.Room.MaxParticipants})");
     }
 
-    private async Task RemoveAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task RemoveAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member) return;
         if (GuildGameRooms.ReadName(payload.Span, _text) is not { } name
@@ -250,7 +262,7 @@ public sealed class GuildServer
         _log($"[guild] game room {left.Room.Key}: '{left.Leaver.Name}' leaves ({left.Kind})");
     }
 
-    private async Task StartRoomAsync(S2SessionContext ctx, CancellationToken ct)
+    private async Task StartRoomAsync(TridentSessionContext ctx, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member) return;
         var result = _gameRooms.TryStart(member.Character.CharacterId);
@@ -285,7 +297,7 @@ public sealed class GuildServer
         }
     }
 
-    private async Task StartNoticeAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task StartNoticeAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member) return;
         if (!GuildGameOrders.TryReadStartNoticeRequest(payload.Span, out var gameType))
@@ -421,7 +433,7 @@ public sealed class GuildServer
 
     private delegate GuildOutbox? GuildRequest(ulong characterId, ReadOnlySpan<byte> payload);
 
-    private void On(OpcodeDispatcher dispatcher, S2SessionContext ctx, ushort opcode, GuildRequest request) =>
+    private void On(OpcodeDispatcher dispatcher, TridentSessionContext ctx, ushort opcode, GuildRequest request) =>
         dispatcher.Register(opcode, (_, payload, ct) =>
         {
             if (_room.Find(ctx) is not { } member) return Task.CompletedTask;
@@ -436,7 +448,7 @@ public sealed class GuildServer
 
     public IFriendStore? Friends { get; set; }
 
-    private async Task GuildMemoAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task GuildMemoAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member || GuildFrames.ReadGuildMemo(payload.Span, _text) is not { } memo) return;
         var owner = member.Character.CharacterId;
@@ -458,7 +470,7 @@ public sealed class GuildServer
         }
     }
 
-    private async Task GuildSmsAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task GuildSmsAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (_room.Find(ctx) is not { } member || GuildFrames.ReadGuildSms(payload.Span, _text) is not { } sms) return;
         var owner = member.Character.CharacterId;
@@ -505,6 +517,10 @@ public sealed class GuildServer
             {
                 _log($"[guild] 0x{message.Opcode:X4} to 0x{message.To:X} not delivered: {ex.Message}");
             }
+        }
+        foreach (var fee in messages.Fees)
+        {
+            await _games.SendOnceAsync(fee.CharacterId, SystemLinkFrames.OrderGuildCreateFee, Array.Empty<byte>(), ct).ConfigureAwait(false);
         }
         foreach (var order in messages.Orders)
         {

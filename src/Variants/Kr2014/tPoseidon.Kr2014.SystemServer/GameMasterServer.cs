@@ -3,7 +3,7 @@ using System.Net;
 using System.Text;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Net;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 using tPoseidon.Core.Net.Social;
 
 namespace tPoseidon.Kr2014.SystemServer;
@@ -12,7 +12,7 @@ public sealed class GameMasterServer
 {
     private sealed record Tool(ulong CharacterId, string Name);
 
-    private sealed record PendingReply(S2SessionContext Requester, ulong GameMaster, ushort Zone = 0, bool FromChat = false, byte[]? OrderData = null);
+    private sealed record PendingReply(TridentSessionContext Requester, ulong GameMaster, ushort Zone = 0, bool FromChat = false, byte[]? OrderData = null);
 
     private static readonly TimeSpan RateTickPeriod = TimeSpan.FromMilliseconds(5000);
 
@@ -25,7 +25,7 @@ public sealed class GameMasterServer
     private readonly Encoding _text;
     private readonly bool _toolsFromLoopbackOnly;
     private readonly Action<string> _log;
-    private readonly ConcurrentDictionary<S2SessionContext, Tool?> _tools = new();
+    private readonly ConcurrentDictionary<TridentSessionContext, Tool?> _tools = new();
     private readonly ConcurrentDictionary<(ulong CharacterId, ushort Report), PendingReply> _pending = new();
     private readonly GameMasterRateControl _rates;
     private readonly GameMasterChatRouter _router;
@@ -82,7 +82,7 @@ public sealed class GameMasterServer
         };
     }
 
-    public void Register(OpcodeDispatcher dispatcher, S2SessionContext ctx)
+    public void Register(OpcodeDispatcher dispatcher, TridentSessionContext ctx)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(ctx);
@@ -291,7 +291,7 @@ public sealed class GameMasterServer
         }
     }
 
-    public async Task GameServerLinkedAsync(S2SessionContext link, CancellationToken ct)
+    public async Task GameServerLinkedAsync(TridentSessionContext link, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(link);
         foreach (var message in _rates.LinkState())
@@ -328,12 +328,12 @@ public sealed class GameMasterServer
     private GameMasterOutbox? RemoveInstantChat(ulong gameMaster, string name) =>
         InstantChatRemover is { } remover ? GameMasterService.RemoveInstantChat(gameMaster, name, Online, remover) : null;
 
-    public void Closed(S2SessionContext ctx)
+    public void Closed(TridentSessionContext ctx)
     {
         if (_tools.TryRemove(ctx, out var tool) && tool is not null) _gameMasters.Closed(tool.CharacterId, tool: true);
     }
 
-    public async Task ChatAsync(S2SessionContext link, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    public async Task ChatAsync(TridentSessionContext link, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(link);
         if (!GameMasterFrames.TryReadChatCommand(payload.Span, _text, out var chat))
@@ -361,7 +361,7 @@ public sealed class GameMasterServer
     private static string SubjectOf(string line, string fallback) =>
         GameMasterChat.Parse(line) is { Arguments.Count: > 0 } command ? command.Arguments[0] : fallback;
 
-    private Task TellAsync(S2SessionContext link, ulong characterId, string line, CancellationToken ct) =>
+    private Task TellAsync(TridentSessionContext link, ulong characterId, string line, CancellationToken ct) =>
         _games.SendToLinkAsync(link, GameMasterFrames.LinkChatReply, GameMasterFrames.ChatLine(characterId, line, _text), ct);
 
     public async Task ReportAsync(OfficerOrder report, CancellationToken ct)
@@ -389,7 +389,7 @@ public sealed class GameMasterServer
         else await DeliverAsync(outbox, null, ct, request.Requester).ConfigureAwait(false);
     }
 
-    private void Expect(S2SessionContext requester, ulong gameMaster, GameMasterOutbox outbox, bool fromChat = false)
+    private void Expect(TridentSessionContext requester, ulong gameMaster, GameMasterOutbox outbox, bool fromChat = false)
     {
         foreach (var order in outbox.Orders)
         {
@@ -404,7 +404,7 @@ public sealed class GameMasterServer
     private static string BlockTime() => DateTime.Now.ToString("T", System.Globalization.CultureInfo.CurrentCulture);
 
     private async Task ReaderConfirmedAsync(
-        S2SessionContext ctx,
+        TridentSessionContext ctx,
         ReadOnlyMemory<byte> payload,
         ushort opcode,
         Func<ulong, ushort, (ulong GameMaster, bool Tool, GameMasterOutbox Outbox)?> confirm,
@@ -421,7 +421,7 @@ public sealed class GameMasterServer
         await DeliverAsync(answer.Outbox, null, ct, ContextOf(answer.GameMaster, answer.Tool)).ConfigureAwait(false);
     }
 
-    private S2SessionContext? ContextOf(ulong characterId, bool tool) =>
+    private TridentSessionContext? ContextOf(ulong characterId, bool tool) =>
         tool
             ? _tools.FirstOrDefault(pair => pair.Value?.CharacterId == characterId).Key
             : _room.Find(characterId)?.Context;
@@ -436,7 +436,7 @@ public sealed class GameMasterServer
 
     private string? OnlineName(ulong characterId) => _room.Find(characterId)?.Character.Name;
 
-    private async Task DissolveGuildAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task DissolveGuildAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (CallerOf(ctx) is not { } caller) return;
         if (!_gameMasters.TryAuthorize(caller.CharacterId, payload.Span, out var consumed, caller.Tool) || ReadStrings(payload.Span[consumed..], 1) is not { } names)
@@ -459,7 +459,7 @@ public sealed class GameMasterServer
 
     private bool IsOnline(ulong characterId) => _room.Find(characterId) is not null || _games.ZoneOf(characterId) is not null;
 
-    private Task ToolConnectAsync(S2SessionContext ctx)
+    private Task ToolConnectAsync(TridentSessionContext ctx)
     {
         if (_toolsFromLoopbackOnly && (ctx.Remote is not { } remote || !IPAddress.IsLoopback(remote.Address)))
         {
@@ -471,7 +471,7 @@ public sealed class GameMasterServer
         return Task.CompletedTask;
     }
 
-    private async Task LoginAsync(S2SessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task LoginAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         GameMasterOutbox? outbox;
         if (_tools.ContainsKey(ctx))
@@ -507,13 +507,13 @@ public sealed class GameMasterServer
 
     private delegate GameMasterOutbox? GameMasterRequest(Caller caller, ReadOnlySpan<byte> payload);
 
-    private Caller? CallerOf(S2SessionContext ctx)
+    private Caller? CallerOf(TridentSessionContext ctx)
     {
         if (_tools.TryGetValue(ctx, out var tool)) return tool is null ? null : new Caller(tool.CharacterId, true);
         return _room.Find(ctx) is { } member ? new Caller(member.Character.CharacterId, false) : null;
     }
 
-    private void On(OpcodeDispatcher dispatcher, S2SessionContext ctx, ushort opcode, GameMasterRequest request) =>
+    private void On(OpcodeDispatcher dispatcher, TridentSessionContext ctx, ushort opcode, GameMasterRequest request) =>
         dispatcher.Register(opcode, async (_, payload, ct) =>
         {
             if (CallerOf(ctx) is not { } caller) return;
@@ -522,7 +522,7 @@ public sealed class GameMasterServer
             await DeliverAsync(outbox, null, ct, ctx).ConfigureAwait(false);
         });
 
-    private void Command(OpcodeDispatcher dispatcher, S2SessionContext ctx, ushort opcode, GameMasterRequest request) =>
+    private void Command(OpcodeDispatcher dispatcher, TridentSessionContext ctx, ushort opcode, GameMasterRequest request) =>
         dispatcher.Register(opcode, async (_, payload, ct) =>
         {
             if (CallerOf(ctx) is not { } caller) return;
@@ -578,7 +578,7 @@ public sealed class GameMasterServer
         return (_text.GetString(payload[..end]), new PacketReader(payload[(end + 1)..]).ReadUInt16());
     }
 
-    private static string ClientIp(S2SessionContext ctx)
+    private static string ClientIp(TridentSessionContext ctx)
     {
         if (ctx.Remote is not { } remote) return string.Empty;
         var address = remote.Address.IsIPv4MappedToIPv6 ? remote.Address.MapToIPv4() : remote.Address;
@@ -600,7 +600,7 @@ public sealed class GameMasterServer
         _ => null,
     };
 
-    private async Task DeliverAsync(GameMasterOutbox outbox, ulong? chatOrigin, CancellationToken ct, S2SessionContext? replyTo = null, string subject = "")
+    private async Task DeliverAsync(GameMasterOutbox outbox, ulong? chatOrigin, CancellationToken ct, TridentSessionContext? replyTo = null, string subject = "")
     {
         foreach (var message in outbox.Messages)
         {

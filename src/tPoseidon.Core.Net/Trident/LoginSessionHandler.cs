@@ -2,7 +2,7 @@ using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Net.Packets;
 
-namespace tPoseidon.Core.Net.S2;
+namespace tPoseidon.Core.Net.Trident;
 
 public sealed class LoginSessionHandler
 {

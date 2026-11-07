@@ -355,12 +355,21 @@ public sealed class PanelHost
         try
         {
             LogHub.Write(LogHub.PanelSource, LogLevel.Info, ClientFolder.Plan(settings).Explanation);
-            var target = GameClientLauncher.Launch(settings);
-            LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Started the game client, connecting to {target}.");
+            var launch = GameClientLauncher.Launch(settings, Paths);
+            LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Started the game client, connecting to {launch.Target}.");
+            _ = ReportQuickExitAsync(launch);
         }
         catch (HostingException ex)
         {
             Fail(LogHub.PanelSource, ex);
+        }
+    }
+
+    private static async Task ReportQuickExitAsync(ClientLaunch launch)
+    {
+        if (await launch.Closed.ConfigureAwait(false) is { } message)
+        {
+            LogHub.Write(LogHub.PanelSource, LogLevel.Error, message);
         }
     }
 

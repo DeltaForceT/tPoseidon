@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
-using tPoseidon.Core.Net.S2;
+using tPoseidon.Core.Net.Trident;
 
 namespace tPoseidon.Core.Net.Social;
 
@@ -173,7 +173,7 @@ public static class GameMasterToolConnection
         var loggedIn = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var answered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var session = S2Client.RunAsync(host, port, keyTablePath, "[tposeidon]", async (ctx, innerCt) =>
+        var session = TridentClient.RunAsync(host, port, keyTablePath, "[tposeidon]", async (ctx, innerCt) =>
         {
             foreach (var reply in Replies)
             {
@@ -461,7 +461,7 @@ public static class GameMasterToolConnection
         return $"{name} (account '{account}', id 0x{characterId:X}): zone {zone}, level {level}, money {money}";
     }
 
-    private static async Task SendCommandAsync(S2SessionContext ctx, Task loggedIn, Task answered, ushort opcode, byte[] body, CancellationTokenSource stop)
+    private static async Task SendCommandAsync(TridentSessionContext ctx, Task loggedIn, Task answered, ushort opcode, byte[] body, CancellationTokenSource stop)
     {
         try
         {

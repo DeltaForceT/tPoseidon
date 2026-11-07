@@ -60,7 +60,8 @@ public static class PetRetrainRules
         PetRetrainMaterialEntry material,
         int lockStatId,
         PetRetrainTables tables,
-        Func<int> curveRoll)
+        Func<int> curveRoll,
+        Func<IReadOnlyList<ItemProperty>>? randomStats = null)
     {
         ArgumentNullException.ThrowIfNull(pet);
         ArgumentNullException.ThrowIfNull(stored);
@@ -68,6 +69,7 @@ public static class PetRetrainRules
         ArgumentNullException.ThrowIfNull(material);
         ArgumentNullException.ThrowIfNull(tables);
         ArgumentNullException.ThrowIfNull(curveRoll);
+        if (pet.HasRandomStats && randomStats is not null) return RetrainRandomStats(stored, current, lockStatId, randomStats());
         var curve = tables.Curve.Count == 0 ? null : StatReroll.Curve(tables.Curve);
         var rolled = new List<ItemProperty>(ItemPropertyRules.BaseStatCount);
         for (var slot = 0; slot < ItemPropertyRules.BaseStatCount && slot < pet.StatBonuses.Count; slot++)
@@ -83,10 +85,41 @@ public static class PetRetrainRules
             }
             else
             {
-                var (low, high) = StatReroll.Range(baseValue, material.RandomStatMinPercent, material.RandomStatMaxPercent);
+                var low = baseValue + Offset(baseValue, material.RandomStatMinPercent);
+                var high = baseValue + Offset(baseValue, material.RandomStatMaxPercent);
                 value = (short)StatReroll.Roll(low, high, curve is null ? 0 : curve[curveRoll()]);
             }
             rolled.Add(new ItemProperty(ItemPropertyTypes.Stat, id, value, 0));
+        }
+        var result = stored.ToList();
+        foreach (var property in rolled)
+        {
+            var at = result.FindIndex(held => held.Type == ItemPropertyTypes.Stat && held.Id == property.Id);
+            if (at >= 0) result[at] = property;
+            else result.Add(property);
+        }
+        return new PetRetrainOutcome(result, rolled);
+    }
+
+    private static int Offset(int baseValue, int percent) =>
+        (int)Math.Truncate(baseValue * (double)(float)(percent / StatReroll.PercentBase));
+
+    private static PetRetrainOutcome RetrainRandomStats(
+        IReadOnlyList<ItemProperty> stored,
+        IReadOnlyList<ItemProperty> current,
+        int lockStatId,
+        IReadOnlyList<ItemProperty> created)
+    {
+        var rolled = new List<ItemProperty>(created.Count);
+        foreach (var property in created)
+        {
+            if (property.Type != ItemPropertyTypes.Stat) continue;
+            if (property.Id == lockStatId)
+            {
+                var kept = current.Where(held => held.Type == ItemPropertyTypes.Stat && held.Id == property.Id).Select(held => (short?)held.Value).FirstOrDefault();
+                rolled.Add(kept is { } value ? property with { Value = value } : property);
+            }
+            else rolled.Add(property);
         }
         var result = stored.ToList();
         foreach (var property in rolled)

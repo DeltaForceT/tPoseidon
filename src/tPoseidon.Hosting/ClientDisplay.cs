@@ -23,12 +23,32 @@ public sealed record ClientDisplay(int Width, int Height, bool FullScreen)
         display is { IsOffered: true } ? display : throw new HostingException("This resolution is not one the client offers.", "Pick 800 x 600 or 1024 x 768.", null);
 }
 
-[SupportedOSPlatform("windows")]
-public static class RegistryClientDisplay
+public sealed record ClientRegistryValue(string Name, int Data);
+
+public static class ClientDisplayValues
 {
     public const string WidthValue = "widthPixel";
     public const string HeightValue = "heightPixel";
     public const string FullScreenValue = "Full Screen";
+
+    public static IReadOnlyList<ClientRegistryValue> For(ClientDisplay display)
+    {
+        ArgumentNullException.ThrowIfNull(display);
+        return
+        [
+            new(WidthValue, display.Width),
+            new(HeightValue, display.Height),
+            new(FullScreenValue, display.FullScreen ? 1 : 0),
+        ];
+    }
+}
+
+[SupportedOSPlatform("windows")]
+public static class RegistryClientDisplay
+{
+    public const string WidthValue = ClientDisplayValues.WidthValue;
+    public const string HeightValue = ClientDisplayValues.HeightValue;
+    public const string FullScreenValue = ClientDisplayValues.FullScreenValue;
 
     public static ClientDisplay Read(ClientSetupProfile profile)
     {
@@ -54,9 +74,10 @@ public static class RegistryClientDisplay
         try
         {
             using var key = Registry.CurrentUser.CreateSubKey(profile.KeyPath, writable: true);
-            key.SetValue(WidthValue, display.Width, RegistryValueKind.DWord);
-            key.SetValue(HeightValue, display.Height, RegistryValueKind.DWord);
-            key.SetValue(FullScreenValue, display.FullScreen ? 1 : 0, RegistryValueKind.DWord);
+            foreach (var value in ClientDisplayValues.For(display))
+            {
+                key.SetValue(value.Name, value.Data, RegistryValueKind.DWord);
+            }
         }
         catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
         {
