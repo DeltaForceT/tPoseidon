@@ -39,7 +39,7 @@ tPoseidon is in beta. These are the rules that matter. The full text is in [BETA
 
 ## Where it stands
 
-**Latest release: [0.83.2-beta](https://github.com/DeltaForceT/tPoseidon/releases/tag/v0.83.2-beta)** (2026-11-06): almost 60 fixes from your reports (crashes on drilling treasure and after a job change, the party after a reconnect, monster chasing, Harcon Defence, item stats), Linux packages back, and the first code from an outside contributor. Every change is in the [CHANGELOG](CHANGELOG.md).
+**Latest release: [0.84.6-beta](https://github.com/DeltaForceT/tPoseidon/releases/tag/v0.84.6-beta)** (2026-11-07): fixes from your reports for equipment fusion at Arein, a crash in the Card Identification game, the Soul Seed after a relog, freezes at Pet Trainer Shurin and Melting, boss set rings after a portal, the Harcon coin shop and barrier count, the GM mail icon, and PvP skills on players. Every change is in the [CHANGELOG](CHANGELOG.md).
 
 You can make a character and play through a good part of the game, but you will hit bugs and missing systems. [docs/beta/SYSTEMS.md](docs/beta/SYSTEMS.md) lists what works, what is built but needs testing, and what isn't built yet. Read it before you start. When something breaks, [How to report a bug](docs/beta/how-to-report-a-bug.md) explains what I need from you.
 
