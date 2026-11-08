@@ -10,7 +10,7 @@ public static class HeldDebuffs
         IsHeldDebuff(effect) && ClassesClearedOnDeath.Contains(effect.EsClass);
 
     public static int ConditionOf(IEnumerable<SkillEffect> held) =>
-        held.Where(effect => effect.IsApplied && !effect.EndRequested && !effect.ConditionSuppressed)
+        held.Where(effect => effect.IsApplied && !effect.EndRequested && !effect.ConditionSuppressed && effect.ElapsedMs >= effect.Kind.HoldDelayMs)
             .Aggregate(0, (mask, effect) => mask | effect.Kind.PlayerCondition);
 
     public static int EndAll(IEnumerable<SkillEffect> held)

@@ -317,6 +317,28 @@ internal sealed class DrillController
         }
     }
 
+    public async Task ResumeSpotAsync(InGameSessionState owner, SurpriseSpot spot)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(spot);
+        var remaining = spot.EndsAt - DateTimeOffset.UtcNow;
+        if (remaining <= TimeSpan.Zero) return;
+        owner.SurpriseSpot = spot;
+        await SendAsync(owner, Opcode.S2C_SPOT_CREATED, SpotCreatedFrame(spot, remaining)).ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} [spot] 0x{owner.PlayerEntityId:X4} keeps the spot of treasure map {spot.ItemId} on map {spot.Zone} through the warp: {(int)remaining.TotalSeconds} s left");
+    }
+
+    private static byte[] SpotCreatedFrame(SurpriseSpot spot, TimeSpan remaining)
+    {
+        var w = new PacketWriter(11);
+        w.WriteByte(SurpriseSpotRules.Created);
+        w.WriteUInt16(spot.Zone);
+        w.WriteInt16(spot.X);
+        w.WriteInt16(spot.Y);
+        w.WriteUInt32((uint)remaining.TotalMilliseconds);
+        return w.ToArray();
+    }
+
     public async Task<bool> CreateTeleportSpotAsync(InGameSessionState owner, ItemParamEntry treasureMap)
     {
         ArgumentNullException.ThrowIfNull(owner);
@@ -367,13 +389,7 @@ internal sealed class DrillController
         }
         var spot = new SurpriseSpot(itemId, zone, (short)spotPoint.X, (short)spotPoint.Y, DateTimeOffset.UtcNow + TimeSpan.FromMinutes(timeMinutes), treasure);
         owner.SurpriseSpot = spot;
-        var w = new PacketWriter(11);
-        w.WriteByte(SurpriseSpotRules.Created);
-        w.WriteUInt16(spot.Zone);
-        w.WriteInt16(spot.X);
-        w.WriteInt16(spot.Y);
-        w.WriteUInt32((uint)(timeMinutes * 60000));
-        await SendAsync(owner, Opcode.S2C_SPOT_CREATED, w.ToArray()).ConfigureAwait(false);
+        await SendAsync(owner, Opcode.S2C_SPOT_CREATED, SpotCreatedFrame(spot, TimeSpan.FromMinutes(timeMinutes))).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [spot] 0x{owner.PlayerEntityId:X4} treasure map {itemId}: {(treasure ? "treasure" : "crevice")} spot on map {zone} ({spot.X},{spot.Y}) for {timeMinutes} min");
         return true;
     }

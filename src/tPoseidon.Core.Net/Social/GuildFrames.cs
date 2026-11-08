@@ -8,11 +8,15 @@ namespace tPoseidon.Core.Net.Social;
 
 public sealed record GuildBlock(ulong CharacterId, uint GuildCode, string GuildName, string MasterName, string Greeting);
 
+public sealed record GuildMemberEdit(ulong CharacterId, uint GradeIndex, string Alias, byte Flags);
+
+public sealed record GuildMemberEditResult(ulong CharacterId, uint GradeIndex, string Alias, string CharacterName, byte Flags);
+
 public sealed record GuildNoticeRow(uint Code, string Created, string Content);
 
 public sealed record GuildStateView(
     GuildBlock Block, ushort MaxMembers, byte GradeIndex, ushort Rights, IReadOnlyList<string> GradeNames, byte DepotTabs = 0, uint Coins = 0,
-    IReadOnlyList<GuildNoticeRow>? Notices = null, byte[]? Auth = null);
+    IReadOnlyList<GuildNoticeRow>? Notices = null, byte[]? Auth = null, IReadOnlyList<int>? GradePoints = null);
 
 public sealed record GuildMemberRow(
     ulong CharacterId,
@@ -62,6 +66,10 @@ public static class GuildFrames
     public const ushort UrlUpdated = 0x2BCF;
     public const ushort DissolveByPassword = 0x2BD0;
     public const ushort DissolvedByPassword = 0x2BD1;
+    public const ushort MemberEdit = 0x2BB5;
+    public const ushort MemberEdited = 0x2BB6;
+    public const ushort GradesUpdate = 0x2BC4;
+    public const ushort GradesUpdated = 0x2BC5;
     public const ushort AuthSave = 0x2BD2;
     public const ushort AuthSaved = 0x2BD3;
     public const ushort PasswordChange = 0x2C47;
@@ -129,6 +137,24 @@ public static class GuildFrames
     public const int GreetingReplyLength = 2 + GreetingLength;
     public const int IntroRequestLength = 0x65;
     public const int AuthRequestLength = GradeCount * GradeRightsStride;
+    public const int MemberEditEntryLength = 0x48;
+    public const int MemberEditUidOffset = 0x08;
+    public const int MemberEditGradeOffset = 0x10;
+    public const int MemberEditAliasOffset = 0x14;
+    public const int MemberEditAliasLength = 21;
+    public const int MemberEditNameOffset = 0x30;
+    public const int MemberEditFlagsOffset = 0x44;
+    public const int MemberEditReplyHeaderLength = 0x0F;
+    public const int MemberEditCountOffset = 0x0E;
+    public const byte MemberEditGradeChanged = 1;
+    public const byte MemberEditAliasChanged = 2;
+    public const byte MemberEditInvalidGuild = 0;
+    public const byte MemberEditNotMaster = 1;
+    public const byte MemberEditNoPermission = 3;
+    public const int GradesRequestLength = RequestHeaderLength + GradeTableLength;
+    public const int GradesReplyLength = 2 + GradeTableLength;
+    public const byte GradesInvalidGuild = 1;
+    public const byte GradesNoPermission = 4;
     public const byte GreetingQueryFailed = 0;
     public const byte GreetingInvalidGuild = 1;
     public const byte GreetingInvalidMaster = 2;
@@ -224,6 +250,7 @@ public static class GuildFrames
 
     public const ushort RightEditMembers = 0x01;
     public const ushort RightVolunteers = 0x02;
+    public const ushort RightGrades = 0x04;
     public const ushort RightNotices = 0x10;
     public const ushort RightEmblem = GuildEmblemRules.PermissionRight;
     public const int RightEmblemIndex = GuildEmblemRules.PermissionRightIndex;
@@ -282,7 +309,7 @@ public static class GuildFrames
         WriteBlock(w, state.Block, text);
         w.WriteZero(8);
         WriteGradeRights(w, state.GradeIndex, state.Rights, state.Auth);
-        WriteGradeTable(w, state.GradeNames, text);
+        WriteGradeTable(w, state.GradeNames, state.GradePoints, text);
         var notices = (state.Notices ?? Array.Empty<GuildNoticeRow>()).Take(NoticeSlots).ToArray();
         w.WriteByte((byte)notices.Length);
         foreach (var notice in notices) WriteNotice(w, notice, text);
@@ -534,6 +561,94 @@ public static class GuildFrames
         return payload;
     }
 
+    public static IReadOnlyList<GuildMemberEdit>? ReadMemberEditRequest(ReadOnlySpan<byte> payload, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (payload.Length < 1) return null;
+        var count = payload[0];
+        if (payload.Length < 1 + count * MemberEditEntryLength) return null;
+        var edits = new List<GuildMemberEdit>(count);
+        for (var i = 0; i < count; i++)
+        {
+            var entry = payload.Slice(1 + i * MemberEditEntryLength, MemberEditEntryLength);
+            edits.Add(new GuildMemberEdit(
+                BinaryPrimitives.ReadUInt64LittleEndian(entry[MemberEditUidOffset..]),
+                BinaryPrimitives.ReadUInt32LittleEndian(entry[MemberEditGradeOffset..]),
+                ReadText(entry, MemberEditAliasOffset, MemberEditAliasLength, text),
+                entry[MemberEditFlagsOffset]));
+        }
+        return edits;
+    }
+
+    public static byte[] MemberEditedFor(IReadOnlyList<GuildMemberEditResult> results, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(results);
+        ArgumentNullException.ThrowIfNull(text);
+        var payload = new byte[MemberEditReplyHeaderLength + results.Count * MemberEditEntryLength];
+        payload[MemberEditCountOffset] = (byte)results.Count;
+        for (var i = 0; i < results.Count; i++)
+        {
+            var entry = payload.AsSpan(MemberEditReplyHeaderLength + i * MemberEditEntryLength, MemberEditEntryLength);
+            var result = results[i];
+            BinaryPrimitives.WriteUInt64LittleEndian(entry[MemberEditUidOffset..], result.CharacterId);
+            BinaryPrimitives.WriteUInt32LittleEndian(entry[MemberEditGradeOffset..], result.GradeIndex);
+            PutText(entry, MemberEditAliasOffset, MemberEditAliasLength, result.Alias, text);
+            PutText(entry, MemberEditNameOffset, CharacterNameLength, result.CharacterName, text);
+            entry[MemberEditFlagsOffset] = result.Flags;
+        }
+        return payload;
+    }
+
+    public static byte[] MemberEditRefused(byte reason)
+    {
+        var payload = new byte[MemberEditReplyHeaderLength];
+        payload[0] = Failed;
+        payload[1] = reason;
+        return payload;
+    }
+
+    private static void PutText(Span<byte> target, int offset, int field, string value, Encoding text)
+    {
+        var length = value.Length;
+        while (length > 0 && text.GetByteCount(value.AsSpan(0, length)) > field - 1) length--;
+        text.GetBytes(value[..length]).CopyTo(target[offset..]);
+    }
+
+    public static byte[] GradesUpdatedFor(IReadOnlyList<string> gradeNames, IReadOnlyList<int> gradePoints, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(gradeNames);
+        ArgumentNullException.ThrowIfNull(gradePoints);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(GradesReplyLength);
+        w.WriteByte(Ok);
+        w.WriteByte(0);
+        WriteGradeTable(w, gradeNames, gradePoints, text);
+        return w.ToArray();
+    }
+
+    public static byte[] GradesRefused(byte reason)
+    {
+        var payload = new byte[GradesReplyLength];
+        payload[0] = Failed;
+        payload[1] = reason;
+        return payload;
+    }
+
+    public static (string[] Names, int[] Points)? ReadGradesRequest(ReadOnlySpan<byte> payload, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (payload.Length < GradesRequestLength) return null;
+        var table = payload.Slice(RequestHeaderLength, GradeTableLength);
+        var points = new int[GradeCount];
+        var names = new string[GradeCount];
+        for (var grade = 0; grade < GradeCount; grade++)
+        {
+            points[grade] = (int)BinaryPrimitives.ReadUInt32LittleEndian(table[(grade * sizeof(uint))..]);
+            names[grade] = ReadText(table, GradeTableHeadLength + grade * GradeNameLength, GradeNameLength, text);
+        }
+        return (names, points);
+    }
+
     public static byte[] AuthSavedFor(ReadOnlySpan<byte> table)
     {
         var payload = new byte[1 + table.Length];
@@ -740,10 +855,13 @@ public static class GuildFrames
         w.WriteBytes(auth is { Length: GradeCount * GradeRightsStride } ? auth : GuildAuthTable.OwnRow(gradeIndex, rights));
     }
 
-    private static void WriteGradeTable(PacketWriter w, IReadOnlyList<string> gradeNames, Encoding text)
+    private static void WriteGradeTable(PacketWriter w, IReadOnlyList<string> gradeNames, IReadOnlyList<int>? gradePoints, Encoding text)
     {
         ArgumentNullException.ThrowIfNull(gradeNames);
-        w.WriteZero(GradeTableHeadLength);
+        for (var grade = 0; grade < GradeCount; grade++)
+        {
+            w.WriteUInt32(gradePoints is not null && grade < gradePoints.Count ? (uint)gradePoints[grade] : 0);
+        }
         for (var grade = 0; grade < GradeCount; grade++)
         {
             WriteText(w, grade < gradeNames.Count ? gradeNames[grade] : string.Empty, GradeNameLength, text);

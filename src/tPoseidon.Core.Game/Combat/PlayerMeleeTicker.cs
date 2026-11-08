@@ -35,7 +35,8 @@ public sealed class PlayerMeleeTicker
     public const double HardenedShare = 0.5;
 
     public IReadOnlyList<PlayerStrike> Tick(
-        IReadOnlyList<PlayerMeleeAttacker> attackers, DateTimeOffset now, Func<ushort, bool>? halvesHits = null, Func<ushort, bool>? cannotEvade = null)
+        IReadOnlyList<PlayerMeleeAttacker> attackers, DateTimeOffset now, Func<ushort, bool>? halvesHits = null, Func<ushort, bool>? cannotEvade = null,
+        Func<MonsterEntity, ushort, Skills.Effects.IncomingHit, Skills.Effects.IncomingHit>? intercept = null)
     {
         ArgumentNullException.ThrowIfNull(attackers);
         if (attackers.Count == 0) return Array.Empty<PlayerStrike>();
@@ -83,6 +84,21 @@ public sealed class PlayerMeleeTicker
                     Result = (byte)((outcome.Result & MeleeResolution.ResultKindMask)
                         | (halved >= monster.CurrentHp ? MeleeResolution.ResultFinishingFlag : 0)),
                 };
+            }
+
+            if (intercept is not null)
+            {
+                var incoming = new Skills.Effects.IncomingHit(
+                    outcome.Damage, Skills.Effects.IncomingHits.BasicAttackType, outcome.Result & MeleeResolution.ResultKindMask, Skills.SkillActions.NoElement, 0);
+                var received = intercept(monster, attacker.EntityId, incoming);
+                if (received != incoming)
+                {
+                    outcome = outcome with
+                    {
+                        Damage = received.Damage,
+                        Result = (byte)(received.Kind | (received.Damage >= monster.CurrentHp ? MeleeResolution.ResultFinishingFlag : 0)),
+                    };
+                }
             }
 
             var (targetX, targetY) = monster.GetInterpolatedPosition(now);

@@ -397,10 +397,10 @@ public sealed class MonsterEntity
         get { lock (_lock) return Boss?.Guarded ?? false; }
     }
 
-    public void TickBossTimers(int elapsedMs, bool engaged, bool castsSkills, Func<int> roll)
+    public void TickBossTimers(int elapsedMs, bool engaged, Func<int> roll)
     {
         ArgumentNullException.ThrowIfNull(roll);
-        lock (_lock) Boss?.TickTimers(this, elapsedMs, engaged, _hp < MaxHp, castsSkills, roll);
+        lock (_lock) Boss?.TickTimers(this, elapsedMs, engaged, _hp < MaxHp, roll);
     }
 
     private bool DeadLocked => _hp <= 0 && (Boss?.Exhausted ?? true);

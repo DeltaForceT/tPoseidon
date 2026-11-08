@@ -225,6 +225,7 @@ public sealed class SoulSeedGrowth
                 return new SoulSeedEventOutcome(true, false, counter, false, false, false, Array.Empty<SoulSeedRecord>());
             }
             _counters[eventType] = (short)Math.Clamp(counter - row.Rate, short.MinValue, short.MaxValue);
+            var wasComplete = Complete;
             var first = row.Special ? SoulSeedRules.NormalTypes : 0;
             var buffGroup = SoulSeedRules.NoBuffGroup;
             var changed = false;
@@ -242,7 +243,7 @@ public sealed class SoulSeedGrowth
                     if (total % SoulSeedRules.PointsPerLevel == 0) backups.Add(Backup());
                 }
             }
-            var complete = CompleteNow();
+            var complete = changed && !wasComplete && CompleteNow();
             if (complete) Complete = true;
             var buffChanged = changed && buffGroup != SoulSeedRules.NoBuffGroup && ApplyBuff(buffGroup);
             return new SoulSeedEventOutcome(true, true, counter, changed, buffChanged, complete, backups);

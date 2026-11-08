@@ -472,7 +472,8 @@ public sealed class LibConfigXmlReader
             ReadInt(row, "Class"),
             ReadFlags(row, "Option"),
             ReadInt(row, "PZType"),
-            ReadInt(row, "WMRegion"))));
+            ReadInt(row, "WMRegion"),
+            ReadInt(row, "Group"))));
         return entries;
     }
 

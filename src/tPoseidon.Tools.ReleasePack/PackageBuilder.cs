@@ -41,7 +41,9 @@ internal sealed class PackageBuilder
         "docs/scripting/examples/greeter.tscript",
     };
 
-    private static readonly string[] LauncherRids = { "win-x64" };
+    private const string LauncherKitRid = "win-x64";
+
+    private static readonly string[] LauncherRids = { LauncherKitRid };
 
     private static readonly string[] LauncherDocuments =
     {
@@ -101,10 +103,7 @@ internal sealed class PackageBuilder
         }
 
         CopyMigrations(Path.Combine(_repoRoot, "scripts", "migrations"), Path.Combine(app, "migrations"));
-        if (HasLauncher(rid))
-        {
-            PublishLauncherKit(rid, Path.Combine(app, LauncherKitFolder));
-        }
+        PublishLauncherKit(Path.Combine(app, LauncherKitFolder));
 
         var licenseFiles = await PackageTools.LicensesAsync(_lock.Licenses, _cache, ct).ConfigureAwait(false);
 
@@ -200,8 +199,9 @@ internal sealed class PackageBuilder
         return new PackageResult(archivePath, archiveInfo.Length, await PackageTools.HashOfAsync(archivePath, ct).ConfigureAwait(false), entries);
     }
 
-    private void PublishLauncherKit(string rid, string kit)
+    private void PublishLauncherKit(string kit)
     {
+        var rid = LauncherKitRid;
         Console.WriteLine($"{rid}: publishing the launcher kit for the panel");
         PackageTools.Publish(_repoRoot, LauncherProject, rid, Path.Combine(kit, "launcher"), _identity, ["-p:ApplicationIcon="]);
         PackageTools.Publish(

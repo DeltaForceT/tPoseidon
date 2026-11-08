@@ -10,4 +10,8 @@
     <PackageReference Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="tPoseidon.Core.Common.Tests" />
+  </ItemGroup>
+
 </Project>

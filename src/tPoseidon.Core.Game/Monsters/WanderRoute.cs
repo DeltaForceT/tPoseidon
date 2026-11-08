@@ -321,7 +321,6 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
             if (ring.Count == 0) continue;
             ring.Sort((a, b) => SquaredCellDistance(a, startX, startY).CompareTo(SquaredCellDistance(b, startX, startY)));
             foreach (var cell in ring.Take(FreeDestinationCandidates)) yield return cell;
-            yield break;
         }
     }
 

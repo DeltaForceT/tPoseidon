@@ -1,5 +1,6 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
+using tPoseidon.Core.Game.Guardian;
 using tPoseidon.Core.Game.Notices;
 using tPoseidon.Core.Game.Quests;
 using tPoseidon.Core.Game.SoulSeed;
@@ -13,7 +14,9 @@ internal sealed class SoulSeedController
     private readonly MasterGuardian _guardians;
     private readonly IItemStore _items;
     private readonly Func<SoulSeedTables> _tables;
+    private readonly Func<GuardianTables> _guardianTables;
     private readonly Func<InGameSessionState, CancellationToken, Task> _showGuardians;
+    private readonly Func<InGameSessionState, Opcode, byte[], Task> _broadcast;
     private readonly Func<ServerNoticeTexts> _notices;
     private readonly MasterSystemNotice _announce;
     private readonly string _logTag;
@@ -25,7 +28,9 @@ internal sealed class SoulSeedController
         MasterGuardian guardians,
         IItemStore items,
         Func<SoulSeedTables> tables,
+        Func<GuardianTables> guardianTables,
         Func<InGameSessionState, CancellationToken, Task> showGuardians,
+        Func<InGameSessionState, Opcode, byte[], Task> broadcast,
         Func<ServerNoticeTexts> notices,
         MasterSystemNotice announce,
         string logTag)
@@ -34,10 +39,18 @@ internal sealed class SoulSeedController
         _guardians = guardians ?? throw new ArgumentNullException(nameof(guardians));
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _tables = tables ?? throw new ArgumentNullException(nameof(tables));
+        _guardianTables = guardianTables ?? throw new ArgumentNullException(nameof(guardianTables));
         _showGuardians = showGuardians ?? throw new ArgumentNullException(nameof(showGuardians));
+        _broadcast = broadcast ?? throw new ArgumentNullException(nameof(broadcast));
         _notices = notices ?? throw new ArgumentNullException(nameof(notices));
         _announce = announce ?? throw new ArgumentNullException(nameof(announce));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
+    }
+
+    public async Task<bool> IsPlantedAsync(ulong characterId, CancellationToken ct)
+    {
+        var (loaded, state) = await _master.LoadAsync(characterId, ct).ConfigureAwait(false);
+        return loaded && state is not null;
     }
 
     public async Task LoadAsync(InGameSessionState player, ulong characterId, bool loggingIn, CancellationToken ct)
@@ -186,7 +199,8 @@ internal sealed class SoulSeedController
         var awakening = new GuardianAwakening(
             character.CharacterId, name, (short)guardianType, (byte)kind, rare, 0,
             (byte)combined[0], (byte)combined[1], (byte)combined[2], (byte)combined[3],
-            SoulSeedRules.SummonGuardianSkill);
+            SoulSeedRules.SummonGuardianSkill,
+            GuardianRuneRules.Defaults(_guardianTables().Params.GetValueOrDefault(guardianType)));
         player.SeedBusy = true;
         _ = CompleteAwakenAsync(player, awakening);
         Console.WriteLine($"{_logTag} [awaken] 0x{player.PlayerEntityId:X4} asks for guardian {guardianType} (kind {kind}, rare {rare}, levels {string.Join(",", combined)})");
@@ -240,7 +254,21 @@ internal sealed class SoulSeedController
             }
             player.Seed.Clear();
             player.Guardians = await _guardians.LoadAsync(awakening.CharacterId, CancellationToken.None).ConfigureAwait(false);
+            if (player.Quests is { } talk)
+            {
+                await SendAsync(player, Opcode.C2S_TRIGGER_75, Array.Empty<byte>()).ConfigureAwait(false);
+                talk.Close();
+            }
+            var first = awakened.SlotNum == 0;
+            if (first)
+            {
+                player.Skills = new Dictionary<int, int>(player.Skills) { [SoulSeedRules.SummonGuardianSkill] = 1 };
+                await SendAsync(player, Opcode.S2C_SKILL_LEARNED, SkillFrames.Record((ushort)SoulSeedRules.SummonGuardianSkill, 1, 0)).ConfigureAwait(false);
+                await _broadcast(player, Opcode.S2C_SKILL_LEARN_SEEN, SkillFrames.LearnSeen(player.PlayerEntityId)).ConfigureAwait(false);
+            }
             await _showGuardians(player, CancellationToken.None).ConfigureAwait(false);
+            await SendAsync(player, first ? Opcode.S2C_AWAKENED : Opcode.S2C_GUARDIAN_AWAKENED,
+                GuardianFrames.Awakened(player.PlayerEntityId, awakening.RareType)).ConfigureAwait(false);
             Console.WriteLine($"{_logTag} [awaken] 0x{player.PlayerEntityId:X4} guardian {awakened.GuardianUid} ({awakening.Name}) in slot {awakened.SlotNum}");
             if (player.Character is { } awakener && _notices().Awakened((byte)awakened.SlotNum, awakener.Name) is { } notice)
             {

@@ -34,7 +34,7 @@ public sealed class BossSpawnCycle
         }
     }
 
-    public void Configure(ushort mapId, IReadOnlyList<BossSpawnTableEntry> rows, ZoneGeometry? geometry)
+    public void Configure(ushort mapId, IReadOnlyList<BossSpawnTableEntry> rows, ZoneGeometry? geometry, bool refills = true)
     {
         ArgumentNullException.ThrowIfNull(rows);
         lock (_gate)
@@ -43,6 +43,7 @@ public sealed class BossSpawnCycle
             {
                 SpawnPoints = new ZoneSpawnPoints(geometry),
                 Slots = rows.Select(row => new Slot(row)).ToArray(),
+                Refills = refills,
             };
         }
     }
@@ -68,6 +69,7 @@ public sealed class BossSpawnCycle
                 slot.Minutes++;
                 if (slot.Row.CheckMinutes > elapsed) continue;
                 var missing = slot.Row.Count - slot.Alive;
+                if (slot.Spawned && !zone.Refills) continue;
                 if (missing < 1 || nowMs - slot.LastSpawnMs <= MinimumSpawnGapMs) continue;
                 slot.Minutes = 0;
                 slot.LastSpawnMs = nowMs;
@@ -79,6 +81,7 @@ public sealed class BossSpawnCycle
                         slot.Row.MonsterId, mapId, x, y, spawnPointId: null, explicitEntityId: null, regionId: slot.Row.Region);
                     if (monster is null) continue;
                     slot.Alive++;
+                    slot.Spawned = true;
                     born.Add(monster);
                 }
             }
@@ -105,6 +108,7 @@ public sealed class BossSpawnCycle
     {
         public required ZoneSpawnPoints SpawnPoints { get; init; }
         public required Slot[] Slots { get; init; }
+        public bool Refills { get; init; } = true;
     }
 
     private sealed class Slot
@@ -114,6 +118,7 @@ public sealed class BossSpawnCycle
         public BossSpawnTableEntry Row { get; }
         public int Minutes { get; set; }
         public int Alive { get; set; }
+        public bool Spawned { get; set; }
         public long LastSpawnMs { get; set; } = long.MinValue / 2;
     }
 }

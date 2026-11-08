@@ -61,7 +61,7 @@ public static class SigningKeyStore
             return existing;
         }
 
-        var pair = ManifestSignature.CreateKeyPair();
+        var pair = CreatePair();
         var created = new SigningKey(pair.PrivateKey, pair.PublicKey, []);
         Save(paths, created);
         return created;
@@ -77,8 +77,8 @@ public static class SigningKeyStore
             throw new HostingException($"The key has been changed {ManifestSignature.MaxLinks} times already, which is the most launchers can follow.", "Build and hand out new launchers, then use the new key from them.", null);
         }
 
-        var next = ManifestSignature.CreateKeyPair();
-        var link = ManifestSignature.Endorse(current.Pair, next.PublicKey);
+        var next = CreatePair();
+        var link = Endorsed(current.Pair, next.PublicKey);
         var rotated = new SigningKey(next.PrivateKey, next.PublicKey, [.. current.Rotations, link]);
         Save(paths, rotated);
         return rotated;
@@ -105,6 +105,33 @@ public static class SigningKeyStore
 
         return target;
     }
+
+    private static SigningKeyPair CreatePair()
+    {
+        try
+        {
+            return ManifestSignature.CreateKeyPair();
+        }
+        catch (Exception ex) when (ex is CryptographicException or PlatformNotSupportedException or DllNotFoundException)
+        {
+            throw CryptoUnavailable("created", ex);
+        }
+    }
+
+    private static KeyLink Endorsed(SigningKeyPair current, string newPublicKey)
+    {
+        try
+        {
+            return ManifestSignature.Endorse(current, newPublicKey);
+        }
+        catch (Exception ex) when (ex is CryptographicException or PlatformNotSupportedException or DllNotFoundException)
+        {
+            throw CryptoUnavailable("changed", ex);
+        }
+    }
+
+    private static HostingException CryptoUnavailable(string action, Exception inner) =>
+        new($"The launcher signing key could not be {action}: the system's cryptography library reported \"{inner.Message}\".", "Report this message with your Linux distribution and .NET runtime version on the tPoseidon issue tracker.", inner);
 
     private static void Save(InstallPaths paths, SigningKey key)
     {

@@ -667,6 +667,87 @@ public sealed class GuildService
         }
     }
 
+    public GuildOutbox List(ulong characterId, GuildListRequest request)
+    {
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is null) return outbox;
+            outbox.Add(new GuildMessage(characterId, GuildListFrames.Reply, GuildListFrames.ReplyFor(_rules.AllGuilds(), request, _text)));
+        }
+        return outbox;
+    }
+
+    public GuildOutbox RecruitList(ulong characterId, GuildRecruitListRequest request)
+    {
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } member) return outbox;
+            var own = member.State == GuildRules.Joined && _rules.RecruitPost(member.GuildCode) is not null;
+            outbox.Add(new GuildMessage(characterId, GuildRecruitFrames.ListReply, GuildRecruitFrames.ListFor(_rules.RecruitPosts(), request, own, _text)));
+        }
+        return outbox;
+    }
+
+    public GuildOutbox RecruitPost(ulong characterId, GuildRecruitText post) =>
+        RecruitWrite(characterId, post, GuildRecruitFrames.PostReply, wantExisting: false);
+
+    public GuildOutbox RecruitUpdate(ulong characterId, GuildRecruitText post) =>
+        RecruitWrite(characterId, post, GuildRecruitFrames.UpdateReply, wantExisting: true);
+
+    public GuildOutbox RecruitDelete(ulong characterId)
+    {
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } member) return outbox;
+            var code = RecruitRefusal(member, wantExisting: true);
+            if (code is null) code = _rules.DeleteRecruit(member.GuildCode) ? null : GuildRecruitFrames.Database;
+            outbox.Add(new GuildMessage(characterId, GuildRecruitFrames.DeleteReply, RecruitResult(code)));
+        }
+        return outbox;
+    }
+
+    public GuildOutbox RecruitContent(ulong characterId, uint guildCode)
+    {
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is null) return outbox;
+            outbox.Add(new GuildMessage(characterId, GuildRecruitFrames.ContentReply, GuildRecruitFrames.ContentFor(_rules.RecruitPost(guildCode), _text)));
+        }
+        return outbox;
+    }
+
+    private GuildOutbox RecruitWrite(ulong characterId, GuildRecruitText post, ushort reply, bool wantExisting)
+    {
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } member) return outbox;
+            var code = RecruitRefusal(member, wantExisting);
+            if (code is null) _rules.SaveRecruit(member.GuildCode, characterId, post.Title, post.Content);
+            var payload = reply == GuildRecruitFrames.UpdateReply
+                ? GuildRecruitFrames.UpdateResult(code is null ? GuildRecruitFrames.Done : GuildRecruitFrames.Failed, code ?? 0)
+                : RecruitResult(code);
+            outbox.Add(new GuildMessage(characterId, reply, payload));
+        }
+        return outbox;
+    }
+
+    private byte? RecruitRefusal(Member member, bool wantExisting)
+    {
+        if (member.State != GuildRules.Joined) return GuildRecruitFrames.Inactive;
+        if ((_rules.RecruitPost(member.GuildCode) is not null) != wantExisting) return GuildRecruitFrames.PostExistence;
+        return _rules.Detail(member.GuildCode) is { } detail && detail.Guild.MasterCharacterId == member.CharacterId
+            ? null
+            : GuildRecruitFrames.NotMaster;
+    }
+
+    private static byte[] RecruitResult(byte? code) =>
+        code is { } refused ? GuildRecruitFrames.Result(GuildRecruitFrames.Failed, refused) : GuildRecruitFrames.Result(GuildRecruitFrames.Done, 0);
+
     public GuildOutbox DetailByCode(ulong characterId, uint guildCode)
     {
         var outbox = new GuildOutbox();
@@ -725,12 +806,10 @@ public sealed class GuildService
 
     private void AddState(GuildOutbox outbox, Member member, GuildDetail detail)
     {
-        var grades = Enumerable.Range(1, GuildFrames.GradeCount)
-            .Select(code => detail.Grades.FirstOrDefault(g => g.GradeCode == code)?.GradeName ?? string.Empty)
-            .ToArray();
+        var grades = GradeNamesOf(detail);
         var state = new GuildStateView(
             BlockOf(member, detail), (ushort)detail.MaxMembers, GradeIndexOf(member.GradeCode), member.Rights, grades, (byte)detail.DepotTabs, (uint)detail.Coins,
-            detail.Notices.Select(NoticeRowOf).ToArray(), detail.Auth);
+            detail.Notices.Select(NoticeRowOf).ToArray(), detail.Auth, GradePointsOf(detail));
         outbox.Add(new GuildMessage(member.CharacterId, GuildFrames.State, GuildFrames.StateFor(state, _text)));
         AddEmblem(outbox, member.CharacterId, detail.Emblem);
     }
@@ -892,6 +971,94 @@ public sealed class GuildService
         foreach (var order in dissolved.Orders) result.Order(order);
         return result;
     }
+
+    public GuildOutbox EditMembers(ulong characterId, IReadOnlyList<GuildMemberEdit> edits)
+    {
+        ArgumentNullException.ThrowIfNull(edits);
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } member) return outbox;
+            var detail = DetailOf(member);
+            if (detail is null)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.MemberEdited, GuildFrames.MemberEditRefused(GuildFrames.MemberEditInvalidGuild)));
+                return outbox;
+            }
+            if ((member.Rights & GuildFrames.RightEditMembers) == 0)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.MemberEdited, GuildFrames.MemberEditRefused(GuildFrames.MemberEditNoPermission)));
+                return outbox;
+            }
+            var roster = _rules.Members(member.GuildCode).ToDictionary(r => r.CharacterId);
+            var results = new List<GuildMemberEditResult>(edits.Count);
+            foreach (var edit in edits)
+            {
+                if (!roster.TryGetValue(edit.CharacterId, out var target)) continue;
+                var isMaster = edit.CharacterId == detail.Guild.MasterCharacterId;
+                var gradeCode = (edit.Flags & GuildFrames.MemberEditGradeChanged) != 0 && !isMaster && edit.GradeIndex is >= 1 and < GuildFrames.GradeCount
+                    ? (byte?)(edit.GradeIndex + GuildRules.MasterGrade) : null;
+                var alias = (edit.Flags & GuildFrames.MemberEditAliasChanged) != 0 ? Fit(edit.Alias, GuildFrames.CharacterNameLength) : null;
+                if (gradeCode is null && alias is null) continue;
+                if (_rules.UpdateMember(member.GuildCode, edit.CharacterId, gradeCode, alias) != GuildRules.Ok) continue;
+                var flags = (byte)((gradeCode is null ? 0 : GuildFrames.MemberEditGradeChanged) | (alias is null ? 0 : GuildFrames.MemberEditAliasChanged));
+                results.Add(new GuildMemberEditResult(edit.CharacterId, gradeCode is { } code ? (uint)(code - GuildRules.MasterGrade) : GradeIndexOf(target.GradeCode), alias ?? target.MemberNick, target.CharName, flags));
+            }
+            var saved = GuildFrames.MemberEditedFor(results, _text);
+            foreach (var recipient in OnlineMembers(member.GuildCode).ToArray())
+            {
+                if (Refresh(recipient) is not { } own) continue;
+                outbox.Add(new GuildMessage(recipient.CharacterId, GuildFrames.MemberEdited, saved));
+                AddState(outbox, recipient, own);
+            }
+        }
+        return outbox;
+    }
+
+    public GuildOutbox UpdateGrades(ulong characterId, IReadOnlyList<string> names, IReadOnlyList<int> points)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        ArgumentNullException.ThrowIfNull(points);
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } member) return outbox;
+            var detail = DetailOf(member);
+            if (detail is null)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.GradesUpdated, GuildFrames.GradesRefused(GuildFrames.GradesInvalidGuild)));
+                return outbox;
+            }
+            if ((member.Rights & GuildFrames.RightGrades) == 0)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.GradesUpdated, GuildFrames.GradesRefused(GuildFrames.GradesNoPermission)));
+                return outbox;
+            }
+            var kept = names.Select(name => Fit(name, GuildFrames.GradeNameLength - 1)).ToArray();
+            if (_rules.UpdateGrades(member.GuildCode, kept, points) != GuildRules.Ok)
+            {
+                outbox.Add(new GuildMessage(characterId, GuildFrames.GradesUpdated, GuildFrames.GradesRefused(GuildFrames.GradesInvalidGuild)));
+                return outbox;
+            }
+            if (_rules.Detail(member.GuildCode) is not { } refreshed) return outbox;
+            var saved = GuildFrames.GradesUpdatedFor(GradeNamesOf(refreshed), GradePointsOf(refreshed), _text);
+            foreach (var recipient in OnlineMembers(member.GuildCode).ToArray())
+            {
+                if (Refresh(recipient) is not { } own) continue;
+                outbox.Add(new GuildMessage(recipient.CharacterId, GuildFrames.GradesUpdated, saved));
+                AddState(outbox, recipient, own);
+            }
+        }
+        return outbox;
+    }
+
+    private static string[] GradeNamesOf(GuildDetail detail) => Enumerable.Range(1, GuildFrames.GradeCount)
+        .Select(code => detail.Grades.FirstOrDefault(g => g.GradeCode == code)?.GradeName ?? string.Empty)
+        .ToArray();
+
+    private static int[] GradePointsOf(GuildDetail detail) => Enumerable.Range(1, GuildFrames.GradeCount)
+        .Select(code => detail.Grades.FirstOrDefault(g => g.GradeCode == code)?.GradePoint ?? 0)
+        .ToArray();
 
     public GuildOutbox SaveAuth(ulong characterId, byte[] table)
     {

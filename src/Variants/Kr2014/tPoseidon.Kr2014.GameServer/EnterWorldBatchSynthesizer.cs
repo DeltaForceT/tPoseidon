@@ -47,9 +47,11 @@ public static class EnterWorldBatchSynthesizer
         AngelResult? angel = null,
         uint gameClock = 0,
         byte[]? harconLobby = null,
+        bool awakened = false,
+        bool soulSeedActive = false,
         CancellationToken ct = default)
     {
-        await SendPhase1Async(ctx, character, entityId, questLists, itemStore, skillStore, rates, itemOptions, timedItems, titles, fortune, fortuneTitleId, abilityPercents, petBag, profileFlags, bossKillWindow, coverLetter, gameClock, harconLobby, ct).ConfigureAwait(false);
+        await SendPhase1Async(ctx, character, entityId, questLists, itemStore, skillStore, rates, itemOptions, timedItems, titles, fortune, fortuneTitleId, abilityPercents, petBag, profileFlags, bossKillWindow, coverLetter, gameClock, harconLobby, awakened, soulSeedActive, ct).ConfigureAwait(false);
         await SendPhase2Async(
             ctx, character, entityId, dialogService,
             worldEntities, characterInfoCatalog,
@@ -76,13 +78,15 @@ public static class EnterWorldBatchSynthesizer
         byte[]? coverLetter = null,
         uint gameClock = 0,
         byte[]? harconLobby = null,
+        bool awakened = false,
+        bool soulSeedActive = false,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ctx);
         ArgumentNullException.ThrowIfNull(character);
         ArgumentNullException.ThrowIfNull(questLists);
 
-        var charData = GameCharDataPacket.For(character);
+        var charData = GameCharDataPacket.For(character, awakened, soulSeedActive);
         await SendFrameAsync(ctx, Opcode.GAME_CHAR_DATA, randKey: 0x8A, charData.EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_BATCH_HEADER, randKey: 0x59,

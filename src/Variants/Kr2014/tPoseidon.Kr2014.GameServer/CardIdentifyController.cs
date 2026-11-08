@@ -177,13 +177,15 @@ internal sealed class CardIdentifyController
         }
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
         var stack = definition.IsStackable ? bag.FirstOrDefault(held => held.ItemIndex == itemId) : null;
+        var bagWeight = bag.Sum(held => (_catalog.GetById(held.ItemIndex)?.Weight ?? 0) * held.WeightUnits);
+        var fits = PickupRules.Fits(player.PlayerMaxWt, bagWeight, bag.Count, stack is not null, definition.Weight, 1) && (stack is not null || bag.Count < _bagCapacity);
         BagOperation operation;
-        if (stack is not null)
+        if (fits && stack is not null)
         {
             var total = _items.AdjustStack(stack.ItemUid, 1);
             operation = new BagOperation(QuestResultFrames.StackChanged, definition.ObjectClass, (uint)itemId, BagItemIds.OnWire(stack.ItemUid), total);
         }
-        else if (bag.Count < _bagCapacity)
+        else if (fits)
         {
             var minted = _itemManager.GrantRewardItem(character.CharacterId, itemId, 1, itemClassOverride: definition.ObjectClass);
             operation = new BagOperation(QuestResultFrames.Created, definition.ObjectClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);

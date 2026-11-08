@@ -4,7 +4,7 @@ namespace tPoseidon.Core.Game.Skills;
 
 public readonly record struct SkillAttacker(long Ap, long Ac, long Ma, long Lk, int Level, long Da = 0, long Hp = 0, long MaxHp = 0, long Hv = 0, long Dx = 0, long Dp = 0, long WeaponDa = 0, float DarkBonus = 0f, long Weight = 0, long ElementBonus = 0, bool AlwaysHits = false);
 
-public readonly record struct SkillTarget(long Dp, long Hv, long Md, long Lk, long Hp, int Level, int Resist, long MaxHp = 0, long BaseDp = 0);
+public readonly record struct SkillTarget(long Dp, long Hv, long Md, long Lk, long Hp, int Level, int Resist, long MaxHp = 0, long BaseDp = 0, double DamageShare = 1.0);
 
 public readonly record struct SkillHit(long Damage, int Type, int Kind, int Element, long Healed, int Flags = 0);
 
@@ -103,6 +103,7 @@ public static class SkillDamage
             remaining = 0;
         }
         remaining -= WireLimits.Saturate(damage * resist * ResistScale);
+        if (remaining > 0 && target.DamageShare < 1.0) remaining = (long)(remaining * target.DamageShare);
         long healed = 0;
         if (remaining < 0)
         {

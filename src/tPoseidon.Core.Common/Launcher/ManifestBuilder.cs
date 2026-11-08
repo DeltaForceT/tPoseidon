@@ -35,11 +35,28 @@ public static class ManifestBuilder
 
     public static string Hash(string path)
     {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        }
+        catch (Exception ex) when (PortableEcdsa.IsPlatformFailure(ex))
+        {
+            return Convert.ToHexString(PortableSha256.Hash(File.ReadAllBytes(path))).ToLowerInvariant();
+        }
     }
 
-    public static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    public static string Hash(ReadOnlySpan<byte> bytes)
+    {
+        try
+        {
+            return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+        }
+        catch (Exception ex) when (PortableEcdsa.IsPlatformFailure(ex))
+        {
+            return Convert.ToHexString(PortableSha256.Hash(bytes)).ToLowerInvariant();
+        }
+    }
 
     private static string? FindBanner(string updatesFolder) =>
         BannerNames.FirstOrDefault(name => File.Exists(Path.Combine(updatesFolder, name)) && new FileInfo(Path.Combine(updatesFolder, name)).Length <= LauncherManifest.MaxBannerBytes);

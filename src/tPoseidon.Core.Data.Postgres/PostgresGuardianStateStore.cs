@@ -71,6 +71,10 @@ public sealed class PostgresGuardianStateStore : IGuardianStateStore
             status.Parameters.AddWithValue("u", uid);
             status.ExecuteNonQuery();
         }
+        foreach (var rune in awakening.DefaultRunes ?? [])
+        {
+            Insert(conn, tx, (ulong)uid, rune);
+        }
         using (var learn = new NpgsqlCommand(
             "INSERT INTO skills (char_uid, skill_id, skill_level) VALUES (@c, @s, 1) ON CONFLICT (char_uid, skill_id) DO NOTHING", conn, tx))
         {

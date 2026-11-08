@@ -496,6 +496,8 @@ public static class SkillFrames
         return frames;
     }
 
+    public static byte[] ChainSummary(ushort targetEntityId, long sum, int landed) => SummaryResult(targetEntityId, sum, landed);
+
     private static byte[] SummaryResult(ushort targetEntityId, long sum, int landed, int type = SkillDamage.PhysicalType, int element = 0)
     {
         var result = new PacketWriter(HitResultSize);

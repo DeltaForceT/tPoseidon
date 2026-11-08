@@ -31,8 +31,10 @@ public sealed class GameCharDataPacket
     public byte SecondJob { get; init; }
     public ushort ThirdType { get; init; }
     public byte ThirdJob { get; init; }
+    public bool Awakened { get; init; }
+    public bool SoulSeedActive { get; init; }
 
-    public static GameCharDataPacket For(Character character)
+    public static GameCharDataPacket For(Character character, bool awakened = false, bool soulSeedActive = false)
     {
         ArgumentNullException.ThrowIfNull(character);
         return new GameCharDataPacket
@@ -52,6 +54,8 @@ public sealed class GameCharDataPacket
             SecondJob = character.Job2,
             ThirdType = OccupationRules.ThirdJobTypeOf(character),
             ThirdJob = character.Job3,
+            Awakened = awakened,
+            SoulSeedActive = soulSeedActive,
         };
     }
 
@@ -83,6 +87,8 @@ public sealed class GameCharDataPacket
         buf[0x37] = SecondJob;
         WriteUInt16Le(buf, 0x38, ThirdType);
         buf[0x3A] = ThirdJob;
+        buf[0x3B] = SoulSeedActive ? (byte)1 : (byte)0;
+        buf[0x3C] = Awakened ? (byte)1 : (byte)0;
 
         return buf;
     }

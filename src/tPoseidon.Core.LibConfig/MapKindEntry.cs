@@ -1,8 +1,10 @@
 namespace tPoseidon.Core.LibConfig;
 
-public readonly record struct MapKindEntry(int Id, int Type, int Class, int Option = 0, int ParallelZoneType = 0, int WorldMapRegion = 0)
+public readonly record struct MapKindEntry(int Id, int Type, int Class, int Option = 0, int ParallelZoneType = 0, int WorldMapRegion = 0, int Group = 0)
 {
     public const int PerPlayerInstanceZoneType = 1;
+    public const int ParallelClass = 2;
+    public const int MonsterQuestGroup = 16;
 
     public const int TownType = 1;
     public const int SecondReturnType = 2;
@@ -27,6 +29,8 @@ public readonly record struct MapKindEntry(int Id, int Type, int Class, int Opti
         Array.IndexOf(LogoutToReturnMapTypes, Type) >= 0 || Class == NoReturnClass || (Option & LogoutToReturnMapOption) != 0;
 
     public bool IsPerPlayerInstance => ParallelZoneType == PerPlayerInstanceZoneType;
+
+    public bool RefillsMonsters => !(Class == ParallelClass && Group == MonsterQuestGroup);
 
     public bool AllowsLoverMove => Class != NoLoverMoveClass && (Option & NoLoverMoveOption) == 0;
 

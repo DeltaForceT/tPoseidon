@@ -101,6 +101,15 @@ public static class SoulSeedMessages
         w.WriteByte(awakening.RareType);
         w.WriteByte(awakening.TitleIndex);
         w.WriteInt32(awakening.SummonSkillId);
+        var runes = awakening.DefaultRunes ?? [];
+        w.WriteByte((byte)runes.Count);
+        foreach (var rune in runes)
+        {
+            w.WriteInt32(rune.SkillId);
+            w.WriteByte(rune.FType);
+            w.WriteInt16(rune.Level);
+            w.WriteByte(rune.Slot);
+        }
         return w.ToArray();
     }
 
@@ -116,7 +125,16 @@ public static class SoulSeedMessages
         var c = r.ReadByte();
         var rare = r.ReadByte();
         var title = r.ReadByte();
-        return new GuardianAwakening(characterId, name, type, fType, rare, title, p, m, s, c, r.ReadInt32());
+        var summonSkill = r.ReadInt32();
+        var runes = new GuardianSkill[r.ReadByte()];
+        for (var i = 0; i < runes.Length; i++)
+        {
+            var skillId = r.ReadInt32();
+            var runeType = r.ReadByte();
+            var level = r.ReadInt16();
+            runes[i] = new GuardianSkill(skillId, GuardianSkillType.Special, runeType, level, r.ReadByte());
+        }
+        return new GuardianAwakening(characterId, name, type, fType, rare, title, p, m, s, c, summonSkill, runes);
     }
 
     public static byte[] EncodeReset(ushort skillId)

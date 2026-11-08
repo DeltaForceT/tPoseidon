@@ -40,7 +40,7 @@ public sealed class ServerFileWindow : Window
         body.Children.Add(new TextBlock { Text = "Server file for your friends", FontSize = 15, FontWeight = FontWeight.SemiBold });
         body.Children.Add(new TextBlock
         {
-            Text = $"Friends open this file in the tPoseidon launcher to add your server at {_settings.Network.PublicAddress}. Use an https:// web address when the web port is behind HTTPS.",
+            Text = $"Friends open this file in the tPoseidon launcher to add your server at {_settings.Network.PublicAddress}. Use an https:// web address when the web port is behind HTTPS. Players log in through the web port (TCP 9990 by default), so open it in your firewall and forward it on your router, and keep the web shop turned on.",
             Foreground = Tokens.TextSecondary,
             TextWrapping = TextWrapping.Wrap,
         });

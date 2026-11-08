@@ -3,7 +3,7 @@ namespace tPoseidon.Core.Data;
 public static class CharacterSlotRules
 {
     public const string Variable = "MT_CHARACTER_SLOTS";
-    public const int Default = 3;
+    public const int Default = 4;
     public const int Min = 1;
     public const int Max = 8;
 

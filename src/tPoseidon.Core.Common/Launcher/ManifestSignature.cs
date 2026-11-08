@@ -1,3 +1,4 @@
+using System.Formats.Asn1;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -27,6 +28,9 @@ public static class ManifestSignature
     public const string SignatureFile = "manifest.sig";
 
     private const string P256Oid = "1.2.840.10045.3.1.7";
+    private const string EcPublicKeyOid = "1.2.840.10045.2.1";
+    private const int P256CoordinateBytes = 32;
+    private const byte UncompressedPointMarker = 4;
     private const string LinkPrefix = "tposeidon-key-link-1";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -38,8 +42,16 @@ public static class ManifestSignature
 
     public static SigningKeyPair CreateKeyPair()
     {
-        using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-        return new SigningKeyPair(Convert.ToBase64String(key.ExportPkcs8PrivateKey()), Convert.ToBase64String(key.ExportSubjectPublicKeyInfo()));
+        try
+        {
+            using var key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+            return new SigningKeyPair(Convert.ToBase64String(key.ExportPkcs8PrivateKey()), Convert.ToBase64String(key.ExportSubjectPublicKeyInfo()));
+        }
+        catch (Exception ex) when (PortableEcdsa.IsPlatformFailure(ex))
+        {
+            var (privateKey, publicKey) = PortableEcdsa.CreateKeyPair();
+            return new SigningKeyPair(Convert.ToBase64String(privateKey), Convert.ToBase64String(publicKey));
+        }
     }
 
     public static bool IsPublicKey(string? text)
@@ -49,8 +61,7 @@ public static class ManifestSignature
             return false;
         }
 
-        using var key = TryImportPublic(text.Trim());
-        return key is not null;
+        return TryDecodePublic(text.Trim(), out _);
     }
 
     public static bool IsKeyPair(SigningKeyPair pair)
@@ -58,9 +69,8 @@ public static class ManifestSignature
         ArgumentNullException.ThrowIfNull(pair);
         try
         {
-            using var key = ECDsa.Create();
-            key.ImportPkcs8PrivateKey(Convert.FromBase64String(pair.PrivateKey), out _);
-            return IsP256(key) && string.Equals(Convert.ToBase64String(key.ExportSubjectPublicKeyInfo()), pair.PublicKey, StringComparison.Ordinal);
+            var privateKey = Convert.FromBase64String(pair.PrivateKey);
+            return string.Equals(Convert.ToBase64String(PortableEcdsa.PublicInfoOf(privateKey)), pair.PublicKey, StringComparison.Ordinal);
         }
         catch (Exception ex) when (ex is FormatException or CryptographicException)
         {
@@ -188,52 +198,94 @@ public static class ManifestSignature
 
     private static byte[] SignBytes(ReadOnlySpan<byte> data, SigningKeyPair key)
     {
-        using var ecdsa = ECDsa.Create();
-        ecdsa.ImportPkcs8PrivateKey(Convert.FromBase64String(key.PrivateKey), out _);
-        return ecdsa.SignData(data, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        var privateKey = Convert.FromBase64String(key.PrivateKey);
+        try
+        {
+            using var ecdsa = ECDsa.Create();
+            ecdsa.ImportPkcs8PrivateKey(privateKey, out _);
+            return ecdsa.SignData(data, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        }
+        catch (Exception ex) when (PortableEcdsa.IsPlatformFailure(ex))
+        {
+            return PortableEcdsa.Sign(privateKey, data);
+        }
     }
 
     private static bool VerifyBytes(ReadOnlySpan<byte> data, string signature, string publicKey)
     {
-        using var key = TryImportPublic(publicKey);
-        if (key is null)
+        if (!TryDecodePublic(publicKey, out var point))
+        {
+            return false;
+        }
+
+        byte[] signatureBytes;
+        try
+        {
+            signatureBytes = Convert.FromBase64String(signature);
+        }
+        catch (FormatException)
         {
             return false;
         }
 
         try
         {
-            return key.VerifyData(data, Convert.FromBase64String(signature), HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+            using var key = ECDsa.Create(new ECParameters { Curve = ECCurve.NamedCurves.nistP256, Q = point });
+            return key.VerifyData(data, signatureBytes, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
         }
-        catch (Exception ex) when (ex is FormatException or CryptographicException)
+        catch (Exception ex) when (PortableEcdsa.IsPlatformFailure(ex))
         {
-            return false;
+            return PortableEcdsa.Verify(point.X, point.Y, data, signatureBytes);
         }
     }
 
-    private static ECDsa? TryImportPublic(string publicKey)
+    private static bool TryDecodePublic(string publicKey, out ECPoint point)
     {
-        var key = ECDsa.Create();
+        point = default;
+        byte[] spki;
         try
         {
-            key.ImportSubjectPublicKeyInfo(Convert.FromBase64String(publicKey), out _);
-            if (IsP256(key))
-            {
-                return key;
-            }
+            spki = Convert.FromBase64String(publicKey);
         }
-        catch (Exception ex) when (ex is FormatException or CryptographicException)
+        catch (FormatException)
         {
-            key.Dispose();
-            return null;
+            return false;
         }
 
-        key.Dispose();
-        return null;
+        return TryReadP256Point(spki, out point) && PortableEcdsa.IsOnCurve(point.X, point.Y);
     }
 
-    private static bool IsP256(ECDsa key) =>
-        string.Equals(key.ExportParameters(false).Curve.Oid.Value, P256Oid, StringComparison.Ordinal);
+    private static bool TryReadP256Point(ReadOnlySpan<byte> spki, out ECPoint point)
+    {
+        point = default;
+        try
+        {
+            var outer = new AsnReader(spki.ToArray(), AsnEncodingRules.DER);
+            var info = outer.ReadSequence();
+            outer.ThrowIfNotEmpty();
+            var algorithm = info.ReadSequence();
+            var keyType = algorithm.ReadObjectIdentifier();
+            var curve = algorithm.ReadObjectIdentifier();
+            algorithm.ThrowIfNotEmpty();
+            var bits = info.ReadBitString(out var unusedBits);
+            info.ThrowIfNotEmpty();
+            if (keyType != EcPublicKeyOid || curve != P256Oid || unusedBits != 0 || bits.Length != 1 + 2 * P256CoordinateBytes || bits[0] != UncompressedPointMarker)
+            {
+                return false;
+            }
+
+            point = new ECPoint
+            {
+                X = bits.AsSpan(1, P256CoordinateBytes).ToArray(),
+                Y = bits.AsSpan(1 + P256CoordinateBytes, P256CoordinateBytes).ToArray(),
+            };
+            return true;
+        }
+        catch (AsnContentException)
+        {
+            return false;
+        }
+    }
 
     private sealed record LinkDocument(string? From, string? To, string? Signature);
 

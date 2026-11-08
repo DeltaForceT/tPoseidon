@@ -86,7 +86,7 @@ internal sealed class SpecialItemController
             OwnedSkills = () => player.Skills,
             CardOfSkill = _cardOfSkill,
             MasterTmPoint = _masterTmPoint,
-            CharacterInfo = () => CharacterInfoOf(Held()),
+            CharacterInfo = () => CharacterInfoOf(Held(), player.Guardians is { Awakened: true }, player.Seed.Planted),
             Warp = (zone, position, ct) => player.RequestZoneChange is { } request
                 ? request(new ZoneChangeRequest(zone, PortRules.ChangeZoneType, null, PortRules.WarpDelay, position), ct)
                 : Task.CompletedTask,
@@ -116,7 +116,7 @@ internal sealed class SpecialItemController
         && player.Dig is null
         && player.Cast is not { IsUnderWay: true };
 
-    private static byte[] CharacterInfoOf(Character character) =>
+    private static byte[] CharacterInfoOf(Character character, bool awakened, bool soulSeedActive) =>
         new GameCharDataPacket
         {
             CharacterId = character.CharacterId,
@@ -130,6 +130,8 @@ internal sealed class SpecialItemController
             StatC = character.PtsS,
             StatD = character.PtsC,
             Timestamp = (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            Awakened = awakened,
+            SoulSeedActive = soulSeedActive,
         }.EncodePayload();
 
     private bool DyeHair(SpecialItemSession session, byte color)

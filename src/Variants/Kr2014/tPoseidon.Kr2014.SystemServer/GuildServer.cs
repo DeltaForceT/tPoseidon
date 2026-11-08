@@ -74,6 +74,10 @@ public sealed class GuildServer
             GuildFrames.ReadChat(p, _text) is { } password ? _guilds.DissolveByPassword(id, password) : null);
         On(dispatcher, ctx, GuildFrames.AuthSave, (id, p) =>
             GuildFrames.ReadAuthRequest(p) is { } table ? _guilds.SaveAuth(id, table) : null);
+        On(dispatcher, ctx, GuildFrames.MemberEdit, (id, p) =>
+            GuildFrames.ReadMemberEditRequest(p, _text) is { } edits ? _guilds.EditMembers(id, edits) : null);
+        On(dispatcher, ctx, GuildFrames.GradesUpdate, (id, p) =>
+            GuildFrames.ReadGradesRequest(p, _text) is { } grades ? _guilds.UpdateGrades(id, grades.Names, grades.Points) : null);
         On(dispatcher, ctx, GuildFrames.PasswordChange, (id, p) =>
             GuildFrames.ReadPasswordChange(p, _text) is { } change ? _guilds.ChangePassword(id, change.Old, change.New) : null);
         On(dispatcher, ctx, GuildFrames.Chat, (id, p) =>
@@ -83,6 +87,17 @@ public sealed class GuildServer
         On(dispatcher, ctx, GuildEmblemFrames.Register, (id, p) =>
             GuildEmblemFrames.ReadRegister(p) is { } emblem ? _guilds.EmblemRegister(id, emblem) : null);
         On(dispatcher, ctx, GuildShopFrames.HistoryRequest, (id, _) => _guilds.ShopHistory(id));
+        On(dispatcher, ctx, GuildRecruitFrames.ListRequest, (id, p) =>
+            GuildRecruitFrames.ReadList(p) is { } listing ? _guilds.RecruitList(id, listing) : null);
+        On(dispatcher, ctx, GuildRecruitFrames.PostRequest, (id, p) =>
+            GuildRecruitFrames.ReadText(p, GuildRecruitFrames.PostRequestLength, _text) is { } post ? _guilds.RecruitPost(id, post) : null);
+        On(dispatcher, ctx, GuildRecruitFrames.UpdateRequest, (id, p) =>
+            GuildRecruitFrames.ReadText(p, GuildRecruitFrames.UpdateRequestLength, _text) is { } post ? _guilds.RecruitUpdate(id, post) : null);
+        On(dispatcher, ctx, GuildRecruitFrames.DeleteRequest, (id, _) => _guilds.RecruitDelete(id));
+        On(dispatcher, ctx, GuildRecruitFrames.ContentRequest, (id, p) =>
+            GuildRecruitFrames.ReadContent(p) is { } guildCode ? _guilds.RecruitContent(id, guildCode) : null);
+        On(dispatcher, ctx, GuildListFrames.Request, (id, p) =>
+            GuildListFrames.ReadRequest(p) is { } listing ? _guilds.List(id, listing) : null);
         On(dispatcher, ctx, GuildFrames.DetailByCode, (id, p) =>
             GuildFrames.ReadDetailByCodeRequest(p) is { } guildCode ? _guilds.DetailByCode(id, guildCode) : null);
         On(dispatcher, ctx, GuildFrames.DetailByCharacter, (id, p) =>

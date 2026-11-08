@@ -25,6 +25,14 @@ public static class GuardianFrames
     public const int CardSaveHeaderSize = 8;
     public const int CardSaveRecordSize = 0x14;
 
+    public static byte[] Awakened(ushort playerEntityId, byte rareType)
+    {
+        var w = new PacketWriter(3);
+        w.WriteUInt16(playerEntityId);
+        w.WriteByte(rareType);
+        return w.ToArray();
+    }
+
     public const int FTypeOffset = 0x1E;
     public const int RareTypeOffset = 0x1F;
     public const int TitleIndexOffset = 0x20;

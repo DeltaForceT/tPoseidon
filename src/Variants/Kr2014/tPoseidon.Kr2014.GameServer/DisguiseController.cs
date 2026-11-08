@@ -90,6 +90,14 @@ internal sealed class DisguiseController
         Console.WriteLine($"{_logTag} [disguise] 0x{player.PlayerEntityId:X4} wears wedding dress type {dressType}");
     }
 
+    public async Task WearCarriedAsync(InGameSessionState player, int shownType)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        if (player.Disguise.Wear(shownType, player.PlayerLookType, !_otherForm(player)) != DisguiseUse.Disguised) return;
+        await _sendToArea(player, Opcode.S2C_DISGUISED, DisguiseFrames.Disguised(player.PlayerEntityId, player.Disguise.ShownType)).ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} [disguise] 0x{player.PlayerEntityId:X4} keeps character type {player.Disguise.ShownType} through the warp");
+    }
+
     public async Task RemoveDressAsync(InGameSessionState player)
     {
         ArgumentNullException.ThrowIfNull(player);

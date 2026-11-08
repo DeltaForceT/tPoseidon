@@ -4,6 +4,9 @@ namespace tPoseidon.Core.Data.Postgres;
 
 public sealed class PostgresGuildRulesStore : IGuildRulesStore
 {
+    private const int DefaultGradeCount = 7;
+    private const int FirstPointGradeIndex = 3;
+
     private readonly NpgsqlDataSource _dataSource;
 
     public PostgresGuildRulesStore(NpgsqlDataSource dataSource)
@@ -345,6 +348,101 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
         return new GuildDetail(found.Guild, found.Max, found.MasterName, found.Ladder, grades, notices, found.DepotTabs, found.Coins, found.Emblem, found.Auth);
     }
 
+    private const string RecruitSelect = """
+        SELECT g.guild_code, g.guild_name, g.master_account_id, g.master_char_uid, g.guild_created_at, g.guild_point, g.guild_members,
+            COALESCE(c.name, ''), r.char_uid, r.recruit_title, r.recruit_content, r.recruit_updated_at
+        FROM guild_recruit r
+        JOIN guild g ON g.guild_code = r.guild_code
+        LEFT JOIN characters c ON c.character_id = g.master_char_uid
+        """;
+
+    private static GuildRecruitView RecruitOf(NpgsqlDataReader r) => new(
+        new Guild
+        {
+            GuildCode = (ulong)r.GetInt64(0),
+            GuildName = r.GetString(1),
+            MasterAccountId = (uint)r.GetInt64(2),
+            MasterCharacterId = (ulong)r.GetInt64(3),
+            GuildCreatedAt = r.GetFieldValue<DateTimeOffset>(4),
+            GuildPoint = r.GetInt32(5),
+            GuildMembers = r.GetInt16(6),
+        },
+        r.GetString(7),
+        new GuildRecruit
+        {
+            GuildCode = (ulong)r.GetInt64(0),
+            CharacterId = (ulong)r.GetInt64(8),
+            RecruitTitle = r.GetString(9),
+            RecruitContent = r.GetString(10),
+            RecruitUpdatedAt = r.GetFieldValue<DateTimeOffset>(11),
+        });
+
+    public IReadOnlyList<GuildRecruitView> RecruitPosts()
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        return Rows(conn, tx, RecruitSelect, RecruitOf);
+    }
+
+    public GuildRecruitView? RecruitPost(uint guildCode)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        return Rows(conn, tx, RecruitSelect + " WHERE r.guild_code = @g", RecruitOf, ("g", (long)guildCode)).FirstOrDefault();
+    }
+
+    public void SaveRecruit(uint guildCode, ulong characterId, string title, string content)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        Execute(conn, tx, """
+            INSERT INTO guild_recruit (guild_code, char_uid, recruit_title, recruit_content, recruit_updated_at)
+            VALUES (@g, @c, @t, @b, NOW())
+            ON CONFLICT (guild_code) DO UPDATE
+                SET char_uid = EXCLUDED.char_uid, recruit_title = EXCLUDED.recruit_title,
+                    recruit_content = EXCLUDED.recruit_content, recruit_updated_at = NOW()
+            """, ("g", (long)guildCode), ("c", (long)characterId), ("t", title), ("b", content));
+        tx.Commit();
+    }
+
+    public bool DeleteRecruit(uint guildCode)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        var removed = Execute(conn, tx, "DELETE FROM guild_recruit WHERE guild_code = @g", ("g", (long)guildCode)) > 0;
+        tx.Commit();
+        return removed;
+    }
+
+    public IReadOnlyList<GuildListEntry> AllGuilds()
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        return Rows(conn, tx, """
+            SELECT g.guild_code, g.guild_name, g.master_account_id, g.master_char_uid, g.guild_created_at, g.guild_point, g.guild_members,
+                g.guild_point_increase, g.guild_ranking, g.guild_ranking_point, COALESCE(c.name, ''), COALESCE(c.level, 0),
+                g.icon_background, g.icon_color, g.icon_item
+            FROM guild g
+            LEFT JOIN characters c ON c.character_id = g.master_char_uid
+            """, r => new GuildListEntry(
+                new Guild
+                {
+                    GuildCode = (ulong)r.GetInt64(0),
+                    GuildName = r.GetString(1),
+                    MasterAccountId = (uint)r.GetInt64(2),
+                    MasterCharacterId = (ulong)r.GetInt64(3),
+                    GuildCreatedAt = r.GetFieldValue<DateTimeOffset>(4),
+                    GuildPoint = r.GetInt32(5),
+                    GuildMembers = r.GetInt16(6),
+                    GuildPointIncrease = r.GetInt32(7),
+                    GuildRanking = r.GetInt32(8),
+                    GuildRankingPoint = r.GetInt32(9),
+                },
+                r.GetString(10),
+                r.GetInt32(11),
+                new GuildEmblem((byte)r.GetInt16(12), (byte)r.GetInt16(13), (uint)r.GetInt64(14))));
+    }
+
     public IReadOnlyList<GuildRosterEntry> Members(uint guildCode)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();
@@ -445,6 +543,55 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
         if (stored is null) return GuildRules.MissingGuild;
         if (stored != oldPassword) return GuildRules.PasswordMismatch;
         Execute(conn, tx, "UPDATE guild SET guild_pw = @p WHERE guild_code = @g", ("p", newPassword), ("g", (long)guildCode));
+        tx.Commit();
+        return GuildRules.Ok;
+    }
+
+    public int UpdateMember(uint guildCode, ulong characterId, byte? gradeCode, string? nick)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        var changed = 0;
+        if (gradeCode is { } grade)
+        {
+            var right = grade is 2 or 3 ? GuildRules.CommissionedRight : (short)0;
+            changed = Execute(conn, tx, "UPDATE guild_member SET grade_code = @k, member_right = @r WHERE guild_code = @g AND char_uid = @c",
+                ("k", (short)grade), ("r", right), ("g", (long)guildCode), ("c", (long)characterId));
+        }
+        if (nick is not null)
+        {
+            changed = Execute(conn, tx, "UPDATE guild_member SET member_nick = @n WHERE guild_code = @g AND char_uid = @c",
+                ("n", nick), ("g", (long)guildCode), ("c", (long)characterId));
+        }
+        tx.Commit();
+        return changed == 1 ? GuildRules.Ok : GuildRules.MemberNotFound;
+    }
+
+    public int UpdateGrades(uint guildCode, IReadOnlyList<string> names, IReadOnlyList<int> points)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        ArgumentNullException.ThrowIfNull(points);
+        if (names.Count != DefaultGradeCount || points.Count != DefaultGradeCount) return GuildRules.Failed;
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        var guild = (long)guildCode;
+        for (var index = 0; index < DefaultGradeCount; index++)
+        {
+            var point = index >= FirstPointGradeIndex && index < DefaultGradeCount - 1 ? Math.Max(points[index], 0) : 0;
+            var changed = Execute(conn, tx, "UPDATE guild_grade SET grade_name = @n, grade_point = CASE WHEN @pointed THEN @p ELSE grade_point END WHERE guild_code = @g AND grade_code = @k",
+                ("n", names[index]), ("p", point), ("pointed", index >= FirstPointGradeIndex), ("g", guild), ("k", (short)(index + 1)));
+            if (changed != 1) return GuildRules.MissingGuild;
+        }
+        var thresholds = Rows(conn, tx, "SELECT grade_code, grade_point FROM guild_grade WHERE guild_code = @g AND grade_code >= 4", r => (Code: r.GetInt16(0), Point: r.GetInt32(1)), ("g", guild));
+        int Threshold(short code) => thresholds.First(t => t.Code == code).Point;
+        Execute(conn, tx, """
+            UPDATE guild_member SET grade_code = CASE
+                WHEN member_point >= @p4 THEN 4
+                WHEN member_point >= @p5 THEN 5
+                WHEN member_point >= @p6 THEN 6
+                ELSE 7 END
+            WHERE guild_code = @g AND grade_code >= 4
+            """, ("g", guild), ("p4", Threshold(4)), ("p5", Threshold(5)), ("p6", Threshold(6)));
         tx.Commit();
         return GuildRules.Ok;
     }

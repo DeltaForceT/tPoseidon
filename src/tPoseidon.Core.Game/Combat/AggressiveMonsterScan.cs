@@ -41,7 +41,8 @@ public sealed class AggressiveMonsterScan
     }
 
     public static bool Scans(MonsterAType atype) =>
-        atype is MonsterAType.AggressiveMonster or MonsterAType.BossMonster or MonsterAType.NonresidentBossMonster;
+        atype is MonsterAType.AggressiveMonster or MonsterAType.BossMonster or MonsterAType.NonresidentBossMonster
+            or MonsterAType.DoppelGanger or MonsterAType.DoppelGangerChild;
 
     public static int RangeOf(MonsterEntity monster)
     {

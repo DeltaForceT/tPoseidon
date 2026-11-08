@@ -62,6 +62,7 @@ public static class GunSkills
             : Math.Max(0, WireLimits.Saturate((float)raw * (double)ratio) - (int)avoid);
         if (target.Resist > Percent) damage = 0;
         else damage -= WireLimits.Saturate(damage * target.Resist * 0.01);
+        if (damage > 0 && target.DamageShare < 1.0) damage = (int)(damage * target.DamageShare);
         var kind = critical ? SkillDamage.KindCritical : SkillDamage.KindHit;
         if (damage >= target.Hp) kind |= SkillDamage.KindFinishingFlag;
         return new SkillHit(damage, GunType, kind, SkillActions.GunElement, 0);

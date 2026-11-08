@@ -22,4 +22,5 @@ public sealed record MapRow(
     float ShopPriceRate,
     int MinItemDepth,
     int MaxItemDepth,
-    float ItemPercentage);
+    float ItemPercentage,
+    int Group);

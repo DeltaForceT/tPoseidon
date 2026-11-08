@@ -363,7 +363,7 @@ public sealed class GmPicker : StackPanel
         Spacing = 4;
         Search = GmKit.Box($"Search {what} by name or id", 240);
         Id = GmKit.Box(idLabel, 110);
-        _list.ItemTemplate = new FuncDataTemplate<GmPick>((pick, _) => Row(pick), false);
+        _list.ItemTemplate = new FuncDataTemplate<GmPick>((pick, _) => pick is null ? new Avalonia.Controls.Panel() : Row(pick), false);
         Search.TextChanged += (_, _) => Restart();
         Search.KeyDown += (_, e) =>
         {

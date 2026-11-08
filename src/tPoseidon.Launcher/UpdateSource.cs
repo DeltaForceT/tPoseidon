@@ -164,7 +164,7 @@ public sealed class HttpUpdateSource : IUpdateSource
         }
         catch (HttpRequestException ex) when (ex.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionRefused })
         {
-            throw new PlayFailure(PlayFailureReason.WebPortClosed, $"The server's web port is closed ({url.Authority} refused the connection).", "Ask the server owner to open the web port.", ex);
+            throw new PlayFailure(PlayFailureReason.WebPortClosed, $"The server's web port is closed ({url.Authority} refused the connection).", PlayFailure.WebPortClosedHint, ex);
         }
         catch (HttpRequestException ex)
         {

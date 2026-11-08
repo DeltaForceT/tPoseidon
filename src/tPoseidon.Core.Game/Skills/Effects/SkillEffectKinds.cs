@@ -14,6 +14,7 @@ public enum SkillEffectRule
     CasterMagicOverFortyNineSixteenfold,
     CasterDig,
     OwnerDefence,
+    CasterSenseDefence,
     CasterAccuracy,
     BestPartyDefence,
     DoubleBase,
@@ -177,6 +178,8 @@ public sealed record SkillEffectKind(
     public bool ReducesSkillHits { get; init; }
 
     public bool ReflectsMagic { get; init; }
+
+    public bool ReflectsAttackerLife { get; init; }
 
     public string? ReflectColumn { get; init; }
 
@@ -442,6 +445,18 @@ public static class SkillEffectKinds
     public const byte LightResist = 0x10;
     public const byte DarkResist = 0x11;
     public const string ResistValueColumn = "Value";
+
+    public static int ElementOfResist(byte resistKind) => resistKind switch
+    {
+        FireResist => SkillActions.FireElement,
+        WaterResist => SkillActions.WaterElement,
+        WindResist => SkillActions.WindElement,
+        EarthResist => SkillActions.EarthElement,
+        ElectricResist => SkillActions.ElectricElement,
+        LightResist => SkillActions.LightElement,
+        DarkResist => SkillActions.DarkElement,
+        _ => SkillActions.NoElement,
+    };
     public const string RecoverySecondsColumn = "RecoverySec";
     public const string CountColumn = "Count";
     public const string ReflexRatioColumn = "ReflexRatio";
@@ -558,7 +573,7 @@ public static class SkillEffectKinds
         {
             FlatColumn = DpRevisionColumn, SecondStat = StatMd, SecondAmountColumn = RatioColumn, BareBaseStats = new[] { StatDp },
         },
-        new(1537, StatDp, SkillEffectRule.OwnerDefence, SkillEffectTail.Duration, DpReductionColumn, OnTarget: true)
+        new(1537, StatDp, SkillEffectRule.CasterSenseDefence, SkillEffectTail.Duration, DpReductionColumn, OnTarget: true)
         {
             RollsChance = true, TickColumn = TickColumn, Periodic = SkillPeriodicHit.DamageOverTime,
         },
@@ -644,6 +659,7 @@ public static class SkillEffectKinds
         new(SkunkBag, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, SecondsColumn, OnTarget: true)
         {
             Holds = true, HoldDelayMs = SkunkBagDelayMs, Periodic = SkillPeriodicHit.DelayedHold, PeriodMs = SkunkBagDelayMs,
+            PlayerCondition = MonsterSkills.StunnedCondition, HeldDebuff = true,
         },
         new(Bind, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: false)
         {
@@ -652,13 +668,14 @@ public static class SkillEffectKinds
         },
         new(BindOnMonster, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: true)
         {
-            Holds = true, GrantsTm = false,
+            Holds = true, GrantsTm = false, PlayerCondition = MonsterSkills.StunnedCondition, HeldDebuff = true,
         },
         new(WinkOfCharm, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: true, SecondColumn),
         new(ChillingPrison, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeThenTarget, PrisonPowerColumn, OnTarget: true)
         {
             Holds = true, StrikesOnStart = true, StrikeGatesMode = true, ChanceColumn = PrisonChanceColumn,
             StrikeElement = SkillActions.WaterElement, StrikeMagicLoss = PrisonMagicLoss, StrikeAddsElement = true,
+            PlayerCondition = MonsterSkills.StunnedCondition, HeldDebuff = true,
         },
         new(Adhesive, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: false)
         {
@@ -750,6 +767,7 @@ public static class SkillEffectKinds
         {
             StrikesOnStart = true, StrikeElement = SkillActions.WaterElement, StrikeMagicLoss = ObjectEffects.WaterMagicLoss, StrikeLossLessLuck = true,
             StrikeGatesMode = true, StrikePowerColumn = ObjectEffects.PowerColumn, StrikeAddsElement = true, Holds = true, HeaderClass = 1,
+            PlayerCondition = MonsterSkills.FrozenCondition, HeldDebuff = true,
             LowersResistElement = SkillActions.ElectricElement, ResistDropByOwnerMagic = true,
         },
         new(ObjectEffects.SwampField, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeRadiusPointDuration, RadiusColumn, OnTarget: false)
@@ -943,6 +961,10 @@ public static class SkillEffectKinds
         new(MonsterSkills.Vampiric, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: false, MonsterSkills.SecondColumn)
         {
             HeaderClass = 0, GrantsTm = false,
+        },
+        new(MonsterSkills.MonDarkBarrier, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: false, MonsterSkills.SecondColumn)
+        {
+            HeaderClass = 0, GrantsTm = false, ReflectsAttackerLife = true,
         },
         new(MonsterSkills.PoisonDo, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, MonsterSkills.PowerColumn, OnTarget: true, MonsterSkills.SecondColumn)
         {

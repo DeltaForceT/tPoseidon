@@ -47,7 +47,7 @@ public sealed class BossLifeCycle
             var called = boss.TickBoss(
                 nowMs, elapsed, engaged, _monsters.GetByMap(boss.MapId).Count, family.Children.Count, _rng.Next(2) == 0);
             if (called) Summon(boss, life.Profile, family);
-            boss.TickBossTimers(elapsed, engaged, boss.Atype != MonsterAType.DoppelGanger, NextRoll);
+            boss.TickBossTimers(elapsed, engaged, NextRoll);
             DespawnWhenIdle(boss, life.Profile, family, elapsed, engaged);
         }
         foreach (var gone in _families.Keys.Where(id => !live.Contains(id)).ToArray())

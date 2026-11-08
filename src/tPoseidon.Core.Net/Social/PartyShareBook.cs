@@ -36,6 +36,9 @@ public sealed class PartyShareBook
         && firstBound.OrderId == secondBound.OrderId
         && firstBound.Group.Contains(second);
 
+    public bool SharesItems(ulong owner, ulong picker) =>
+        AreGrouped(owner, picker) && _bound.TryGetValue(owner, out var ownerBound) && ownerBound.ItemShare != 0;
+
     public Task ApplyAsync(OfficerOrder order, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(order);
@@ -44,7 +47,7 @@ public sealed class PartyShareBook
             case SystemLinkFrames.OrderShareExp:
                 var share = PartyBonusTables.DecodeShare(order.Data);
                 var group = share.Entries.Select(e => e.CharacterId).ToArray();
-                foreach (var entry in share.Entries) _bound[entry.CharacterId] = new Bound(order.OrderId, share.ShareFlag, entry, group);
+                foreach (var entry in share.Entries) _bound[entry.CharacterId] = new Bound(order.OrderId, share.ShareFlag, share.ItemShare, entry, group);
                 break;
             case SystemLinkFrames.OrderCancel:
                 var cancelled = SystemLinkFrames.ReadCancelledOrderId(order.Data);
@@ -72,5 +75,5 @@ public sealed class PartyShareBook
         return gains;
     }
 
-    private sealed record Bound(ushort OrderId, byte ShareFlag, PartyShareEntry Entry, IReadOnlyList<ulong> Group);
+    private sealed record Bound(ushort OrderId, byte ShareFlag, byte ItemShare, PartyShareEntry Entry, IReadOnlyList<ulong> Group);
 }

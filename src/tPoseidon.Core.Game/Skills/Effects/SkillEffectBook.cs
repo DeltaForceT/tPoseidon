@@ -23,6 +23,7 @@ public sealed class SkillEffectBook
     };
 
     private const int SixteenthDivisor = 16;
+    private const double SenseDefenceShare = 0.74;
     private const double AcDownFloor = 49.0;
     private const double MarksmanshipDivisor = 20.0;
     private const double PercentDivisor = 100.0;
@@ -182,6 +183,11 @@ public sealed class SkillEffectBook
             case SkillEffectRule.CasterMagicOverFortyNineSixteenfold:
             {
                 var reduction = (float)((float)((caster.Ma - MagicFloor) << 4) * ratio);
+                return reduction > 0f ? accumulated - reduction : accumulated;
+            }
+            case SkillEffectRule.CasterSenseDefence:
+            {
+                var reduction = (float)(caster.Da * ratio * SenseDefenceShare);
                 return reduction > 0f ? accumulated - reduction : accumulated;
             }
             case SkillEffectRule.CasterDig:

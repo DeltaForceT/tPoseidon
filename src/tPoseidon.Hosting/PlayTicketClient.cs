@@ -39,7 +39,7 @@ public static class PlayTicketClient
             throw new PlayFailure(
                 PlayFailureReason.WebPortClosed,
                 $"The server's web port is closed ({endpoint.Authority} refused the connection).",
-                "Ask the server owner to open the web port (9990 by default) and to run the item shop, which also hands out the login passes.",
+                PlayFailure.WebPortClosedHint,
                 ex);
         }
         catch (HttpRequestException ex)

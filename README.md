@@ -39,7 +39,7 @@ tPoseidon is in beta. These are the rules that matter. The full text is in [BETA
 
 ## Where it stands
 
-**Latest release: [0.85.4-beta](https://github.com/DeltaForceT/tPoseidon/releases/tag/v0.85.4-beta)** (2026-11-07): about 40 fixes from your reports: secret cards and the Soul Seed in Card Identification, the Paula and polar bear skills, the guild master menu and the guild creation fee, monster attack speed and aggro, buffs kept through a warp, tempering of Requiem and Chaos gear, the Chapter 3 ending, the melting score, and starting the client from the panel on Linux. Every change is in the [CHANGELOG](CHANGELOG.md).
+**Latest release: [0.86.2-beta](https://github.com/DeltaForceT/tPoseidon/releases/tag/v0.86.2-beta)** (2026-11-08): about 40 fixes from your reports: every monster skill now cast, the monster attacker limit, Harcon Defence monsters that stood still, Chronos absorbing on his last life bars, guardians awakening and their runes, the secret map, the Soul Seed, the Doppelganger room, the Esther guild list and recruiting board, character creation in every slot, transformations kept through a warp, party loot sharing, the Dragon Cleric shield against monster skills, and the launcher and Friends build on Linux. Every change is in the [CHANGELOG](CHANGELOG.md).
 
 You can make a character and play through a good part of the game, but you will hit bugs and missing systems. [docs/beta/SYSTEMS.md](docs/beta/SYSTEMS.md) lists what works, what is built but needs testing, and what isn't built yet. Read it before you start. When something breaks, [How to report a bug](docs/beta/how-to-report-a-bug.md) explains what I need from you.
 

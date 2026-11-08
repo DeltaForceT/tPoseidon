@@ -14,7 +14,7 @@ internal static class ServerFileCommand
         var output = Path.GetFullPath(commandLine.Option("output")?.Trim().Trim('"') ?? Path.Combine(paths.Root, "players" + ServerFile.Extension));
         file.Write(output);
         Console.WriteLine($"Server file written to {output}.");
-        Console.WriteLine($"Players open it in the tPoseidon launcher to join {file.Address}. Their login goes through {file.WebUrl}, so that web port must be reachable.");
+        Console.WriteLine($"Players open it in the tPoseidon launcher to join {file.Address}. Their login goes through {file.WebUrl}, so that web port (TCP 9990 by default) must be open in your firewall, forwarded on your router and have the web shop turned on.");
         return 0;
     }
 }

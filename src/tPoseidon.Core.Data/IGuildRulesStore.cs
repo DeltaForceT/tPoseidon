@@ -33,6 +33,8 @@ public static class GuildRules
     public const int NewGuildRanking = 999999;
     public const int NoticesShown = 3;
     public const int NoticeNotFound = 101;
+    public const int MemberNotFound = 102;
+    public const short CommissionedRight = 63;
     public const int MissingGuild = 101;
     public const int PasswordMismatch = 102;
     public const int GreetingBytes = 60;
@@ -84,6 +86,10 @@ public sealed record GuildDetail(
     GuildEmblemState Emblem = default,
     byte[]? Auth = null);
 
+public sealed record GuildListEntry(Guild Guild, string MasterName, int MasterLevel, GuildEmblem Emblem);
+
+public sealed record GuildRecruitView(Guild Guild, string MasterName, GuildRecruit Post);
+
 public sealed record GuildRosterEntry(
     ulong CharacterId,
     string CharName,
@@ -118,6 +124,16 @@ public interface IGuildRulesStore
 
     GuildDetail? Detail(uint guildCode);
 
+    IReadOnlyList<GuildListEntry> AllGuilds();
+
+    IReadOnlyList<GuildRecruitView> RecruitPosts();
+
+    GuildRecruitView? RecruitPost(uint guildCode);
+
+    void SaveRecruit(uint guildCode, ulong characterId, string title, string content);
+
+    bool DeleteRecruit(uint guildCode);
+
     IReadOnlyList<GuildRosterEntry> Members(uint guildCode);
 
     IReadOnlyList<GuildApplicant> Applicants(uint guildCode);
@@ -135,4 +151,8 @@ public interface IGuildRulesStore
     int ChangePassword(uint guildCode, string oldPassword, string newPassword);
 
     int UpdateAuth(uint guildCode, byte[] table);
+
+    int UpdateMember(uint guildCode, ulong characterId, byte? gradeCode, string? nick);
+
+    int UpdateGrades(uint guildCode, IReadOnlyList<string> names, IReadOnlyList<int> points);
 }

@@ -56,7 +56,7 @@ public sealed class MapCatalog
     }
 
     public IReadOnlyList<MapKindEntry> ToMapKinds() =>
-        Rows.Select(row => new MapKindEntry(row.Id, row.Type, row.Class, row.Option, row.ParallelZoneType, row.WorldMapRegion)).ToArray();
+        Rows.Select(row => new MapKindEntry(row.Id, row.Type, row.Class, row.Option, row.ParallelZoneType, row.WorldMapRegion, row.Group)).ToArray();
 
     public IReadOnlyList<MapFileEntry> ToMapFiles() =>
         Rows.Select(row => new MapFileEntry(row.Id, row.Name, row.FileName)).ToArray();
@@ -168,7 +168,8 @@ public sealed class MapCatalog
                 RowValues.ReadFloat(row, "ShopPriceRate"),
                 RowValues.ReadInt(row, "MinItemDepth"),
                 RowValues.ReadInt(row, "MaxItemDepth"),
-                RowValues.ReadFloat(row, "ItemPercentage")));
+                RowValues.ReadFloat(row, "ItemPercentage"),
+                RowValues.ReadInt(row, "Group")));
         });
         return rows;
     }

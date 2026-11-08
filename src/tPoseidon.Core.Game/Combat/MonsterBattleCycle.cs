@@ -79,7 +79,8 @@ public readonly record struct MonsterBattleTarget(
     bool Protected = false,
     long MaxHp = 0,
     int Job = 0,
-    bool DefenceParalysed = false);
+    bool DefenceParalysed = false,
+    bool Monster = false);
 
 public sealed class MonsterBattleCycle
 {
@@ -88,6 +89,10 @@ public sealed class MonsterBattleCycle
     public const int UnreachableSameSpotOrders = 10;
     public const int MaxDestinationShifts = 5;
     public const int MaxReapproachFailures = 3;
+    public const double WeakHitShare = 0.01;
+    public const int WeakHitsToLimit = 0x18;
+    public const int WeakHitStep = 2;
+    public const int DisabledWeakHitCounter = -1;
     public static readonly TimeSpan UnreachableMemory = TimeSpan.FromSeconds(20);
 
     public static readonly TimeSpan LongestCountedTick = TimeSpan.FromSeconds(1);
@@ -104,10 +109,13 @@ public sealed class MonsterBattleCycle
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<MonsterEntity, MonsterTactics> _timedTactics = new();
     private readonly Func<int, IReadOnlyList<MonsterTacticEntry>>? _tacticsOf;
     private readonly Func<int, int, bool>? _castable;
+    private readonly Func<int, int, bool>? _castableOnMonster;
     private readonly Func<int, int, MonsterSkillTiming>? _skillTimingOf;
     private readonly Dictionary<(ushort Monster, int Skill), DateTimeOffset> _skillCooling = new();
     private readonly Func<MonsterEntity, int?>? _attackerLimitOf;
     private readonly List<(ushort MapId, MonsterBattleEvent Event)> _queued = new();
+    private readonly HashSet<(ushort MapId, ushort Target, int MonsterType)> _limitedTargets = new();
+    private readonly Dictionary<ushort, int> _weakHitCounters = new();
 
     public MonsterBattleCycle(
         IMonsterParamLookup catalog,
@@ -116,7 +124,8 @@ public sealed class MonsterBattleCycle
         Func<int, IReadOnlyList<MonsterTacticEntry>>? tacticsOf = null,
         Func<int, int, bool>? castable = null,
         Func<MonsterEntity, int?>? attackerLimitOf = null,
-        Func<int, int, MonsterSkillTiming>? skillTimingOf = null)
+        Func<int, int, MonsterSkillTiming>? skillTimingOf = null,
+        Func<int, int, bool>? castableOnMonster = null)
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(reachByType);
@@ -125,6 +134,7 @@ public sealed class MonsterBattleCycle
         _rng = rng ?? new Random();
         _tacticsOf = tacticsOf;
         _castable = castable;
+        _castableOnMonster = castableOnMonster;
         _attackerLimitOf = attackerLimitOf;
         _skillTimingOf = skillTimingOf;
     }
@@ -136,9 +146,42 @@ public sealed class MonsterBattleCycle
         var limit = _attackerLimitOf(monster);
         lock (_gate)
         {
-            var others = _fights.Count(pair => pair.Key != monster.EntityId && pair.Value.TargetEntityId == targetEntityId);
+            if (!_limitedTargets.Contains((monster.MapId, targetEntityId, monster.MonsterParamId))) return false;
+            var others = _fights.Count(pair => pair.Key != monster.EntityId
+                && pair.Value.TargetEntityId == targetEntityId
+                && pair.Value.MapId == monster.MapId);
             return MonsterAttackerLimit.Exceeded(limit, others);
         }
+    }
+
+    public void ForgetTarget(ushort mapId, ushort targetEntityId)
+    {
+        lock (_gate)
+        {
+            _limitedTargets.RemoveWhere(key => key.MapId == mapId && key.Target == targetEntityId);
+        }
+    }
+
+    public static bool IsWeakHit(long damage, long targetMaxHp) =>
+        targetMaxHp > 0 && damage < (long)Math.Round(targetMaxHp * WeakHitShare, MidpointRounding.ToEven);
+
+    private void CountWeakHit(MonsterEntity monster, ushort targetEntityId, long damage, long targetMaxHp)
+    {
+        _weakHitCounters.TryGetValue(monster.EntityId, out var counter);
+        var key = (monster.MapId, targetEntityId, monster.MonsterParamId);
+        if (!IsWeakHit(damage, targetMaxHp) || _limitedTargets.Contains(key) || counter < 0)
+        {
+            _weakHitCounters[monster.EntityId] = DisabledWeakHitCounter;
+            return;
+        }
+
+        if (counter >= WeakHitsToLimit)
+        {
+            _limitedTargets.Add(key);
+            return;
+        }
+
+        _weakHitCounters[monster.EntityId] = counter + WeakHitStep;
     }
 
     public static int ChaseTimeMs(MonsterParamEntry definition)
@@ -178,6 +221,7 @@ public sealed class MonsterBattleCycle
         {
             _fights.Remove(monsterEntityId);
             _unreachable.Remove(monsterEntityId);
+            _weakHitCounters.Remove(monsterEntityId);
             foreach (var key in _skillCooling.Keys.Where(key => key.Monster == monsterEntityId).ToArray()) _skillCooling.Remove(key);
         }
     }
@@ -484,7 +528,7 @@ public sealed class MonsterBattleCycle
 
         if (fight.Tactics is { Usable: true } tactics
             && tactics.Pick(sum => _rng.Next(sum)) is { ActionType: MonsterTactics.CastActionType } tactic
-            && (_castable?.Invoke(tactic.SkillId, tactic.SkillLevel) ?? false)
+            && ((target.Monster && _castableOnMonster is not null ? _castableOnMonster : _castable)?.Invoke(tactic.SkillId, tactic.SkillLevel) ?? false)
             && !IsCooling(monster.EntityId, tactic.SkillId, now))
         {
             var timing = _skillTimingOf?.Invoke(tactic.SkillId, tactic.SkillLevel) ?? default;
@@ -517,6 +561,7 @@ public sealed class MonsterBattleCycle
             target.DefenceParalysed);
         var fatal = outcome.Damage >= targetHp;
         hpLeftByTarget[fight.TargetEntityId] = fatal ? 0 : targetHp - outcome.Damage;
+        CountWeakHit(monster, fight.TargetEntityId, outcome.Damage, target.MaxHp);
         fight.Settled = true;
         fight.NextSwingAt = now.AddMilliseconds(reach.MonsterSwingDelayMs(definition.DxLv + monster.StatDelta(MonsterStat.Dx)));
         Observer?.Invoke(new MonsterBattleReachSample(
@@ -639,6 +684,8 @@ public sealed class MonsterBattleCycle
 
     private void Leave(ushort monsterEntityId, MonsterBattleLeaveReason reason, List<MonsterBattleEvent> events)
     {
+        if (reason == MonsterBattleLeaveReason.TargetGone && _fights.TryGetValue(monsterEntityId, out var leaving))
+            _limitedTargets.RemoveWhere(key => key.MapId == leaving.MapId && key.Target == leaving.TargetEntityId);
         _fights.Remove(monsterEntityId);
         events.Add(new MonsterBattleLeft(monsterEntityId, reason));
     }

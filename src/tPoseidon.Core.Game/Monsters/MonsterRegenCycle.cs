@@ -54,7 +54,7 @@ public sealed class MonsterRegenCycle
         (monsterId >= FirstFieldMonsterId && monsterId <= LastFieldMonsterId)
         || (monsterId >= FirstSpecialMonsterId && monsterId <= LastSpecialMonsterId);
 
-    public void Configure(ushort mapId, int mapCap, IReadOnlyList<MonsterRegenRow> rows, ZoneGeometry? geometry, bool perInstance = false)
+    public void Configure(ushort mapId, int mapCap, IReadOnlyList<MonsterRegenRow> rows, ZoneGeometry? geometry, bool perInstance = false, bool refills = true)
     {
         ArgumentNullException.ThrowIfNull(rows);
 
@@ -70,6 +70,7 @@ public sealed class MonsterRegenCycle
                 RatioSum = ratioSum,
                 SpawnPoints = new ZoneSpawnPoints(geometry),
                 PerInstance = perInstance,
+                Refills = refills,
             };
             _templates[mapId] = template;
             _zones[(mapId, 0)] = template;
@@ -88,7 +89,12 @@ public sealed class MonsterRegenCycle
                 zone = template.CopyEmpty();
                 _zones[(mapId, instanceKey)] = zone;
             }
-            if (zone.Alive >= zone.Cap) return born;
+            if (zone.Settled) return born;
+            if (zone.Alive >= zone.Cap)
+            {
+                zone.Settled = !zone.Refills;
+                return born;
+            }
 
             foreach (var row in zone.Rows)
             {
@@ -119,6 +125,7 @@ public sealed class MonsterRegenCycle
                 zone.Alive++;
                 born.Add(monster);
             }
+            if (!zone.Refills && (born.Count == 0 || zone.Alive >= zone.Cap)) zone.Settled = true;
         }
         return born;
     }
@@ -148,6 +155,8 @@ public sealed class MonsterRegenCycle
     private sealed class Zone
     {
         public bool PerInstance { get; init; }
+        public bool Refills { get; init; } = true;
+        public bool Settled { get; set; }
 
         public Zone CopyEmpty() => new()
         {
@@ -156,6 +165,7 @@ public sealed class MonsterRegenCycle
             RatioSum = RatioSum,
             SpawnPoints = SpawnPoints,
             PerInstance = PerInstance,
+            Refills = Refills,
         };
 
         public required int Cap { get; init; }

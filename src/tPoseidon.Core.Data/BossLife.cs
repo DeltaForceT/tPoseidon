@@ -111,11 +111,11 @@ public sealed class BossLife
         return called;
     }
 
-    internal void TickTimers(MonsterEntity owner, int elapsedMs, bool engaged, bool hpBelowMax, bool castsSkills, Func<int> roll)
+    internal void TickTimers(MonsterEntity owner, int elapsedMs, bool engaged, bool hpBelowMax, Func<int> roll)
     {
         if (_guardMs > 0) _guardMs = Math.Max(0, _guardMs - elapsedMs);
         TickHeal(owner, elapsedMs, hpBelowMax, roll);
-        if (castsSkills) TickSkills(owner, elapsedMs, engaged, roll);
+        TickSkills(owner, elapsedMs, engaged, roll);
     }
 
     public ushort OwnerEntityId { get; set; }

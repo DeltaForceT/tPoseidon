@@ -43,7 +43,8 @@ public sealed record GuardianAwakening(
     byte PtsM,
     byte PtsS,
     byte PtsC,
-    int SummonSkillId);
+    int SummonSkillId,
+    IReadOnlyList<GuardianSkill>? DefaultRunes = null);
 
 public enum GuardianAwakenError
 {

@@ -26,10 +26,10 @@ public static class PickupRules
     public static bool IsWithinReach(int fromX, int fromY, int toX, int toY) =>
         CellDistance(fromX, fromY, toX, toY) <= ReachInCells;
 
-    public static bool MayTake(FieldItem item, ushort playerEntityId, DateTimeOffset now)
+    public static bool MayTake(FieldItem item, ushort playerEntityId, DateTimeOffset now, Func<ushort, bool>? ownerSharesWithPlayer = null)
     {
         var owner = GroundItemField.OwnerAt(item, now);
-        return owner == FieldItem.NoOwner || owner == playerEntityId;
+        return owner == FieldItem.NoOwner || owner == playerEntityId || ownerSharesWithPlayer?.Invoke(owner) == true;
     }
 
     public static (ushort X, ushort Y) WalkEnd(ZoneGeometry? geometry, FieldItem item, Random rng)

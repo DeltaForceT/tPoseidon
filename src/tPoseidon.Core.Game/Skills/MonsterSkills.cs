@@ -25,8 +25,15 @@ public static class MonsterSkills
     public const int CruelFlame = 1237;
     public const int FluentWaist = 1240;
     public const int Destruction = 1294;
+    public const int ElectricField = 1316;
     public const int Vampiric = 1460;
     public const int Guard = 1463;
+    public const int MagicPowerShare = 3;
+    public const int BuffCancel = 1461;
+    public const int BuffCancelVictims = 6;
+    public const string MaxClearColumn = "MaxClear";
+    public const string SubPowerColumn = "SubAP";
+    public const int MonDarkBarrier = 1466;
     public const int Unshield = 1081;
     public const int DarkSlow = 1322;
     public const int Poison = 1464;
@@ -72,7 +79,7 @@ public static class MonsterSkills
     public const string DelayColumn = "DelayTime";
 
     public const int LowestLevel = 1;
-    public const int HighestLevel = 10;
+    public const int HighestLevel = SkillDefinition.HighestLevel;
     public const int ThunderboltVictims = 4;
     public const int WindSlashVictims = 5;
     public const int NoPropertyElement = 0x80;
@@ -112,7 +119,11 @@ public static class MonsterSkills
         actionId is Heal or ChainArrow or MagicRing or FireBreath or ThunderBreath or SharpBrandish or Thunderbolt or WindSlash or Siren
             or DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
             or Destruction or Vampiric or Poison or Charging or Warp or MagicStorm or EarthDivide or Guard or Unshield or DarkSlow
-        || IsStatEffect(actionId)
+            or MonDarkBarrier or SkillEffectKinds.MagicReflect or SkillEffectKinds.Subcutaneous or SkillEffectKinds.WindShield or SkillEffectKinds.DarkBarrier
+            or ObjectHits.FlashAttacking or SkillActions.ManaArrow or SkillEffectKinds.WinkOfCharm or ElectricField or ObjectEffects.IceCrystal or SkillEffectKinds.Harden or ChainHits.QuadPunch or ChainHits.TetraPunch
+            or BuffCancel or SkillActions.StoneThrowing or SupportSkills.FirstAid or GroundSkills.Earthquake or ObjectHits.GaleBreak or ObjectEffects.DeadlyFunk
+            or SkillEffectKinds.Berserk or SkillEffectKinds.Bind or SkillEffectKinds.ChillingPrison or SkillEffectKinds.FireField or GunSkills.BreakBarrier
+        || IsEmote(actionId) || IsStatEffect(actionId)
         || SingleMagic.ContainsKey(actionId) || HarconSkills.IsHarcon(actionId)
         || SkillAreaShapes.Find(actionId) is not null || SkillHitShapes.Find(actionId) is { NeedsGun: false };
 
@@ -123,7 +134,16 @@ public static class MonsterSkills
     public static bool IsObject(int actionId) =>
         actionId is DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
             or Destruction or Vampiric or Poison or Charging or Warp or Unshield or DarkSlow
+            or MonDarkBarrier or SkillEffectKinds.MagicReflect or SkillEffectKinds.Subcutaneous or SkillEffectKinds.WindShield or SkillEffectKinds.DarkBarrier
+            or SkillEffectKinds.WinkOfCharm or ElectricField or ObjectEffects.IceCrystal or SkillEffectKinds.Harden or ChainHits.QuadPunch or ChainHits.TetraPunch
+            or ObjectHits.GaleBreak or ObjectEffects.DeadlyFunk or SkillEffectKinds.Berserk or SkillEffectKinds.Bind or SkillEffectKinds.ChillingPrison
+            or SkillEffectKinds.FireField or GunSkills.BreakBarrier
         || IsStatEffect(actionId);
+
+    public static long BuffCancelDamage(long power, long step, int index) => WireLimits.Saturate(power + step * (double)index);
+
+    public static bool IsEmote(int actionId) =>
+        actionId is EventSkills.PerryFlame or EventSkills.WhitePearl or EventSkills.WhiteSplash or EventSkills.Butterfly;
 
     public static long ChargingPower(long pushed, long casterHp, float ratio) =>
         WireLimits.Saturate(unchecked((pushed + ChargingDistanceBase) * casterHp) * (double)ratio / ChargingDivisor);
@@ -147,6 +167,9 @@ public static class MonsterSkills
     public static bool PoisonStrikeDue(int elapsedMs, int strikes, int periodMs) => elapsedMs >= PoisonFirstMs + strikes * periodMs;
 
     public static bool Castable(int actionId, int level) => level is >= LowestLevel and <= HighestLevel && IsBuilt(actionId);
+
+    public static bool CastableOnMonster(int actionId, int level) =>
+        Castable(actionId, level) && (actionId is ChainArrow or Thunderbolt || SingleMagicOf(actionId) is not null);
 
     public static (int Action, int Skill)? ImitationOf(int actionId) => Imitated.TryGetValue(actionId, out var imitation) ? imitation : null;
 

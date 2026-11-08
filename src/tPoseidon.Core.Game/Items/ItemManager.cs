@@ -30,6 +30,22 @@ public sealed class ItemManager
         return _itemStore.SetBreakedAt(item.ItemUid, expiresAt) ? item with { BreakedAt = expiresAt } : item;
     }
 
+    public int StampMissingPeriods(ulong characterId, Func<int, short?> shopHours)
+    {
+        ArgumentNullException.ThrowIfNull(shopHours);
+        var stamped = 0;
+        foreach (var item in _itemStore.GetAllForCharacter(characterId))
+        {
+            if (item.ItemClass != Item.RareClass || TimedItemRules.IsTimed(item)) continue;
+            var definition = _itemCatalog.GetById(item.ItemIndex);
+            if (definition is not { ExistType: ItemRechargeRules.TimeLimitedExistType }) continue;
+            var hours = shopHours(item.ItemIndex) ?? TimedItemPeriods.HoursOf(definition, TimerMinutes);
+            if (hours is not > 0) continue;
+            if (_itemStore.SetBreakedAt(item.ItemUid, Clock.GetUtcNow().AddHours(hours.Value))) stamped++;
+        }
+        return stamped;
+    }
+
     public ushort NewStack(int itemIndex, ushort stack) =>
         DrillLifeOf?.Invoke(itemIndex) is int life && life > 0 ? (ushort)Math.Min(life, ushort.MaxValue) : stack;
 
