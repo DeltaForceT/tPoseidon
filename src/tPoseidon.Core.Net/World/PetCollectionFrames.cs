@@ -2,7 +2,7 @@ using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Net.World;
 
-public readonly record struct PetCollectionStartFrame(ulong PetWireUid, ulong FoodWireUid, ushort FoodCount);
+public readonly record struct PetCollectionStartFrame(ulong PetWireUid, ulong FoodWireUid, ushort Filters);
 
 public readonly record struct PetBagEntry(byte ItemClass, uint ItemId, ulong ItemUid, ushort Count);
 
@@ -10,8 +10,8 @@ public static class PetCollectionFrames
 {
     public const int StartSize = 2 * sizeof(ulong) + sizeof(ushort);
     public const int ItemRequestSize = sizeof(ulong);
-    public const ushort FoodNotSpent = 0;
-    public const ushort FoodSpent = 1;
+    public const ushort NothingCollected = 0;
+    public const ushort OneCollected = 1;
     public const int RareEntryStateBytes = 4;
     private const int RecordCapacity = 24;
 
@@ -35,20 +35,20 @@ public static class PetCollectionFrames
 
     public static byte[] Code(byte code) => new[] { code };
 
-    public static byte[] Collected(BagOperation collected, BagOperation? food)
+    public static byte[] Collected(BagOperation food, BagOperation? collected)
     {
         var w = new PacketWriter(2 * RecordCapacity + sizeof(ushort));
-        w.WriteBytes(QuestResultFrames.ItemOperation(collected));
-        w.WriteUInt16(food is null ? FoodNotSpent : FoodSpent);
-        if (food is { } spent) w.WriteBytes(QuestResultFrames.ItemOperation(spent));
+        w.WriteBytes(QuestResultFrames.ItemOperation(food));
+        w.WriteUInt16(collected is null ? NothingCollected : OneCollected);
+        if (collected is { } found) w.WriteBytes(QuestResultFrames.ItemOperation(found));
         return w.ToArray();
     }
 
-    public static byte[] Moved(BagOperation petBag, BagOperation bag)
+    public static byte[] Moved(BagOperation bag, BagOperation petBag)
     {
         var w = new PacketWriter(2 * RecordCapacity);
-        w.WriteBytes(QuestResultFrames.ItemOperation(petBag));
         w.WriteBytes(QuestResultFrames.ItemOperation(bag));
+        w.WriteBytes(QuestResultFrames.ItemOperation(petBag));
         return w.ToArray();
     }
 

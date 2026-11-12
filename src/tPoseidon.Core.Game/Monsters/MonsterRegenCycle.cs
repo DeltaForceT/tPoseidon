@@ -130,6 +130,14 @@ public sealed class MonsterRegenCycle
         return born;
     }
 
+    public void Reopen(ushort mapId)
+    {
+        lock (_gate)
+        {
+            if (_zones.TryGetValue((mapId, 0), out var zone) && !zone.Refills) zone.Settled = false;
+        }
+    }
+
     public void Release(MonsterEntity monster)
     {
         ArgumentNullException.ThrowIfNull(monster);
@@ -140,6 +148,14 @@ public sealed class MonsterRegenCycle
             if (!zone.Counts.TryGetValue(key, out var count) || count < 1) return;
             zone.Counts[key] = count - 1;
             zone.Alive--;
+        }
+    }
+
+    public IReadOnlyCollection<ushort> InstanceKeysOf(ushort mapId)
+    {
+        lock (_gate)
+        {
+            return _zones.Keys.Where(key => key.Map == mapId && key.Key != 0).Select(key => key.Key).ToArray();
         }
     }
 

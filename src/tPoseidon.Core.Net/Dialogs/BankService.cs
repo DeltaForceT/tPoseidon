@@ -149,7 +149,7 @@ public sealed class BankService
         {
             _bank.Deposit(character.OwnerAccountId, held.ItemUid, FreeBankPosition(stored));
             bagOperation = new BagOperation(Taken, itemClass, (uint)held.ItemIndex, BagItemIds.OnWire(held.ItemUid), 0);
-            bankOperation = new BagOperation(Added, itemClass, (uint)held.ItemIndex, BagItemIds.OnWire(held.ItemUid), (ushort)count);
+            bankOperation = AddedOf(held, itemClass, (ushort)count);
         }
         else
         {
@@ -222,7 +222,7 @@ public sealed class BankService
             _bank.Withdraw(character.OwnerAccountId, stored.ItemUid);
             _items.AssignToCharacter(stored.ItemUid, character.CharacterId, SlotKind.Inventory, EquipmentRules.FirstFreeBagPosition(bag));
             bankOperation = new BagOperation(Taken, itemClass, (uint)stored.ItemIndex, BagItemIds.OnWire(stored.ItemUid), 0);
-            bagOperation = new BagOperation(Added, itemClass, (uint)stored.ItemIndex, BagItemIds.OnWire(stored.ItemUid), (ushort)count);
+            bagOperation = AddedOf(stored, itemClass, (ushort)count);
         }
         else
         {
@@ -308,6 +308,13 @@ public sealed class BankService
 
     private Task RefuseAsync(Opcode opcode, string reason, CancellationToken ct) =>
         RefuseAsync(opcode, Array.Empty<byte>(), reason, ct);
+
+    public static BagOperation AddedOf(Item item, byte itemClass, ushort count)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return new BagOperation(Added, itemClass, (uint)item.ItemIndex, BagItemIds.OnWire(item.ItemUid), count,
+            item.ItemSlot, (byte)item.RefineType, item.RefineLevel, item.RefineState);
+    }
 
     private async Task RefuseAsync(Opcode opcode, byte[] payload, string reason, CancellationToken ct)
     {

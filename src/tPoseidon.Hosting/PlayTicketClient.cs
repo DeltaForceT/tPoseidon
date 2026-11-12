@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using System.Net.Sockets;
 
 namespace tPoseidon.Hosting;
@@ -20,7 +21,9 @@ public static class PlayTicketClient
         return new Uri(baseUri, EndpointPath);
     }
 
-    public static async Task RequestAsync(HttpClient http, Uri endpoint, string username, string password, CancellationToken ct)
+    private const int MaxReplyBytes = 4096;
+
+    public static async Task<string?> RequestAsync(HttpClient http, Uri endpoint, string username, string password, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(http);
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -56,7 +59,7 @@ public static class PlayTicketClient
             switch (response.StatusCode)
             {
                 case HttpStatusCode.OK:
-                    return;
+                    return ServiceIn(await ReadReplyAsync(response, ct).ConfigureAwait(false));
                 case HttpStatusCode.Unauthorized:
                     throw new PlayFailure(PlayFailureReason.WrongPassword, "The account name or password is wrong.");
                 case HttpStatusCode.TooManyRequests:
@@ -65,5 +68,43 @@ public static class PlayTicketClient
                     throw new PlayFailure(PlayFailureReason.ServerRefused, $"The server refused the login ({(int)response.StatusCode}).");
             }
         }
+    }
+
+    public static string? ServiceIn(string reply)
+    {
+        if (string.IsNullOrWhiteSpace(reply))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(reply);
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("service", out var service)
+                && service.ValueKind == JsonValueKind.String)
+            {
+                var name = service.GetString();
+                return string.Equals(name, ClientFolder.EnglishService, StringComparison.OrdinalIgnoreCase) ? ClientFolder.EnglishService
+                    : string.Equals(name, ClientFolder.KoreanService, StringComparison.OrdinalIgnoreCase) ? ClientFolder.KoreanService
+                    : null;
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return null;
+    }
+
+    private static async Task<string> ReadReplyAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        if (response.Content.Headers.ContentLength is > MaxReplyBytes)
+        {
+            return "";
+        }
+
+        var text = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        return text.Length > MaxReplyBytes ? "" : text;
     }
 }

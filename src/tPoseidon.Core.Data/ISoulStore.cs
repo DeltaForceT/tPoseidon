@@ -1,6 +1,6 @@
 namespace tPoseidon.Core.Data;
 
-public sealed record GuardianSoulRow(ulong GuardianUid, int Gauge, ulong SourceItemUid, int SourceCount, int PotionsReady, DateTimeOffset LastTick);
+public sealed record GuardianSoulRow(ulong GuardianUid, int Gauge, ulong SourceItemUid, int SourceCount, int PotionsReady, DateTimeOffset LastTick, bool Penalty = false);
 
 public sealed record SoulAccount(uint Soul, IReadOnlyList<GuardianSoulRow> Guardians);
 

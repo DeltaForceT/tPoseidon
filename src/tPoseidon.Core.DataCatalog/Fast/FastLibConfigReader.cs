@@ -732,8 +732,26 @@ public sealed class FastLibConfigReader
                 .ToArray(),
             ReadInt(row, "Ratio"))));
         var tartaros = new HashSet<int>();
-        LoadTable(SoulSystemTables.TartarosTable, row => tartaros.Add(ReadInt(row, "ID")));
-        return new SoulSystemTables(info, sources, potions, equipment, crafts, intensify, tartaros);
+        var tartarosSkills = new Dictionary<int, IReadOnlyList<TartarosMapSkill>>();
+        LoadTable(SoulSystemTables.TartarosTable, row =>
+        {
+            var mapId = ReadInt(row, "ID");
+            tartaros.Add(mapId);
+            tartarosSkills[mapId] = Enumerable.Range(0, SoulSystemTables.TartarosSkillColumns)
+                .Select(n => new TartarosMapSkill(ReadInt(row, $"DebuffSkill_Id_{n}"), ReadInt(row, $"DebuffSkill_Level_{n}")))
+                .Where(skill => skill.SkillId != 0 && skill.Level > 0)
+                .ToArray();
+        });
+        var badRatios = new Dictionary<int, float>();
+        LoadTable(SoulSystemTables.BadBuffTable, row => badRatios[ReadInt(row, "Level")] = ReadFloat(row, "Ratio"));
+        var goodRatios = new Dictionary<int, float>();
+        LoadTable(SoulSystemTables.GoodBuffTable, row => goodRatios[ReadInt(row, "Level")] = ReadFloat(row, "Ratio"));
+        return new SoulSystemTables(info, sources, potions, equipment, crafts, intensify, tartaros)
+        {
+            TartarosMapSkills = tartarosSkills,
+            BadBuffRatios = badRatios,
+            GoodBuffRatios = goodRatios,
+        };
     }
 
     public MeltingTables LoadMeltingTables()
@@ -928,7 +946,16 @@ public sealed class FastLibConfigReader
         var bands = new Dictionary<(int Map, int Portal), PortalLevelBand>();
         LoadTable(PortalLevelBands.TableName, row => bands.TryAdd(
             (ReadInt(row, "Map"), ReadInt(row, "PortalID")),
-            new PortalLevelBand(ReadInt(row, "MinLevel"), ReadInt(row, "MaxLevel"))));
+            new PortalLevelBand(
+                ReadInt(row, "MinLevel"),
+                ReadInt(row, "MaxLevel"),
+                ReadInt(row, "CheckType"),
+                ReadInt(row, "JobType1"),
+                ReadInt(row, "JobType2"),
+                ReadInt(row, "QuestType"),
+                ReadInt(row, "QuestID"),
+                ReadInt(row, "ItemID"),
+                ReadInt(row, "DestZone"))));
         return new PortalLevelBands(bands);
     }
 
@@ -1892,10 +1919,16 @@ public sealed class FastLibConfigReader
         return entries;
     }
 
-    public IReadOnlyList<SkillParam2Entry> LoadSkillParam2()
+    public IReadOnlyList<SkillParam2Entry> LoadSkillParam2() => LoadSkillParameterTable("SkillParam2");
+
+    public IReadOnlyList<SkillParam2Entry> LoadRuneSkills() => LoadSkillParameterTable(RuneSkillTableName);
+
+    public const string RuneSkillTableName = "RuneStoneSkillParam";
+
+    private List<SkillParam2Entry> LoadSkillParameterTable(string tableName)
     {
         var entries = new List<SkillParam2Entry>(320);
-        LoadTable("SkillParam2", row => entries.Add(new SkillParam2Entry
+        LoadTable(tableName, row => entries.Add(new SkillParam2Entry
         {
             Id = ReadInt(row, "ID"),
             Type = ReadInt(row, "Type"),
@@ -2548,7 +2581,9 @@ public sealed class FastLibConfigReader
         var drills = new Dictionary<int, DrillParamEntry>();
         LoadTable("Item_DrillParam", row => drills.TryAdd(ReadInt(row, "Id"), new DrillParamEntry(
             ReadInt(row, "Id"), ReadInt(row, "Grade"), ReadInt(row, "GroundNature"), ReadInt(row, "DigDepth"),
-            ReadInt(row, "BarEffArea"), ReadInt(row, "BarSpeed"), ReadInt(row, "ScoopMass"), ReadInt(row, "DrillLife"), ReadFloat(row, "RandomSpot_Ratio"))));
+            ReadInt(row, "BarEffArea"), ReadInt(row, "BarSpeed"), ReadInt(row, "ScoopMass"), ReadInt(row, "DrillLife"), ReadFloat(row, "RandomSpot_Ratio"),
+            ReadFloat(row, "CDM_GaugeMax"), ReadFloat(row, "CDM_StressBonus"), ReadInt(row, "CDM_Seconds"), ReadFloat(row, "CDM_RatioBang"),
+            ReadFloat(row, "Wedding_Stress"), ReadFloat(row, "Wedding_RatioBang"))));
 
         var zoneItems = new Dictionary<int, MapItemZoneRow>();
         LoadTable("MapItem_All", row =>
@@ -2574,14 +2609,27 @@ public sealed class FastLibConfigReader
             if (type >= 0 && type < EventRateTypes) eventRateAdd[type] = ReadFloat(row, "Rate_Add");
         });
 
+        var eventItems = new List<DropEventItemEntry>();
+        LoadTable(DropEventItemEntry.TableName, row => eventItems.Add(new DropEventItemEntry(
+            ReadInt(row, "ID"), ReadFloat(row, "DrillRatio"), ReadFloat(row, "MonRatio"),
+            ReadInt(row, "In_Year"), ReadInt(row, "In_Month"), ReadInt(row, "In_Day"), ReadInt(row, "In_Hour"), ReadInt(row, "In_Minute"),
+            ReadInt(row, "Out_Year"), ReadInt(row, "Out_Month"), ReadInt(row, "Out_Day"), ReadInt(row, "Out_Hour"), ReadInt(row, "Out_Minute"),
+            ReadString(row, "WorkingDays"))));
+
         var gradeExpRates = new List<float>();
         LoadTable("DrillGradeExpRate", row => gradeExpRates.Add(ReadFloat(row, "ExpRate")));
 
         var natures = new Dictionary<int, int>();
         LoadTable("MapAttr", row => natures.TryAdd(ReadInt(row, "Type"), ReadInt(row, "Attr")));
 
+        var stressPoints = new SortedDictionary<int, float>();
+        LoadTable("StressPointInfo", row => stressPoints.TryAdd(ReadInt(row, "StressType"), ReadFloat(row, "Point")));
+
         var autoDrillPets = new Dictionary<int, int>();
         LoadTable("AutoDrillPetInfo", row => autoDrillPets.TryAdd(ReadInt(row, "ItemID"), ReadInt(row, "CoolTime")));
+
+        var megaCrazyRatios = new Dictionary<int, float>();
+        LoadTable("ESAction_EnchantedCDM", row => megaCrazyRatios.TryAdd(ReadInt(row, "Level"), ReadFloat(row, "Ratio")));
 
         return new DrillTables
         {
@@ -2590,9 +2638,12 @@ public sealed class FastLibConfigReader
             ZoneItems = zoneItems,
             ItemTables = itemTables.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<MapItemChance>)pair.Value, StringComparer.Ordinal),
             EventRateAdd = eventRateAdd,
+            EventItems = eventItems,
             GradeExpRates = gradeExpRates,
             GroundNatures = natures,
             AutoDrillPets = autoDrillPets,
+            StressPoints = stressPoints.Values.ToList(),
+            MegaCrazyRatios = megaCrazyRatios,
         };
     }
 

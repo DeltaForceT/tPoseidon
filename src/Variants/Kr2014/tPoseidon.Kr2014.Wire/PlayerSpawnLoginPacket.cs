@@ -73,8 +73,9 @@ public sealed class PlayerSpawnLoginPacket
     public static PlayerSpawnLoginPacket FromCharacter(
         Character character,
         ushort entityId,
-        IItemStore? itemStore = null)
-        => FromCharacter(character, entityId, itemStore, null);
+        IItemStore? itemStore = null,
+        Func<Item, IReadOnlyList<ItemProperty>>? itemProperties = null)
+        => FromCharacter(character, entityId, itemStore, null, itemProperties: itemProperties);
 
     public static PlayerSpawnLoginPacket FromCharacter(
         Character character,
@@ -86,13 +87,15 @@ public sealed class PlayerSpawnLoginPacket
         byte postureCode = 0,
         GuildTag? guild = null,
         uint entityFlags = DefaultEntityFlags,
-        bool angelWing = false)
+        bool angelWing = false,
+        Func<Item, IReadOnlyList<ItemProperty>>? itemProperties = null)
     {
         ArgumentNullException.ThrowIfNull(character);
         var makeUp = LookChangeRules.MakeUpOf(character, OccupationRules.LookStateOf(character))
             ?? new MakeUp((ushort)character.Species, (byte)character.Species, (byte)character.Hair);
 
         var looks = new Dictionary<byte, uint>();
+        var overrides = new Dictionary<byte, uint>();
         if (itemStore is null)
         {
             looks[EquipmentSlot.Ear] = character.StarterEarItemIndex;
@@ -103,6 +106,12 @@ public sealed class PlayerSpawnLoginPacket
             foreach (var item in itemStore.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Equipment))
             {
                 if (Array.Exists(LookBits, look => look.Slot == item.SlotPosition)) looks[item.SlotPosition] = (uint)item.ItemIndex;
+                if (itemProperties is not null
+                    && Array.Exists(LookOverrideBits, look => look.Slot == item.SlotPosition)
+                    && AppearanceOf(itemProperties(item)) is { } appearance)
+                {
+                    overrides[item.SlotPosition] = appearance;
+                }
             }
         }
 
@@ -126,7 +135,18 @@ public sealed class PlayerSpawnLoginPacket
             EntityFlags = entityFlags,
             Guild = guild ?? new GuildTag(string.Empty, string.Empty, default),
             LookItems = looks,
+            LookOverrides = overrides,
         };
+    }
+
+    public static uint? AppearanceOf(IReadOnlyList<ItemProperty> properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        foreach (var property in properties)
+        {
+            if (property.Type == tPoseidon.Core.Game.Items.ItemComposingRules.AppearanceType && property.Extra != 0) return property.Extra;
+        }
+        return null;
     }
 
     public uint LookMask => MaskOf(LookBits, LookItems) | EarAndTailBits;

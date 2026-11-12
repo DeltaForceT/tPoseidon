@@ -321,13 +321,8 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         ArgumentNullException.ThrowIfNull(args);
         if (!IsEngagedWith(entityId))
         {
-            if (NpcScript.Classify(functionId).Operation == NpcScriptOperation.Exit)
-            {
-                await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
-                Console.WriteLine($"{_logTag} {_ctx.Remote}   dialog of 0x{entityId:X4} closed after its system window");
-                return;
-            }
-            Console.WriteLine($"{_logTag} {_ctx.Remote}   script function {functionId} for 0x{entityId:X4} ignored: not talking to it");
+            await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
+            Console.WriteLine($"{_logTag} {_ctx.Remote}   script function {functionId} for 0x{entityId:X4}: not talking to it; dialog closed");
             return;
         }
         var call = NpcScript.Classify(functionId);
@@ -836,10 +831,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         if (!Fits(bag, required, rewards)) return 2;
         if (Arg(args, entry.CompletionCount < QuestRules.MaxCountOf(quest) ? 1 : 3) is not ushort message) return NpcScript.Refused;
 
-        var taken = TakeItems(bag, required);
-        var operations = new List<BagOperation>();
-        operations.AddRange(GrantRewards(characterId, rewards));
-        operations.AddRange(taken);
+        var operations = QuestResultFrames.InApplyOrder(TakeItems(bag, required), GrantRewards(characterId, rewards));
         var rates = _player.Rates();
         var member = IsMember;
         var exp = Math.Max(0, rates.ScaleExp(quest.Exp, member));
@@ -903,6 +895,18 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         _stores.Quests.RemoveActive(characterId, QuestTypes.Monster, removed.QuestId, removed.Monster);
         await SendAsync(Opcode.S2C_MONSTER_QUEST_REMOVED, QuestFrames.MonsterQuestRemoved(questId), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   monster quest {questId} given up ({(removed.Success ? "finished" : "not finished")})");
+    }
+
+    public void LoginForCharacter(ulong characterId)
+    {
+        var cancelled = MonsterQuests.CancelledAtLogin(_stores.Quests.GetActiveForCharacter(characterId));
+        _stores.Hunts.Delete(characterId);
+        foreach (var row in cancelled)
+        {
+            _stores.Quests.RemoveActive(characterId, QuestTypes.Monster, row.QuestId, row.MonsterId);
+            Console.WriteLine($"{_logTag} {_ctx.Remote}   monster quest {row.QuestId} cancelled by the logout (kills {row.KillCount})");
+        }
+        LoadForCharacter(characterId);
     }
 
     public void LoadForCharacter(ulong characterId)
@@ -1260,10 +1264,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
             return NpcScript.Refused;
         }
 
-        var taken = TakeItems(bag, required);
-        var operations = new List<BagOperation>();
-        operations.AddRange(GrantRewards(characterId, rewards));
-        operations.AddRange(taken);
+        var operations = QuestResultFrames.InApplyOrder(TakeItems(bag, required), GrantRewards(characterId, rewards));
 
         var rates = _player.Rates();
         var member = IsMember;

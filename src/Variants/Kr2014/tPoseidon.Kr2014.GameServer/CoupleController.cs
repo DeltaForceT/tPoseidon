@@ -296,6 +296,9 @@ internal sealed class CoupleController
         Log(st, $"couple {couple.CoupleCode} options: ring {choice.Ring.ItemId}, dress {dressItemId}, title {choice.Title.Index}, fee {choice.Fee} (coupon 0x{request.CouponWireUid:X})");
     }
 
+    public ulong? MarriedPartnerOf(ulong characterId) =>
+        _store.LoadForCharacter(characterId) is { State: CoupleStates.Married } couple ? couple.Partner(characterId)?.CharacterId : null;
+
     public async Task EnteredZoneAsync(InGameSessionState st)
     {
         if (st.Character is not { } character) return;

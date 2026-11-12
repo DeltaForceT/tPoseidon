@@ -31,4 +31,9 @@ public static class AutoDrillRules
         if (free < 1 || weight < 0 || free < weight) return 0;
         return weight > 0 ? Math.Min(free / weight, count) : count;
     }
+
+    public static bool DigBeginsAfterStop(int stopX, int stopY, int digX, int digY) =>
+        stopX / ZoneGeometryCell == digX / ZoneGeometryCell && stopY / ZoneGeometryCell == digY / ZoneGeometryCell;
+
+    private const int ZoneGeometryCell = 16;
 }

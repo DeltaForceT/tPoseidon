@@ -169,7 +169,58 @@ public static class MonsterSkills
     public static bool Castable(int actionId, int level) => level is >= LowestLevel and <= HighestLevel && IsBuilt(actionId);
 
     public static bool CastableOnMonster(int actionId, int level) =>
-        Castable(actionId, level) && (actionId is ChainArrow or Thunderbolt || SingleMagicOf(actionId) is not null);
+        Castable(actionId, level) && OnMonsterRuleOf(actionId) != MonsterOnMonsterRule.None;
+
+    public const int StaffOfThunder = 1263;
+
+    private static readonly HashSet<int> TargetOwnedObjects =
+    [
+        0x439, 0x448, 0x44A, 0x44B, 0x44E, 0x452, 0x453, 0x455, 0x456, 0x45D, 0x45F, 0x4C9, 0x4CA, 0x4D0, 0x4D4, 0x4D5, 0x4F9,
+        0x523, 0x524, 0x526, 0x528, 0x529, 0x52A, 0x52C, 0x534, 0x536, 0x54B, 0x553, 0x566, 0x573, 0x574, 0x5A9, 0x5C2,
+    ];
+
+    public static bool OwnedByTarget(int actionId) => TargetOwnedObjects.Contains(actionId);
+
+    public static bool IsSelfBuff(int actionId) =>
+        actionId is Berserk or FluentWaist or Vampiric or MonDarkBarrier or SkillEffectKinds.Berserk
+            or SkillEffectKinds.MagicReflect or SkillEffectKinds.Subcutaneous or SkillEffectKinds.WindShield or SkillEffectKinds.DarkBarrier
+        || (IsStatEffect(actionId) && SkillEffectKinds.Find(actionId) is { OnTarget: false });
+
+    public static bool CentresOnCaster(int actionId) =>
+        !OwnedByTarget(actionId)
+        && (IsSelfBuff(actionId)
+            || actionId is Heal or Guard or WindSlash or Destruction or Charging
+            || (SingleMagicOf(actionId) is null && SkillAreaShapes.Find(actionId) is { Centre: AreaCentre.Caster }));
+
+    public static bool EffectOnTarget(int actionId) =>
+        OwnedByTarget(actionId)
+        && (actionId is DefenseParalysis or PowerStun or WaterNet or WhirlWind or CruelFlame or Unshield or DarkSlow or SkillEffectKinds.WinkOfCharm
+            || (IsStatEffect(actionId) && SkillEffectKinds.Find(actionId) is { OnTarget: true }));
+
+    public static bool SpentOnMonster(int actionId) => actionId is SharpBrandish or Siren or ObjectHits.FlashAttacking;
+
+    public static MonsterOnMonsterRule OnMonsterRuleOf(int actionId)
+    {
+        if (actionId is ChainArrow or Thunderbolt || SingleMagicOf(actionId) is not null || SkillHitShapes.Find(actionId) is { NeedsGun: false })
+        {
+            return MonsterOnMonsterRule.Strike;
+        }
+        if (CentresOnCaster(actionId)) return MonsterOnMonsterRule.CasterCentred;
+        if (EffectOnTarget(actionId)) return MonsterOnMonsterRule.TargetEffect;
+        if (actionId is ChainHits.QuadPunch or ChainHits.TetraPunch) return MonsterOnMonsterRule.Chain;
+        if (actionId == StaffOfThunder) return MonsterOnMonsterRule.TargetArea;
+        return SpentOnMonster(actionId) ? MonsterOnMonsterRule.Spent : MonsterOnMonsterRule.None;
+    }
+
+    public static IReadOnlyList<T> WithTargetFirst<T>(IReadOnlyList<T> victims, T target, Func<T, bool> isTarget)
+    {
+        ArgumentNullException.ThrowIfNull(victims);
+        ArgumentNullException.ThrowIfNull(isTarget);
+        if (victims.Count == 0 || victims.Any(isTarget)) return victims;
+        var swapped = victims.ToList();
+        swapped[0] = target;
+        return swapped;
+    }
 
     public static (int Action, int Skill)? ImitationOf(int actionId) => Imitated.TryGetValue(actionId, out var imitation) ? imitation : null;
 
@@ -193,3 +244,14 @@ public static class MonsterSkills
 }
 
 public readonly record struct MonsterSkillTiming(int CastMs, int CoolMs);
+
+public enum MonsterOnMonsterRule
+{
+    None,
+    Strike,
+    CasterCentred,
+    TargetEffect,
+    Chain,
+    TargetArea,
+    Spent,
+}

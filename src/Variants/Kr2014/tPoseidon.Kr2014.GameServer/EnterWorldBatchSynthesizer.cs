@@ -49,13 +49,14 @@ public static class EnterWorldBatchSynthesizer
         byte[]? harconLobby = null,
         bool awakened = false,
         bool soulSeedActive = false,
+        Func<Item, IReadOnlyList<ItemProperty>>? lookProperties = null,
         CancellationToken ct = default)
     {
         await SendPhase1Async(ctx, character, entityId, questLists, itemStore, skillStore, rates, itemOptions, timedItems, titles, fortune, fortuneTitleId, abilityPercents, petBag, profileFlags, bossKillWindow, coverLetter, gameClock, harconLobby, awakened, soulSeedActive, ct).ConfigureAwait(false);
         await SendPhase2Async(
             ctx, character, entityId, dialogService,
             worldEntities, characterInfoCatalog,
-            monsterProvider, itemStore, rates, shops, skillShops, inView, activation, angel, gameClock, ct).ConfigureAwait(false);
+            monsterProvider, itemStore, rates, shops, skillShops, inView, activation, angel, gameClock, lookProperties, ct).ConfigureAwait(false);
     }
 
     public static async Task SendPhase1Async(
@@ -167,6 +168,7 @@ public static class EnterWorldBatchSynthesizer
         NpcActivation? activation = null,
         AngelResult? angel = null,
         uint gameClock = 0,
+        Func<Item, IReadOnlyList<ItemProperty>>? lookProperties = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ctx);
@@ -191,7 +193,7 @@ public static class EnterWorldBatchSynthesizer
 
         _ = monsterProvider;
 
-        var playerSpawn = Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(character, entityId, itemStore, null, angelWing: AngelWingOf(angel));
+        var playerSpawn = Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(character, entityId, itemStore, null, angelWing: AngelWingOf(angel), itemProperties: lookProperties);
         await SendFrameAsync(ctx, Opcode.PLAYER_SPAWN_LOGIN, randKey: 0x11, playerSpawn.EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_UNK_135, randKey: 0x28, EmptyPacket.EncodePayload(), ct);
@@ -437,6 +439,7 @@ public static class EnterWorldBatchSynthesizer
         uint entityFlags = Kr2014.Wire.PlayerSpawnLoginPacket.DefaultEntityFlags,
         AngelResult? angel = null,
         uint gameClock = 0,
+        Func<Item, IReadOnlyList<ItemProperty>>? lookProperties = null,
         CancellationToken ct = default)
     {
         inView ??= EverywhereInView;
@@ -449,7 +452,7 @@ public static class EnterWorldBatchSynthesizer
 
         await SendFrameAsync(ctx, Opcode.S2C_OP_2E29_TBD, randKey: 0x3B, AngelWingPacket.Of(angel, DateTimeOffset.UtcNow).EncodePayload(), ct);
 
-        var playerSpawn = Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(character, entityId, itemStore, null, entityFlags: entityFlags, angelWing: AngelWingOf(angel));
+        var playerSpawn = Kr2014.Wire.PlayerSpawnLoginPacket.FromCharacter(character, entityId, itemStore, null, entityFlags: entityFlags, angelWing: AngelWingOf(angel), itemProperties: lookProperties);
         await SendFrameAsync(ctx, Opcode.S2C_PLAYER_SPAWN_POST_WARP, randKey: 0x11, playerSpawn.EncodePayload(), ct);
 
         await SendFrameAsync(ctx, Opcode.GAME_PLAYER_PRESENCE_RESET, randKey: 0xCE, PlayerPresenceResetPacket.Zero.EncodePayload(), ct);

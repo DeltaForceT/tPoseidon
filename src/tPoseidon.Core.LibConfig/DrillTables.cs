@@ -1,7 +1,9 @@
 namespace tPoseidon.Core.LibConfig;
 
 public sealed record DrillParamEntry(
-    int Id, int Grade, int GroundNature, int DigDepth, int BarEffArea, int BarSpeed, int ScoopMass, int DrillLife, float RandomSpotRatio = 0f);
+    int Id, int Grade, int GroundNature, int DigDepth, int BarEffArea, int BarSpeed, int ScoopMass, int DrillLife, float RandomSpotRatio = 0f,
+    float CrazyGaugeMax = 0f, float CrazyStressBonus = 0f, int CrazySeconds = 0, float CrazyRatioBang = 0f,
+    float WeddingStress = 0f, float WeddingRatioBang = 0f);
 
 public sealed record DrillZoneEntry(int ZoneId, int MinItemDepth, int MaxItemDepth, float ItemPercentage)
 {
@@ -34,7 +36,10 @@ public sealed record DrillTables
     public IReadOnlyDictionary<int, MapItemZoneRow> ZoneItems { get; init; } = new Dictionary<int, MapItemZoneRow>();
     public IReadOnlyDictionary<string, IReadOnlyList<MapItemChance>> ItemTables { get; init; } = new Dictionary<string, IReadOnlyList<MapItemChance>>();
     public IReadOnlyList<float> EventRateAdd { get; init; } = Array.Empty<float>();
+    public IReadOnlyList<DropEventItemEntry> EventItems { get; init; } = Array.Empty<DropEventItemEntry>();
     public IReadOnlyList<float> GradeExpRates { get; init; } = Array.Empty<float>();
     public IReadOnlyDictionary<int, int> GroundNatures { get; init; } = new Dictionary<int, int>();
     public IReadOnlyDictionary<int, int> AutoDrillPets { get; init; } = new Dictionary<int, int>();
+    public IReadOnlyList<float> StressPoints { get; init; } = Array.Empty<float>();
+    public IReadOnlyDictionary<int, float> MegaCrazyRatios { get; init; } = new Dictionary<int, float>();
 }

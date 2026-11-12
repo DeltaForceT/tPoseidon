@@ -1,6 +1,18 @@
 namespace tPoseidon.Core.LibConfig;
 
-public readonly record struct PortalLevelBand(int MinLevel, int MaxLevel);
+public readonly record struct PortalLevelBand(
+    int MinLevel,
+    int MaxLevel,
+    int CheckType = 0,
+    int JobType1 = 0,
+    int JobType2 = 0,
+    int QuestType = 0,
+    int QuestId = 0,
+    int ItemId = 0,
+    int DestZone = 0)
+{
+    public bool Redirects => DestZone > 0;
+}
 
 public sealed class PortalLevelBands
 {

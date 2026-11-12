@@ -27,7 +27,7 @@ public static class GuildRecruitFrames
     public const int UpdateRequestLength = 0x100;
     public const int ContentRequestLength = 4;
     public const int PageSize = 10;
-    public const int EntryLength = 0x67;
+    public const int EntryLength = 0x6D;
     public const int GuildNameLength = 25;
     public const int MasterNameLength = 20;
     public const int TitleLength = 41;
@@ -76,7 +76,7 @@ public static class GuildRecruitFrames
         return list;
     }
 
-    public static byte[] ListFor(IReadOnlyList<GuildRecruitView> posts, GuildRecruitListRequest request, bool ownPostExists, Encoding text)
+    public static byte[] ListFor(IReadOnlyList<GuildRecruitView> posts, GuildRecruitListRequest request, bool ownPostExists, Encoding text, Func<uint, GuildEmblem>? emblemOf = null)
     {
         ArgumentNullException.ThrowIfNull(posts);
         ArgumentNullException.ThrowIfNull(text);
@@ -94,6 +94,10 @@ public static class GuildRecruitFrames
             WriteText(w, post.MasterName, MasterNameLength, text);
             WriteText(w, post.Post.RecruitTitle, TitleLength, text);
             WriteText(w, Date(post.Post.RecruitUpdatedAt), DateLength, text);
+            var emblem = emblemOf?.Invoke((uint)post.Guild.GuildCode) ?? default;
+            w.WriteByte(emblem.Template);
+            w.WriteByte(emblem.Colour);
+            w.WriteUInt32(emblem.Icon);
         }
         return w.ToArray();
     }

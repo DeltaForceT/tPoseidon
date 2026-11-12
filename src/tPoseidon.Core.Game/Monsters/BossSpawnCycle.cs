@@ -11,7 +11,7 @@ public sealed class BossSpawnCycle
     private readonly IMonsterParamLookup _catalog;
     private readonly Random _rng;
     private readonly object _gate = new();
-    private readonly Dictionary<ushort, Zone> _zones = new();
+    private readonly Dictionary<(ushort MapId, ushort InstanceKey), Zone> _zones = new();
     private readonly HashSet<ushort> _held = new();
 
     public BossSpawnCycle(MonsterManager monsters, IMonsterParamLookup catalog, Random? rng = null)
@@ -29,21 +29,33 @@ public sealed class BossSpawnCycle
         {
             lock (_gate)
             {
-                return _zones.Keys.ToArray();
+                return _zones.Where(entry => entry.Key.InstanceKey == 0 && !entry.Value.PerInstance).Select(entry => entry.Key.MapId).ToArray();
             }
         }
     }
 
-    public void Configure(ushort mapId, IReadOnlyList<BossSpawnTableEntry> rows, ZoneGeometry? geometry, bool refills = true)
+    public IReadOnlyCollection<ushort> InstancedMapIds
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _zones.Where(entry => entry.Key.InstanceKey == 0 && entry.Value.PerInstance).Select(entry => entry.Key.MapId).ToArray();
+            }
+        }
+    }
+
+    public void Configure(ushort mapId, IReadOnlyList<BossSpawnTableEntry> rows, ZoneGeometry? geometry, bool refills = true, bool perInstance = false)
     {
         ArgumentNullException.ThrowIfNull(rows);
         lock (_gate)
         {
-            _zones[mapId] = new Zone
+            _zones[(mapId, 0)] = new Zone
             {
                 SpawnPoints = new ZoneSpawnPoints(geometry),
                 Slots = rows.Select(row => new Slot(row)).ToArray(),
                 Refills = refills,
+                PerInstance = perInstance,
             };
         }
     }
@@ -57,12 +69,18 @@ public sealed class BossSpawnCycle
         }
     }
 
-    public IReadOnlyList<MonsterEntity> Minute(ushort mapId, long nowMs)
+    public IReadOnlyList<MonsterEntity> Minute(ushort mapId, long nowMs, ushort instanceKey = 0)
     {
         var born = new List<MonsterEntity>();
         lock (_gate)
         {
-            if (_held.Contains(mapId) || !_zones.TryGetValue(mapId, out var zone)) return born;
+            if (_held.Contains(mapId) || !_zones.TryGetValue((mapId, 0), out var template)) return born;
+            if (template.PerInstance != (instanceKey != 0)) return born;
+            if (!_zones.TryGetValue((mapId, instanceKey), out var zone))
+            {
+                zone = template.CopyEmpty();
+                _zones[(mapId, instanceKey)] = zone;
+            }
             foreach (var slot in zone.Slots)
             {
                 var elapsed = slot.Minutes;
@@ -78,7 +96,7 @@ public sealed class BossSpawnCycle
                 {
                     var (x, y) = zone.SpawnPoints.Pick(slot.Row.Region, _rng);
                     var monster = _monsters.Spawn(
-                        slot.Row.MonsterId, mapId, x, y, spawnPointId: null, explicitEntityId: null, regionId: slot.Row.Region);
+                        slot.Row.MonsterId, mapId, x, y, spawnPointId: null, explicitEntityId: null, regionId: slot.Row.Region, instanceKey: instanceKey);
                     if (monster is null) continue;
                     slot.Alive++;
                     slot.Spawned = true;
@@ -89,12 +107,21 @@ public sealed class BossSpawnCycle
         return born;
     }
 
+    public void Reopen(ushort mapId)
+    {
+        lock (_gate)
+        {
+            if (!_zones.TryGetValue((mapId, 0), out var zone) || zone.Refills || zone.PerInstance) return;
+            foreach (var slot in zone.Slots) slot.Spawned = false;
+        }
+    }
+
     public void Release(MonsterEntity monster)
     {
         ArgumentNullException.ThrowIfNull(monster);
         lock (_gate)
         {
-            if (!_zones.TryGetValue(monster.MapId, out var zone)) return;
+            if (!_zones.TryGetValue((monster.MapId, monster.InstanceKey), out var zone)) return;
             foreach (var slot in zone.Slots)
             {
                 if (slot.Row.MonsterId != monster.MonsterParamId || slot.Row.Region != monster.RegionId || slot.Alive < 1) continue;
@@ -104,11 +131,37 @@ public sealed class BossSpawnCycle
         }
     }
 
+    public IReadOnlyCollection<ushort> InstanceKeysOf(ushort mapId)
+    {
+        lock (_gate)
+        {
+            return _zones.Keys.Where(key => key.MapId == mapId && key.InstanceKey != 0).Select(key => key.InstanceKey).ToArray();
+        }
+    }
+
+    public void Drop(ushort mapId, ushort instanceKey)
+    {
+        if (instanceKey == 0) return;
+        lock (_gate)
+        {
+            _zones.Remove((mapId, instanceKey));
+        }
+    }
+
     private sealed class Zone
     {
         public required ZoneSpawnPoints SpawnPoints { get; init; }
         public required Slot[] Slots { get; init; }
         public bool Refills { get; init; } = true;
+        public bool PerInstance { get; init; }
+
+        public Zone CopyEmpty() => new()
+        {
+            SpawnPoints = SpawnPoints,
+            Slots = Slots.Select(slot => new Slot(slot.Row)).ToArray(),
+            Refills = Refills,
+            PerInstance = PerInstance,
+        };
     }
 
     private sealed class Slot

@@ -85,6 +85,8 @@ public static class SkillHitShapes
     public const int RagingNail = 1346;
     public const int FlamingFist = 1335;
     public const int HeavyHit = 1347;
+    public const int GuardianBasicAttack = 1395;
+    public const int GuardianRangeAttack = 1396;
     public const int Shadow = 1262;
     public const int WhirlwindBlaze = 1158;
     public const int DripBomb = 1156;
@@ -166,6 +168,8 @@ public static class SkillHitShapes
         {
             ElementSlot = ElementSlots.Fire, ElementStep = FlamingFistElementStep, MagicWhenElement = true,
         },
+        [GuardianBasicAttack] = new(SkillPowerRule.AttackTimesRatio, TakesOwner: false, SkillRestart.Never) { Tail = SkillTail.None, TargetInHeader = true },
+        [GuardianRangeAttack] = new(SkillPowerRule.AttackTimesRatio, TakesOwner: false, SkillRestart.Never) { Tail = SkillTail.None, TargetInHeader = true },
         [HeavyHit] = new(SkillPowerRule.AttackAndLifeEighth, TakesOwner: false, SkillRestart.Never) { FlatTm = true },
         [Shadow] = new(SkillPowerRule.ShadowCopies, TakesOwner: true, SkillRestart.Never) { Tail = SkillTail.Count, TargetInHeader = true },
         [WhirlwindBlaze] = Magic(FireElement) with { ElementSlot = ElementSlots.Fire },

@@ -43,6 +43,7 @@ public sealed class MonsterManager : IMonsterEntityProvider
     public event Action<MonsterEntity>? MonsterSpawned;
     public event Action<MonsterEntity, ushort, long>? MonsterDamaged;
     public event Action<MonsterEntity, ushort>? MonsterKilled;
+    public event Action<ushort>? MonsterRemoved;
 
     public int Count => _byEntityId.Count;
 
@@ -182,6 +183,7 @@ public sealed class MonsterManager : IMonsterEntityProvider
         if (!_byEntityId.TryRemove(entityId, out var removed)) return false;
         Unindex(removed);
         _strategyByEntityId.TryRemove(entityId, out _);
+        MonsterRemoved?.Invoke(entityId);
         _idAllocator.Release(entityId);
         return true;
     }

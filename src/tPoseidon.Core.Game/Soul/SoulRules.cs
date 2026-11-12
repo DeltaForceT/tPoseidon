@@ -13,8 +13,9 @@ public static class SoulRules
     public const int LevelId = 28001;
     public const int RemainType = 0x11;
     public const int RemainId = 28000;
-    public const int MaxSoulLevel = 10;
-    public const int CapLevelOffset = 3;
+    public const int FirstSoulLevel = 1;
+    public const int MaxSoulLevel = 11;
+    public const int CapLevelOffset = 2;
     public const int CapStep = 100;
     public const int MaterialSlots = 5;
     public const int PotionSubType = 84;
@@ -71,11 +72,30 @@ public static class SoulRules
         return row.Count;
     }
 
-    public static byte CheckRegister(bool hasGuardian, bool inBag, bool isSource, int count, int stack, bool alreadyRegistered)
+    public static int MinimumSourceCount(GuardianSoulRow state, SoulSystemInfoEntry? info)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return state.Penalty && info is not null ? Math.Max(1, info.PenaltyCount) : 1;
+    }
+
+    public static int StepMinutes(GuardianSoulRow state, SoulSystemInfoEntry info)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(info);
+        return state.Penalty && info.PenaltyMinutes > 0 ? info.PenaltyMinutes : info.GaugeMinutes;
+    }
+
+    public static GuardianSoulRow Restarted(GuardianSoulRow state, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return state with { LastTick = now };
+    }
+
+    public static byte CheckRegister(bool hasGuardian, bool inBag, bool isSource, int count, int stack, bool alreadyRegistered, int minimumCount = 1)
     {
         if (!hasGuardian) return NotifyBadGuardian;
         if (!inBag || !isSource) return NotifyBadItem;
-        if (count <= 0 || count > stack) return NotifyNotEnoughSource;
+        if (count <= 0 || count < minimumCount || count > stack) return NotifyNotEnoughSource;
         return alreadyRegistered ? NotifyBadItem : Ok;
     }
 
@@ -83,7 +103,7 @@ public static class SoulRules
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(info);
-        var next = state with { LastTick = state.LastTick.AddMinutes(info.GaugeMinutes) };
+        var next = state with { LastTick = state.LastTick.AddMinutes(StepMinutes(state, info)) };
         var consumed = 0;
         if (HasSource(next) && sourceGaugeUp is { } gaugeUp && sourceStack >= info.SourceDecreaseCount && next.SourceCount >= info.SourceDecreaseCount)
         {
@@ -94,12 +114,14 @@ public static class SoulRules
         else
         {
             next = WithoutSource(next) with { Gauge = Math.Max(0, next.Gauge - info.GaugeDecrease) };
+            if (next.Gauge == 0) next = next with { Penalty = true };
         }
         var made = 0;
         while (info.GaugeMax > 0 && next.Gauge >= info.GaugeMax)
         {
             next = next with { Gauge = next.Gauge - info.GaugeMax };
             made += potionsPerGauge;
+            next = next with { Penalty = false };
         }
         return new SoulTick(next with { PotionsReady = (int)Math.Min(ushort.MaxValue, (long)next.PotionsReady + made) }, consumed, made);
     }
@@ -108,7 +130,8 @@ public static class SoulRules
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(info);
-        return info.GaugeMinutes > 0 && state.LastTick.AddMinutes(info.GaugeMinutes) <= now;
+        var step = StepMinutes(state, info);
+        return step > 0 && state.LastTick.AddMinutes(step) <= now;
     }
 
     public static byte CheckTakePotions(int count, int ready) => count <= 0 || count > ready ? NotifyBadPotionCount : Ok;
@@ -117,6 +140,14 @@ public static class SoulRules
     {
         ArgumentNullException.ThrowIfNull(properties);
         return (short)properties.Where(property => property.Type == type && property.Id == id).Sum(property => property.Value);
+    }
+
+    public static int SoulLevel(IReadOnlyList<ItemProperty> properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        return properties.Any(property => property.Type == LevelType && property.Id == LevelId)
+            ? PropertyValue(properties, LevelType, LevelId)
+            : FirstSoulLevel;
     }
 
     public static IReadOnlyList<ItemProperty> WithProperty(IReadOnlyList<ItemProperty> properties, int type, int id, short value)
@@ -179,10 +210,10 @@ public static class SoulRules
         return recipe.Probability < 1f ? Unknown : Ok;
     }
 
-    public static SoulIntensifyEntry? IntensifyRow(IReadOnlyList<SoulIntensifyEntry> rows, int nextLevel, int weaponLevel)
+    public static SoulIntensifyEntry? IntensifyRow(IReadOnlyList<SoulIntensifyEntry> rows, int soulLevel, int weaponLevel)
     {
         ArgumentNullException.ThrowIfNull(rows);
-        return rows.FirstOrDefault(row => row.SoulLevel == nextLevel && row.WeaponLevel == weaponLevel);
+        return rows.FirstOrDefault(row => row.SoulLevel == soulLevel && row.WeaponLevel == weaponLevel);
     }
 
     public static byte CheckIntensify(bool windowOpen, bool soulItem, int soulLevel, SoulIntensifyEntry? row, bool hasMaterials, uint soul)

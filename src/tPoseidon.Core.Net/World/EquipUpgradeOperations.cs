@@ -14,6 +14,14 @@ public static class EquipUpgradeOperations
     public static EquipUpgradeItem Insert(int itemIndex, byte itemClass, ushort count, byte slot, short refineType = 0, byte refineLevel = 0, int periodMinutes = 0) =>
         new(EquipUpgradeAction.Insert, 0, itemIndex, itemClass, count, slot, refineType, refineLevel, 0, periodMinutes);
 
+    public static List<BagOperation> ToBagWithProperties(IEnumerable<EquipUpgradeItem> rows, IReadOnlyList<ItemProperty> createdProperties)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(createdProperties);
+        var stored = createdProperties.Take(ItemPropertyTypes.MaxStored).ToList();
+        return rows.Select(row => row.Action == EquipUpgradeAction.Insert ? ToBag(row) with { Options = stored } : ToBag(row)).ToList();
+    }
+
     public static BagOperation ToBag(EquipUpgradeItem row)
     {
         ArgumentNullException.ThrowIfNull(row);

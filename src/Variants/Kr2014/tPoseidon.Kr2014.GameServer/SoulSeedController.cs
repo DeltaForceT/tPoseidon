@@ -62,7 +62,7 @@ internal sealed class SoulSeedController
         {
             player.Seed.Restore(new SoulSeedRecord(true, state.SeedItemIndex, state.StartAt, state.LastUpdateAt, state.Points));
             Console.WriteLine($"{_logTag} [soul seed] char 0x{characterId:X16} seed {state.SeedItemIndex} planted, points {string.Join(",", state.Points)}");
-            if (loggingIn) await SendAsync(player, Opcode.S2C_SOUL_SEED_PLANTED, SoulSeedFrames.Planted(player.Seed.Record())).ConfigureAwait(false);
+            if (loggingIn) await SendAsync(player, Opcode.S2C_SOUL_SEED_PLANTED, SoulSeedFrames.Planted(player.Seed.Record(), false)).ConfigureAwait(false);
         }
         await SendAsync(player, Opcode.S2C_SOUL_SEED_STATE, SoulSeedFrames.StateOf(player.Seed)).ConfigureAwait(false);
     }
@@ -83,7 +83,7 @@ internal sealed class SoulSeedController
                 return true;
             }
             player.Seed.Plant(item.ItemIndex, DateTimeOffset.UtcNow);
-            await SendAsync(player, Opcode.S2C_SOUL_SEED_PLANTED, SoulSeedFrames.Planted(player.Seed.Record())).ConfigureAwait(false);
+            await SendAsync(player, Opcode.S2C_SOUL_SEED_PLANTED, SoulSeedFrames.Planted(player.Seed.Record(), true)).ConfigureAwait(false);
             await SendAsync(player, Opcode.S2C_ITEM_USED, ItemUseFrames.Consumed(wireUid)).ConfigureAwait(false);
             if (_items.FindByUid(item.ItemUid) is { } held)
             {

@@ -7,6 +7,7 @@ public sealed partial class SkillTables
 {
     private readonly FastLibConfigReader _reader;
     private readonly Lazy<IReadOnlyList<SkillParam2Entry>> _skillParam2;
+    private readonly Lazy<IReadOnlyList<SkillParam2Entry>> _runeSkills;
     private readonly Lazy<IReadOnlyList<SkillCardEntry>> _skillCards;
     private readonly Lazy<IReadOnlyList<SkillScrollEntry>> _skillScrolls;
     private readonly Lazy<IReadOnlyList<SkillMasterEntry>> _skillMasterInfo;
@@ -20,6 +21,7 @@ public sealed partial class SkillTables
         ArgumentNullException.ThrowIfNull(reader);
         _reader = reader;
         _skillParam2 = new Lazy<IReadOnlyList<SkillParam2Entry>>(reader.LoadSkillParam2);
+        _runeSkills = new Lazy<IReadOnlyList<SkillParam2Entry>>(reader.LoadRuneSkills);
         _skillCards = new Lazy<IReadOnlyList<SkillCardEntry>>(reader.LoadSkillCards);
         _skillScrolls = new Lazy<IReadOnlyList<SkillScrollEntry>>(reader.LoadSkillScrolls);
         _skillMasterInfo = new Lazy<IReadOnlyList<SkillMasterEntry>>(reader.LoadSkillMasterInfo);
@@ -30,6 +32,8 @@ public sealed partial class SkillTables
     }
 
     public IReadOnlyList<SkillParam2Entry> SkillParam2 => _skillParam2.Value;
+
+    public IReadOnlyList<SkillParam2Entry> RuneSkills => _runeSkills.Value;
 
     public IReadOnlyList<SkillCardEntry> SkillCards => _skillCards.Value;
 

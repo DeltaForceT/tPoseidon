@@ -21,6 +21,8 @@ public sealed record SoulCraftEntry(int Id, int ResultItemId, int ResultCount, I
 
 public sealed record SoulIntensifyEntry(int Id, int SoulLevel, int WeaponLevel, int Cost, IReadOnlyList<SoulMaterial> Materials, int Ratio);
 
+public readonly record struct TartarosMapSkill(int SkillId, int Level);
+
 public sealed record SoulSystemTables(
     SoulSystemInfoEntry? Info,
     IReadOnlyList<SoulSourceEntry> Sources,
@@ -37,6 +39,15 @@ public sealed record SoulSystemTables(
     public const string CraftTable = "SoulEquipmentCraftInfo";
     public const string IntensifyTable = "SoulLevelIntensifyInfo";
     public const string TartarosTable = "TartarosMapSkillInfo";
+    public const string BadBuffTable = "ESAction_SoulBadBuff";
+    public const string GoodBuffTable = "ESAction_SoulGoodBuff";
+    public const int TartarosSkillColumns = 4;
+
+    public IReadOnlyDictionary<int, IReadOnlyList<TartarosMapSkill>> TartarosMapSkills { get; init; } = new Dictionary<int, IReadOnlyList<TartarosMapSkill>>();
+
+    public IReadOnlyDictionary<int, float> BadBuffRatios { get; init; } = new Dictionary<int, float>();
+
+    public IReadOnlyDictionary<int, float> GoodBuffRatios { get; init; } = new Dictionary<int, float>();
     public const int RequirementColumns = 5;
 
     public static SoulSystemTables Empty { get; } = new(

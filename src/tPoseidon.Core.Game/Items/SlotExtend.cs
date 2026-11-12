@@ -32,7 +32,8 @@ public sealed record SlotExtendCandidate(
     ItemParamEntry? Equipment,
     byte Slots,
     SlotExtendMaterialEntry? Material,
-    IReadOnlyList<SlotExtendSubItemEntry?> SubItems);
+    IReadOnlyList<SlotExtendSubItemEntry?> SubItems,
+    bool Compoundable = true);
 
 public static class SlotExtendRules
 {
@@ -83,7 +84,7 @@ public static class SlotExtendRules
     {
         ArgumentNullException.ThrowIfNull(candidate);
         if (candidate.Equipment is not { } equipment) return NoEquipment;
-        if (equipment.Class != EquipmentClass || equipment.CompoundSlot == 0) return InvalidEquipment;
+        if (equipment.Class != EquipmentClass || !candidate.Compoundable) return InvalidEquipment;
         if (candidate.Slots >= FiveSlotCap) return AtMaxSlots;
         if (candidate.Slots >= CapOf(equipment)) return NoFifthSlot;
         var target = candidate.Slots + 1;

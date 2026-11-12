@@ -56,6 +56,7 @@ public sealed class LauncherModel
     private readonly LauncherSelfUpdater? _selfUpdater;
     private LauncherStage? _pendingLauncher;
     private string? _password;
+    private string? _serverService;
 
     public LauncherModel(LauncherSettings settings, string settingsPath, ITicketService tickets, IClientHost client, ClientUpdater updater, Branding? branding = null, IClientSetupStore? setupStore = null, LauncherSelfUpdater? selfUpdater = null)
     {
@@ -258,6 +259,57 @@ public sealed class LauncherModel
         }
     }
 
+    public static TimeSpan StatusInterval { get; } = TimeSpan.FromSeconds(30);
+
+    public async Task<bool> PollStatusAsync(CancellationToken ct)
+    {
+        if (Busy || Status == ChannelStatus.Checking || SelectedServer is not { } server)
+        {
+            return false;
+        }
+
+        var seen = await ProbeAsync(server, ct).ConfigureAwait(true);
+        if (seen is not { } now || Busy || Status == ChannelStatus.Checking || !ReferenceEquals(SelectedServer, server))
+        {
+            return false;
+        }
+
+        if (now.Status == Status && (now.Status != ChannelStatus.Maintenance || now.Detail == StatusDetail))
+        {
+            return false;
+        }
+
+        await RefreshChannelAsync(ct).ConfigureAwait(true);
+        return true;
+    }
+
+    private async Task<(ChannelStatus Status, string Detail)?> ProbeAsync(ServerFile server, CancellationToken ct)
+    {
+        try
+        {
+            var fetched = await FetchManifestAsync(server, ct).ConfigureAwait(true);
+            var maintenance = fetched?.Manifest.Maintenance;
+            return string.IsNullOrWhiteSpace(maintenance) ? (ChannelStatus.Online, "") : (ChannelStatus.Maintenance, maintenance);
+        }
+        catch (PlayFailure failure)
+        {
+            return (failure.Reason is PlayFailureReason.UpdateFailed or PlayFailureReason.UpdatesNotTrusted ? ChannelStatus.Online : ChannelStatus.Offline, failure.Summary);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    private void MarkReachable()
+    {
+        if (Status is ChannelStatus.Offline or ChannelStatus.Unknown)
+        {
+            Status = ChannelStatus.Online;
+            StatusDetail = "";
+        }
+    }
+
     public Task RefreshChannelAsync(CancellationToken ct)
     {
         var next = RefreshAfterAsync(_lastRefresh, ct);
@@ -403,7 +455,8 @@ public sealed class LauncherModel
         Begin("Logging in...");
         try
         {
-            await _tickets.RequestAsync(server.TicketEndpoint(ShopPort), _settings.Account, password, ct).ConfigureAwait(true);
+            _serverService = await _tickets.RequestAsync(server.TicketEndpoint(ShopPort), _settings.Account, password, ct).ConfigureAwait(true);
+            MarkReachable();
             _password = password;
             await UpdateAsync(server, ct).ConfigureAwait(true);
         }
@@ -468,7 +521,8 @@ public sealed class LauncherModel
         var started = false;
         try
         {
-            await _tickets.RequestAsync(server.TicketEndpoint(ShopPort), _settings.Account, _password, ct).ConfigureAwait(true);
+            _serverService = await _tickets.RequestAsync(server.TicketEndpoint(ShopPort), _settings.Account, _password, ct).ConfigureAwait(true);
+            MarkReachable();
             ApplyDisplay();
             var target = _client.Start(Launch(server));
             Notice = new LauncherNotice(BannerKind.Success, "Started", $"The game client is starting and connecting to {target}.");
@@ -594,7 +648,7 @@ public sealed class LauncherModel
     }
 
     public string SetupProfileName() =>
-        ClientSetupProfile.NameFor(ClientCheck.Ok ? ClientFolder.ServiceFor(_settings.ClientFolder, _settings.Language) : _settings.Language);
+        ClientSetupProfile.NameFor(ClientCheck.Ok ? ClientFolder.ServiceFor(_settings.ClientFolder, LaunchService(_settings.Language, _serverService)) : LaunchService(_settings.Language, _serverService));
 
     public ClientSetupProfile SetupProfile()
     {
@@ -666,6 +720,8 @@ public sealed class LauncherModel
                     return;
                 }
 
+                Status = ChannelStatus.Online;
+                StatusDetail = "";
                 Manifest = manifest;
                 await InstallAsync(server, manifest, ct).ConfigureAwait(true);
             }
@@ -881,12 +937,17 @@ public sealed class LauncherModel
     private static bool SameAddress(string left, string right) =>
         string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
 
+    public static string LaunchService(string language, string? serverService) =>
+        serverService is not null && string.Equals(language, ClientFolder.AutomaticService, StringComparison.OrdinalIgnoreCase)
+            ? serverService
+            : language;
+
     private HostSettings Launch(ServerFile server)
     {
         var settings = new HostSettings { ClientFolder = _settings.ClientFolder };
         settings.Network.PublicAddress = server.Address;
         settings.Launch.Account = _settings.Account;
-        settings.Launch.ServiceName = _settings.Language;
+        settings.Launch.ServiceName = LaunchService(_settings.Language, _serverService);
         return settings;
     }
 

@@ -30,6 +30,8 @@ public readonly record struct SpeedBonus(float Walk, float Run, float Chase)
         return new SpeedBonus(baseSpeeds.WalkSpeed * MembershipRatio, baseSpeeds.RunSpeed * MembershipRatio, baseSpeeds.ChaseSpeed * MembershipRatio);
     }
 
+    public static SpeedBonus Flat(float amount) => amount > 0f ? new SpeedBonus(amount, amount, amount) : None;
+
     public static SpeedBonus operator +(SpeedBonus left, SpeedBonus right) =>
         new(left.Walk + right.Walk, left.Run + right.Run, left.Chase + right.Chase);
 }

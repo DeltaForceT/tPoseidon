@@ -43,6 +43,22 @@ public static class PetRules
         return dx * dx + dy * dy > (long)FollowRadius * FollowRadius;
     }
 
+    public static (int X, int Y) ChaseTarget(ZoneGeometry? geometry, int petX, int petY, int ownerX, int ownerY)
+    {
+        double dx = ownerX - petX;
+        double dy = ownerY - petY;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length <= FollowRadius) return (petX, petY);
+        var x = (int)Math.Round(ownerX - dx / length * FollowRadius);
+        var y = (int)Math.Round(ownerY - dy / length * FollowRadius);
+        if (geometry is null) return (x, y);
+        var cellX = ZoneGeometry.CellOf(x);
+        var cellY = ZoneGeometry.CellOf(y);
+        return geometry.ContainsCell(cellX, cellY) && geometry.IsFreeDestination(cellX, cellY)
+            ? (x, y)
+            : FollowTarget(geometry, petX, petY, ownerX, ownerY);
+    }
+
     public static (int X, int Y) FollowTarget(ZoneGeometry? geometry, int petX, int petY, int ownerX, int ownerY)
     {
         if (geometry is null) return (ownerX, ownerY);

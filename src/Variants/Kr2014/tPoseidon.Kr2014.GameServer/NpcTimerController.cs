@@ -20,6 +20,8 @@ internal sealed class NpcTimerController
         _setTimerNpc = setTimerNpc;
     }
 
+    public bool IsClosed(int timerId) => _open.TryGetValue(timerId, out var open) && !open;
+
     public async Task TickAsync(DateTimeOffset now)
     {
         var phase = _phaseAt(now);

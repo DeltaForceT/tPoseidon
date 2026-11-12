@@ -12,9 +12,11 @@ public sealed class PlayTicketEndpoint
     private readonly IAccountStore _accounts;
     private readonly ILaunchTicketStore _tickets;
     private readonly LoginThrottle? _throttle;
+    private readonly string? _clientService;
 
-    public PlayTicketEndpoint(IAccountStore accounts, ILaunchTicketStore tickets, LoginThrottle? throttle)
+    public PlayTicketEndpoint(IAccountStore accounts, ILaunchTicketStore tickets, LoginThrottle? throttle, string? clientService = null)
     {
+        _clientService = clientService;
         _accounts = accounts ?? throw new ArgumentNullException(nameof(accounts));
         _tickets = tickets ?? throw new ArgumentNullException(nameof(tickets));
         _throttle = throttle;
@@ -60,5 +62,11 @@ public sealed class PlayTicketEndpoint
         _throttle?.Succeeded(username);
         _tickets.Issue(account.AccountId, [remote], LaunchTicket.Lifetime);
         context.Response.StatusCode = StatusCodes.Status200OK;
+        if (_clientService is not null)
+        {
+            await context.Response.WriteAsJsonAsync(new PlayTicketReply(_clientService), context.RequestAborted).ConfigureAwait(false);
+        }
     }
 }
+
+public sealed record PlayTicketReply(string Service);

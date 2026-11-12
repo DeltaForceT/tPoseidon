@@ -10,6 +10,8 @@ using tPoseidon.Core.Net.World;
 internal sealed class PlayerShopController
 {
     private readonly MasterTrade _master;
+    public Func<Item, IReadOnlyList<ItemProperty>>? FullProperties { get; init; }
+
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
     private readonly IItemPropertyStore _properties;
@@ -466,14 +468,10 @@ internal sealed class PlayerShopController
         }
     }
 
-    private static BagOperation Operation(TradeItemChange change) => new(
-        change.Kind switch
-        {
-            TradeChangeKind.StackChanged => QuestResultFrames.StackChanged,
-            TradeChangeKind.Removed => QuestResultFrames.Removed,
-            _ => QuestResultFrames.Created,
-        },
-        change.ItemClass, (uint)change.ItemIndex, BagItemIds.OnWire(change.ItemUid), change.Count, change.MixSlot);
+    private BagOperation Operation(TradeItemChange change) =>
+        _items.FindByUid(change.ItemUid) is { } arrived
+            ? TradeOperations.Of(change, arrived, FullProperties?.Invoke(arrived) ?? _properties.ForItem(arrived.ItemUid))
+            : TradeOperations.Of(change, null, null);
 
     private async Task RefuseRegisterAsync(InGameSessionState keeper, string reason)
     {

@@ -63,7 +63,8 @@ app.MapMethods("/chargepoint.aspx", [HttpMethods.Get, HttpMethods.Post], (Delega
 var playTickets = new PlayTicketEndpoint(
     bootstrap.Store,
     new PostgresLaunchTicketStore(bootstrap.DataSource),
-    guard.Settings.Enabled ? guard.Logins : null);
+    guard.Settings.Enabled ? guard.Logins : null,
+    options.ClientService);
 app.MapPost("/play-ticket", (Delegate)playTickets.HandleAsync);
 var launcher = LauncherEndpoints.FromEnvironment();
 app.MapGet(LauncherEndpoints.ManifestPath, (Delegate)launcher.ManifestAsync);

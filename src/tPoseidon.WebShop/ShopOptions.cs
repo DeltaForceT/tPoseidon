@@ -3,8 +3,9 @@ using tPoseidon.Core.Data;
 
 namespace tPoseidon.WebShop;
 
-public sealed record ShopOptions(string Urls, string LibConfigPath, CashShopPolicy Cash)
+public sealed record ShopOptions(string Urls, string LibConfigPath, CashShopPolicy Cash, string? ClientService = null)
 {
+    public const string ClientServiceVariable = "MT_CLIENT_SERVICE";
     public const string UrlsVariable = "MT_WEBSHOP_URLS";
     public const string LibConfigVariable = "MT_LIBCONFIG_PATH";
     public const string CashModeVariable = "MT_CASH_MODE";
@@ -20,10 +21,12 @@ public sealed record ShopOptions(string Urls, string LibConfigPath, CashShopPoli
                 RepoRoot.Data("variants", "Kr2014", "libconfig.dat"),
                 RepoRoot.Data("variants", "Kr2014", "libconfig_eng.dat"),
                 RepoRoot.Data("krn-2014.01.28", "libconfig_decrypted.xml"));
+        var service = Environment.GetEnvironmentVariable(ClientServiceVariable);
         return new ShopOptions(
             string.IsNullOrWhiteSpace(urls) ? DefaultUrls : urls.Trim(),
             libconfig,
-            CashFromEnvironment());
+            CashFromEnvironment(),
+            string.IsNullOrWhiteSpace(service) ? null : service.Trim());
     }
 
     public static CashShopPolicy CashFromEnvironment()

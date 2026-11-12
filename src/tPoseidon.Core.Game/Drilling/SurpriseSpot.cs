@@ -30,6 +30,9 @@ public static class SurpriseSpotRules
     public const byte Created = 1;
     public const byte Failed = 3;
     public const int SpotReachCells = 2;
+    public const ushort LifeOverWord = 0;
+
+    public static byte[] LifeOverPayload() => BitConverter.GetBytes(LifeOverWord);
     public const byte CreviceOpened = 0;
     public const byte CreviceClosedAsDeclined = 1;
     public const byte CreviceUsed = 0;

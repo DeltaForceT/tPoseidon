@@ -104,11 +104,12 @@ internal sealed class CharacterPetReinforceController
             await RefuseAsync(player, CharacterPetReinforceRules.Failed, $"store refused with code {applied.Error}").ConfigureAwait(false);
             return;
         }
-        _properties.Replace(created.ItemUid, CharacterPetReinforceRules.ResultProperties(row, petProperties, result));
+        var reinforced = CharacterPetReinforceRules.ResultProperties(row, petProperties, result);
+        _properties.Replace(created.ItemUid, reinforced);
         _properties.Delete(pet.ItemUid);
         foreach (var removed in applied.Items.Where(item => item.Action == EquipUpgradeAction.Delete)) player.TimedItems.Forget(removed.ItemUid);
         await SendAsync(player, Opcode.S2C_CHARACTER_PET_REINFORCE_RESULT,
-            CharacterPetReinforceFrames.Result(applied.Items.Select(EquipUpgradeOperations.ToBag).ToList())).ConfigureAwait(false);
+            CharacterPetReinforceFrames.Result(EquipUpgradeOperations.ToBagWithProperties(applied.Items, reinforced))).ConfigureAwait(false);
         Log(player, $"character pet {pet.ItemIndex} -> {row.ResultId} with item {reinforce.ItemIndex}");
     }
 

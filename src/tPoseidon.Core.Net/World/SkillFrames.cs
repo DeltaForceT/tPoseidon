@@ -633,15 +633,19 @@ public static class SkillFrames
         return w.ToArray();
     }
 
-    public static IReadOnlyList<SwingFrame> EncodeAreaVictim(PlayerStrike strike, SkillHit hit, ushort blockId, SwingAdditions additions)
+    public static IReadOnlyList<SwingFrame> EncodeAreaVictim(PlayerStrike strike, SkillHit hit, ushort blockId, SwingAdditions additions) =>
+        EncodeAreaVictim(strike, HitResult(strike.TargetEntityId, hit, strike.GuardLeft), blockId, additions);
+
+    public static IReadOnlyList<SwingFrame> EncodeAreaVictim(PlayerStrike strike, byte[] result, ushort blockId, SwingAdditions additions)
     {
+        ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(additions);
         var frames = new List<SwingFrame>();
         if (additions.OwnerTaken is { } ownerTaken)
         {
             frames.Add(new(Opcode.S2C_OP_016D_TBD, ownerTaken, MeleeSwingFrames.NoBlock, SwingAudience.Everyone));
         }
-        AppendVictim(frames, strike, HitResult(strike.TargetEntityId, hit, strike.GuardLeft), blockId, additions);
+        AppendVictim(frames, strike, result, blockId, additions);
         return frames;
     }
 

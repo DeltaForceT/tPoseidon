@@ -3,8 +3,9 @@ namespace tPoseidon.Core.Data;
 public sealed class IdAllocator
 {
     private readonly object _gate = new();
-    private readonly Stack<ushort> _freeList = new();
-    private ushort _nextId;
+    private readonly Queue<ushort> _freeList = new();
+    private readonly HashSet<ushort> _queued = new();
+    private int _nextId;
     private readonly ushort _firstId;
     private readonly ushort _lastId;
 
@@ -24,21 +25,19 @@ public sealed class IdAllocator
     {
         lock (_gate)
         {
-            while (_freeList.Count > 0)
+            while (_nextId <= _lastId)
             {
-                var id = _freeList.Pop();
-                if (!_reserved.Contains(id)) return id;
-            }
-            while (true)
-            {
-                if (_nextId > _lastId)
-                {
-                    throw new InvalidOperationException(
-                        $"IdAllocator exhausted: range [{_firstId:X4}..{_lastId:X4}] all in use.");
-                }
-                var candidate = _nextId++;
+                var candidate = (ushort)_nextId++;
                 if (!_reserved.Contains(candidate)) return candidate;
             }
+            while (_freeList.Count > 0)
+            {
+                var id = _freeList.Dequeue();
+                _queued.Remove(id);
+                if (!_reserved.Contains(id)) return id;
+            }
+            throw new InvalidOperationException(
+                $"IdAllocator exhausted: range [{_firstId:X4}..{_lastId:X4}] all in use.");
         }
     }
 
@@ -54,13 +53,13 @@ public sealed class IdAllocator
     {
         lock (_gate)
         {
-            if (id < _firstId || id > _lastId)
+            if (id < _firstId || id > _lastId || id >= _nextId)
             {
                 return;
             }
-            if (!_freeList.Contains(id))
+            if (_queued.Add(id))
             {
-                _freeList.Push(id);
+                _freeList.Enqueue(id);
             }
         }
     }
@@ -81,7 +80,7 @@ public sealed class IdAllocator
     {
         get
         {
-            lock (_gate) { return _nextId; }
+            lock (_gate) { return (ushort)Math.Min(_nextId, ushort.MaxValue); }
         }
     }
 

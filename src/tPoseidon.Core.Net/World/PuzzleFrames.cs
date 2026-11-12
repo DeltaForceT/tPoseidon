@@ -4,6 +4,13 @@ namespace tPoseidon.Core.Net.World;
 
 public static class PuzzleFrames
 {
+    public static byte[] MemoryStart(int memoryId)
+    {
+        var w = new PacketWriter(2);
+        w.WriteInt16((short)memoryId);
+        return w.ToArray();
+    }
+
     public static byte[] SlideStart(int slideId, (int X, int Y) origin, IReadOnlyList<int> grid)
     {
         ArgumentNullException.ThrowIfNull(grid);

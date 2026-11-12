@@ -5,6 +5,8 @@ public static class TableReaders
     private static readonly (string Table, string Reader)[] Exact =
     {
         ("AutoDrillPetInfo", "LoadDrillTables"),
+        ("StressPointInfo", "LoadDrillTables"),
+        ("ESAction_EnchantedCDM", "LoadDrillTables"),
         ("BeginnerRebirthInfo", "LoadBeginnerRebirthInfo"),
         ("BossMonsterparamEx", "LoadBossGiveItems"),
         ("BossMonsterparamEx", "LoadBossLives"),
@@ -17,7 +19,10 @@ public static class TableReaders
         ("ChrTypeInfo", "LoadCharacterTypeNames"),
         ("Compounder_Info", "LoadCompounderLists"),
         ("DrillGradeExpRate", "LoadDrillTables"),
+        ("DropItemEventParam", "LoadDrillTables"),
         ("ESAction_CompoundMaster", "LoadGrowthTables"),
+        ("ESAction_SoulBadBuff", "LoadSoulSystemTables"),
+        ("ESAction_SoulGoodBuff", "LoadSoulSystemTables"),
         ("EquipReformCostDiscount", "LoadEquipReformTables"),
         ("EquipReformRandomStatRatio", "LoadEquipReformTables"),
         ("EquipReformRandomStatRatio", "LoadMeltingTables"),
@@ -125,6 +130,7 @@ public static class TableReaders
         ("RefineLevelTable", "LoadRefineTables"),
         ("RefineSupportItemLevel", "LoadRefineTables"),
         ("RepairInfo", "LoadRefineTables"),
+        ("RuneStoneSkillParam", "LoadRuneSkills"),
         ("ScenarioQuestInfo", "LoadAllQuestTables"),
         ("SetItemParam", "LoadSetItems"),
         ("ShadowAI", "LoadShadowAi"),

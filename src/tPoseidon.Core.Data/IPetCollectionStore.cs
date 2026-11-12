@@ -9,4 +9,6 @@ public interface IPetCollectionStore
     PetCollectedItem Add(ulong characterId, int itemId, byte itemClass, ushort count);
 
     bool Remove(ulong characterId, ulong collectedUid);
+
+    bool SetCount(ulong characterId, ulong collectedUid, ushort count);
 }

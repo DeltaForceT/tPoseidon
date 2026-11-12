@@ -10,6 +10,12 @@ public readonly record struct MonsterQuestGrade(int Monster, int Count, int Minu
 public static class MonsterQuests
 {
     public const int DefaultMaxCount = 25;
+
+    public static IReadOnlyList<tPoseidon.Core.Data.Quest> CancelledAtLogin(IEnumerable<tPoseidon.Core.Data.Quest> active)
+    {
+        ArgumentNullException.ThrowIfNull(active);
+        return active.Where(quest => quest.QuestType == QuestTypes.Monster).ToList();
+    }
     public const int MillisecondsPerMinute = 60_000;
     public const int TimerStepMs = 1_000;
     public const int Slots = 1;

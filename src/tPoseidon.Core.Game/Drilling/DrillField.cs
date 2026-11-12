@@ -47,6 +47,18 @@ public sealed class DrillField
 
     public int? LaidDepth(int cellX, int cellY) => _laid.TryGetValue((cellX, cellY), out var depth) ? depth : null;
 
+    public int CellsX => _geometry.CellsX;
+
+    public int CellsY => _geometry.CellsY;
+
+    public void Remove(int cellX, int cellY) => _laid.Remove((cellX, cellY));
+
+    public void Refill(Random rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (_zone.HasItems) Fill(rng);
+    }
+
     public void Take(int cellX, int cellY, Random rng)
     {
         ArgumentNullException.ThrowIfNull(rng);

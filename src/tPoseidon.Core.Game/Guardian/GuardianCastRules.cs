@@ -23,6 +23,7 @@ public enum GuardianCastKind
     ManaRing,
     TargetEffect,
     Hit,
+    WindAttack,
 }
 
 public readonly record struct GuardianCastCandidate(GuardianSkill Skill, GuardianCastTarget Target);
@@ -75,6 +76,7 @@ public static class GuardianCastRules
     public const byte CastEmote = 6;
     public const int GroupCount = 4;
     public const int UsableCardOption = 2;
+    public const int AttackRuneType = 2;
 
     private static readonly int[][] GroupRotation =
     [
@@ -93,6 +95,7 @@ public static class GuardianCastRules
     {
         if (target == GuardianCastTarget.Owner) return actionId == SkillActions.Cure ? GuardianCastKind.Cure : GuardianCastKind.None;
         if (GroundSkills.IsGround(actionId)) return GuardianCastKind.Ground;
+        if (actionId == GuardianRunes.StormyWind) return GuardianCastKind.WindAttack;
         if (ObjectHits.IsTargeted(actionId)) return GuardianCastKind.ObjectHit;
         if (SkillAreaShapes.Find(actionId) is not null) return GuardianCastKind.Area;
         if (ChainHits.Find(actionId) is not null) return GuardianCastKind.Chain;
@@ -144,6 +147,16 @@ public static class GuardianCastRules
             var relation = relationOf(entry.SkillId);
             if ((relation & HostileRelation) != 0) yield return new GuardianCastCandidate(entry, GuardianCastTarget.Enemy);
             else if ((relation & SupportRelation) != 0) yield return new GuardianCastCandidate(entry, GuardianCastTarget.Owner);
+        }
+    }
+
+    public static IEnumerable<GuardianCastCandidate> RuneCandidates(GuardianState guardian, Func<int, int?> skillTypeOf)
+    {
+        ArgumentNullException.ThrowIfNull(guardian);
+        ArgumentNullException.ThrowIfNull(skillTypeOf);
+        foreach (var rune in guardian.Skills.Where(skill => skill.Type == GuardianSkillType.Special).OrderBy(skill => skill.Slot))
+        {
+            if (skillTypeOf(rune.SkillId) == AttackRuneType) yield return new GuardianCastCandidate(rune, GuardianCastTarget.Enemy);
         }
     }
 

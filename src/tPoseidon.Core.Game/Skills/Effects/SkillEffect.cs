@@ -27,6 +27,9 @@ public sealed class SkillEffect
     public required sbyte EsClass { get; init; }
     public required ushort CasterEntityId { get; init; }
     public required ushort OwnerEntityId { get; init; }
+    public ushort HolderEntityId { get; set; }
+    public ushort EndHolderEntityId => HolderEntityId != 0 ? HolderEntityId : OwnerEntityId;
+    public bool HeldByAnother => HolderEntityId != 0 && HolderEntityId != OwnerEntityId;
     public required float Amount { get; init; }
     public float Flat { get; init; }
     public required int DurationMs { get; set; }
@@ -44,6 +47,13 @@ public sealed class SkillEffect
     public bool ConditionSuppressed { get; set; }
 
     public void EndNow() => EndRequested = true;
+
+    public bool EndsWithKill => !Kind.EndsWithOwner;
+
+    public void OwnerDied()
+    {
+        if (Kind.EndsWithOwner) EndRequested = true;
+    }
 
     public float Extra { get; set; }
     public float SecondAmount { get; init; }

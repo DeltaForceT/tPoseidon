@@ -8,6 +8,8 @@ using tPoseidon.Core.Net.World;
 
 internal sealed class SlotExtendController
 {
+    public Func<int, bool>? Compoundable { get; init; }
+
     private readonly MasterEquipStatusUpgrade _master;
     private readonly Func<SlotExtendTables> _tables;
     private readonly IItemStore _items;
@@ -72,7 +74,8 @@ internal sealed class SlotExtendController
         var subItems = request.SubItemWireUids.Select(InBag).ToList();
         var materialRow = material is not null && tables.Materials.TryGetValue(material.ItemIndex, out var foundMaterial) ? foundMaterial : null;
         var subRows = subItems.Select(sub => sub is not null && tables.SubItems.TryGetValue(sub.ItemIndex, out var row) ? row : null).ToList();
-        var candidate = new SlotExtendCandidate(equipment is null ? null : _catalog.GetById(equipment.ItemIndex), equipment?.ItemSlot ?? 0, materialRow, subRows);
+        var candidate = new SlotExtendCandidate(equipment is null ? null : _catalog.GetById(equipment.ItemIndex), equipment?.ItemSlot ?? 0, materialRow, subRows,
+            equipment is not null && (Compoundable?.Invoke(equipment.ItemIndex) ?? true));
         var equipped = equipment is null
             && _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Equipment).Any(item => item.ItemUid == BagItemIds.Stored(request.EquipmentWireUid));
         var code = equipped ? SlotExtendRules.InvalidEquipment : SlotExtendRules.Check(candidate);

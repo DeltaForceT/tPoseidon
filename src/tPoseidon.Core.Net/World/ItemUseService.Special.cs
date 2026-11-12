@@ -99,6 +99,13 @@ public sealed partial class ItemUseService
         await RefuseAsync(reason, ct).ConfigureAwait(false);
     }
 
+    private async Task UseImprintAsync(Item item, ItemParamEntry definition, ActiveImprint imprinted, CancellationToken ct)
+    {
+        var consumed = ConsumeWithRecord(item, definition);
+        await SendAsync((Opcode)ImprintFrames.Used, ImprintFrames.UsedWith(imprinted, DateTimeOffset.UtcNow, consumed), ct).ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} {_remote()}   imprint {item.ItemIndex} used: type {imprinted.Type} +{imprinted.Value} until {imprinted.Until:u}, {consumed.Count} left");
+    }
+
     private BagOperation ConsumeWithRecord(Item item, ItemParamEntry definition)
     {
         var left = Consume(item, definition);

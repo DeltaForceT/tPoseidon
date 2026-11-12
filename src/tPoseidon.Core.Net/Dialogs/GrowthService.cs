@@ -70,6 +70,7 @@ public sealed class GrowthService
     {
         IsGrowthOpen = !reset;
         IsResetOpen = reset;
+        await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
         await SendAsync(reset ? Opcode.S2C_RESET_MIX_OPENED : Opcode.S2C_GROWTH_OPENED, Array.Empty<byte>(), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   {(reset ? "mix reset" : "maturing compound")} window opened");
         return NpcScript.Silent;

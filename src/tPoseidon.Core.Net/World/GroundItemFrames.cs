@@ -182,6 +182,25 @@ public static class GroundItemFrames
         return w.ToArray();
     }
 
+    public static byte[] CrazyBang(ushort diggerEntityId, IReadOnlyList<(FieldItem Item, ushort FromX, ushort FromY)> items, bool couple)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        var w = new PacketWriter(7 + items.Count * (DroppedSize + RareItemExtraBytes));
+        w.WriteUInt32((uint)items.Count);
+        w.WriteUInt16(diggerEntityId);
+        foreach (var (item, fromX, fromY) in items)
+        {
+            w.WriteUInt16(item.EntityId);
+            w.WriteUInt16(fromX);
+            w.WriteUInt16(fromY);
+            w.WriteUInt16(item.X);
+            w.WriteUInt16(item.Y);
+            WriteResting(w, item);
+        }
+        w.WriteByte(couple ? (byte)1 : (byte)0);
+        return w.ToArray();
+    }
+
     public static byte[] Thrown(FieldItem item, ushort fromX, ushort fromY)
     {
         ArgumentNullException.ThrowIfNull(item);

@@ -50,6 +50,16 @@ public sealed class PostgresPetCollectionStore : IPetCollectionStore
         return cmd.ExecuteNonQuery() > 0;
     }
 
+    public bool SetCount(ulong characterId, ulong collectedUid, ushort count)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand("UPDATE pet_collection_item SET item_count = @n WHERE collected_uid = @u AND char_uid = @c", conn);
+        cmd.Parameters.AddWithValue("n", (int)count);
+        cmd.Parameters.AddWithValue("u", (long)collectedUid);
+        cmd.Parameters.AddWithValue("c", (long)characterId);
+        return cmd.ExecuteNonQuery() > 0;
+    }
+
     private static PetCollectedItem Read(NpgsqlDataReader reader) => new(
         (ulong)reader.GetInt64(0),
         reader.GetInt32(1),

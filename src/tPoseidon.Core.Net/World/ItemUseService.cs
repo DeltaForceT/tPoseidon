@@ -37,7 +37,7 @@ public sealed record ItemUsePlayer
     public Func<int, int?>? KeyRate { get; init; }
     public Func<int>? ZoneType { get; init; }
     public Func<int, int, bool>? ExpPotion { get; init; }
-    public Func<int, bool>? Imprint { get; init; }
+    public Func<int, ActiveImprint?>? Imprint { get; init; }
 }
 
 public sealed partial class ItemUseService
@@ -255,12 +255,12 @@ public sealed partial class ItemUseService
                 await UsePlainAsync(item, definition, wireUid, ct).ConfigureAwait(false);
                 break;
             case ItemUseHelper.Use when definition.Effect == ImprintBook.Effect:
-                if (_player.Imprint is not { } imprint || !imprint(item.ItemIndex))
+                if (_player.Imprint is not { } imprint || imprint(item.ItemIndex) is not { } imprinted)
                 {
                     await RefuseAsync($"imprint {item.ItemIndex}: no {ImprintEntry.TableName} row", ct).ConfigureAwait(false);
                     break;
                 }
-                await UsePlainAsync(item, definition, wireUid, ct).ConfigureAwait(false);
+                await UseImprintAsync(item, definition, imprinted, ct).ConfigureAwait(false);
                 break;
             case ItemUseHelper.Use when definition.Effect == tPoseidon.Core.Game.Pets.CharacterPetReinforceRules.ReinforceEffect:
                 await RefuseAsync($"item {item.ItemIndex}: a pet piercing is used through the character pet window", ct).ConfigureAwait(false);

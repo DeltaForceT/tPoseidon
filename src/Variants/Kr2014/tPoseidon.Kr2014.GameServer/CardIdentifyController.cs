@@ -86,7 +86,8 @@ internal sealed class CardIdentifyController
         }
         if (player.PendingMonsterCard is not { } card || card.Id != (int)cardItemId)
         {
-            Log(player, $"deal with card {cardItemId} refused: no such monster card was used since the last deal");
+            Log(player, $"deal with card {cardItemId} refused: no such monster card was used since the last deal; the game ends so the client does not wait for a deal");
+            await EndAsync(player).ConfigureAwait(false);
             return;
         }
         player.PendingMonsterCard = null;
@@ -94,7 +95,8 @@ internal sealed class CardIdentifyController
         lock (_rngGate) dealt = game.Deal(card.CardNum, _tables(), _rng.Next);
         if (!dealt)
         {
-            Log(player, $"stage {game.Stage}: no CardIdentify_GradeInfo / ResultTable rows to deal from");
+            Log(player, $"stage {game.Stage}: no CardIdentify_GradeInfo / ResultTable rows to deal from; the game ends so the client does not wait for a deal");
+            await EndAsync(player).ConfigureAwait(false);
             return;
         }
         await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_LIFE, CardIdentifyFrames.Life(game.Life)).ConfigureAwait(false);

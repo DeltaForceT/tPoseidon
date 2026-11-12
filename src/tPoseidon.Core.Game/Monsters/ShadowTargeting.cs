@@ -4,7 +4,7 @@ using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Monsters;
 
-public readonly record struct ShadowEngagement(MonsterEntity Shadow, MonsterEntity Target);
+public readonly record struct ShadowEngagement(MonsterEntity Shadow, MonsterEntity? Target, ushort PlayerEntityId = 0);
 
 public sealed class ShadowTargeting
 {
@@ -18,6 +18,12 @@ public sealed class ShadowTargeting
         public MonsterEntity? Held { get; set; }
     }
 
+    public static bool KeepsTarget(MonsterEntity shadow)
+    {
+        ArgumentNullException.ThrowIfNull(shadow);
+        return shadow.Atype == MonsterAType.NonresidentBossMonster;
+    }
+
     public static bool MayDamage(ShadowAiEntry? entry, bool victimIsPlayer) =>
         entry is null || entry.AiType != NonresidentMonsterTargetOnlyStrategy.TargetOnlyAiType || !victimIsPlayer;
 
@@ -26,7 +32,7 @@ public sealed class ShadowTargeting
         _entryOf = entryOf ?? throw new ArgumentNullException(nameof(entryOf));
     }
 
-    public IReadOnlyList<ShadowEngagement> Due(IReadOnlyList<MonsterEntity> scene, DateTimeOffset now)
+    public IReadOnlyList<ShadowEngagement> Due(IReadOnlyList<MonsterEntity> scene, DateTimeOffset now, Func<MonsterEntity, ushort>? playerNearAtSpawn = null)
     {
         ArgumentNullException.ThrowIfNull(scene);
         var engagements = new List<ShadowEngagement>();
@@ -40,6 +46,12 @@ public sealed class ShadowTargeting
                 if (MonsterStrategyFactory.CreateShadow(entry.AiType) is not { } strategy) continue;
                 memory = new Memory { Strategy = strategy, NextAt = now };
                 _memory[shadow.EntityId] = memory;
+                if (!KeepsTarget(shadow) && playerNearAtSpawn?.Invoke(shadow) is > 0 and var player)
+                {
+                    memory.NextAt = now.AddMilliseconds(ShadowAiStrategy.EngageIntervalMilliseconds);
+                    engagements.Add(new ShadowEngagement(shadow, null, player));
+                    continue;
+                }
             }
             if (now < memory.NextAt) continue;
             memory.NextAt = now.AddMilliseconds(ShadowAiStrategy.EngageIntervalMilliseconds);

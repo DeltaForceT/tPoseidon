@@ -57,7 +57,16 @@ public sealed class SetupWindow : Window
             _after = new Button { Content = follow.Label, Height = 36, MinHeight = 0, Padding = new Thickness(20, 0), VerticalContentAlignment = VerticalAlignment.Center, IsVisible = false };
             _after.Click += (_, _) =>
             {
-                _afterAction?.Invoke();
+                try
+                {
+                    _afterAction?.Invoke();
+                }
+                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+                {
+                    _banner.Show(BannerKind.Error, $"The launcher could not be started: {ex.Message} Use the shortcut on your desktop.");
+                    return;
+                }
+
                 Close();
             };
         }
@@ -127,14 +136,7 @@ public sealed class SetupWindow : Window
             return;
         }
 
-        var error = task.Exception?.GetBaseException();
-        if (error is InstallerException or IOException or UnauthorizedAccessException)
-        {
-            _action.IsEnabled = true;
-            _banner.Show(BannerKind.Error, error.Message);
-            return;
-        }
-
-        throw task.Exception!;
+        _action.IsEnabled = true;
+        _banner.Show(BannerKind.Error, Installer.ErrorText(task.Exception?.GetBaseException()));
     }
 }

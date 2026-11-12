@@ -685,7 +685,7 @@ public sealed class GuildService
         {
             if (Session(characterId) is not { } member) return outbox;
             var own = member.State == GuildRules.Joined && _rules.RecruitPost(member.GuildCode) is not null;
-            outbox.Add(new GuildMessage(characterId, GuildRecruitFrames.ListReply, GuildRecruitFrames.ListFor(_rules.RecruitPosts(), request, own, _text)));
+            outbox.Add(new GuildMessage(characterId, GuildRecruitFrames.ListReply, GuildRecruitFrames.ListFor(_rules.RecruitPosts(), request, own, _text, code => _shop.EmblemOf(code)?.Emblem ?? default)));
         }
         return outbox;
     }

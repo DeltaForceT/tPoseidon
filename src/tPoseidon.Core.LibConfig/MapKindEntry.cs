@@ -30,6 +30,8 @@ public readonly record struct MapKindEntry(int Id, int Type, int Class, int Opti
 
     public bool IsPerPlayerInstance => ParallelZoneType == PerPlayerInstanceZoneType;
 
+    public bool IsPerPlayerMonsterQuestRoom => Class == ParallelClass && Group == MonsterQuestGroup && IsPerPlayerInstance;
+
     public bool RefillsMonsters => !(Class == ParallelClass && Group == MonsterQuestGroup);
 
     public bool AllowsLoverMove => Class != NoLoverMoveClass && (Option & NoLoverMoveOption) == 0;

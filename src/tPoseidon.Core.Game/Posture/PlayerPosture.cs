@@ -33,6 +33,7 @@ public sealed class PlayerPosture
     public const byte EmoteHappy = 3;
     public const byte EmoteSad = 4;
     public const byte EmoteAngry = 5;
+    public const byte SlideCell = 4;
 
     private int _idleMs;
 
@@ -74,6 +75,9 @@ public sealed class PlayerPosture
                 return new PostureOutcome(true, null);
         }
     }
+
+    public static bool SlidesDown(byte secondaryCell, int currentY, int destinationY) =>
+        secondaryCell == SlideCell && destinationY > currentY;
 
     public static byte? EmoteRefusal(byte code, BodyForm form) =>
         form != BodyForm.Normal && code is EmoteHappy or EmoteSad or EmoteAngry ? FormNotice(form) : null;

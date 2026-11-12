@@ -5,7 +5,7 @@ namespace tPoseidon.Core.InterServer;
 
 public static class SoulMessages
 {
-    private const int RowSize = 8 + 4 + 8 + 4 + 4 + 8;
+    private const int RowSize = 8 + 4 + 8 + 4 + 4 + 8 + 1;
 
     public static byte[] EncodeAccount(SoulAccount account)
     {
@@ -57,6 +57,7 @@ public static class SoulMessages
         w.WriteInt32(row.SourceCount);
         w.WriteInt32(row.PotionsReady);
         w.WriteInt64(row.LastTick.ToUnixTimeMilliseconds());
+        w.WriteByte(row.Penalty ? (byte)1 : (byte)0);
     }
 
     private static GuardianSoulRow ReadRow(ref PacketReader r) => new(
@@ -65,5 +66,6 @@ public static class SoulMessages
         r.ReadUInt64(),
         r.ReadInt32(),
         r.ReadInt32(),
-        DateTimeOffset.FromUnixTimeMilliseconds(r.ReadInt64()));
+        DateTimeOffset.FromUnixTimeMilliseconds(r.ReadInt64()),
+        r.ReadByte() != 0);
 }

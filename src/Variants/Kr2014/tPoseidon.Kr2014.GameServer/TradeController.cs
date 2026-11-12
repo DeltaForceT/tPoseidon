@@ -47,6 +47,8 @@ internal sealed class TradeController
     public const int NotExchangeableOption = 0x400;
     public const int PropertyOptionsClass = 2;
 
+    public Func<Item, IReadOnlyList<ItemProperty>>? FullProperties { get; init; }
+
     private readonly MasterTrade _master;
     private readonly IItemStore _items;
     private readonly tPoseidon.Core.LibConfig.IItemParamLookup _catalog;
@@ -368,15 +370,10 @@ internal sealed class TradeController
         }
     }
 
-    private static List<BagOperation> Operations(TradeSideResult result) => result.Changes
-        .Select(change => new BagOperation(
-            change.Kind switch
-            {
-                TradeChangeKind.StackChanged => QuestResultFrames.StackChanged,
-                TradeChangeKind.Removed => QuestResultFrames.Removed,
-                _ => QuestResultFrames.Created,
-            },
-            change.ItemClass, (uint)change.ItemIndex, BagItemIds.OnWire(change.ItemUid), change.Count, change.MixSlot))
+    private List<BagOperation> Operations(TradeSideResult result) => result.Changes
+        .Select(change => _items.FindByUid(change.ItemUid) is { } arrived
+            ? TradeOperations.Of(change, arrived, FullProperties?.Invoke(arrived) ?? _properties.ForItem(arrived.ItemUid))
+            : TradeOperations.Of(change, null, null))
         .ToList();
 
     private static void Detach(TradeSession session)

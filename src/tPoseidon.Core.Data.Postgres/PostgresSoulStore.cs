@@ -24,7 +24,7 @@ public sealed class PostgresSoulStore : ISoulStore
         var guardians = new List<GuardianSoulRow>();
         using (var cmd = new NpgsqlCommand("""
             SELECT g.guardian_uid, COALESCE(s.guardian_gauge, 0), COALESCE(o.source_item_uid, 0), COALESCE(o.source_count, 0),
-                   COALESCE(o.potions_ready, 0), o.last_tick
+                   COALESCE(o.potions_ready, 0), o.last_tick, COALESCE(o.penalty, FALSE)
             FROM char_soulguardian g
             LEFT JOIN char_soulguardian_status s ON s.guardian_uid = g.guardian_uid
             LEFT JOIN char_soulguardian_source o ON o.guardian_uid = g.guardian_uid
@@ -43,7 +43,8 @@ public sealed class PostgresSoulStore : ISoulStore
                     unchecked((ulong)reader.GetInt64(2)),
                     reader.GetInt32(3),
                     reader.GetInt32(4),
-                    lastTick));
+                    lastTick,
+                    reader.GetBoolean(6)));
             }
         }
         return new SoulAccount(soul, guardians);
@@ -79,10 +80,10 @@ public sealed class PostgresSoulStore : ISoulStore
             gauge.ExecuteNonQuery();
         }
         using (var source = new NpgsqlCommand("""
-            INSERT INTO char_soulguardian_source (guardian_uid, source_item_uid, source_count, potions_ready, last_tick)
-            VALUES (@g, @u, @n, @p, @t)
+            INSERT INTO char_soulguardian_source (guardian_uid, source_item_uid, source_count, potions_ready, last_tick, penalty)
+            VALUES (@g, @u, @n, @p, @t, @x)
             ON CONFLICT (guardian_uid) DO UPDATE SET source_item_uid = EXCLUDED.source_item_uid, source_count = EXCLUDED.source_count,
-                potions_ready = EXCLUDED.potions_ready, last_tick = EXCLUDED.last_tick
+                potions_ready = EXCLUDED.potions_ready, last_tick = EXCLUDED.last_tick, penalty = EXCLUDED.penalty
             """, conn, tx))
         {
             source.Parameters.AddWithValue("g", unchecked((long)row.GuardianUid));
@@ -90,6 +91,7 @@ public sealed class PostgresSoulStore : ISoulStore
             source.Parameters.AddWithValue("n", row.SourceCount);
             source.Parameters.AddWithValue("p", row.PotionsReady);
             source.Parameters.AddWithValue("t", row.LastTick.ToUniversalTime());
+            source.Parameters.AddWithValue("x", row.Penalty);
             source.ExecuteNonQuery();
         }
         tx.Commit();

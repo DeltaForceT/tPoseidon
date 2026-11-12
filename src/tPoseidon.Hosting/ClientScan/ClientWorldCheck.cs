@@ -17,6 +17,17 @@ public sealed class ClientWorldCheck : IClientCheck
     private const string MapFileFilter = "*.md3";
     private const int NoRegion = 0;
 
+    private static readonly IReadOnlyList<OriginalPortalGap> OriginalPortalGaps =
+    [
+        new("map_sq10_02.md3", 1, 136),
+    ];
+
+    private static readonly IReadOnlyList<OriginalPointGap> OriginalPointGaps =
+    [
+        new("map_sq00_14t.md3", MapPointTypes.SkillShop, 8, "its point 8 is stored with type 0 at 609,575, next to where the NPC stands"),
+        new("map_fd28d.md3", MapPointTypes.Npc, 102, "the map file has points 100, 101 and 103 to 110 but no 102"),
+    ];
+
     private readonly ClientPatchCatalog _catalog;
     private readonly IReadOnlyList<LibConfigRowFix> _rowFixes;
 
@@ -60,6 +71,13 @@ public sealed class ClientWorldCheck : IClientCheck
 
         return scan.Findings;
     }
+
+    private sealed record OriginalPortalGap(string MapFile, int PortalId, int Destination);
+
+    private sealed record OriginalPointGap(string MapFile, int PointType, int PointId, string Detail);
+
+    private static bool SameFile(string md3FileName, string file) =>
+        string.Equals(Path.GetFileName(md3FileName.Replace('\\', '/')), file, StringComparison.OrdinalIgnoreCase);
 
     private sealed record WorldTables(
         IReadOnlyList<MapInfoEntry> Maps,
@@ -154,6 +172,12 @@ public sealed class ClientWorldCheck : IClientCheck
             {
                 if (range.Destination > ushort.MaxValue || !_byId.TryGetValue((ushort)range.Destination, out var destination))
                 {
+                    if (OriginalPortalGaps.Any(gap => SameFile(map.Md3FileName, gap.MapFile) && gap.PortalId == range.Id && gap.Destination == range.Destination))
+                    {
+                        Add(map, ScanStatus.Info, $"Portal {range.Id} leads to map {range.Destination}, which the KR 2014 game data does not define. The original client has this portal too; it does nothing, as on the original server. Nothing to fix.");
+                        continue;
+                    }
+
                     Add(map, ScanStatus.Problem, $"Portal {range.Id} leads to map {range.Destination}, which is not in the map table.");
                     continue;
                 }
@@ -217,6 +241,13 @@ public sealed class ClientWorldCheck : IClientCheck
         {
             if (!_maps[map.Id].Points.Any(point => point.Type == pointType && point.Id == posId))
             {
+                if (OriginalPointGaps.FirstOrDefault(gap => SameFile(map.Md3FileName, gap.MapFile) && gap.PointType == pointType && gap.PointId == posId) is { } gap)
+                {
+                    Add(map, ScanStatus.Info, $"{kind} {type} has no point {posId} (type {pointType}) in the map file; {gap.Detail}. The original client file is the same, and the original server also puts this NPC at {NpcPoint.Origin().X:0},{NpcPoint.Origin().Y:0}. Nothing to fix.");
+                    CheckArt(map, kind, type);
+                    return;
+                }
+
                 var patch = _catalog.FindPoint(map.Md3FileName, pointType, posId);
                 Add(map, ScanStatus.Problem, $"{kind} {type} has no point {posId} (type {pointType}) in the map file; the server would put it at {NpcPoint.Origin().X:0},{NpcPoint.Origin().Y:0}.{NoFix(patch is null, "no source gives the point position")}", patch is null ? null : Md3PointsFix.FixId);
             }

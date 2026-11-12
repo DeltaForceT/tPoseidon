@@ -222,7 +222,19 @@ internal sealed class MyCampController : IDisposable
             Log(st, $"enter of house 0x{request.HouseId:X4} refused: {code}");
             return;
         }
-        shell!.AddGuest(character.CharacterId);
+        if (character.CharacterId == shell!.OwnerId)
+        {
+            shell.OwnerAway = false;
+            await _sendToOthersOnMap(st, Opcode.S2C_PLAYER_LEFT_MAP, MyCampFrames.ObjectId(st.PlayerEntityId)).ConfigureAwait(false);
+            st.MyCampReturn = (st.MapId, st.PlayerX, st.PlayerY);
+            st.MapId = shell.ShellZone;
+            st.PlayerX = MyCampRules.OwnerX;
+            st.PlayerY = MyCampRules.OwnerY;
+            await StartTransferAsync(st, character.CharacterId, shell.Layout.Values.ToArray(), MyCampTransferKind.Open).ConfigureAwait(false);
+            Log(st, $"returns to his camp as its owner ({shell.Guests.Count} guests, {shell.Layout.Count} items)");
+            return;
+        }
+        shell.AddGuest(character.CharacterId);
         await StartTransferAsync(st, character.CharacterId, shell.Placed(), MyCampTransferKind.Guest).ConfigureAwait(false);
     });
 
@@ -233,12 +245,20 @@ internal sealed class MyCampController : IDisposable
             await SendAsync(st, Opcode.S2C_MYCAMP_LEAVE_REFUSED, Array.Empty<byte>()).ConfigureAwait(false);
             return;
         }
-        if (Shell(character.CharacterId) is { } own)
+        if (GuestShell(character.CharacterId) is { } shell)
         {
-            await CloseAsync(own).ConfigureAwait(false);
+            await GuestOutAsync(st, shell, null).ConfigureAwait(false);
             return;
         }
-        if (GuestShell(character.CharacterId) is { } shell) await GuestOutAsync(st, shell, null).ConfigureAwait(false);
+        if (Shell(character.CharacterId) is { } own)
+        {
+            Save(own);
+            own.OwnerAway = true;
+            _transfers.Remove(character.CharacterId);
+            await ReturnAsync(st, own, null).ConfigureAwait(false);
+            await _sendToMap(own.FieldMap, Opcode.S2C_MYCAMP_GUEST_COUNT, MyCampFrames.GuestCount(own)).ConfigureAwait(false);
+            Log(st, $"leaves the camp standing ({own.Guests.Count} guests, {own.Placed().Count} placed items saved)");
+        }
     });
 
     public Task CloseRequestAsync(InGameSessionState st) => Locked(async () =>
@@ -531,7 +551,7 @@ internal sealed class MyCampController : IDisposable
         && entityId == st.PlayerEntityId;
 
     private MyCampShell? ShellOfOwner(InGameSessionState st) =>
-        st.Character is { } character && Shell(character.CharacterId) is { } shell && st.MapId == shell.ShellZone ? shell : null;
+        st.Character is { } character && Shell(character.CharacterId) is { } shell && st.MapId == shell.ShellZone && !shell.OwnerAway && !shell.Guests.Contains(character.CharacterId) ? shell : null;
 
     private MyCampShell? SeatingShell(InGameSessionState st)
     {

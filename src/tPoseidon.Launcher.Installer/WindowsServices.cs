@@ -95,6 +95,22 @@ public sealed class ProcessRunningCheck : IRunningCheck
     }
 }
 
+public static class ShortcutRules
+{
+    private const string FirstIcon = ",0";
+
+    public static string IconLocation(string iconPath) => iconPath + FirstIcon;
+
+    public static InstallerException Failure(string shortcutPath, Exception error)
+    {
+        var cause = error is TargetInvocationException { InnerException: { } inner } ? inner : error;
+        return new InstallerException($"The shortcut {shortcutPath} could not be created: {cause.Message}", cause);
+    }
+
+    public static bool IsShortcutFailure(Exception error) =>
+        error is COMException or TargetInvocationException or NotSupportedException or InvalidCastException or MissingMethodException;
+}
+
 [SupportedOSPlatform("windows")]
 public sealed class WindowsShortcutWriter : IShortcutWriter
 {
@@ -103,6 +119,18 @@ public sealed class WindowsShortcutWriter : IShortcutWriter
     public void Create(ShortcutPlan shortcut)
     {
         ArgumentNullException.ThrowIfNull(shortcut);
+        try
+        {
+            Write(shortcut);
+        }
+        catch (Exception ex) when (ShortcutRules.IsShortcutFailure(ex))
+        {
+            throw ShortcutRules.Failure(shortcut.Path, ex);
+        }
+    }
+
+    private static void Write(ShortcutPlan shortcut)
+    {
         var type = Type.GetTypeFromProgID(ShellProgramId) ?? throw new InstallerException("Windows could not create shortcuts on this computer.");
         var shell = Activator.CreateInstance(type) ?? throw new InstallerException("Windows could not create shortcuts on this computer.");
         object? link = null;
@@ -113,7 +141,7 @@ public sealed class WindowsShortcutWriter : IShortcutWriter
             var linkType = link!.GetType();
             Set(linkType, link, "TargetPath", shortcut.Target);
             Set(linkType, link, "WorkingDirectory", shortcut.WorkingDirectory);
-            Set(linkType, link, "IconLocation", shortcut.IconPath);
+            Set(linkType, link, "IconLocation", ShortcutRules.IconLocation(shortcut.IconPath));
             Set(linkType, link, "Description", shortcut.Description);
             linkType.InvokeMember("Save", BindingFlags.InvokeMethod, null, link, null);
         }

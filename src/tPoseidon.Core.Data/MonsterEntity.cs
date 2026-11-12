@@ -150,6 +150,18 @@ public sealed class MonsterEntity
         }
     }
 
+    public int DropAttackersExcept(IReadOnlyCollection<ushort> stillAttacking)
+    {
+        ArgumentNullException.ThrowIfNull(stillAttacking);
+        lock (_attackerLock)
+        {
+            var dropped = _attackerIds.RemoveWhere(id => !stillAttacking.Contains(id));
+            _announcedEngagements.RemoveWhere(id => !_attackerIds.Contains(id));
+            if (!_attackerIds.Contains(_lastAttackerEntityId)) _lastAttackerEntityId = 0;
+            return dropped;
+        }
+    }
+
     public void ClearAttackers()
     {
         lock (_attackerLock)

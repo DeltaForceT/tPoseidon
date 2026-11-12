@@ -151,6 +151,7 @@ public sealed class MyCampShell
     public byte MaxGuests { get; set; } = MyCampRules.MaxGuests;
     public ushort Model { get; set; } = MyCampRules.DefaultModel;
     public bool Ready { get; set; }
+    public bool OwnerAway { get; set; }
     public IReadOnlyCollection<ulong> Guests => _guests;
     public IReadOnlyDictionary<ulong, MyCampItemRecord> Layout => _layout;
     public MyCampTimerTracker Timers { get; } = new();
@@ -168,9 +169,11 @@ public sealed class MyCampShell
     {
         if (!Ready) return MyCampRules.EnterNotReady;
         if (Mode != MyCampRules.Chat) return MyCampRules.EnterNotOpen;
-        if (HasPassword && !skipPassword && !string.Equals(Password, password, StringComparison.Ordinal)) return MyCampRules.EnterWrongPassword;
-        if (_guests.Count >= MaxGuests || _guests.Count >= MyCampRules.MaxGuests) return MyCampRules.EnterFull;
-        if (_bans.TryGetValue(guestId, out var until) && now < until) return MyCampRules.EnterBanned;
+        var isOwner = guestId == OwnerId;
+        if (isOwner && !OwnerAway) return MyCampRules.EnterFailed;
+        if (HasPassword && !skipPassword && !isOwner && !string.Equals(Password, password, StringComparison.Ordinal)) return MyCampRules.EnterWrongPassword;
+        if (!isOwner && (_guests.Count >= MaxGuests || _guests.Count >= MyCampRules.MaxGuests)) return MyCampRules.EnterFull;
+        if (!isOwner && _bans.TryGetValue(guestId, out var until) && now < until) return MyCampRules.EnterBanned;
         return null;
     }
 

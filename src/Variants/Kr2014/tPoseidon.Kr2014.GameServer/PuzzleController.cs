@@ -27,6 +27,9 @@ internal sealed class PuzzleController : IDisposable
     private readonly Dictionary<ushort, (MemoryPuzzleRun Run, ulong OwnerId)> _runs = new();
     private readonly Dictionary<ushort, (SlidePuzzleRun Run, ulong OwnerId)> _slides = new();
     private readonly List<ushort> _kills = new();
+    private readonly Dictionary<ushort, SlideOffer> _offers = new();
+
+    private sealed record SlideOffer(SlidePuzzleEntry Puzzle, IReadOnlyList<SlidePuzzleBlock> Blocks, (int X, int Y) Origin, int[] Grid);
     private readonly SemaphoreSlim _sync = new(1, 1);
     private readonly Random _rng = new();
 
@@ -56,6 +59,33 @@ internal sealed class PuzzleController : IDisposable
         _monsters.MonsterKilled -= OnMonsterKilled;
         _sync.Dispose();
     }
+
+    public Task OfferAsync(InGameSessionState st) => Locked(async () =>
+    {
+        if (st.Character is null) return;
+        var tables = _tables();
+        if (!tables.Maps.TryGetValue(st.MapId, out var map)) return;
+        if (_runs.ContainsKey(st.MapId) || _slides.ContainsKey(st.MapId))
+        {
+            Log(st, $"puzzle on map {st.MapId} already running, no start window");
+            return;
+        }
+        if (map.PuzzleType == PuzzleTables.SlideType)
+        {
+            if (SlideOfferOf(st, tables, map) is not { } offer) return;
+            _offers[st.MapId] = offer;
+            await SendAsync(st, Opcode.S2C_PUZZLE_SLIDE_START, PuzzleFrames.SlideStart(offer.Puzzle.Id, offer.Origin, offer.Grid)).ConfigureAwait(false);
+            Log(st, $"slide puzzle {offer.Puzzle.Id} window on map {st.MapId}: {offer.Puzzle.Columns} x {offer.Puzzle.Rows} at ({offer.Origin.X},{offer.Origin.Y})");
+            return;
+        }
+        if (map.PuzzleType != PuzzleTables.MemoryType || !tables.Memory.TryGetValue(map.PuzzleId, out var puzzle))
+        {
+            Log(st, $"puzzle {map.PuzzleId} on map {st.MapId}: no start window (type {map.PuzzleType})");
+            return;
+        }
+        await SendAsync(st, Opcode.S2C_PUZZLE_MEMORY_START, PuzzleFrames.MemoryStart(puzzle.Id)).ConfigureAwait(false);
+        Log(st, $"memory puzzle {puzzle.Id} window on map {st.MapId}");
+    });
 
     public Task StartAsync(InGameSessionState st) => Locked(async () =>
     {
@@ -98,9 +128,6 @@ internal sealed class PuzzleController : IDisposable
         }
         _runs[st.MapId] = (new MemoryPuzzleRun(puzzle, st.MapId, order, DateTimeOffset.UtcNow), character.CharacterId);
         await SendAsync(st, Opcode.S2C_PUZZLE_COUNTDOWN, Array.Empty<byte>()).ConfigureAwait(false);
-        var w = new PacketWriter(2);
-        w.WriteInt16((short)puzzle.Id);
-        await SendAsync(st, Opcode.S2C_PUZZLE_MEMORY_START, w.ToArray()).ConfigureAwait(false);
         Log(st, $"memory puzzle {puzzle.Id} starts on map {st.MapId}: {order.Count} statues, {puzzle.TimeLimitSeconds} s");
     });
 
@@ -162,17 +189,17 @@ internal sealed class PuzzleController : IDisposable
         }
     });
 
-    private async Task StartSlideAsync(InGameSessionState st, ulong ownerId, PuzzleTables tables, PuzzleMapEntry map)
+    private SlideOffer? SlideOfferOf(InGameSessionState st, PuzzleTables tables, PuzzleMapEntry map)
     {
         if (!tables.Slide.TryGetValue(map.PuzzleId, out var puzzle) || !tables.SlideBlocks.TryGetValue(puzzle.BlockTable, out var blocks))
         {
             Log(st, $"slide puzzle {map.PuzzleId}: no {PuzzleTables.SlideTable} row / block table");
-            return;
+            return null;
         }
         if (puzzle.Columns <= 0 || puzzle.Rows <= 0 || blocks.Count != puzzle.Columns * puzzle.Rows || blocks.Count(block => block.IsEmpty) != 1)
         {
             Log(st, $"slide puzzle {puzzle.Id}: {puzzle.BlockTable} has {blocks.Count} blocks for {puzzle.Columns} x {puzzle.Rows}, not started");
-            return;
+            return null;
         }
         var centre = _geometry.TryGetValue(st.MapId, out var geometry)
             ? geometry.PointsOfType(ZoneGeometry.PointTypeSpawn).Take(1).ToArray()
@@ -180,18 +207,26 @@ internal sealed class PuzzleController : IDisposable
         if (centre.Length == 0)
         {
             Log(st, $"slide puzzle {puzzle.Id}: map {st.MapId} has no spawn point for the board centre, not started");
-            return;
+            return null;
         }
         var origin = SlidePuzzleBoard.Origin(centre[0].X, centre[0].Y, puzzle.Columns, puzzle.Rows);
         int[] grid;
         lock (_rng) grid = SlidePuzzleBoard.Shuffle(blocks, puzzle.Columns, puzzle.Rows, _rng.Next);
+        return new SlideOffer(puzzle, blocks, origin, grid);
+    }
+
+    private async Task StartSlideAsync(InGameSessionState st, ulong ownerId, PuzzleTables tables, PuzzleMapEntry map)
+    {
+        if (_offers.Remove(st.MapId, out var offered) && offered.Puzzle.Id == map.PuzzleId) { }
+        else offered = SlideOfferOf(st, tables, map);
+        if (offered is null) return;
+        var (puzzle, blocks, origin, grid) = offered;
         var now = DateTimeOffset.UtcNow;
         var run = new SlidePuzzleRun(puzzle, st.MapId, origin, blocks, grid, now);
         var (x, y) = _positionAt(st, now);
         run.Arrive(x, y);
         _slides[st.MapId] = (run, ownerId);
         await SendAsync(st, Opcode.S2C_PUZZLE_COUNTDOWN, Array.Empty<byte>()).ConfigureAwait(false);
-        await SendAsync(st, Opcode.S2C_PUZZLE_SLIDE_START, PuzzleFrames.SlideStart(puzzle.Id, origin, grid)).ConfigureAwait(false);
         Log(st, $"slide puzzle {puzzle.Id} starts on map {st.MapId}: {puzzle.Columns} x {puzzle.Rows} at ({origin.X},{origin.Y}), {puzzle.TimeLimitSeconds} s");
     }
 

@@ -18,7 +18,6 @@ public sealed record PetCollectionStartRequest(
     bool Fainted,
     PetCollectionSlot? Pet,
     PetCollectionSlot? Food,
-    int FoodCount,
     int MapId,
     int BagCount);
 
@@ -56,6 +55,23 @@ public static class PetCollectionRules
     public const int RateScale = 10000;
     public const int NothingDrawn = 0;
     public const int DepthStep = 10;
+    public const int NoFilter = -1;
+    public const int GalderFilter = 0;
+    public const int EquipmentFilter = 1;
+    public const int PetFilter = 2;
+    public const int PotionFilter = 3;
+    public const int CardFilter = 4;
+    public const int GemFilter = 5;
+    public const int UsableFilter = 6;
+    public const int EventFilter = 7;
+    public const ushort ItemFilterMask = (1 << EventFilter) - 1;
+    public const int GalderCouponType = 1;
+    public const int PotionType = 10;
+    public const int CardType = 11;
+    public const int GemType = 12;
+    public const int PetType = 13;
+    public const int StarCardType = 35;
+    public const int EquipmentClass = 2;
 
     public static bool CanStartFrom(PetCollectionState state) => state is PetCollectionState.Idle or PetCollectionState.Stopped;
 
@@ -88,7 +104,7 @@ public static class PetCollectionRules
         if (foodSlot.Equipped) return Equipped;
         if (foodSlot.Expired) return Expired;
         if (!tables.Foods.TryGetValue(food.Id, out var feed)) return NotFood;
-        if (request.FoodCount < 1 || request.FoodCount > foodSlot.Stack || request.FoodCount > feed.MaxItems) return Unknown;
+        if (foodSlot.Stack < 1) return Unknown;
         var candidate = new PetCollectionPlan(pet.Id, petLevel, collector, feed, tables.ExItems.GetValueOrDefault(pet.Id),
             DigsMines(pet), DigsMines(food));
         var areaCode = CheckArea(tables, request.MapId, candidate);
@@ -135,6 +151,35 @@ public static class PetCollectionRules
         return pet.MinLevel;
     }
 
+    public static int FoodCount(PetCollectionSlot food, PetDigFoodEntry feed)
+    {
+        ArgumentNullException.ThrowIfNull(food);
+        ArgumentNullException.ThrowIfNull(feed);
+        return feed.MaxItems > 0 ? Math.Min(food.Stack, feed.MaxItems) : food.Stack;
+    }
+
+    public static int FilterOf(ItemParamEntry item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (item.Type is GalderCouponType or ItemParamEntry.MoneyType) return GalderFilter;
+        if (item.Type == PetType) return PetFilter;
+        if (item.Class == EquipmentClass) return EquipmentFilter;
+        if (item.Type == PotionType) return PotionFilter;
+        if (item.Type is CardType or StarCardType) return CardFilter;
+        if (item.Type == GemType) return GemFilter;
+        if ((item.Options & ItemParamEntry.UsableOption) != 0) return UsableFilter;
+        return NoFilter;
+    }
+
+    public static bool Excluded(ushort filters, ItemParamEntry item, bool eventItem = false)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        var filter = eventItem ? EventFilter : FilterOf(item);
+        return filter != NoFilter && (filters & (1 << filter)) != 0;
+    }
+
+    public static bool ExAllowed(ushort filters) => (filters & ItemFilterMask) == 0;
+
     public static bool IsFull(int bagCount, PetDigPetEntry pet)
     {
         ArgumentNullException.ThrowIfNull(pet);
@@ -143,13 +188,13 @@ public static class PetCollectionRules
 
     public static bool StopsAfterTick(int foodLeft, int bagCount, PetDigPetEntry pet) => foodLeft < 1 || IsFull(bagCount, pet);
 
-    public static PetCollectionDraw? Draw(PetCollectionPlan plan, int depthPenalty, Func<int, int> next, Func<(int ItemId, int Count)> groundItem)
+    public static PetCollectionDraw? Draw(PetCollectionPlan plan, int depthPenalty, Func<int, int> next, Func<(int ItemId, int Count)> groundItem, bool exAllowed = true)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(next);
         ArgumentNullException.ThrowIfNull(groundItem);
         if (next(RateScale) >= plan.Pet.DigRate - depthPenalty) return null;
-        if (plan.ExRow is { Items.Count: > 0 } ex && next(RateScale) < ex.ExRate + plan.Food.PlusRate)
+        if (exAllowed && plan.ExRow is { Items.Count: > 0 } ex && next(RateScale) < ex.ExRate + plan.Food.PlusRate)
         {
             var total = ex.Items.Sum(item => item.Rate);
             var roll = next(total);

@@ -20,6 +20,7 @@ public static class MonsterStrategyFactory
             MonsterAType.LowHarconAttackMonster => new LowHarconAttackMonsterStrategy(),
             MonsterAType.LowHarconAttackBosMonster => new LowHarconAttackBosMonsterStrategy(),
             MonsterAType.TestMonsterAlias => new TestMonsterStrategy(),
+            MonsterAType.HarconTurret => new TestMonsterStrategy(),
             _ => new TestMonsterStrategy(),
         };
     }
@@ -51,6 +52,7 @@ public static class MonsterStrategyFactory
             9 => MonsterAType.LowHarconAttackMonster,
             10 => MonsterAType.LowHarconAttackBosMonster,
             11 => MonsterAType.TestMonsterAlias,
+            15 => MonsterAType.HarconTurret,
             _ => MonsterAType.TestMonster,
         };
     }

@@ -273,7 +273,7 @@ public sealed class WarehouseService
             _items.MoveToSlot(source.ItemUid, destination, destinationPosition);
             return (
                 new BagOperation(BankService.Taken, itemClass, itemId, BagItemIds.OnWire(source.ItemUid), 0),
-                new BagOperation(BankService.Added, itemClass, itemId, BagItemIds.OnWire(source.ItemUid), (ushort)count));
+                BankService.AddedOf(source, itemClass, (ushort)count));
         }
         var left = _items.AdjustStack(source.ItemUid, -count);
         var split = _items.GrantToCharacter(characterId, source.ItemIndex, itemClass, destination, destinationPosition, (ushort)count);

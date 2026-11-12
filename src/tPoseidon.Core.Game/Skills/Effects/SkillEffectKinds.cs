@@ -305,6 +305,8 @@ public sealed record SkillEffectKind(
 
     public bool SilentEnd { get; init; }
 
+    public bool EndsWithOwner { get; init; }
+
     public string? ThirdAmountColumn { get; init; }
 
     public IReadOnlyList<int> Stats => new[] { Stat, SecondStat, ThirdStat }.Where(stat => stat != SkillEffectKinds.NoStat).ToArray();
@@ -877,11 +879,13 @@ public static class SkillEffectKinds
         {
             HeaderClass = -1, GrantsTm = false, Periodic = SkillPeriodicHit.KnockMove,
             FixedDurationMs = KnockSkills.ChargingMoveMs, PeriodMs = KnockSkills.ChargingMoveMs,
+            EndsWithOwner = true,
         },
         new(KnockSkills.PowerChargingDo, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeThenPoint, RatioColumn, OnTarget: true)
         {
             HeaderClass = -1, GrantsTm = false, Periodic = SkillPeriodicHit.KnockMove,
             FixedDurationMs = KnockSkills.PowerChargingMoveMs, PeriodMs = KnockSkills.PowerChargingMoveMs,
+            EndsWithOwner = true,
         },
         new(KnockSkills.MassiveAttack, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeThenPoint, RatioColumn, OnTarget: true)
         {
@@ -1146,4 +1150,8 @@ public static class SkillEffectKinds
             });
 
     public static SkillEffectKind? Find(int actionId) => Kinds.TryGetValue(actionId, out var kind) ? kind : null;
+
+    private static readonly HashSet<int> FieldChildren = Kinds.Values.Where(kind => kind.FieldChild != 0).Select(kind => kind.FieldChild).ToHashSet();
+
+    public static bool IsFieldChild(int actionId) => FieldChildren.Contains(actionId);
 }

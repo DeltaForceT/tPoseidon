@@ -13,4 +13,5 @@ public enum MonsterAType : byte
     LowHarconAttackMonster = 9,
     LowHarconAttackBosMonster = 10,
     TestMonsterAlias = 11,
+    HarconTurret = 15,
 }

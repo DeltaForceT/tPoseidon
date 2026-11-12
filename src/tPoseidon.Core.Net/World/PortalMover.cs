@@ -15,8 +15,8 @@ public static class PortalMover
     public static async Task<PortalMoveOutcome> MoveAsync(
         IPortalLookup lookup,
         ushort map,
-        (int X, int Y) standing,
-        (int X, int Y) previous,
+        (int X, int Y) current,
+        int margin,
         Func<Task<bool>> tryWalk,
         Func<PortalDestination, Task<bool>> warp)
     {
@@ -24,7 +24,7 @@ public static class PortalMover
         ArgumentNullException.ThrowIfNull(tryWalk);
         ArgumentNullException.ThrowIfNull(warp);
         if (await tryWalk().ConfigureAwait(false)) return PortalMoveOutcome.Walking;
-        var destination = lookup.FindDestination(map, standing.X, standing.Y) ?? lookup.FindDestination(map, previous.X, previous.Y);
+        var destination = lookup.FindDestinationWithin(map, current.X, current.Y, margin);
         if (destination is null) return PortalMoveOutcome.NoPortal;
         return await warp(destination).ConfigureAwait(false) ? PortalMoveOutcome.Warped : PortalMoveOutcome.WarpRefused;
     }

@@ -15,6 +15,7 @@ public static class ClientFolder
     public const string AutomaticService = "auto";
     public const string EnglishService = "gsp";
     public const string KoreanService = "korean";
+    public const string ServiceVariable = "MT_CLIENT_SERVICE";
     public const int KoreanTextCharacters = 1000;
 
     private const string DataFolderName = "data";

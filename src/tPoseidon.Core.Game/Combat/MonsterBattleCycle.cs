@@ -526,12 +526,13 @@ public sealed class MonsterBattleCycle
             return;
         }
 
+        var skillOnly = SkillOnly(monster);
         if (fight.Tactics is { Usable: true } tactics
             && tactics.Pick(sum => _rng.Next(sum)) is { ActionType: MonsterTactics.CastActionType } tactic
             && ((target.Monster && _castableOnMonster is not null ? _castableOnMonster : _castable)?.Invoke(tactic.SkillId, tactic.SkillLevel) ?? false)
             && !IsCooling(monster.EntityId, tactic.SkillId, now))
         {
-            var timing = _skillTimingOf?.Invoke(tactic.SkillId, tactic.SkillLevel) ?? default;
+            var timing = skillOnly ? default : _skillTimingOf?.Invoke(tactic.SkillId, tactic.SkillLevel) ?? default;
             var cast = new PendingCast(tactic.SkillId, tactic.SkillLevel, tactic.Speech, timing.CoolMs);
             fight.Settled = true;
             if (timing.CastMs > 0)
@@ -542,6 +543,12 @@ public sealed class MonsterBattleCycle
                 return;
             }
             CompleteCast(monster, fight, definition, reach, cast, now, events);
+            if (skillOnly) fight.NextSwingAt = now;
+            return;
+        }
+        if (skillOnly)
+        {
+            fight.Settled = true;
             return;
         }
 
@@ -650,6 +657,8 @@ public sealed class MonsterBattleCycle
         }
         return false;
     }
+
+    public static bool SkillOnly(MonsterEntity monster) => monster.Atype == MonsterAType.HarconTurret;
 
     private bool IsCooling(ushort monsterEntityId, int skillId, DateTimeOffset now) =>
         _skillCooling.TryGetValue((monsterEntityId, skillId), out var until) && now < until;

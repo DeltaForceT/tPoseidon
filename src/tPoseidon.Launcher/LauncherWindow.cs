@@ -29,6 +29,8 @@ public sealed class LauncherWindow : Window
     private readonly Button _signOut = Small("Not you? Sign out");
     private readonly StackPanel _links = new() { Orientation = Orientation.Horizontal, Spacing = 8 };
     private readonly TextBox _clientFolder = Field("Folder with Trickster.bin");
+    private readonly DispatcherTimer _statusTimer;
+    private bool _polling;
     private readonly TextBlock _clientStatus = Tokens.Caption();
     private readonly ComboBox _servers = new() { Height = FieldHeight, Width = 280, MinHeight = 0 };
     private readonly ComboBox _displayResolution = new() { Height = FieldHeight, MinHeight = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -126,6 +128,28 @@ public sealed class LauncherWindow : Window
         Refresh();
         SettingsOpen = _model.NeedsSetup;
         Opened += async (_, _) => await RefreshChannelAsync().ConfigureAwait(true);
+        _statusTimer = new DispatcherTimer { Interval = LauncherModel.StatusInterval };
+        _statusTimer.Tick += async (_, _) => await PollStatusAsync().ConfigureAwait(true);
+        Opened += (_, _) => _statusTimer.Start();
+        Closed += (_, _) => _statusTimer.Stop();
+    }
+
+    internal async Task PollStatusAsync()
+    {
+        if (_polling)
+        {
+            return;
+        }
+
+        _polling = true;
+        try
+        {
+            await _model.PollStatusAsync(CancellationToken.None).ConfigureAwait(true);
+        }
+        finally
+        {
+            _polling = false;
+        }
     }
 
     public bool SettingsOpen

@@ -22,6 +22,7 @@ internal sealed class PetCollectionRun
     public ulong PetUid { get; set; }
     public ulong FoodUid { get; set; }
     public int FoodLeft { get; set; }
+    public ushort Filters { get; set; }
     public DateTimeOffset NextTickAt { get; set; }
 }
 
@@ -36,6 +37,7 @@ internal sealed class PetCollectionController
     private readonly string _logTag;
     private readonly ConcurrentDictionary<ulong, PetCollectionRun> _runs = new();
     private readonly Dictionary<ushort, DrillLoot?> _loot = new();
+    private DropEventItems? _eventItems;
     private readonly Random _rng = new();
     private readonly object _rngGate = new();
 
@@ -92,19 +94,19 @@ internal sealed class PetCollectionController
             var now = DateTimeOffset.UtcNow;
             var petUid = BagItemIds.Stored(frame.PetWireUid);
             var foodUid = BagItemIds.Stored(frame.FoodWireUid);
+            var food = Slot(character.CharacterId, frame.FoodWireUid, now);
             var request = new PetCollectionStartRequest(
                 run.State,
                 player.Stats?.Level ?? character.Level,
                 player.IsDead,
                 Slot(character.CharacterId, frame.PetWireUid, now),
-                Slot(character.CharacterId, frame.FoodWireUid, now),
-                frame.FoodCount,
+                food,
                 player.MapId,
                 run.Bag.Count);
             var code = PetCollectionRules.CheckStart(request, _tables(), out var plan);
             if (code != PetCollectionRules.Ok || plan is null)
             {
-                Log(player, $"start refused with code {code}: pet 0x{frame.PetWireUid:X} food 0x{frame.FoodWireUid:X} x{frame.FoodCount} on map {player.MapId}");
+                Log(player, $"start refused with code {code}: pet 0x{frame.PetWireUid:X} food 0x{frame.FoodWireUid:X} x{food?.Stack ?? 0} filters 0x{frame.Filters:X2} on map {player.MapId}");
                 await SendAsync(player, Opcode.S2C_PET_COLLECTION_START_REFUSED, PetCollectionFrames.Code(code)).ConfigureAwait(false);
                 return;
             }
@@ -112,10 +114,11 @@ internal sealed class PetCollectionController
             run.Plan = plan;
             run.PetUid = petUid;
             run.FoodUid = foodUid;
-            run.FoodLeft = frame.FoodCount;
+            run.FoodLeft = PetCollectionRules.FoodCount(food!, plan.Food);
+            run.Filters = frame.Filters;
             run.NextTickAt = now + plan.TickPeriod;
             await SendAsync(player, Opcode.S2C_PET_COLLECTION_STARTED, Array.Empty<byte>()).ConfigureAwait(false);
-            Log(player, $"pet {plan.PetItemId} collects with {frame.FoodCount} x {plan.Food.ItemId} every {plan.Food.SpeedSeconds} s on map {player.MapId}");
+            Log(player, $"pet {plan.PetItemId} collects with {run.FoodLeft} x {plan.Food.ItemId} every {plan.Food.SpeedSeconds} s on map {player.MapId}, filters 0x{frame.Filters:X2}");
         }
         finally
         {
@@ -217,7 +220,7 @@ internal sealed class PetCollectionController
                 placed = new BagOperation(QuestResultFrames.Created, definition.ObjectClass, (uint)entry.ItemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);
             }
             run.State = PetCollectionRules.AfterBagChange(run.State, run.Bag.Count);
-            await SendAsync(player, Opcode.S2C_PET_COLLECTION_GOT, PetCollectionFrames.Moved(Removal(entry), placed)).ConfigureAwait(false);
+            await SendAsync(player, Opcode.S2C_PET_COLLECTION_GOT, PetCollectionFrames.Moved(placed, Removal(entry))).ConfigureAwait(false);
             Log(player, $"item {entry.ItemId} x{entry.Count} moved from the pet bag; {run.Bag.Count} left (state {run.State})");
         }
         finally
@@ -280,21 +283,34 @@ internal sealed class PetCollectionController
                 return;
             }
             PetCollectionDraw? draw;
-            lock (_rngGate) draw = PetCollectionRules.Draw(plan, PetCollectionRules.DepthPenalty(tables, player.MapId, _rng.Next), _rng.Next, () => GroundItem(player.MapId));
+            lock (_rngGate) draw = PetCollectionRules.Draw(plan, PetCollectionRules.DepthPenalty(tables, player.MapId, _rng.Next), _rng.Next, () => GroundItem(player.MapId),
+                PetCollectionRules.ExAllowed(run.Filters));
             var spent = SpendOne(food);
             run.FoodLeft--;
-            if (draw is { } drawn && _catalog.GetById(drawn.ItemId) is { IsMoney: false } definition)
+            if (draw is { } drawn && _catalog.GetById(drawn.ItemId) is { IsMoney: false } definition && !PetCollectionRules.Excluded(run.Filters, definition, EventItems().IsEventItem(drawn.ItemId)))
             {
-                var collected = _store.Add(character.CharacterId, drawn.ItemId, definition.ObjectClass, (ushort)Math.Clamp(drawn.Count, 1, ushort.MaxValue));
-                run.Bag.Add(collected);
-                var created = new BagOperation(QuestResultFrames.Created, collected.ItemClass, (uint)collected.ItemId, collected.CollectedUid, collected.Count);
-                await SendAsync(player, Opcode.S2C_PET_COLLECTION_COLLECTED, PetCollectionFrames.Collected(created, spent)).ConfigureAwait(false);
-                Log(player, $"pet collected {(drawn.IsExItem ? "EX " : string.Empty)}item {drawn.ItemId} x{collected.Count}; {run.Bag.Count} of {plan.Pet.BagSize}, food left {run.FoodLeft}");
+                var count = (ushort)Math.Clamp(drawn.Count, 1, ushort.MaxValue);
+                var stackIndex = definition.IsStackable ? run.Bag.FindIndex(held => held.ItemId == drawn.ItemId && held.Count <= ushort.MaxValue - count) : -1;
+                BagOperation change;
+                if (stackIndex >= 0 && _store.SetCount(character.CharacterId, run.Bag[stackIndex].CollectedUid, (ushort)(run.Bag[stackIndex].Count + count)))
+                {
+                    var merged = run.Bag[stackIndex] with { Count = (ushort)(run.Bag[stackIndex].Count + count) };
+                    run.Bag[stackIndex] = merged;
+                    change = new BagOperation(QuestResultFrames.StackChanged, merged.ItemClass, (uint)merged.ItemId, merged.CollectedUid, merged.Count);
+                }
+                else
+                {
+                    var collected = _store.Add(character.CharacterId, drawn.ItemId, definition.ObjectClass, count);
+                    run.Bag.Add(collected);
+                    change = new BagOperation(QuestResultFrames.Created, collected.ItemClass, (uint)collected.ItemId, collected.CollectedUid, collected.Count);
+                }
+                await SendAsync(player, Opcode.S2C_PET_COLLECTION_COLLECTED, PetCollectionFrames.Collected(spent, change)).ConfigureAwait(false);
+                Log(player, $"pet collected {(drawn.IsExItem ? "EX " : string.Empty)}item {drawn.ItemId} x{count}; {run.Bag.Count} of {plan.Pet.BagSize}, food left {run.FoodLeft}");
             }
             else
             {
-                await SendAsync(player, Opcode.S2C_ITEM_ADDED, QuestResultFrames.ItemOperations(new[] { spent })).ConfigureAwait(false);
-                Log(player, $"pet found nothing; food left {run.FoodLeft}");
+                await SendAsync(player, Opcode.S2C_PET_COLLECTION_COLLECTED, PetCollectionFrames.Collected(spent, null)).ConfigureAwait(false);
+                Log(player, draw is { } kept ? $"pet left item {kept.ItemId} (filtered); food left {run.FoodLeft}" : $"pet found nothing; food left {run.FoodLeft}");
             }
             if (PetCollectionRules.StopsAfterTick(run.FoodLeft, run.Bag.Count, plan.Pet))
             {
@@ -336,8 +352,12 @@ internal sealed class PetCollectionController
             _loot[mapId] = loot;
         }
         var itemId = loot?.Pop(_ => false, _rng) ?? PetCollectionRules.NothingDrawn;
-        return itemId == PetCollectionRules.NothingDrawn ? (itemId, 0) : (itemId, _itemManager.NewStack(itemId, 1));
+        if (itemId == PetCollectionRules.NothingDrawn) return (itemId, 0);
+        if (EventItems().DrillReplacement(DateTime.Now, _rng.Next(DropEventItems.RollScale)) is { } eventItem) return (eventItem, 1);
+        return (itemId, _itemManager.NewStack(itemId, 1));
     }
+
+    private DropEventItems EventItems() => _eventItems ??= new DropEventItems(_drillTables().EventItems);
 
     private BagOperation SpendOne(Item food)
     {

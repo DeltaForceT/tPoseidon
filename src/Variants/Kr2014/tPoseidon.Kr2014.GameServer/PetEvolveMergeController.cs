@@ -110,7 +110,7 @@ internal sealed class PetEvolveMergeController
         };
         if (await ApplyAsync(player, character.CharacterId, rows, Opcode.S2C_PET_EVOLVE_REFUSED, PetEvolveRules.Failed).ConfigureAwait(false) is not { } applied) return;
         Store(player, applied, evolved, pet.ItemUid);
-        await SendAsync(player, Opcode.S2C_PET_EVOLVE_RESULT, PetLevelUpFrames.Result(applied.Items.Select(EquipUpgradeOperations.ToBag).ToList())).ConfigureAwait(false);
+        await SendAsync(player, Opcode.S2C_PET_EVOLVE_RESULT, PetLevelUpFrames.Result(EquipUpgradeOperations.ToBagWithProperties(applied.Items, evolved))).ConfigureAwait(false);
         Log(player, $"pet {pet.ItemIndex} evolved into {row.ResultId} with {row.CatalystCount} x {row.CatalystItemId}");
     }
 
@@ -171,7 +171,7 @@ internal sealed class PetEvolveMergeController
         if (await ApplyAsync(player, character.CharacterId, rows, Opcode.S2C_PET_MERGE_REFUSED, PetMergeRules.Failed).ConfigureAwait(false) is not { } applied) return;
         Store(player, applied, merged, first.ItemUid, second.ItemUid);
         await _timedGrants.AnnounceAsync(player, applied).ConfigureAwait(false);
-        await SendAsync(player, Opcode.S2C_PET_MERGE_RESULT, PetLevelUpFrames.Result(applied.Items.Select(EquipUpgradeOperations.ToBag).ToList())).ConfigureAwait(false);
+        await SendAsync(player, Opcode.S2C_PET_MERGE_RESULT, PetLevelUpFrames.Result(EquipUpgradeOperations.ToBagWithProperties(applied.Items, merged))).ConfigureAwait(false);
         Log(player, $"pets 0x{first.ItemUid:X} and 0x{second.ItemUid:X} merged (grade {grade})");
     }
 

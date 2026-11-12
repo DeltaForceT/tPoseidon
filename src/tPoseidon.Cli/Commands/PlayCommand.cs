@@ -58,7 +58,11 @@ internal static class PlayCommand
         var password = prompt.AskSecret($"Password for {account} on {server}");
         var endpoint = PlayTicketClient.Endpoint(server, settings.Ports.Shop, commandLine.Option("web-url"));
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-        await PlayTicketClient.RequestAsync(http, endpoint, account, password, ct).ConfigureAwait(false);
+        var serverService = await PlayTicketClient.RequestAsync(http, endpoint, account, password, ct).ConfigureAwait(false);
+        if (serverService is not null && string.Equals(settings.Launch.ServiceName, ClientFolder.AutomaticService, StringComparison.OrdinalIgnoreCase))
+        {
+            settings.Launch.ServiceName = serverService;
+        }
 
         settings.Network.PublicAddress = server;
         settings.Launch.Account = account;

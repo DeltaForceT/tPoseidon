@@ -72,12 +72,24 @@ public static class Installer
             services.Registry.Write(plan.Uninstall);
             registered = true;
         }
+        catch (InstallerException)
+        {
+            Undo(plan, services, created, registered, deleteFolder: !existed);
+            throw;
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
         {
             Undo(plan, services, created, registered, deleteFolder: !existed);
             throw new InstallerException($"The installation could not be finished: {ex.Message}", ex);
         }
     }
+
+    public static string ErrorText(Exception? error) => error switch
+    {
+        InstallerException or IOException or UnauthorizedAccessException => error.Message,
+        null => "The installer stopped without saying why. Try again.",
+        _ => $"The installer hit an unexpected error and stopped: {error.Message}",
+    };
 
     public static void Uninstall(InstallPlan plan, InstallerServices services)
     {

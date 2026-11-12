@@ -77,6 +77,7 @@ public sealed class RefineService
     {
         IsOpen = true;
         Phantom = false;
+        await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
         await SendAsync(Opcode.S2C_REFINE_OPENED, Array.Empty<byte>(), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   refine window opened");
         return NpcScript.Silent;
@@ -86,6 +87,7 @@ public sealed class RefineService
     {
         IsOpen = true;
         Phantom = true;
+        await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
         await _ctx.SendFrameAsync(PhantomOpened, Array.Empty<byte>(), randKey: NextRandKey(), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   phantom academy refine window opened");
         return NpcScript.Silent;

@@ -14,11 +14,11 @@ public static class SoulSeedFrames
     public const byte Granted = 1;
     public const byte NotGranted = 0;
 
-    public static byte[] Planted(SoulSeedRecord record)
+    public static byte[] Planted(SoulSeedRecord record, bool justPlanted)
     {
         ArgumentNullException.ThrowIfNull(record);
         var w = new PacketWriter(1 + RecordSize);
-        w.WriteByte(record.Planted ? (byte)1 : (byte)0);
+        w.WriteByte(record.Planted && justPlanted ? (byte)1 : (byte)0);
         WriteRecord(w, record);
         return w.ToArray();
     }

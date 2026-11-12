@@ -25,6 +25,8 @@ internal sealed class SoulController
     private readonly Random _rng = new();
     private readonly object _rngGate = new();
 
+    public Func<InGameSessionState, Task>? SoulRanOut { get; set; }
+
     public SoulController(
         MasterSoul master,
         MasterEquipStatusUpgrade upgrades,
@@ -96,6 +98,7 @@ internal sealed class SoulController
         };
         player.Upgrade = kind;
         player.UpgradeBusy = false;
+        await SendAsync(player, Opcode.C2S_TRIGGER_75, Array.Empty<byte>()).ConfigureAwait(false);
         await SendAsync(player, opcode, Array.Empty<byte>()).ConfigureAwait(false);
         Log(player, $"{kind} window opened");
         return NpcScript.Silent;
@@ -136,10 +139,10 @@ internal sealed class SoulController
         lock (hold.Gate)
         {
             var row = hold.Guardian(guardian.GuardianUid) ?? SoulRules.Fresh(guardian.GuardianUid, DateTimeOffset.UtcNow);
-            code = SoulRules.CheckRegister(true, source is not null, isSource, count, source?.Stack ?? 0, SoulRules.HasSource(row));
+            code = SoulRules.CheckRegister(true, source is not null, isSource, count, source?.Stack ?? 0, SoulRules.HasSource(row), SoulRules.MinimumSourceCount(row, tables.Info));
             if (code == SoulRules.Ok && source is not null)
             {
-                saved = row with { SourceItemUid = source.ItemUid, SourceCount = count };
+                saved = SoulRules.Restarted(row, DateTimeOffset.UtcNow) with { SourceItemUid = source.ItemUid, SourceCount = count };
                 hold.Set(saved);
             }
         }
@@ -164,7 +167,7 @@ internal sealed class SoulController
         GuardianSoulRow cleared;
         lock (hold.Gate)
         {
-            cleared = SoulRules.WithoutSource(hold.Guardian(guardian.GuardianUid) ?? SoulRules.Fresh(guardian.GuardianUid, DateTimeOffset.UtcNow));
+            cleared = SoulRules.Restarted(SoulRules.WithoutSource(hold.Guardian(guardian.GuardianUid) ?? SoulRules.Fresh(guardian.GuardianUid, DateTimeOffset.UtcNow)), DateTimeOffset.UtcNow);
             hold.Set(cleared);
         }
         await _master.SaveGuardianAsync(character.CharacterId, cleared, default).ConfigureAwait(false);
@@ -310,7 +313,7 @@ internal sealed class SoulController
             code = SoulRules.CheckCharge(player.Upgrade == UpgradeWindow.SoulCharge && !hold.Busy, soulItem, amount, hold.Soul);
             if (code == SoulRules.Ok)
             {
-                charge = SoulRules.Charge(SoulRules.PropertyValue(stored, SoulRules.LevelType, SoulRules.LevelId), SoulRules.PropertyValue(stored, SoulRules.RemainType, SoulRules.RemainId), amount);
+                charge = SoulRules.Charge(SoulRules.SoulLevel(stored), SoulRules.PropertyValue(stored, SoulRules.RemainType, SoulRules.RemainId), amount);
                 hold.Soul -= (uint)charge.Added;
             }
             soul = hold.Soul;
@@ -384,8 +387,8 @@ internal sealed class SoulController
         var definition = target is null ? null : _catalog.GetById(target.ItemIndex);
         var soulItem = target is not null && definition is not null && _tables().Equipment.ContainsKey(target.ItemIndex);
         var stored = target is null ? Array.Empty<ItemProperty>() : _properties.ForItem(target.ItemUid);
-        var level = SoulRules.PropertyValue(stored, SoulRules.LevelType, SoulRules.LevelId);
-        var row = definition is null ? null : SoulRules.IntensifyRow(_tables().Intensify, level + 1, definition.MinLevel);
+        var level = SoulRules.SoulLevel(stored);
+        var row = definition is null ? null : SoulRules.IntensifyRow(_tables().Intensify, level, definition.MinLevel);
         var offered = Offered(character.CharacterId, materialUids.Where(uid => uid != targetUid).ToArray());
         var hasMaterials = row is not null && SoulRules.HasMaterials(row.Materials, offered);
         if (!TryBeginSoulSpend(player, hold, UpgradeWindow.SoulReinforce,
@@ -510,6 +513,7 @@ internal sealed class SoulController
             .Where(held => tables.Equipment.ContainsKey(held.Item.ItemIndex))
             .ToList();
         var drained = new List<SoulItemInstance>();
+        var ranOut = false;
         foreach (var held in worn)
         {
             var entry = tables.Equipment[held.Item.ItemIndex];
@@ -525,6 +529,7 @@ internal sealed class SoulController
             var remaining = SoulRules.PropertyValue(stored, SoulRules.RemainType, SoulRules.RemainId);
             if (remaining <= 0) continue;
             var left = SoulRules.Drain(remaining, entry.DecreaseSoul);
+            if (left <= 0) ranOut = true;
             _properties.Replace(held.Item.ItemUid, SoulRules.WithProperty(stored, SoulRules.RemainType, SoulRules.RemainId, left));
             drained.Add(new SoulItemInstance(BagItemIds.OnWire(held.Item.ItemUid), (uint)held.Item.ItemIndex, new ItemProperty(SoulRules.RemainType, SoulRules.RemainId, left, 0)));
         }
@@ -532,6 +537,7 @@ internal sealed class SoulController
         if (drained.Count == 0) return;
         await SendAsync(player, Opcode.S2C_SOUL_ITEM_PROPERTIES, SoulFrames.PropertyUpdates(drained)).ConfigureAwait(false);
         Log(player, $"soul drained on {drained.Count} worn items on map {player.MapId}");
+        if (ranOut && SoulRanOut is { } ranOutHandler) await ranOutHandler(player).ConfigureAwait(false);
     }
 
     private static bool TryBeginSoulSpend(InGameSessionState player, SoulHold hold, UpgradeWindow window, Func<uint, byte> check, out byte code)
@@ -589,7 +595,7 @@ internal sealed class SoulController
                 (ushort)Math.Clamp(row is not null && SoulRules.HasSource(row) ? row.SourceCount : 0, 0, ushort.MaxValue),
                 (uint)(tables.Info?.PotionItemId ?? 0),
                 (ushort)Math.Clamp(row?.PotionsReady ?? 0, 0, ushort.MaxValue),
-                0);
+                row is not null && row.Penalty ? (byte)1 : (byte)0);
         }
         await SendAsync(player, Opcode.S2C_SOUL_MANAGE_STATUS, SoulFrames.ManageStatus(status, potion)).ConfigureAwait(false);
     }

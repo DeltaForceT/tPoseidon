@@ -24,6 +24,16 @@ public static class QuestResultFrames
     public const int RareItemExtraBytes = 4;
     public const byte NoOptions = 0;
 
+    public static List<BagOperation> InApplyOrder(IReadOnlyList<BagOperation> taken, IReadOnlyList<BagOperation> granted)
+    {
+        ArgumentNullException.ThrowIfNull(taken);
+        ArgumentNullException.ThrowIfNull(granted);
+        var operations = new List<BagOperation>(taken.Count + granted.Count);
+        operations.AddRange(taken);
+        operations.AddRange(granted);
+        return operations;
+    }
+
     public static byte[] Result(
         IReadOnlyList<BagOperation> operations,
         IReadOnlyList<(uint ItemId, ushort Count)> rewards,
