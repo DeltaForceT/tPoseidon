@@ -36,6 +36,7 @@ internal sealed class PetReinforceController
     {
         ArgumentNullException.ThrowIfNull(player);
         player.Upgrade = UpgradeWindow.PetReinforce;
+        await SendAsync(player, Opcode.C2S_TRIGGER_75, Array.Empty<byte>()).ConfigureAwait(false);
         await SendAsync(player, Opcode.S2C_PET_REINFORCE_OPENED, Array.Empty<byte>()).ConfigureAwait(false);
         Log(player, "reinforce window opened");
         return NpcScript.Silent;
