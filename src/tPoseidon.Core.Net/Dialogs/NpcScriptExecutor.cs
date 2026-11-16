@@ -679,6 +679,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
                 result = await NpcSkillStartAsync(args, ct).ConfigureAwait(false);
                 if (result == NpcScript.Silent)
                 {
+                    await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
                     Close();
                     return;
                 }
