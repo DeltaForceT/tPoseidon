@@ -304,5 +304,22 @@ public sealed class SoulSeedGrowth
         return true;
     }
 
+    public void SetBuffValues(int group, int v0, int v1, int v2)
+    {
+        lock (_gate)
+        {
+            Array.Clear(_buffValues);
+            var offset = group * 3;
+            if (offset >= 0 && offset + 2 < _buffValues.Length)
+            {
+                _buffValues[offset] = v0;
+                _buffValues[offset + 1] = v1;
+                _buffValues[offset + 2] = v2;
+            }
+        }
+    }
+
+
+
     private int TotalOf(int type) => _saved[type] + _session[type];
 }
