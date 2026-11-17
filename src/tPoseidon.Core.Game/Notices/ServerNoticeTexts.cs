@@ -27,12 +27,12 @@ public sealed class ServerNoticeTexts
         _jobNames = jobNames ?? throw new ArgumentNullException(nameof(jobNames));
     }
 
-    public SystemNotice? JobChanged(byte tier, ushort characterType, string playerName)
+    public SystemNotice? JobChanged(byte tier, ushort job, string playerName)
     {
         ArgumentNullException.ThrowIfNull(playerName);
         if (tier != AnnouncedJobTier) return null;
         if (!_changeJob.TryGetValue(PrefixRow, out var prefix) || !_changeJob.TryGetValue(JobChangeRow, out var template)) return null;
-        if (!_jobNames.TryGetValue(characterType, out var jobName)) return null;
+        if (!_jobNames.TryGetValue(job, out var jobName)) return null;
         return new SystemNotice(prefix, Fill(template, playerName, jobName));
     }
 

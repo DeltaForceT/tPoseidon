@@ -543,6 +543,7 @@ public enum Opcode : ushort
         C2S_PORTAL_REGION_MOVE  = 0x04B1,
         S2C_PORTAL_REGION_MOVE_RESULT = 0x04B2,
         S2C_MONSTER_VAMPIRIC_HEAL = 0x04E4,
+        S2C_MONSTER_ABSORB_HEAL = 0x02CF,
         S2C_GUILD_RANK_BONUS    = 0x037C,
         S2C_BOSS_APPEARED       = 0x02AB,
         S2C_BOSS_DIED           = 0x02AC,

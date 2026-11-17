@@ -28,6 +28,10 @@ public sealed class BossLifeCycle
 
     public Func<MonsterEntity, bool>? PlayerNear { get; set; }
 
+    public Func<MonsterEntity, bool>? HasTarget { get; set; }
+
+    public Func<MonsterEntity, BossSkillSlot, bool>? CanCast { get; set; }
+
     public IReadOnlyList<ushort> ChildrenOf(ushort bossEntityId) =>
         _families.TryGetValue(bossEntityId, out var family) ? family.Children.ToArray() : Array.Empty<ushort>();
 
@@ -41,13 +45,18 @@ public sealed class BossLifeCycle
             var elapsed = _lastTickMs.TryGetValue(boss.EntityId, out var last) ? (int)Math.Min(nowMs - last, int.MaxValue) : 0;
             _lastTickMs[boss.EntityId] = nowMs;
             var engaged = boss.SnapshotAttackers().Count > 0
+                || HasTarget?.Invoke(boss) == true
                 || (boss.Atype == MonsterAType.NonresidentBossMonster && PlayerNear?.Invoke(boss) == true);
             var family = FamilyOf(boss.EntityId);
             family.Children.RemoveAll(child => _monsters.Get(child) is not { IsDead: false });
             var called = boss.TickBoss(
-                nowMs, elapsed, engaged, _monsters.GetByMap(boss.MapId).Count, family.Children.Count, _rng.Next(2) == 0);
+                nowMs, elapsed, engaged, _monsters.GetByScene(boss.MapId, boss.InstanceKey).Count, family.Children.Count, _rng.Next(2) == 0);
             if (called) Summon(boss, life.Profile, family);
-            boss.TickBossTimers(elapsed, engaged, NextRoll);
+            var skills = life.Profile.Skills;
+            var ready = skills is { Count: > 0 } && CanCast is { } canCast
+                ? skills.Select(slot => canCast(boss, slot)).ToArray()
+                : null;
+            boss.TickBossTimers(elapsed, HasTarget?.Invoke(boss) ?? engaged, NextRoll, ready is null ? null : slot => ready[slot]);
             DespawnWhenIdle(boss, life.Profile, family, elapsed, engaged);
         }
         foreach (var gone in _families.Keys.Where(id => !live.Contains(id)).ToArray())
@@ -80,14 +89,14 @@ public sealed class BossLifeCycle
             var shared = slots[_rng.Next(int.MaxValue) & SummonSlotMask];
             for (var i = 0; i < count; i++)
             {
-                if (_monsters.GetByMap(boss.MapId).Count >= BossLife.SummonMapMonsterLimit
+                if (_monsters.GetByScene(boss.MapId, boss.InstanceKey).Count >= BossLife.SummonMapMonsterLimit
                     || family.Children.Count >= profile.SummonTotalCount)
                 {
                     continue;
                 }
                 var type = profile.SummonBType == 0 ? slots[_rng.Next(int.MaxValue) & SummonSlotMask] : shared;
                 if (!TryPlace(boss, out var x, out var y)) continue;
-                if (_monsters.Spawn(type, boss.MapId, x, y) is not { } child) continue;
+                if (_monsters.Spawn(type, boss.MapId, x, y, spawnPointId: null, explicitEntityId: null, regionId: 0, instanceKey: boss.InstanceKey) is not { } child) continue;
                 family.Children.Add(child.EntityId);
                 _monsters.BossEvents.Enqueue(new BossEvent(
                     BossEventKind.ChildSpawned, child.EntityId, boss.MapId, 0, false, string.Empty, boss.EntityId));

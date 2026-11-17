@@ -20,7 +20,7 @@ public static class ServerDataStep
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(settings);
-        var libconfig = ClientFolder.LibConfigFor(settings);
+        var libconfig = ServerClientData.Ensure(paths, settings);
         var mapFolder = ClientFolder.MapFolder(settings.ClientFolder);
         var clientExecutable = Path.Combine(settings.ClientFolder, settings.ClientExecutable);
         if (!RunningClient.IsRunning(clientExecutable))
@@ -88,7 +88,7 @@ public static class ServerDataStep
         }
 
         var lines = File.ReadAllLines(stamp);
-        var libconfig = ClientFolder.LibConfigFor(settings);
+        var libconfig = ServerClientData.LibConfigOrClient(paths, settings);
         return lines.Length > 1 && File.Exists(libconfig) && string.Equals(lines[1].Trim(), LibConfigHash(libconfig), StringComparison.Ordinal);
     }
 

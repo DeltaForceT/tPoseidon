@@ -11,11 +11,14 @@ public readonly record struct VampiricHealNotice(
     bool BossFlag,
     int Healed);
 
+public readonly record struct AbsorbHealNotice(ushort MonsterEntityId, ushort MapId, int Healed);
+
 public sealed class MonsterVampiricHeal : IMonsterDamageObserver
 {
     public const double MaxHpDivisor = 100.0;
 
     private readonly ConcurrentQueue<VampiricHealNotice> _notices = new();
+    private readonly ConcurrentQueue<AbsorbHealNotice> _absorbed = new();
 
     public Func<ushort, bool> HasVampiricState { get; set; } = static _ => false;
 
@@ -40,5 +43,13 @@ public sealed class MonsterVampiricHeal : IMonsterDamageObserver
             monster.EntityId, monster.MapId, (int)hp, monster.HpBarsField, IsBossFlagged(monster.Atype), healed));
     }
 
+    public void Absorbed(MonsterEntity monster, long healed)
+    {
+        if (healed <= 0) return;
+        _absorbed.Enqueue(new AbsorbHealNotice(monster.EntityId, monster.MapId, (int)Math.Min(healed, int.MaxValue)));
+    }
+
     public bool TryTake(out VampiricHealNotice notice) => _notices.TryDequeue(out notice);
+
+    public bool TryTakeAbsorbed(out AbsorbHealNotice notice) => _absorbed.TryDequeue(out notice);
 }

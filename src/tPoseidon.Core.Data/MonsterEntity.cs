@@ -90,6 +90,11 @@ public sealed class MonsterEntity
         lock (_lock) return now < _heldUntil;
     }
 
+    public void ReleaseHold()
+    {
+        lock (_lock) _heldUntil = default;
+    }
+
     public (ushort X, ushort Y) HoldUntil(DateTimeOffset until, DateTimeOffset now)
     {
         lock (_lock)
@@ -280,6 +285,26 @@ public sealed class MonsterEntity
         }
     }
 
+    public bool EndMoveAt(ushort x, ushort y)
+    {
+        lock (_lock)
+        {
+            var stop = Array.FindIndex(_movePoints, point => point.X == x && point.Y == y);
+            if (stop < 0 || stop == _movePoints.Length - 1) return false;
+            var fullLength = PathLength(_moveFromX, _moveFromY, _movePoints);
+            var kept = _movePoints[..(stop + 1)];
+            if (fullLength > 0)
+            {
+                var fullMs = (_moveEndsAt - _moveStartedAt).TotalMilliseconds;
+                _moveEndsAt = _moveStartedAt.AddMilliseconds(Math.Ceiling(fullMs * PathLength(_moveFromX, _moveFromY, kept) / fullLength));
+            }
+            _movePoints = kept;
+            _curX = x;
+            _curY = y;
+            return true;
+        }
+    }
+
     public long CurrentHp
     {
         get { lock (_lock) return _hp; }
@@ -409,10 +434,11 @@ public sealed class MonsterEntity
         get { lock (_lock) return Boss?.Guarded ?? false; }
     }
 
-    public void TickBossTimers(int elapsedMs, bool engaged, Func<int> roll)
+    public void TickBossTimers(int elapsedMs, bool hasTarget, Func<int> roll, Func<int, bool>? castable = null)
     {
         ArgumentNullException.ThrowIfNull(roll);
-        lock (_lock) Boss?.TickTimers(this, elapsedMs, engaged, _hp < MaxHp, roll);
+        castable ??= static _ => true;
+        lock (_lock) Boss?.TickTimers(this, elapsedMs, hasTarget, _hp < MaxHp, roll, castable);
     }
 
     private bool DeadLocked => _hp <= 0 && (Boss?.Exhausted ?? true);
@@ -483,6 +509,20 @@ public sealed class MonsterEntity
         }
     }
 
+    public long Absorb(long amount)
+    {
+        if (amount <= 0) return 0;
+        long hp;
+        lock (_lock)
+        {
+            if (DeadLocked) return 0;
+            _hp = Math.Min(_hp + amount, MaxHp);
+            hp = _hp;
+        }
+        DamageObserver?.Absorbed(this, amount);
+        return hp;
+    }
+
     public long Heal(long amount)
     {
         lock (_lock)
@@ -490,36 +530,6 @@ public sealed class MonsterEntity
             if (_hp <= 0) return 0;
             _hp = Math.Min(_hp + amount, MaxHp);
             return _hp;
-        }
-    }
-
-    private int _guardCharges;
-    private DateTimeOffset _guardUntil;
-
-    public void RaiseGuard(int charges, DateTimeOffset until)
-    {
-        lock (_lock)
-        {
-            _guardCharges = Math.Max(0, charges);
-            _guardUntil = until;
-        }
-    }
-
-    public int GuardChargesLeft
-    {
-        get
-        {
-            lock (_lock) return _guardCharges;
-        }
-    }
-
-    public bool ConsumeGuard(DateTimeOffset now)
-    {
-        lock (_lock)
-        {
-            if (_guardCharges <= 0 || now >= _guardUntil) return false;
-            _guardCharges--;
-            return true;
         }
     }
 }

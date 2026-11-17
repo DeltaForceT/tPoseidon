@@ -48,6 +48,14 @@ public sealed class ClientAddressCheck : IClientCheck
             return findings;
         }
 
+        var shopUrl = context.ShopPort > 0 ? KrShopAddressPatch.BaseUrl(target, context.ShopPort) : null;
+        var shopCurrent = KrShopAddressPatch.PatchedBaseUrl(bytes);
+        if (current.Count == 1 && string.Equals(current[0], target, StringComparison.Ordinal) && shopUrl is not null && !string.Equals(shopCurrent, shopUrl, StringComparison.Ordinal))
+        {
+            findings.Add(ScanFinding.Warning(Id, $"The client connects to {target}, but its My Shop pages do not open from {shopUrl}. Play fixes this on its own; Fix does it now and keeps the original.", AddressPatchFix.FixId));
+            return findings;
+        }
+
         findings.Add(current.Count == 1 && string.Equals(current[0], target, StringComparison.Ordinal)
             ? ScanFinding.Pass(Id, $"The client already connects to {target}.")
             : ScanFinding.Warning(Id, $"The client connects to {shown}, but this server is {target}. Play fixes this on its own; Fix does it now and keeps the original.", AddressPatchFix.FixId));

@@ -60,12 +60,24 @@ public static class GunSkills
         var damage = critical
             ? Math.Max(1, WireLimits.Saturate(raw * CriticalShare * (ratio * criticalMultiplier) - avoid))
             : Math.Max(0, WireLimits.Saturate((float)raw * (double)ratio) - (int)avoid);
-        if (target.Resist > Percent) damage = 0;
-        else damage -= WireLimits.Saturate(damage * target.Resist * 0.01);
+        var unresisted = damage;
+        var resist = target.Resist;
+        if (resist > Percent)
+        {
+            resist -= Percent;
+            damage = 0;
+        }
+        damage -= WireLimits.Saturate(unresisted * resist * 0.01);
         if (damage > 0 && target.DamageShare < 1.0) damage = (int)(damage * target.DamageShare);
+        long healed = 0;
+        if (damage < 0)
+        {
+            healed = -damage;
+            damage = 0;
+        }
         var kind = critical ? SkillDamage.KindCritical : SkillDamage.KindHit;
         if (damage >= target.Hp) kind |= SkillDamage.KindFinishingFlag;
-        return new SkillHit(damage, GunType, kind, SkillActions.GunElement, 0);
+        return new SkillHit(damage, GunType, kind, SkillActions.GunElement, healed);
     }
 
     public static int BarrierBreak(long ownerDa, float ratio) =>

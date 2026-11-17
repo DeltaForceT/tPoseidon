@@ -20,6 +20,7 @@ internal static class HelpCommand
         Console.WriteLine("  gm        game master tools (run 'tposeidon gm --help')");
         Console.WriteLine("  account   create player accounts, set passwords, list accounts");
         Console.WriteLine("  cash      show or change an account's item shop cash (balance mode)");
+        Console.WriteLine("  shop      list, add or remove the goods of the item shop");
         Console.WriteLine("  camp      list or add the My Camp items of a character's account");
         Console.WriteLine("  guild-depot  show or set how many depot tabs a guild owns");
         Console.WriteLine("  guild-coins  show a guild's coins or add some");
@@ -69,6 +70,11 @@ internal static class HelpCommand
         Console.WriteLine();
         Console.WriteLine("cash options:");
         Console.WriteLine("  --account <name> [--grant <amount>]   add (or with a minus sign, take) cash");
+        Console.WriteLine();
+        Console.WriteLine("shop options:");
+        Console.WriteLine("  (none)   list the goods");
+        Console.WriteLine("  --add <code> --name <text> --items <id>[x<count>][@<class>],... --price <cash> [--hours <n>] [--category 0|1] [--desc <text>]   add or replace goods; a set is several items; hours 0 is permanent; category 1 is My Camp; class defaults to 2 (shop item)");
+        Console.WriteLine("  --remove <code>   remove goods (goods already sold are only taken off sale)");
         Console.WriteLine();
         AccountCommand.WriteHelp();
         Console.WriteLine();

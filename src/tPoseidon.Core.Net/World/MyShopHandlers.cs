@@ -1,3 +1,4 @@
+using System.Text;
 using tPoseidon.Core.Common;
 
 namespace tPoseidon.Core.Net.World;
@@ -13,6 +14,8 @@ public static class MyShopHandlers
         Func<Task> depart,
         Func<Task> restore,
         Func<Task> listCampItems,
+        Func<byte, IReadOnlyList<MyShopBought>> bought,
+        Encoding text,
         Action<string> log)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
@@ -21,6 +24,8 @@ public static class MyShopHandlers
         ArgumentNullException.ThrowIfNull(depart);
         ArgumentNullException.ThrowIfNull(restore);
         ArgumentNullException.ThrowIfNull(listCampItems);
+        ArgumentNullException.ThrowIfNull(bought);
+        ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(log);
 
         dispatcher.Register(Opcode.C2S_MYSHOP_OPEN, async (_, _, ct) =>
@@ -46,9 +51,9 @@ public static class MyShopHandlers
         dispatcher.Register(Opcode.C2S_MYSHOP_ID_LIST, (_, _, ct) =>
             send(Opcode.S2C_MYSHOP_ID_LIST, MyShopFrames.EmptyList(), ct));
         dispatcher.Register(Opcode.C2S_BOUGHT_LIST, (_, _, ct) =>
-            send(Opcode.S2C_BOUGHT_LIST, MyShopFrames.EmptyList(), ct));
+            send(Opcode.S2C_BOUGHT_LIST, MyShopFrames.BoughtList(bought(0), text), ct));
         dispatcher.Register(Opcode.C2S_BOUGHT_LIST_CAMP, (_, _, ct) =>
-            send(Opcode.S2C_BOUGHT_LIST_CAMP, MyShopFrames.EmptyList(), ct));
+            send(Opcode.S2C_BOUGHT_LIST_CAMP, MyShopFrames.BoughtList(bought(1), text), ct));
         dispatcher.Register(Opcode.C2S_MYSHOP_ENTER, (_, _, _) => listCampItems());
         dispatcher.Register(Opcode.C2S_MYSHOP_CLOSE, async (_, _, ct) =>
         {

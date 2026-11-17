@@ -314,12 +314,26 @@ public sealed class ClientPage : WizardPage
     {
         if (Validate() && CurrentContext() is { } context)
         {
+            if (ServerClientData.ClientChanged(_state.Settings))
+            {
+                try
+                {
+                    ServerClientData.Ensure(_state.Paths, _state.Settings);
+                    var restored = ServerClientData.RestoreClient(_state.Settings);
+                    _result.Show(BannerKind.Info, restored.Message, "The server keeps its own copy of the game data, so the client stays as installed.");
+                }
+                catch (PlayFailure failure)
+                {
+                    _result.Show(BannerKind.Warning, failure.Message, failure.Hint ?? "");
+                }
+            }
+
             await _scan.ScanAsync(context).ConfigureAwait(true);
         }
     }
 
     private ClientScanContext? CurrentContext() =>
-        _state.Settings.ClientFolder.Length == 0 ? null : new ClientScanContext(_state.Settings.ClientFolder, _state.Settings.Launch.ServiceName, null, 0);
+        _state.Settings.ClientFolder.Length == 0 ? null : new ClientScanContext(_state.Settings.ClientFolder, _state.Settings.Launch.ServiceName, null, 0, libConfigCopy: () => ServerClientData.Ensure(_state.Paths, _state.Settings));
 
     private async Task BrowseAsync()
     {

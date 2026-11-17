@@ -22,7 +22,7 @@ public static class ServerEnvironment
             ["MT_CATALOG_CACHE"] = paths.CatalogCache,
             [PostgresMigrations.MigrationsDirectoryVariable] = paths.Migrations,
             ["MT_VARIANT_DATA_ROOT"] = clientData,
-            ["MT_LIBCONFIG_PATH"] = ClientFolder.LibConfigFor(settings),
+            ["MT_LIBCONFIG_PATH"] = ServerClientData.LibConfig(paths, settings),
             [ClientFolder.ServiceVariable] = ClientFolder.Service(settings),
             ["MT_DB_CONNECTION"] = settings.Database.Connection,
             ["MT_DB_SCHEMA"] = settings.Database.Schema,

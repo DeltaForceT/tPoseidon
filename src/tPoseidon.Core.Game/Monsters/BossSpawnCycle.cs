@@ -69,7 +69,7 @@ public sealed class BossSpawnCycle
         }
     }
 
-    public IReadOnlyList<MonsterEntity> Minute(ushort mapId, long nowMs, ushort instanceKey = 0)
+    public IReadOnlyList<MonsterEntity> Check(ushort mapId, long nowMs, ushort instanceKey = 0)
     {
         var born = new List<MonsterEntity>();
         lock (_gate)
@@ -83,13 +83,12 @@ public sealed class BossSpawnCycle
             }
             foreach (var slot in zone.Slots)
             {
-                var elapsed = slot.Minutes;
-                slot.Minutes++;
-                if (slot.Row.CheckMinutes > elapsed) continue;
+                slot.ArmedMs ??= nowMs;
+                if (nowMs - slot.ArmedMs.Value < (long)slot.Row.CheckSeconds * 1000) continue;
                 var missing = slot.Row.Count - slot.Alive;
                 if (slot.Spawned && !zone.Refills) continue;
                 if (missing < 1 || nowMs - slot.LastSpawnMs <= MinimumSpawnGapMs) continue;
-                slot.Minutes = 0;
+                slot.ArmedMs = nowMs;
                 slot.LastSpawnMs = nowMs;
                 if (_catalog.GetById(slot.Row.MonsterId) is null) continue;
                 for (var i = 0; i < missing; i++)
@@ -169,7 +168,7 @@ public sealed class BossSpawnCycle
         public Slot(BossSpawnTableEntry row) => Row = row;
 
         public BossSpawnTableEntry Row { get; }
-        public int Minutes { get; set; }
+        public long? ArmedMs { get; set; }
         public int Alive { get; set; }
         public bool Spawned { get; set; }
         public long LastSpawnMs { get; set; } = long.MinValue / 2;

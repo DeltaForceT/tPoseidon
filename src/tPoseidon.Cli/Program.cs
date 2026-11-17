@@ -43,6 +43,7 @@ try
         "launcher" => LauncherCommand.Run(paths, commandLine),
         "client" => ClientCommand.Run(paths, commandLine),
         "cash" => CashCommand.Run(paths, commandLine),
+        "shop" => ShopCommand.Run(paths, commandLine),
         "account" => AccountCommand.Run(paths, commandLine, prompt),
         "camp" => CampCommand.Run(paths, commandLine),
         "guild-depot" => GuildDepotCommand.Run(paths, commandLine),

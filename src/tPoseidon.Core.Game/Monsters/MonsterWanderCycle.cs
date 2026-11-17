@@ -67,7 +67,7 @@ public sealed class MonsterWanderCycle
         {
             foreach (var monster in monsters)
             {
-                if (monster.IsDead || monster.SnapshotAttackers().Count != 0)
+                if (monster.IsDead || monster.SnapshotAttackers().Count != 0 || monster.IsHeld(now))
                 {
                     Interrupt(monster, now);
                     continue;
@@ -85,6 +85,13 @@ public sealed class MonsterWanderCycle
 
                 if (slot.Moving)
                 {
+                    if (_catalog.GetById(monster.MonsterParamId) is { } movingDefinition
+                        && ClientSpeed.Drawn(monster.WalkSpeedOf(movingDefinition.WalkSpeed)) != slot.PlannedSpeed)
+                    {
+                        slot.Moving = false;
+                        StartMove(geometry, monster, slot, now, events);
+                        continue;
+                    }
                     while (slot.PendingLegs.Count > 0 && now >= slot.PendingLegs.Peek().At)
                     {
                         var leg = slot.PendingLegs.Dequeue();
@@ -159,6 +166,7 @@ public sealed class MonsterWanderCycle
             events.Add(new MonsterSpeedChanged(monster.EntityId, walkSpeed));
         }
         slot.Moving = true;
+        slot.PlannedSpeed = walkSpeed;
         slot.ArrivesAt = now + TimeSpan.FromMilliseconds(travelMs + ArrivalNoticeDelayMs);
         slot.PendingLegs.Clear();
         var legs = WanderRoute.Legs(geometry, fromX, fromY, route.Points);
@@ -216,6 +224,7 @@ public sealed class MonsterWanderCycle
         public int CountdownMs;
         public DateTimeOffset LastTick;
         public bool Moving;
+        public float PlannedSpeed;
         public DateTimeOffset ArrivesAt;
         public Queue<PendingLeg> PendingLegs { get; } = new();
     }

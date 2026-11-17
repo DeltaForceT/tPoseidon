@@ -34,7 +34,7 @@ public sealed class SkillDefinition
     {
         ArgumentNullException.ThrowIfNull(row);
         Row = row;
-        var entries = Math.Max(0, row.MaxSkillLevel) + 1;
+        var entries = Math.Max(Math.Max(0, row.MaxSkillLevel), Math.Max(HighestRowLevel(conditionRows), HighestRowLevel(actionRows))) + 1;
         _conditions = PerLevel(conditionRows, entries);
         _actions = PerLevel(actionRows, entries);
     }
@@ -56,6 +56,9 @@ public sealed class SkillDefinition
     public SkillTableRow? ConditionsAt(int level) => HasLevel(level) ? _conditions[level] : null;
 
     public SkillTableRow? ActionAt(int level) => HasLevel(level) ? _actions[level] : null;
+
+    private static int HighestRowLevel(IReadOnlyList<SkillTableRow> rows) =>
+        rows.Count == 0 ? 0 : rows.Max(row => row.Level);
 
     private static SkillTableRow?[] PerLevel(IReadOnlyList<SkillTableRow> rows, int entries)
     {

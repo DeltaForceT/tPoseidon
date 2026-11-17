@@ -1,6 +1,6 @@
 namespace tPoseidon.Core.Game.Combat;
 
-public readonly record struct ElementalDamage(long Damage, int ElementMask);
+public readonly record struct ElementalDamage(long Damage, int ElementMask, long Absorbed = 0);
 
 public static class ElementalAttack
 {
@@ -31,7 +31,8 @@ public static class ElementalAttack
             mask |= element;
         }
         adjustment -= Scale(damage * physicalResist);
-        return new ElementalDamage(Math.Max(0L, damage + adjustment), mask);
+        var total = damage + adjustment;
+        return total < 0 ? new ElementalDamage(0L, mask, -total) : new ElementalDamage(total, mask);
     }
 
     public static long[] ResistCuts(long damage, IReadOnlyList<int> attackSlots, Func<int, int> resistOfElement)

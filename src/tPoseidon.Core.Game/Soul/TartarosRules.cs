@@ -4,7 +4,7 @@ namespace tPoseidon.Core.Game.Soul;
 
 public readonly record struct TartarosBuff(int Category, int SkillId, int Level, float Ratio, bool Good);
 
-public readonly record struct TartarosSoulItem(int ItemType, int SoulLevel, int Remaining);
+public readonly record struct TartarosSoulItem(int ItemType, int SoulLevel, int Remaining, bool IsSoulItem = true);
 
 public static class TartarosRules
 {
@@ -28,16 +28,23 @@ public static class TartarosRules
         : NoCategory;
 
     public static IReadOnlyList<TartarosBuff> BuffsOn(
-        SoulSystemTables tables, int mapId, IEnumerable<TartarosSoulItem> wornSoulItems)
+        SoulSystemTables tables, int mapId, IEnumerable<TartarosSoulItem> wornItems)
     {
         ArgumentNullException.ThrowIfNull(tables);
-        ArgumentNullException.ThrowIfNull(wornSoulItems);
+        ArgumentNullException.ThrowIfNull(wornItems);
         if (!tables.TartarosMapSkills.TryGetValue(mapId, out var mapSkills)) return Array.Empty<TartarosBuff>();
         var good = new Dictionary<int, int>();
-        foreach (var soul in wornSoulItems)
+        var plain = new HashSet<int>();
+        foreach (var soul in wornItems)
         {
             var category = CategoryOf(soul.ItemType);
-            if (category == NoCategory || soul.Remaining <= 0) continue;
+            if (category == NoCategory) continue;
+            if (!soul.IsSoulItem)
+            {
+                plain.Add(category);
+                continue;
+            }
+            if (soul.Remaining <= 0) continue;
             var level = Math.Max(1, soul.SoulLevel);
             good[category] = good.TryGetValue(category, out var known) ? Math.Max(known, level) : level;
         }
@@ -50,7 +57,7 @@ public static class TartarosRules
             {
                 buffs.Add(new TartarosBuff(category, FirstGoodSkill + category, soulLevel, RatioAt(tables.GoodBuffRatios, soulLevel), true));
             }
-            else
+            else if (plain.Contains(category))
             {
                 buffs.Add(new TartarosBuff(category, skill.SkillId, skill.Level, RatioAt(tables.BadBuffRatios, skill.Level), false));
             }

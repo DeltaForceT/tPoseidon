@@ -17,6 +17,149 @@ public sealed class PostgresCashShopStore : ICashShopStore
         return LoadGoods(conn, null, goodsCode);
     }
 
+    public IReadOnlyList<ShopGoods> ListGoods()
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        var codes = new List<int>();
+        using (var cmd = new NpgsqlCommand("SELECT goods_code FROM shop_goods ORDER BY goods_code", conn))
+        {
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read()) codes.Add(reader.GetInt32(0));
+        }
+
+        var all = new List<ShopGoods>(codes.Count);
+        foreach (var code in codes)
+        {
+            if (LoadGoods(conn, null, code) is { } goods) all.Add(goods);
+        }
+
+        return all;
+    }
+
+    public void SaveGoods(ShopGoods goods)
+    {
+        ArgumentNullException.ThrowIfNull(goods);
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        using (var head = new NpgsqlCommand(
+            """
+            INSERT INTO shop_goods (goods_code, goods_name, goods_desc, goods_category, goods_set_count, goods_issell)
+            VALUES (@g, @n, @d, @c, @s, @o)
+            ON CONFLICT (goods_code) DO UPDATE SET goods_name = @n, goods_desc = @d, goods_category = @c, goods_set_count = @s, goods_issell = @o
+            """,
+            conn,
+            tx))
+        {
+            head.Parameters.AddWithValue("g", goods.GoodsCode);
+            head.Parameters.AddWithValue("n", goods.Name);
+            head.Parameters.AddWithValue("d", goods.Description);
+            head.Parameters.AddWithValue("c", (short)goods.Category);
+            head.Parameters.AddWithValue("s", goods.SetCount);
+            head.Parameters.AddWithValue("o", goods.OnSale);
+            head.ExecuteNonQuery();
+        }
+
+        foreach (var table in new[] { "shop_goods_item", "shop_goods_limit" })
+        {
+            using var clear = new NpgsqlCommand($"DELETE FROM {table} WHERE goods_code = @g", conn, tx);
+            clear.Parameters.AddWithValue("g", goods.GoodsCode);
+            clear.ExecuteNonQuery();
+        }
+
+        foreach (var item in goods.Items)
+        {
+            using var insert = new NpgsqlCommand(
+                "INSERT INTO shop_goods_item (goods_code, item_index, item_class, item_count) VALUES (@g, @i, @c, @n)",
+                conn,
+                tx);
+            insert.Parameters.AddWithValue("g", goods.GoodsCode);
+            insert.Parameters.AddWithValue("i", item.ItemIndex);
+            insert.Parameters.AddWithValue("c", (short)item.ItemClass);
+            insert.Parameters.AddWithValue("n", item.ItemCount);
+            insert.ExecuteNonQuery();
+        }
+
+        foreach (var option in goods.Options)
+        {
+            using (var limit = new NpgsqlCommand(
+                """
+                INSERT INTO shop_limit (limit_code, limit_flag, limit_use) VALUES (@l, @f, @u)
+                ON CONFLICT (limit_code) DO UPDATE SET limit_flag = @f, limit_use = @u
+                """,
+                conn,
+                tx))
+            {
+                limit.Parameters.AddWithValue("l", option.LimitCode);
+                limit.Parameters.AddWithValue("f", (short)option.LimitFlag);
+                limit.Parameters.AddWithValue("u", option.UseHours);
+                limit.ExecuteNonQuery();
+            }
+
+            using var link = new NpgsqlCommand(
+                "INSERT INTO shop_goods_limit (goods_code, limit_code, goods_limit_price, default_display) VALUES (@g, @l, @p, @d)",
+                conn,
+                tx);
+            link.Parameters.AddWithValue("g", goods.GoodsCode);
+            link.Parameters.AddWithValue("l", option.LimitCode);
+            link.Parameters.AddWithValue("p", option.Price);
+            link.Parameters.AddWithValue("d", option.DefaultDisplay);
+            link.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+    }
+
+    public bool RemoveGoods(int goodsCode)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        using (var sold = new NpgsqlCommand("SELECT 1 FROM shop_sell WHERE goods_code = @g LIMIT 1", conn, tx))
+        {
+            sold.Parameters.AddWithValue("g", goodsCode);
+            if (sold.ExecuteScalar() is not null)
+            {
+                using var hide = new NpgsqlCommand("UPDATE shop_goods SET goods_issell = FALSE WHERE goods_code = @g", conn, tx);
+                hide.Parameters.AddWithValue("g", goodsCode);
+                var hidden = hide.ExecuteNonQuery() > 0;
+                tx.Commit();
+                return hidden;
+            }
+        }
+
+        using var delete = new NpgsqlCommand("DELETE FROM shop_goods WHERE goods_code = @g", conn, tx);
+        delete.Parameters.AddWithValue("g", goodsCode);
+        var removed = delete.ExecuteNonQuery() > 0;
+        tx.Commit();
+        return removed;
+    }
+
+    public IReadOnlyList<ShopPurchase> Purchases(uint accountId, byte category)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var cmd = new NpgsqlCommand(
+            """
+            SELECT s.sell_code, g.goods_name, l.limit_flag, l.limit_use, s.sell_date
+            FROM shop_sell s
+            JOIN shop_goods g ON g.goods_code = s.goods_code
+            JOIN shop_limit l ON l.limit_code = s.limit_code
+            WHERE s.account_id = @a AND s.sell_type = @t AND g.goods_category = @c
+            ORDER BY s.sell_date DESC, s.sell_code DESC
+            LIMIT 200
+            """,
+            conn);
+        cmd.Parameters.AddWithValue("a", (long)accountId);
+        cmd.Parameters.AddWithValue("t", (short)CashSellType.Self);
+        cmd.Parameters.AddWithValue("c", (short)category);
+        using var reader = cmd.ExecuteReader();
+        var rows = new List<ShopPurchase>();
+        while (reader.Read())
+        {
+            rows.Add(new ShopPurchase(reader.GetInt32(0), reader.GetString(1), (byte)reader.GetInt16(2), reader.GetInt16(3), reader.GetFieldValue<DateTimeOffset>(4)));
+        }
+
+        return rows;
+    }
+
     public short? ShopPeriodHours(int itemIndex)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();

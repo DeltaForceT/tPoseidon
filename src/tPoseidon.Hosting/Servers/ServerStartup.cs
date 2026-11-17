@@ -47,6 +47,7 @@ public static class ServerStartup
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(observer);
         await PrepareDatabaseAsync(paths, settings, observer, ct).ConfigureAwait(false);
+        ServerClientData.Ensure(paths, settings);
 
         if (!ServerDataStep.IsCurrent(paths, settings))
         {

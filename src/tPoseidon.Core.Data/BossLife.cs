@@ -111,12 +111,15 @@ public sealed class BossLife
         return called;
     }
 
-    internal void TickTimers(MonsterEntity owner, int elapsedMs, bool engaged, bool hpBelowMax, Func<int> roll)
+    internal void TickTimers(MonsterEntity owner, int elapsedMs, bool hasTarget, bool hpBelowMax, Func<int> roll, Func<int, bool> castable)
     {
         if (_guardMs > 0) _guardMs = Math.Max(0, _guardMs - elapsedMs);
         TickHeal(owner, elapsedMs, hpBelowMax, roll);
-        TickSkills(owner, elapsedMs, engaged, roll);
+        TickSkills(owner, elapsedMs, hasTarget, roll, castable);
     }
+
+    public static bool SkillRollPasses(MonsterAType atype, int roll) =>
+        atype == MonsterAType.DoppelGanger ? roll % SkillRollModulus != 0 : roll % SkillRollModulus == 0;
 
     public ushort OwnerEntityId { get; set; }
 
@@ -138,7 +141,7 @@ public sealed class BossLife
         _healTimerMs = heals.Count > 0 ? heals[fired].TimeMs : 0;
     }
 
-    private void TickSkills(MonsterEntity owner, int elapsedMs, bool engaged, Func<int> roll)
+    private void TickSkills(MonsterEntity owner, int elapsedMs, bool hasTarget, Func<int> roll, Func<int, bool> castable)
     {
         _skillTimerMs -= elapsedMs;
         if (_skillTimerMs >= 0 || _profile.Skills is not { } skills) return;
@@ -146,8 +149,9 @@ public sealed class BossLife
         for (var slot = 0; slot < skills.Count; slot++)
         {
             var skill = skills[slot];
-            if (BarsLeft > skill.LeftLife || !engaged || skill.Level == 0 || roll() % SkillRollModulus != 0) continue;
+            if (BarsLeft > skill.LeftLife || !hasTarget || skill.Level == 0 || !SkillRollPasses(owner.Atype, roll())) continue;
             fired = slot;
+            if (!castable(slot)) continue;
             _events.Enqueue(new BossEvent(
                 BossEventKind.SkillCast, owner.EntityId, owner.MapId, 0, _profile.NotEarthQuake, string.Empty,
                 SkillId: skill.SkillId, SkillLevel: skill.Level));

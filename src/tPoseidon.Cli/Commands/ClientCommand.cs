@@ -43,9 +43,14 @@ internal static class ClientCommand
         if (folderOption is not null)
         {
             var folder = Path.GetFullPath(folderOption.Trim().Trim('"'));
+            if (settings is not null && string.Equals(Path.GetFullPath(settings.ClientFolder), folder, StringComparison.OrdinalIgnoreCase))
+            {
+                return ClientScanContext.For(settings, paths);
+            }
+
             return settings is null
                 ? ClientScanContext.ForFolder(folder)
-                : new ClientScanContext(folder, settings.Launch.ServiceName, settings.Network.PublicAddress, settings.Ports.Lobby);
+                : new ClientScanContext(folder, settings.Launch.ServiceName, settings.Network.PublicAddress, settings.Ports.Lobby, shopPort: settings.ShopEnabled ? settings.Ports.Shop : 0);
         }
 
         if (settings is null || string.IsNullOrWhiteSpace(settings.ClientFolder))
@@ -53,7 +58,7 @@ internal static class ClientCommand
             throw new CliException("No client folder is set up yet. Pass --client <folder>, or run 'tposeidon setup'.");
         }
 
-        return ClientScanContext.For(settings);
+        return ClientScanContext.For(settings, paths);
     }
 
     public static void Print(ScanReport report)

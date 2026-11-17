@@ -40,6 +40,7 @@ internal sealed class SlotExtendController
         ArgumentNullException.ThrowIfNull(player);
         player.Upgrade = UpgradeWindow.SlotExtend;
         player.UpgradeBusy = false;
+        await SendAsync(player, Opcode.C2S_TRIGGER_75, Array.Empty<byte>()).ConfigureAwait(false);
         await SendAsync(player, Opcode.S2C_SLOT_EXTEND_OPENED, Array.Empty<byte>()).ConfigureAwait(false);
         Log(player, "window opened");
         return NpcScript.Silent;

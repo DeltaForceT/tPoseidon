@@ -171,6 +171,7 @@ internal sealed class DrillController
             if (wornParameters is not null) AddGauge(digger, wornParameters, CrazyDrillRules.StartPoint);
         }
 
+        if (wornParameters is not null) digger.Crazy.Load(wornParameters);
         var invincible = digger.Skills.ContainsKey(DrillRules.InvincibleDrillSkill);
         lock (_lock) dig.Token = (ushort)(_rng.Next(ushort.MaxValue + 1) & DrillRules.TokenMask);
         dig.StartedAt = DateTimeOffset.UtcNow;
@@ -339,6 +340,7 @@ internal sealed class DrillController
         var allowed = digger.Crazy.Couple || digger.Skills.ContainsKey(CrazyDrillRules.Skill);
         if (!allowed) return;
         digger.Crazy.ResetAll();
+        if (DrillOf(drill) is { } changedParameters) digger.Crazy.Load(changedParameters);
         await SendCrazyAsync(digger, CrazyDrillRules.DrillChanged, 0).ConfigureAwait(false);
     }
 

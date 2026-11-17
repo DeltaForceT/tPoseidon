@@ -141,7 +141,7 @@ internal sealed class CardIdentifyController
         if (game.Take(position) is not { } taken) return;
         var dropped = await GiveAsync(player, taken.ItemId).ConfigureAwait(false);
         if (taken.LifeChanged) await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_LIFE, CardIdentifyFrames.Life(game.Life)).ConfigureAwait(false);
-        await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_TAKEN, CardIdentifyFrames.Taken((uint)taken.ItemId, dropped)).ConfigureAwait(false);
+        await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_TAKEN, CardIdentifyFrames.Taken((uint)taken.ItemId)).ConfigureAwait(false);
         if (SoulSeedRules.SecretCardEvent(taken.ItemId) is { } secretEvent) await _seedEvent(player, secretEvent, 1).ConfigureAwait(false);
         Log(player, $"single card {position} taken: item {taken.ItemId}, life {game.Life}{(dropped ? ", dropped at the feet" : string.Empty)}");
     }
@@ -180,7 +180,7 @@ internal sealed class CardIdentifyController
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
         var stack = definition.IsStackable ? bag.FirstOrDefault(held => held.ItemIndex == itemId) : null;
         var bagWeight = bag.Sum(held => (_catalog.GetById(held.ItemIndex)?.Weight ?? 0) * held.WeightUnits);
-        var fits = PickupRules.Fits(player.PlayerMaxWt, bagWeight, bag.Count, stack is not null, definition.Weight, 1) && (stack is not null || bag.Count < _bagCapacity);
+        var fits = PickupRules.Fits(player.PlayerMaxWt, bagWeight, _items.BagSlotsInUse(character.CharacterId), stack is not null, definition.Weight, 1) && (stack is not null || _items.BagSlotsInUse(character.CharacterId) < _bagCapacity);
         BagOperation operation;
         if (fits && stack is not null)
         {

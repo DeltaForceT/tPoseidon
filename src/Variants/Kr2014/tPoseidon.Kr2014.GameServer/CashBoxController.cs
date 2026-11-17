@@ -75,7 +75,7 @@ internal sealed class CashBoxController
             var common = entry.ItemClass == ChargedItemRules.CommonClass;
             var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
             var joinStack = common && bag.Any(item => item.ItemClass == ChargedItemRules.CommonClass && item.ItemIndex == entry.ItemIndex);
-            if (!joinStack && bag.Count >= tPoseidon.Core.Game.Monsters.PickupRules.BagCapacity)
+            if (!joinStack && _items.BagSlotsInUse(character.CharacterId) >= tPoseidon.Core.Game.Monsters.PickupRules.BagCapacity)
             {
                 await RefuseAsync(player, $"item {entry.ItemIndex}: bag full").ConfigureAwait(false);
                 return;

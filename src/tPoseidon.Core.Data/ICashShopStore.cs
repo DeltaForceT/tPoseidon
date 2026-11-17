@@ -54,6 +54,8 @@ public sealed record ShopGoods(
     IReadOnlyList<ShopGoodsItem> Items,
     IReadOnlyList<ShopGoodsOption> Options);
 
+public sealed record ShopPurchase(int SellCode, string GoodsName, byte LimitFlag, short UseHours, DateTimeOffset SoldAt);
+
 public sealed record ShopFriend(ulong CharacterId, string Name, uint AccountId);
 
 public sealed record CashPurchase(uint AccountId, int World, int GoodsCode, short LimitCode, int SettlePrice, CashSellStore Store);
@@ -65,6 +67,14 @@ public sealed record CashShopOutcome(CashShopResult Result, int SellCode, long B
 public interface ICashShopStore
 {
     ShopGoods? FindGoods(int goodsCode);
+
+    IReadOnlyList<ShopGoods> ListGoods();
+
+    void SaveGoods(ShopGoods goods);
+
+    bool RemoveGoods(int goodsCode);
+
+    IReadOnlyList<ShopPurchase> Purchases(uint accountId, byte category);
 
     short? ShopPeriodHours(int itemIndex);
 

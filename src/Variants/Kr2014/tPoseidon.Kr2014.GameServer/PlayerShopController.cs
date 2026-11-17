@@ -194,7 +194,7 @@ internal sealed class PlayerShopController
             var buyerBag = _items.GetForCharacterBySlotKind(buyerCharacter.CharacterId, SlotKind.Inventory);
             var joins = _catalog.GetById((int)purchase.ItemId) is { IsStackable: true } && buyerBag.Any(item => item.ItemIndex == (int)purchase.ItemId);
             if (buyer.Trade is not null || keeper.Trade is not null) visitRefusal = PlayerShopRules.VisitRefused;
-            else if (!joins && buyerBag.Count >= PickupRules.BagCapacity) visitRefusal = PlayerShopRules.BagFull;
+            else if (!joins && _items.BagSlotsInUse(buyerCharacter.CharacterId) >= PickupRules.BagCapacity) visitRefusal = PlayerShopRules.BagFull;
             else if (!PlayerShopRules.MoneySettles(buyerStats.Money, keeperStats.Money, purchase.UnitPrice, purchase.Count)) visitRefusal = PlayerShopRules.MoneyOutOfRange;
             if (visitRefusal is { } code)
             {
@@ -375,9 +375,9 @@ internal sealed class PlayerShopController
             return;
         }
         var joins = definition is { IsStackable: true } && buyerBag.Any(item => item.ItemIndex == (int)listed.ItemId);
-        if (!joins && buyerBag.Count >= PickupRules.BagCapacity)
+        if (!joins && _items.BagSlotsInUse(buyerCharacter.CharacterId) >= PickupRules.BagCapacity)
         {
-            await RefuseSearchBuyAsync(buyer, PlayerShopSearchRules.FullInventory, $"{buyerBag.Count} items in the bag").ConfigureAwait(false);
+            await RefuseSearchBuyAsync(buyer, PlayerShopSearchRules.FullInventory, $"{_items.BagSlotsInUse(buyerCharacter.CharacterId)} items in the bag").ConfigureAwait(false);
             return;
         }
         var purchase = new PlayerShopPurchase(buy.KeeperId, buy.WireUid, listed.ItemId, buy.Count, (uint)listed.UnitPrice);

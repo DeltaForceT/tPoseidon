@@ -180,7 +180,7 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
             }
         }
         if (cells is not null && cells.Count - 1 > MaxWaypoints) return null;
-        if (cells is null && goalReachable)
+        if (cells is null)
         {
             var greedy = Greedy(geometry, startX, startY, ZoneGeometry.CellOf(toX), ZoneGeometry.CellOf(toY));
             if (greedy is null || greedy.Count - 1 > MaxWaypoints) return null;
@@ -191,8 +191,6 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
                 reachedGoal && keepsPoint && goalIsFree ? toX : ZoneGeometry.CentreOf(last.X),
                 reachedGoal && keepsPoint && goalIsFree ? toY : ZoneGeometry.CentreOf(last.Y));
         }
-        if (cells is null) return null;
-
         var destinationX = keepsPoint && goalIsFree ? toX : ZoneGeometry.CentreOf(goalX);
         var destinationY = keepsPoint && goalIsFree ? toY : ZoneGeometry.CentreOf(goalY);
         return new RoutePlan(cells, destinationX, destinationY);
@@ -253,9 +251,19 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
     private static bool Closed(ZoneGeometry geometry, int cellX, int cellY) =>
         !geometry.ContainsCell(cellX, cellY) || geometry.IsBlocked(cellX, cellY);
 
+    public static (int X, int Y) StraightWalkEnd(ZoneGeometry geometry, int fromX, int fromY, int toX, int toY)
+    {
+        ArgumentNullException.ThrowIfNull(geometry);
+        var goalX = ZoneGeometry.CellOf(toX);
+        var goalY = ZoneGeometry.CellOf(toY);
+        if (Greedy(geometry, ZoneGeometry.CellOf(fromX), ZoneGeometry.CellOf(fromY), goalX, goalY) is not { Count: > 1 } cells) return (fromX, fromY);
+        var (lastX, lastY) = cells[^1];
+        return (lastX, lastY) == (goalX, goalY) ? (toX, toY) : (ZoneGeometry.CentreOf(lastX), ZoneGeometry.CentreOf(lastY));
+    }
+
     private static List<(int X, int Y)>? Greedy(ZoneGeometry geometry, int startX, int startY, int goalX, int goalY)
     {
-        if (!geometry.ContainsCell(goalX, goalY) || geometry.IsBlocked(goalX, goalY)) return null;
+        if (!geometry.ContainsCell(goalX, goalY)) return null;
         var cells = new List<(int X, int Y)> { (startX, startY) };
         var current = (X: startX, Y: startY);
         var previous = current;
@@ -335,6 +343,7 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
     private const int PlainCellCost = 2;
     private const int ReservedCellCost = 3;
     private const int TurnCost = 1;
+    private const int UnsetNeighbourCell = 0;
 
     private sealed class SearchNode
     {
@@ -401,7 +410,7 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
         int goalY)
     {
         var cell = nextY * geometry.CellsX + nextX;
-        var g = StepCost(geometry, current, cell, nextX, nextY) + current.G;
+        var g = StepCost(geometry, current, UnsetNeighbourCell) + current.G;
         if (nodes.TryGetValue(cell, out var known))
         {
             current.Children.Add(known);
@@ -430,9 +439,9 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
         current.Children.Add(created);
     }
 
-    private static int StepCost(ZoneGeometry geometry, SearchNode from, int toCell, int toX, int toY)
+    private static int StepCost(ZoneGeometry geometry, SearchNode from, int toCell)
     {
-        var cost = geometry.AttributeAt(toX, toY) == 0 ? PlainCellCost : ReservedCellCost;
+        var cost = geometry.AttributeAt(toCell % geometry.CellsX, toCell / geometry.CellsX) == 0 ? PlainCellCost : ReservedCellCost;
         if (from.Parent is { } before && before.Cell - from.Cell != from.Cell - toCell) cost += TurnCost;
         return cost;
     }
@@ -457,7 +466,7 @@ public sealed record WanderRoute(int DestinationX, int DestinationY, double Leng
             foreach (var child in node.Children)
             {
                 if (node.G + 1 >= child.G) continue;
-                child.G = StepCost(geometry, node, child.Cell, child.X, child.Y) + node.G;
+                child.G = StepCost(geometry, node, child.Cell) + node.G;
                 child.F = child.G + child.H;
                 child.Parent = node;
                 pending.Push(child);

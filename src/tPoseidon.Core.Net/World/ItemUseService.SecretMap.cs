@@ -38,7 +38,7 @@ public sealed partial class ItemUseService
         }
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
         var freed = pieces.Count(piece => piece.Item.Stack <= 1);
-        if (!mapDefinition.IsStackable && PickupRules.BagCapacity - bag.Count + freed < 1)
+        if (!mapDefinition.IsStackable && PickupRules.BagCapacity - _items.BagSlotsInUse(character.CharacterId) + freed < 1)
         {
             Console.WriteLine($"{_logTag} {_remote()}   secret map: no bag slot for the map");
             return;

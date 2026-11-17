@@ -14,7 +14,7 @@ public static class GunAttack
     public const int LuckOffset = 0x50;
     public const int Percent = 100;
 
-    public static (long Damage, int Kind) Shot(
+    public static (long Damage, int Kind, long Absorbed) Shot(
         long attackerAc, long attackerLk, long power, float criticalMultiplier, bool critical, SkillTarget target, bool targetIsPlayer, Func<int, int> randomBelow)
     {
         ArgumentNullException.ThrowIfNull(randomBelow);
@@ -29,14 +29,26 @@ public static class GunAttack
         }
         else
         {
-            if (attackerLk - target.Lk + LuckOffset < randomBelow(Percent)) return (0, SkillDamage.KindMiss);
+            if (attackerLk - target.Lk + LuckOffset < randomBelow(Percent)) return (0, SkillDamage.KindMiss, 0);
             damage = Math.Max(0, WireLimits.Saturate(raw - defense));
             kind = damage == 0 ? SkillDamage.KindMiss : SkillDamage.KindHit;
         }
-        if (target.Resist > Percent) damage = 0;
-        else damage -= WireLimits.Saturate(damage * target.Resist / (double)Percent);
+        var unresisted = damage;
+        var resist = target.Resist;
+        if (resist > Percent)
+        {
+            resist -= Percent;
+            damage = 0;
+        }
+        damage -= WireLimits.Saturate(unresisted * resist / (double)Percent);
+        long absorbed = 0;
+        if (damage < 0)
+        {
+            absorbed = -damage;
+            damage = 0;
+        }
         if (damage > 0 && damage >= target.Hp) kind |= SkillDamage.KindFinishingFlag;
-        return (damage, kind);
+        return (damage, kind, absorbed);
     }
 
     public static long CustomizedPower(long power, float ratio) => WireLimits.Saturate(power * (double)ratio);

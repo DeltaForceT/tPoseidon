@@ -123,7 +123,7 @@ public sealed class ShopTrade
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
         var bagWeight = bag.Sum(item => WeightOf(item.ItemIndex) * item.WeightUnits);
         if (orders.Sum(order => WeightOf(order.ItemId) * order.Count) + bagWeight > _player.MaxWeight()) return Opcode.S2C_SHOP_BUY_TOO_HEAVY;
-        if (PickupRules.BagCapacity - bag.Count < lines) return Opcode.S2C_SHOP_BUY_REFUSED;
+        if (PickupRules.BagCapacity - _items.BagSlotsInUse(character.CharacterId) < lines) return Opcode.S2C_SHOP_BUY_REFUSED;
 
         long total = 0;
         foreach (var (itemId, count) in orders)

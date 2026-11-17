@@ -38,7 +38,7 @@ public sealed class WarehouseService
     private readonly WarehousePlayer _player;
     private readonly Random _rng;
     private readonly string _logTag;
-    private bool _contentsSent;
+    private readonly HashSet<byte> _sentTabs = new();
 
     public WarehouseService(
         TridentSessionContext ctx,
@@ -103,21 +103,21 @@ public sealed class WarehouseService
             Console.WriteLine($"{_logTag} {_ctx.Remote}   storage: {character.WarehouseSlots} slots give no tabs");
             return NpcScript.Silent;
         }
-        if (_contentsSent)
+        if (tabs.All(tab => _sentTabs.Contains(tab.Id)))
         {
             await SendAsync(Opcode.S2C_WAREHOUSE_CONTENTS, WarehouseFrames.AlreadyLoaded(tabs[0].Id), ct).ConfigureAwait(false);
             return NpcScript.Silent;
         }
         var total = 0;
-        foreach (var tab in tabs)
+        foreach (var tab in tabs.Where(tab => !_sentTabs.Contains(tab.Id)))
         {
             var stored = _items.GetForCharacterBySlotKind(character.CharacterId, tab.Id)
                 .Select(item => (item, ClassOf(item)))
                 .ToList();
             total += stored.Count;
             await SendAsync(Opcode.S2C_WAREHOUSE_CONTENTS, WarehouseFrames.Contents(tab.Id, stored, _player.Properties), ct).ConfigureAwait(false);
+            _sentTabs.Add(tab.Id);
         }
-        _contentsSent = true;
         Console.WriteLine($"{_logTag} {_ctx.Remote}   storage opened: {tabs.Count} tabs, {character.WarehouseSlots} slots, {total} items");
         return NpcScript.Silent;
     }
@@ -140,6 +140,7 @@ public sealed class WarehouseService
         var uid = BagItemIds.Stored(wireUid);
         var held = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory).FirstOrDefault(item => item.ItemUid == uid);
         var definition = held is null ? null : _catalog.GetById(held.ItemIndex);
+        if (held is not null && definition is not null) count = BankService.QuantityOf(definition, held, count);
         if (held is null || definition is null || held.Stack < count)
         {
             await RefuseAsync(Opcode.S2C_WAREHOUSE_DEPOSIT_REFUSED, tabId, $"the bag does not hold {count} of 0x{uid:X}", ct).ConfigureAwait(false);
@@ -183,15 +184,21 @@ public sealed class WarehouseService
         var stored = hasTab
             ? _items.GetForCharacterBySlotKind(character.CharacterId, tabId).FirstOrDefault(item => item.ItemUid == uid)
             : null;
-        if (count < 1 || stored is null || stored.Stack < count || _catalog.GetById(stored.ItemIndex) is not { } definition)
+        if (count < 1 || stored is null || _catalog.GetById(stored.ItemIndex) is not { } definition)
+        {
+            await RefuseAsync(Opcode.S2C_WAREHOUSE_WITHDRAW_REFUSED, tabId, $"tab {tabId} does not hold {count} of 0x{uid:X}", ct).ConfigureAwait(false);
+            return;
+        }
+        count = BankService.QuantityOf(definition, stored, count);
+        if (stored.Stack < count)
         {
             await RefuseAsync(Opcode.S2C_WAREHOUSE_WITHDRAW_REFUSED, tabId, $"tab {tabId} does not hold {count} of 0x{uid:X}", ct).ConfigureAwait(false);
             return;
         }
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
-        var weight = definition.Weight * count;
+        var weight = definition.Weight * (definition.IsStackable ? count : stored.WeightUnits);
         var bagWeight = bag.Sum(item => (_catalog.GetById(item.ItemIndex)?.Weight ?? 0) * item.WeightUnits);
-        if (bag.Count >= PickupRules.BagCapacity || (weight != 0 && bagWeight + weight > _player.MaxWeight()))
+        if (_items.BagSlotsInUse(character.CharacterId) >= PickupRules.BagCapacity || (weight != 0 && bagWeight + weight > _player.MaxWeight()))
         {
             await RefuseAsync(Opcode.S2C_WAREHOUSE_WITHDRAW_REFUSED, tabId, $"no room or weight for {stored.ItemIndex} x{count}", ct).ConfigureAwait(false);
             return;
@@ -228,7 +235,13 @@ public sealed class WarehouseService
         }
         var uid = BagItemIds.Stored(wireUid);
         var source = _items.GetForCharacterBySlotKind(character.CharacterId, from).FirstOrDefault(item => item.ItemUid == uid);
-        if (source is null || source.Stack < count || _catalog.GetById(source.ItemIndex) is not { } definition)
+        if (source is null || _catalog.GetById(source.ItemIndex) is not { } definition)
+        {
+            await RefuseMoveAsync($"tab {from} does not hold {count} of 0x{uid:X}", ct).ConfigureAwait(false);
+            return;
+        }
+        count = BankService.QuantityOf(definition, source, count);
+        if (source.Stack < count)
         {
             await RefuseMoveAsync($"tab {from} does not hold {count} of 0x{uid:X}", ct).ConfigureAwait(false);
             return;

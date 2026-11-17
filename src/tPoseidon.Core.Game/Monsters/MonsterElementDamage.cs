@@ -14,4 +14,11 @@ public static class MonsterElementDamage
         }
         return monster.ApplyDamage(amount);
     }
+
+    public static long ApplyHit(this MonsterEntity monster, long amount, int elementCode, long absorbed)
+    {
+        ArgumentNullException.ThrowIfNull(monster);
+        monster.Absorb(absorbed);
+        return monster.ApplyElementDamage(amount, elementCode);
+    }
 }

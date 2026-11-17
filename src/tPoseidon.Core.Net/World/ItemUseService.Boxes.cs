@@ -65,7 +65,7 @@ public sealed partial class ItemUseService
         var bagWeight = bag.Sum(held => (long)(_catalog.GetById(held.ItemIndex)?.Weight ?? 0) * held.WeightUnits);
         var rewardWeight = grants.Sum(grant => (long)_catalog.GetById(grant.ItemId)!.Weight * grant.Count);
         var removals = choice.UsesKey ? 2 : 1;
-        var fit = KeyBoxRules.Fits(bagWeight, rewardWeight, _player.MaxWeight(), grants.Count, PickupRules.BagCapacity - bag.Count, grants.Count + removals);
+        var fit = KeyBoxRules.Fits(bagWeight, rewardWeight, _player.MaxWeight(), grants.Count, PickupRules.BagCapacity - _items.BagSlotsInUse(character.CharacterId), grants.Count + removals);
         if (fit != KeyBoxRefusal.None)
         {
             await RefuseKeyBoxAsync(fit, ct).ConfigureAwait(false);

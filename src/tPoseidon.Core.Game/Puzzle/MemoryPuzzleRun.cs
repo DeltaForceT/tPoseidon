@@ -13,6 +13,7 @@ public static class PuzzleRules
 {
     public const uint Solved = 0;
     public const uint Failed = 1;
+    public const ushort FailureMap = 104;
 }
 
 public sealed class MemoryPuzzleRun

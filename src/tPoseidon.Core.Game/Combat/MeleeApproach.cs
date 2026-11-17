@@ -24,6 +24,8 @@ public static class MeleeApproach
     public static readonly TimeSpan OrderGap = TimeSpan.FromMilliseconds(300);
     public static readonly TimeSpan BackOffGap = TimeSpan.FromMilliseconds(100);
 
+    public const int FirstSwingReach = 30;
+
     public const int RandomSideAfterOrders = 2;
     public const int RandomSideAngles = 6;
 
@@ -74,7 +76,9 @@ public static class MeleeApproach
         int targetY,
         bool afterFirstSwing,
         Random rng,
-        bool immobile = false)
+        bool immobile = false,
+        int firstSwingReach = 0,
+        bool backsOff = true)
     {
         ArgumentNullException.ThrowIfNull(reach);
         ArgumentNullException.ThrowIfNull(rng);
@@ -90,7 +94,8 @@ public static class MeleeApproach
         {
             return new MeleeApproachDecision(MeleeApproachKind.GiveUp, attackerX, attackerY);
         }
-        if (distanceSquared <= max * max && distanceSquared >= min * min)
+        long swingMax = max + Math.Max(0, firstSwingReach);
+        if (distanceSquared <= swingMax * swingMax && (distanceSquared >= min * min || !backsOff))
         {
             return new MeleeApproachDecision(MeleeApproachKind.InRange, attackerX, attackerY);
         }

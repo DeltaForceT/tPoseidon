@@ -167,7 +167,9 @@ public sealed class CrazyDrillMeter
     public bool Add(DrillParamEntry drill, float points, bool mayBuild, float? boilingStressUp, float megaRatio, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(drill);
-        if (!mayBuild || Active || !(points < GaugeMax)) return false;
+        if (Active) return false;
+        Load(drill);
+        if (!mayBuild || !(points < GaugeMax)) return false;
         if (!Couple && boilingStressUp is { } stressUp)
         {
             Gauge += (stressUp + 1.0f) * (points + StressBonus);
@@ -181,6 +183,14 @@ public sealed class CrazyDrillMeter
         if (!(Gauge >= GaugeMax)) return false;
         Activate(drill, megaRatio, now);
         return true;
+    }
+
+    public void Load(DrillParamEntry drill)
+    {
+        ArgumentNullException.ThrowIfNull(drill);
+        if (Active) return;
+        GaugeMax = CrazyDrillRules.GaugeMax(drill);
+        StressBonus = CrazyDrillRules.StressBonus(drill);
     }
 
     public byte Percent() => CrazyDrillRules.Percent(Gauge, GaugeMax);

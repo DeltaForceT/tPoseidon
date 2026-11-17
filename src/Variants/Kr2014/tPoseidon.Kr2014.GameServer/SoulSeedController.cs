@@ -254,6 +254,10 @@ internal sealed class SoulSeedController
             }
             player.Seed.Clear();
             player.Guardians = await _guardians.LoadAsync(awakening.CharacterId, CancellationToken.None).ConfigureAwait(false);
+            if (player.Guardians is { Equipped: { } hatched } hatchedLogin)
+            {
+                player.Guardians = hatchedLogin with { Equipped = tPoseidon.Core.Game.Guardian.GuardianLoginCheck.Validate(hatched, _guardianTables().NextExpByLevel, _guardianTables().BasicStats) };
+            }
             if (player.Quests is { } talk)
             {
                 await SendAsync(player, Opcode.C2S_TRIGGER_75, Array.Empty<byte>()).ConfigureAwait(false);

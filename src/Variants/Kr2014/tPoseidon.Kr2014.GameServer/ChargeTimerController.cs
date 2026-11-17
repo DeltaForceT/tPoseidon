@@ -1,3 +1,4 @@
+using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.Game.Quests;
@@ -29,6 +30,7 @@ internal sealed class ChargeTimerController
         ArgumentNullException.ThrowIfNull(player);
         player.Upgrade = UpgradeWindow.ChargeTimer;
         player.UpgradeBusy = false;
+        await SendAsync(player, (ushort)Opcode.C2S_TRIGGER_75, Array.Empty<byte>()).ConfigureAwait(false);
         await SendAsync(player, ChargeTimerFrames.Opened, Array.Empty<byte>()).ConfigureAwait(false);
         Log(player, "recharge window opened");
         return NpcScript.Silent;

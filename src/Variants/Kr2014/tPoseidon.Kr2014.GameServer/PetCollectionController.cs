@@ -197,7 +197,7 @@ internal sealed class PetCollectionController
             var stack = definition.IsStackable ? bag.FirstOrDefault(item => item.ItemIndex == entry.ItemId) : null;
             var bagWeight = bag.Sum(held => (_catalog.GetById(held.ItemIndex)?.Weight ?? 0) * held.WeightUnits);
             var units = definition.ObjectClass == Item.RareClass ? 1 : entry.Count;
-            if (!PickupRules.Fits(player.PlayerMaxWt, bagWeight, bag.Count, stack is not null, definition.Weight, units))
+            if (!PickupRules.Fits(player.PlayerMaxWt, bagWeight, _items.BagSlotsInUse(character.CharacterId), stack is not null, definition.Weight, units))
             {
                 await RefuseAsync(player, Opcode.S2C_PET_COLLECTION_GET_REFUSED, PetCollectionRules.GetNoRoom, $"item {entry.ItemId} x{entry.Count}: bag weight {bagWeight} of {player.PlayerMaxWt}, {bag.Count} items").ConfigureAwait(false);
                 return;

@@ -113,6 +113,7 @@ public sealed class BankService
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
         var held = bag.FirstOrDefault(item => item.ItemUid == uid);
         var definition = held is null ? null : _catalog.GetById(held.ItemIndex);
+        if (held is not null && definition is not null) count = QuantityOf(definition, held, count);
         var merge = definition is { IsStackable: true } ? stored.FirstOrDefault(item => item.ItemIndex == held!.ItemIndex) : null;
         if (stored.Count >= Capacity && merge is null)
         {
@@ -172,15 +173,21 @@ public sealed class BankService
 
         var uid = BagItemIds.Stored(wireUid);
         var stored = _bank.FindItem(character.OwnerAccountId, uid);
-        if (stored is null || count < 1 || stored.Stack < count || _catalog.GetById(stored.ItemIndex) is not { } definition)
+        if (stored is null || count < 1 || _catalog.GetById(stored.ItemIndex) is not { } definition)
+        {
+            await RefuseAsync(Opcode.S2C_BANK_WITHDRAW_REFUSED, $"the bank does not hold {count} of 0x{uid:X}", ct).ConfigureAwait(false);
+            return;
+        }
+        count = QuantityOf(definition, stored, count);
+        if (stored.Stack < count)
         {
             await RefuseAsync(Opcode.S2C_BANK_WITHDRAW_REFUSED, $"the bank does not hold {count} of 0x{uid:X}", ct).ConfigureAwait(false);
             return;
         }
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
-        var weight = definition.Weight * count;
+        var weight = definition.Weight * (definition.IsStackable ? count : stored.WeightUnits);
         var bagWeight = bag.Sum(item => (_catalog.GetById(item.ItemIndex)?.Weight ?? 0) * item.WeightUnits);
-        if (bag.Count >= PickupRules.BagCapacity || (weight != 0 && bagWeight + weight > _player.MaxWeight()))
+        if (_items.BagSlotsInUse(character.CharacterId) >= PickupRules.BagCapacity || (weight != 0 && bagWeight + weight > _player.MaxWeight()))
         {
             await RefuseAsync(Opcode.S2C_BANK_WITHDRAW_REFUSED, $"no room or weight for {stored.ItemIndex} x{count}", ct).ConfigureAwait(false);
             return;
@@ -308,6 +315,9 @@ public sealed class BankService
 
     private Task RefuseAsync(Opcode opcode, string reason, CancellationToken ct) =>
         RefuseAsync(opcode, Array.Empty<byte>(), reason, ct);
+
+    public static int QuantityOf(ItemParamEntry definition, Item item, int requested) =>
+        definition.IsStackable || requested < 1 ? requested : Math.Max(1, (int)item.Stack);
 
     public static BagOperation AddedOf(Item item, byte itemClass, ushort count)
     {

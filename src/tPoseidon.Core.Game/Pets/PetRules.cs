@@ -1,3 +1,5 @@
+using tPoseidon.Core.Data;
+using tPoseidon.Core.Game.Items;
 using tPoseidon.Core.Game.Stats;
 using tPoseidon.Core.LibConfig;
 
@@ -21,6 +23,11 @@ public static class PetRules
     private const int ThirdLookBoundary = 90000;
     private const int ThirdLookOffset = 0xF550;
     private const int FourthLookOffset = 0x14DFC;
+
+    public static int LookItemId(int itemId, IEnumerable<ItemProperty> properties) =>
+        properties.Where(property => property.Type == ItemComposingRules.AppearanceType && property.Extra != 0)
+            .Select(property => unchecked((int)property.Extra))
+            .FirstOrDefault(itemId);
 
     public static int CharacterType(int lookItemId) => lookItemId switch
     {
@@ -48,15 +55,7 @@ public static class PetRules
         double dx = ownerX - petX;
         double dy = ownerY - petY;
         var length = Math.Sqrt(dx * dx + dy * dy);
-        if (length <= FollowRadius) return (petX, petY);
-        var x = (int)Math.Round(ownerX - dx / length * FollowRadius);
-        var y = (int)Math.Round(ownerY - dy / length * FollowRadius);
-        if (geometry is null) return (x, y);
-        var cellX = ZoneGeometry.CellOf(x);
-        var cellY = ZoneGeometry.CellOf(y);
-        return geometry.ContainsCell(cellX, cellY) && geometry.IsFreeDestination(cellX, cellY)
-            ? (x, y)
-            : FollowTarget(geometry, petX, petY, ownerX, ownerY);
+        return length <= FollowRadius ? (petX, petY) : FollowTarget(geometry, petX, petY, ownerX, ownerY);
     }
 
     public static (int X, int Y) FollowTarget(ZoneGeometry? geometry, int petX, int petY, int ownerX, int ownerY)

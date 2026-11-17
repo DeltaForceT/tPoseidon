@@ -679,6 +679,10 @@ public static class SkillFrames
         if (strike.Killed)
         {
             frames.Add(new(Opcode.S2C_OP_002B_TBD, Death(strike.TargetEntityId), blockId, SwingAudience.Everyone));
+            foreach (var (opcode, payload) in additions.DeathEnds ?? Array.Empty<(Opcode Opcode, byte[] Payload)>())
+            {
+                frames.Add(new(opcode, payload, blockId, SwingAudience.Everyone));
+            }
             foreach (var (opcode, payload) in additions.OwnerRewards)
             {
                 frames.Add(new(opcode, payload, blockId, SwingAudience.Owner));

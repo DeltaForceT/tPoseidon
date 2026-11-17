@@ -68,7 +68,7 @@ public sealed class MaterialExchange
             if (!definition.IsStackable) newItems += amount;
             else if (!bag.Any(held => held.ItemIndex == itemId)) newItems++;
         }
-        if (newItems > PickupRules.BagCapacity - bag.Count) return null;
+        if (newItems > PickupRules.BagCapacity - _items.BagSlotsInUse(characterId)) return null;
 
         var operations = new List<BagOperation>();
         foreach (var (itemId, amount) in netGrants)

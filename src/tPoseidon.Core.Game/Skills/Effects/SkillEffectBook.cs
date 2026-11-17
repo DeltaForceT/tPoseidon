@@ -93,6 +93,8 @@ public sealed class SkillEffectBook
         }
     }
 
+    public static float SenseDefenceReduction(long casterSense, double ratio) => (float)(casterSense * ratio * SenseDefenceShare);
+
     public int[] Deltas(IReadOnlyList<int> bases, Func<ushort, SkillEffectCaster?> casterOf, bool ownerIsPlayer = true, IReadOnlyList<int>? bareBases = null)
     {
         ArgumentNullException.ThrowIfNull(bases);
@@ -187,7 +189,7 @@ public sealed class SkillEffectBook
             }
             case SkillEffectRule.CasterSenseDefence:
             {
-                var reduction = (float)(caster.Da * ratio * SenseDefenceShare);
+                var reduction = SenseDefenceReduction(caster.Da, ratio);
                 return reduction > 0f ? accumulated - reduction : accumulated;
             }
             case SkillEffectRule.CasterDig:

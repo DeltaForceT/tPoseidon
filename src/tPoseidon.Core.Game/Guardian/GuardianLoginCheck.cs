@@ -1,4 +1,5 @@
 using tPoseidon.Core.Data;
+using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Guardian;
 
@@ -6,11 +7,11 @@ public static class GuardianLoginCheck
 {
     public const short ResetCardLevel = 1;
 
-    public static GuardianState Validate(GuardianState guardian, IReadOnlyDictionary<int, int> nextExpByLevel)
+    public static GuardianState Validate(GuardianState guardian, IReadOnlyDictionary<int, int> nextExpByLevel, IReadOnlyDictionary<int, GuardianBasicStatEntry>? basicStats = null)
     {
         ArgumentNullException.ThrowIfNull(guardian);
         ArgumentNullException.ThrowIfNull(nextExpByLevel);
-        var checkedGuardian = guardian;
+        var checkedGuardian = basicStats is null ? guardian : guardian with { StatPoints = GuardianStats.WithBaseValues(guardian.StatPoints, guardian.Level, basicStats) };
         var spent = guardian.Skills.Where(skill => skill.Type == GuardianSkillType.Card).Sum(skill => skill.Level - 1);
         if (guardian.SkillPoint + spent != guardian.Level)
         {

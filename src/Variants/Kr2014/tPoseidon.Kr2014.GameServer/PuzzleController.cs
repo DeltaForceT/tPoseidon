@@ -28,6 +28,7 @@ internal sealed class PuzzleController : IDisposable
     private readonly Dictionary<ushort, (SlidePuzzleRun Run, ulong OwnerId)> _slides = new();
     private readonly List<ushort> _kills = new();
     private readonly Dictionary<ushort, SlideOffer> _offers = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, byte> _held = new();
 
     private sealed record SlideOffer(SlidePuzzleEntry Puzzle, IReadOnlyList<SlidePuzzleBlock> Blocks, (int X, int Y) Origin, int[] Grid);
     private readonly SemaphoreSlim _sync = new(1, 1);
@@ -60,6 +61,9 @@ internal sealed class PuzzleController : IDisposable
         _sync.Dispose();
     }
 
+    public bool HoldsPlayer(InGameSessionState st) =>
+        st.Character is { } character && _held.ContainsKey(character.CharacterId);
+
     public Task OfferAsync(InGameSessionState st) => Locked(async () =>
     {
         if (st.Character is null) return;
@@ -74,7 +78,7 @@ internal sealed class PuzzleController : IDisposable
         {
             if (SlideOfferOf(st, tables, map) is not { } offer) return;
             _offers[st.MapId] = offer;
-            await SendAsync(st, Opcode.S2C_PUZZLE_SLIDE_START, PuzzleFrames.SlideStart(offer.Puzzle.Id, offer.Origin, offer.Grid)).ConfigureAwait(false);
+            await SendAsync(st, Opcode.S2C_PUZZLE_SLIDE_START, PuzzleFrames.SlideStart(offer.Puzzle.Id, offer.Origin, offer.Grid, offer.Blocks)).ConfigureAwait(false);
             Log(st, $"slide puzzle {offer.Puzzle.Id} window on map {st.MapId}: {offer.Puzzle.Columns} x {offer.Puzzle.Rows} at ({offer.Origin.X},{offer.Origin.Y})");
             return;
         }
@@ -127,6 +131,7 @@ internal sealed class PuzzleController : IDisposable
             return;
         }
         _runs[st.MapId] = (new MemoryPuzzleRun(puzzle, st.MapId, order, DateTimeOffset.UtcNow), character.CharacterId);
+        _held[character.CharacterId] = 0;
         await SendAsync(st, Opcode.S2C_PUZZLE_COUNTDOWN, Array.Empty<byte>()).ConfigureAwait(false);
         Log(st, $"memory puzzle {puzzle.Id} starts on map {st.MapId}: {order.Count} statues, {puzzle.TimeLimitSeconds} s");
     });
@@ -149,7 +154,11 @@ internal sealed class PuzzleController : IDisposable
             }
             foreach (var kill in kills) run.Killed(kill);
             if (run.NextToShow(now) is { } next) await ShowAsync(run, next).ConfigureAwait(false);
-            if (run.StartInputIfShown(now)) await SendAsync(owner, Opcode.S2C_PUZZLE_MEMORY_INPUT, Array.Empty<byte>()).ConfigureAwait(false);
+            if (run.StartInputIfShown(now))
+            {
+                _held.TryRemove(ownerId, out _);
+                await SendAsync(owner, Opcode.S2C_PUZZLE_MEMORY_INPUT, Array.Empty<byte>()).ConfigureAwait(false);
+            }
             run.TimedOut(now);
             if (run.Phase == MemoryPuzzlePhase.Finished) await EndAsync(mapId, run, owner).ConfigureAwait(false);
         }
@@ -255,7 +264,7 @@ internal sealed class PuzzleController : IDisposable
 
     private async Task EndAsync(ushort mapId, MemoryPuzzleRun run, InGameSessionState? owner)
     {
-        _runs.Remove(mapId);
+        if (_runs.Remove(mapId, out var ended)) _held.TryRemove(ended.OwnerId, out _);
         foreach (var id in run.Spawned)
         {
             if (id == 0 || !_monsters.Remove(id)) continue;
@@ -271,7 +280,14 @@ internal sealed class PuzzleController : IDisposable
     {
         await SendAsync(owner, resultOpcode, PuzzleFrames.Result(result, record)).ConfigureAwait(false);
         Log(owner, $"{what} {(result == PuzzleRules.Solved ? "solved" : "failed")}");
-        if (result != PuzzleRules.Solved) return;
+        if (result != PuzzleRules.Solved)
+        {
+            if (owner.RequestZoneChange is { } leaveZoneChange)
+            {
+                await leaveZoneChange(new ZoneChangeRequest(PuzzleRules.FailureMap, TeleportArrival.ChangeZoneType, null, TimeSpan.Zero), default).ConfigureAwait(false);
+            }
+            return;
+        }
         foreach (var (itemId, count) in rewards)
         {
             if (Grant(owner, itemId, (ushort)Math.Clamp(count, 1, ushort.MaxValue)) is { } change)

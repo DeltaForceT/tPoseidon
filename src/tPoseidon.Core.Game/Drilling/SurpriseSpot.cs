@@ -33,7 +33,7 @@ public static class SurpriseSpotRules
     public const ushort LifeOverWord = 0;
 
     public static byte[] LifeOverPayload() => BitConverter.GetBytes(LifeOverWord);
-    public const byte CreviceOpened = 0;
+    public const byte CreviceOpened = 1;
     public const byte CreviceClosedAsDeclined = 1;
     public const byte CreviceUsed = 0;
     public static readonly TimeSpan TeleportProtection = TimeSpan.FromMilliseconds(2000);

@@ -40,6 +40,7 @@ internal sealed class MissionController
         ArgumentNullException.ThrowIfNull(args);
         if (args.Count < 1 || !_tables().Missions.TryGetValue(args[0], out var mission)) return NpcScript.Refused;
         st.MissionOffer = mission.Id;
+        await SendAsync(st, Opcode.C2S_TRIGGER_75, Array.Empty<byte>()).ConfigureAwait(false);
         await SendAsync(st, Opcode.S2C_MISSION_GUIDE, new[] { (byte)mission.Id }).ConfigureAwait(false);
         Log(st, $"opens the guide of mission {mission.Id}");
         return NpcScript.Silent;

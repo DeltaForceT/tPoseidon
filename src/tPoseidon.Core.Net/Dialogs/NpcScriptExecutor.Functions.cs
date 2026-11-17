@@ -11,6 +11,9 @@ public sealed partial class NpcScriptExecutor
     private (int Kind, ushort? Message)? _eventTalk;
     private int? _lastMessage;
 
+    public bool EventSceneRunning => _eventTalk is { Kind: NpcEventTalk.Scene };
+
+
     private async Task<int> NotifyCardBattleRankAsync(CancellationToken ct)
     {
         await SendAsync(NpcFunctionFrames.CardBattleRankNotice, Array.Empty<byte>(), ct).ConfigureAwait(false);

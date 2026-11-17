@@ -51,7 +51,7 @@ public sealed partial class NpcScriptExecutor
         var existingStack = stackable && bag.Any(item => item.ItemIndex == itemId);
         var slotsNeeded = existingStack ? 0 : stackable ? 1 : (int)count;
         var weight = bag.Sum(item => WeightOf(item.ItemIndex) * item.WeightUnits) + (long)definition.Weight * count;
-        if (weight > _player.MaxWeight() || PickupRules.BagCapacity - bag.Count < slotsNeeded) return null;
+        if (weight > _player.MaxWeight() || PickupRules.BagCapacity - _stores.Items.BagSlotsInUse(characterId) < slotsNeeded) return null;
         var rewards = stackable
             ? new[] { new RewardItem((int)itemId, (int)count) }
             : Enumerable.Repeat(new RewardItem((int)itemId, 1), (int)count).ToArray();

@@ -112,7 +112,13 @@ internal sealed class SetupCommand
     private void ScanClient(HostSettings settings, string folder)
     {
         Console.WriteLine("   Checking that the client has what the emulator needs...");
-        var context = new ClientScanContext(folder, settings.Launch.ServiceName, null, 0);
+        var context = new ClientScanContext(folder, settings.Launch.ServiceName, null, 0, libConfigCopy: () => ServerClientData.Ensure(_paths, settings));
+        if (ServerClientData.ClientChanged(settings))
+        {
+            ServerClientData.Ensure(_paths, settings);
+            Console.WriteLine("   " + ServerClientData.RestoreClient(settings).Message + " The server keeps its own copy, so the client stays as installed.");
+        }
+
         var report = ClientScanner.Default.Scan(context);
         ClientCommand.Print(report);
         if (report.FixableIds.Count == 0 || !_prompt.Confirm("   Fix these now? Each fix keeps a backup (tposeidon client fix --restore undoes it).", defaultValue: true))

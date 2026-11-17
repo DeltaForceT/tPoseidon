@@ -39,6 +39,7 @@ public static class SkillActions
 
     public const int RefusedMonsterType = 8;
     public const int OtherRefusedMonsterType = 12;
+    public const int TurretMonsterType = 15;
 
     public const string ApplyRatioColumn = "ApplyRatio";
     public const string LevelRatioColumn = "Ratio1";
@@ -73,7 +74,7 @@ public static class SkillActions
     public static bool MayTarget(MonsterParamEntry monster)
     {
         ArgumentNullException.ThrowIfNull(monster);
-        return monster.Type != RefusedMonsterType && monster.Type != OtherRefusedMonsterType;
+        return monster.Type != RefusedMonsterType && monster.Type != OtherRefusedMonsterType && monster.Type != TurretMonsterType;
     }
 
     public static bool MayTarget(MonsterEntity monster, MonsterParamEntry definition)

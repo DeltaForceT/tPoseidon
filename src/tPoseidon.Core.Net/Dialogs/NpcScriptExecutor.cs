@@ -679,6 +679,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
                 result = await NpcSkillStartAsync(args, ct).ConfigureAwait(false);
                 if (result == NpcScript.Silent)
                 {
+                    await SendAsync(Opcode.C2S_TRIGGER_75, Array.Empty<byte>(), ct).ConfigureAwait(false);
                     Close();
                     return;
                 }
@@ -1588,7 +1589,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
     {
         if (CharacterId is not ulong characterId || _talk is null) return NpcScript.Refused;
         var bag = _stores.Items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory);
-        if (PickupRules.BagCapacity - bag.Count < 1) return 2;
+        if (PickupRules.BagCapacity - _stores.Items.BagSlotsInUse(characterId) < 1) return 2;
         if (_talk.GiveItemId == 0 || _catalogs.Items.GetById(_talk.GiveItemId) is not { } given) return 2;
         if (given.Weight + bag.Sum(item => WeightOf(item.ItemIndex) * item.WeightUnits) > _player.MaxWeight()) return 2;
         if (args.Count < 2) return NpcScript.Refused;
@@ -1793,7 +1794,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
         var weight = bag.Sum(item => WeightOf(item.ItemIndex) * item.WeightUnits)
             - required.Sum(item => WeightOf(item.ItemId) * item.Count)
             + rewards.Sum(item => WeightOf(item.ItemIndex) * item.Count);
-        return weight <= _player.MaxWeight() && PickupRules.BagCapacity - bag.Count >= rewards.Count;
+        return weight <= _player.MaxWeight() && PickupRules.BagCapacity - _stores.Items.BagSlotsInUse(CharacterId ?? 0) >= rewards.Count;
     }
 
     private int WeightOf(int itemId) => _catalogs.Items.GetById(itemId)?.Weight ?? 0;

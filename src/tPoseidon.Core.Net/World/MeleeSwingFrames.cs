@@ -17,7 +17,8 @@ public sealed record SwingAdditions(
     byte[]? OwnerTaken,
     IReadOnlyList<(Opcode Opcode, byte[] Payload)> OwnerRewards,
     IReadOnlyList<(Opcode Opcode, byte[] Payload, SwingAudience Audience)> AttackerRewards,
-    IReadOnlyList<(Opcode Opcode, byte[] Payload)>? Drops = null)
+    IReadOnlyList<(Opcode Opcode, byte[] Payload)>? Drops = null,
+    IReadOnlyList<(Opcode Opcode, byte[] Payload)>? DeathEnds = null)
 {
     public static readonly SwingAdditions None = new(
         null,
@@ -138,6 +139,10 @@ public static class MeleeSwingFrames
         if (strike.Killed)
         {
             frames.Add(new(Opcode.S2C_OP_002B_TBD, Death(strike), blockId, SwingAudience.Everyone));
+            foreach (var (opcode, payload) in extra.DeathEnds ?? Array.Empty<(Opcode Opcode, byte[] Payload)>())
+            {
+                frames.Add(new(opcode, payload, blockId, SwingAudience.Everyone));
+            }
             foreach (var (opcode, payload) in extra.OwnerRewards)
             {
                 frames.Add(new(opcode, payload, blockId, SwingAudience.Owner));

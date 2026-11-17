@@ -65,6 +65,7 @@ public sealed class PlayerMeleeTicker
             _armedByAttacker[attacker.EntityId] = outcome.ArmedNext;
             if (monster.Guarded) outcome = outcome with { Damage = 0, Result = MeleeResolution.ResultBlock };
             var elementMask = 0;
+            long absorbed = 0;
             if (outcome.Damage > 0 && definition is not null)
             {
                 var elemental = ElementalAttack.Apply(
@@ -74,6 +75,7 @@ public sealed class PlayerMeleeTicker
                     definition.PhysicalR - monster.ResistLoss(Skills.SkillActions.NoElement));
                 outcome = outcome with { Damage = elemental.Damage };
                 elementMask = elemental.ElementMask;
+                absorbed = elemental.Absorbed;
             }
             if (outcome.Damage > 0 && halvesHits?.Invoke(monster.EntityId) == true)
             {
@@ -102,6 +104,7 @@ public sealed class PlayerMeleeTicker
             }
 
             var (targetX, targetY) = monster.GetInterpolatedPosition(now);
+            monster.Absorb(absorbed);
             var hpBefore = monster.CurrentHp;
             monster.AddAttacker(attacker.EntityId);
             if (monster.Boss is not null && definition is not null)

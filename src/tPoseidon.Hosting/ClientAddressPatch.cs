@@ -85,7 +85,7 @@ public static class ClientAddressPatch
             ?? throw new HostingException($"{trimmed} has no IPv4 address, and the KR 2014 client only connects to IPv4 addresses.", "Use the server's IPv4 address.", null);
     }
 
-    public static ClientAddressResult Apply(string executablePath, string serverAddress, int lobbyPort)
+    public static ClientAddressResult Apply(string executablePath, string serverAddress, int lobbyPort, int shopPort = 0)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         if (lobbyPort != ClientLobbyPort)
@@ -108,11 +108,13 @@ public static class ClientAddressPatch
                 null);
         }
 
+        var shopUrl = shopPort > 0 ? KrShopAddressPatch.BaseUrl(address, shopPort) : null;
+        var shopPending = shopUrl is not null && !string.Equals(KrShopAddressPatch.PatchedBaseUrl(bytes), shopUrl, StringComparison.Ordinal);
         var imeSite = ClientImePatch.FindUnpatched(bytes);
         var minimapPlan = ClientMinimapPatch.FindUnpatched(bytes);
         var tooltipPlan = ClientTooltipPatch.FindUnpatched(bytes);
         var gmIconSite = ClientGmMailIconPatch.FindUnpatched(bytes);
-        if (imeSite < 0 && minimapPlan is null && tooltipPlan is null && gmIconSite < 0 && slots.All(slot => string.Equals(ReadAddress(bytes, slot), address, StringComparison.Ordinal)))
+        if (!shopPending && imeSite < 0 && minimapPlan is null && tooltipPlan is null && gmIconSite < 0 && slots.All(slot => string.Equals(ReadAddress(bytes, slot), address, StringComparison.Ordinal)))
         {
             return new ClientAddressResult(address, false, null);
         }
@@ -130,6 +132,15 @@ public static class ClientAddressPatch
             foreach (var slot in slots)
             {
                 WriteAddress(bytes, slot, address);
+            }
+
+            if (shopPending)
+            {
+                var shopResult = KrShopAddressPatch.Apply(bytes, shopUrl!);
+                if (!shopResult.Succeeded)
+                {
+                    throw new PlayFailure(PlayFailureReason.NotKr2014Client, shopResult.Message, "Use the 2014.01.28 KR client, or reinstall it.", null);
+                }
             }
 
             if (imeSite >= 0)

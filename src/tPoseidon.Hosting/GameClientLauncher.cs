@@ -101,7 +101,7 @@ public static class GameClientLauncher
         ShadowSanctuaryClientData.Apply(plan.LibConfig, executable);
         ReferencedTablesClientData.Apply(plan.LibConfig, executable);
         ReferencedItemRows.Data.Apply(plan.LibConfig, executable);
-        ClientAddressPatch.Apply(executable, settings.Network.PublicAddress, settings.Ports.Lobby);
+        ClientAddressPatch.Apply(executable, settings.Network.PublicAddress, settings.Ports.Lobby, settings.ShopEnabled ? settings.Ports.Shop : 0);
         var wine = OperatingSystem.IsWindows() ? null : FindWine();
         ApplyDisplay(settings, executable, plan.Service, runner, wine);
         var logFile = wine is null || paths is null ? null : paths.LogFile(WineLogName);

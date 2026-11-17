@@ -23,12 +23,20 @@ public static class GuardianStats
         var result = new int[GuardianTables.GrowthColumns.Length];
         for (var i = 0; i < result.Length; i++)
         {
-            var basis = (int)Math.Round(points[i] * level * LevelFactor, MidpointRounding.ToEven);
-            result[i] = (int)Math.Round(basis * growth.Ratios[i], MidpointRounding.ToEven);
+            var basis = (int)(points[i] * (double)(float)(level * (double)LevelFactor));
+            result[i] = (int)(basis * (double)growth.Ratios[i]);
         }
         result[AcIndex] += AccuracyMagicBonus;
         result[MaIndex] += AccuracyMagicBonus;
         return result;
+    }
+
+    public static IReadOnlyList<short> WithBaseValues(IReadOnlyList<short> points, short level, IReadOnlyDictionary<int, GuardianBasicStatEntry> basicStats)
+    {
+        ArgumentNullException.ThrowIfNull(points);
+        ArgumentNullException.ThrowIfNull(basicStats);
+        if (points.Sum(point => (int)point) != 0 || !basicStats.TryGetValue(level, out var row)) return points;
+        return row.Points.Take(GuardianTables.GrowthColumns.Length).Select(value => (short)value).ToArray();
     }
 
     public static Skills.SkillAttacker Attacker(short level, IReadOnlyList<int> stats) => new(

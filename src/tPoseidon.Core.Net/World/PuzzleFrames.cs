@@ -1,4 +1,5 @@
 using tPoseidon.Core.Game.Puzzle;
+using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Net.World;
 
@@ -11,15 +12,17 @@ public static class PuzzleFrames
         return w.ToArray();
     }
 
-    public static byte[] SlideStart(int slideId, (int X, int Y) origin, IReadOnlyList<int> grid)
+    public static byte[] SlideStart(int slideId, (int X, int Y) origin, IReadOnlyList<int> grid, IReadOnlyList<SlidePuzzleBlock> blocks)
     {
         ArgumentNullException.ThrowIfNull(grid);
+        ArgumentNullException.ThrowIfNull(blocks);
+        var bundleOf = blocks.ToDictionary(block => block.Id, block => block.Bundle);
         var w = new PacketWriter(8 + grid.Count * 2);
         w.WriteInt16((short)slideId);
         w.WriteInt16((short)origin.X);
         w.WriteInt16((short)origin.Y);
         w.WriteUInt16((ushort)grid.Count);
-        foreach (var block in grid) w.WriteUInt16((ushort)block);
+        foreach (var block in grid) w.WriteUInt16((ushort)bundleOf[block]);
         return w.ToArray();
     }
 

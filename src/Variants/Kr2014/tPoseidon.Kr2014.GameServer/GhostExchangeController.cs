@@ -41,6 +41,7 @@ internal sealed class GhostExchangeController
         ArgumentNullException.ThrowIfNull(player);
         player.Upgrade = neo ? UpgradeWindow.GhostNeo : UpgradeWindow.GhostStone;
         player.UpgradeBusy = false;
+        await SendAsync(player, Opcode.C2S_TRIGGER_75, Array.Empty<byte>()).ConfigureAwait(false);
         await SendAsync(player, neo ? Opcode.S2C_GHOST_NEO_OPENED : Opcode.S2C_GHOST_STONE_OPENED, Array.Empty<byte>()).ConfigureAwait(false);
         Log(player, $"{(neo ? "Neo equipment" : "growth stone")} window opened");
         return NpcScript.Silent;

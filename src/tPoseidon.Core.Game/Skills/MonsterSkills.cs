@@ -28,6 +28,7 @@ public static class MonsterSkills
     public const int ElectricField = 1316;
     public const int Vampiric = 1460;
     public const int Guard = 1463;
+    public const int GuardImitationSkill = 1107;
     public const int MagicPowerShare = 3;
     public const int BuffCancel = 1461;
     public const int BuffCancelVictims = 6;
@@ -133,7 +134,7 @@ public static class MonsterSkills
 
     public static bool IsObject(int actionId) =>
         actionId is DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
-            or Destruction or Vampiric or Poison or Charging or Warp or Unshield or DarkSlow
+            or Destruction or Vampiric or Poison or Charging or Warp or Unshield or DarkSlow or Guard
             or MonDarkBarrier or SkillEffectKinds.MagicReflect or SkillEffectKinds.Subcutaneous or SkillEffectKinds.WindShield or SkillEffectKinds.DarkBarrier
             or SkillEffectKinds.WinkOfCharm or ElectricField or ObjectEffects.IceCrystal or SkillEffectKinds.Harden or ChainHits.QuadPunch or ChainHits.TetraPunch
             or ObjectHits.GaleBreak or ObjectEffects.DeadlyFunk or SkillEffectKinds.Berserk or SkillEffectKinds.Bind or SkillEffectKinds.ChillingPrison
@@ -182,7 +183,7 @@ public static class MonsterSkills
     public static bool OwnedByTarget(int actionId) => TargetOwnedObjects.Contains(actionId);
 
     public static bool IsSelfBuff(int actionId) =>
-        actionId is Berserk or FluentWaist or Vampiric or MonDarkBarrier or SkillEffectKinds.Berserk
+        actionId is Berserk or FluentWaist or Vampiric or Guard or MonDarkBarrier or SkillEffectKinds.Berserk
             or SkillEffectKinds.MagicReflect or SkillEffectKinds.Subcutaneous or SkillEffectKinds.WindShield or SkillEffectKinds.DarkBarrier
         || (IsStatEffect(actionId) && SkillEffectKinds.Find(actionId) is { OnTarget: false });
 
@@ -197,11 +198,9 @@ public static class MonsterSkills
         && (actionId is DefenseParalysis or PowerStun or WaterNet or WhirlWind or CruelFlame or Unshield or DarkSlow or SkillEffectKinds.WinkOfCharm
             || (IsStatEffect(actionId) && SkillEffectKinds.Find(actionId) is { OnTarget: true }));
 
-    public static bool SpentOnMonster(int actionId) => actionId is SharpBrandish or Siren or ObjectHits.FlashAttacking;
-
     public static MonsterOnMonsterRule OnMonsterRuleOf(int actionId)
     {
-        if (actionId is ChainArrow or Thunderbolt || SingleMagicOf(actionId) is not null || SkillHitShapes.Find(actionId) is { NeedsGun: false })
+        if (actionId is ChainArrow or Thunderbolt or SharpBrandish or Siren or ObjectHits.FlashAttacking || SingleMagicOf(actionId) is not null || SkillHitShapes.Find(actionId) is { NeedsGun: false })
         {
             return MonsterOnMonsterRule.Strike;
         }
@@ -209,7 +208,7 @@ public static class MonsterSkills
         if (EffectOnTarget(actionId)) return MonsterOnMonsterRule.TargetEffect;
         if (actionId is ChainHits.QuadPunch or ChainHits.TetraPunch) return MonsterOnMonsterRule.Chain;
         if (actionId == StaffOfThunder) return MonsterOnMonsterRule.TargetArea;
-        return SpentOnMonster(actionId) ? MonsterOnMonsterRule.Spent : MonsterOnMonsterRule.None;
+        return MonsterOnMonsterRule.None;
     }
 
     public static IReadOnlyList<T> WithTargetFirst<T>(IReadOnlyList<T> victims, T target, Func<T, bool> isTarget)
@@ -253,5 +252,4 @@ public enum MonsterOnMonsterRule
     TargetEffect,
     Chain,
     TargetArea,
-    Spent,
 }

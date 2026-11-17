@@ -426,7 +426,7 @@ public sealed partial class ItemUseService
             return;
         }
         var newSlots = grants.Count(grant => !(_catalog.GetById(grant.ItemId) is { IsStackable: true } && bag.Any(held => held.ItemIndex == grant.ItemId)));
-        if (PickupRules.BagCapacity - bag.Count < newSlots)
+        if (PickupRules.BagCapacity - _items.BagSlotsInUse(characterId) < newSlots)
         {
             await RefusePresentAsync($"gift box {box.ItemIndex}: {newSlots} free bag slots needed", ct).ConfigureAwait(false);
             return;

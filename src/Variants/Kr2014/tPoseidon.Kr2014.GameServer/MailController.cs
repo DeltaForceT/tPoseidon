@@ -240,7 +240,7 @@ internal sealed class MailController
                 await SendAsync(player, PostFrames.TakeFailed, PostFrames.Error(MailError.NotEnoughMoney)).ConfigureAwait(false);
                 return;
             }
-            if (bag.Count >= tPoseidon.Core.Game.Monsters.PickupRules.BagCapacity)
+            if (_items.BagSlotsInUse(character.CharacterId) >= tPoseidon.Core.Game.Monsters.PickupRules.BagCapacity)
             {
                 await SendAsync(player, PostFrames.TakeFailed, PostFrames.Error(MailError.BagFull)).ConfigureAwait(false);
                 return;
@@ -292,7 +292,7 @@ internal sealed class MailController
             await SendAsync(player, PostFrames.TakeFailed, PostFrames.Error((uint)detail.Error)).ConfigureAwait(false);
             return;
         }
-        if (bag.Count + detail.Value!.Items.Count > tPoseidon.Core.Game.Monsters.PickupRules.BagCapacity)
+        if (_items.BagSlotsInUse(character.CharacterId) + detail.Value!.Items.Count > tPoseidon.Core.Game.Monsters.PickupRules.BagCapacity)
         {
             await SendAsync(player, PostFrames.TakeFailed, PostFrames.Error(MailError.BagFull)).ConfigureAwait(false);
             return;

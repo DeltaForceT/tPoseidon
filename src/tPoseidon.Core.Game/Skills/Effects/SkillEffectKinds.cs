@@ -257,6 +257,8 @@ public sealed record SkillEffectKind(
 
     public bool EndsWhenOwnerHit { get; init; }
 
+    public bool AggroesOnEnd { get; init; }
+
     public bool EndsWhenOwnerMoves { get; init; }
 
     public bool BlocksOwnerAttack { get; init; }
@@ -670,7 +672,7 @@ public static class SkillEffectKinds
         },
         new(BindOnMonster, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: true)
         {
-            Holds = true, GrantsTm = false, PlayerCondition = MonsterSkills.StunnedCondition, HeldDebuff = true,
+            Holds = true, GrantsTm = false, PlayerCondition = MonsterSkills.StunnedCondition, HeldDebuff = true, AggroesOnEnd = true,
         },
         new(WinkOfCharm, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: true, SecondColumn),
         new(ChillingPrison, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeThenTarget, PrisonPowerColumn, OnTarget: true)
@@ -746,11 +748,11 @@ public static class SkillEffectKinds
         },
         new(SkillRiders.PowerStun, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, SecondsColumn, OnTarget: true)
         {
-            Holds = true, HeaderClass = 1,
+            Holds = true, HeaderClass = 1, AggroesOnEnd = true,
         },
         new(SkillRiders.DefenseParalysis, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, SecondsColumn, OnTarget: true)
         {
-            PreventsEvade = true, SkipsRoll = true, HeaderClass = 1,
+            PreventsEvade = true, SkipsRoll = true, HeaderClass = 1, AggroesOnEnd = true,
         },
         new(SkillRiders.WaterNet, StatDx, SkillEffectRule.CasterMagicHundredthAdded, SkillEffectTail.Mode, RatioColumn, OnTarget: true)
         {
