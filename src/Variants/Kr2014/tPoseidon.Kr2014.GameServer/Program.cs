@@ -1283,6 +1283,27 @@ var soulSeeds = new SoulSeedController(
     () => serverNoticeTexts,
     masterSystemNotice,
     LogTag);
+int[][] SoulSeedAuraStatKinds =
+[
+    [MonsterStat.Ap, MonsterStat.Ac, MonsterStat.Dx],
+    [tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatMp, MonsterStat.Ma, MonsterStat.Md],
+    [tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatWt, MonsterStat.Da, MonsterStat.Lk],
+    [tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatHp, MonsterStat.Dp, MonsterStat.Hv],
+];
+
+soulSeeds.OnBuffUpdated = player =>
+{
+    var deltas = ApplyEffectDeltas(player);
+    foreach (var groupKinds in SoulSeedAuraStatKinds)
+    {
+        foreach (var statKind in groupKinds)
+        {
+            var rk = (byte)Random.Shared.Next(1, 256);
+            _ = player.SendFrameAsync(Opcode.S2C_OP_011B_TBD, SkillEffectFrames.StatChanged(statKind, deltas[statKind]), rk, default);
+        }
+    }
+};
+
 
 var recycle = new RecycleController(() => recycleChanges, () => recycleShop, () => recycleExcluded, () => recycleMyCampExcluded, myCampStore, itemPropertyStore, itemStore, globalItemManager, itemCatalog, LogTag);
 
@@ -7463,12 +7484,43 @@ tPoseidon.Core.Game.Skills.Effects.SkillEffectCaster? EffectCasterOf(ushort enti
                 casterDefinition.AcLv + monsterCaster.StatDelta(MonsterStat.Ac), casterDefinition.LkLv + monsterCaster.StatDelta(MonsterStat.Lk))
             : null;
 
+int[] SoulSeedAuraBonuses(InGameSessionState state)
+{
+    var bonuses = new int[32];
+    var group = state.Seed.BuffGroup;
+    var stacks = state.Seed.BuffStacks;
+    if (group < 0 || group >= SoulSeedAuraStatKinds.Length || stacks <= 0)
+    {
+        state.Seed.SetBuffValues(group, 0, 0, 0);
+        return bonuses;
+    }
+    var bare = state.CombatBase;
+    var pct = stacks * 2;
+    int Calc(int baseVal) => baseVal > 0 ? (int)((long)baseVal * pct / 100L) : 0;
+    var (v0, v1, v2) = group switch
+    {
+        0 => (Calc(bare.Ap), Calc(bare.Ac), Calc(bare.Dx)),
+        1 => (Calc(bare.Mp), Calc(bare.Ma), Calc(bare.Md)),
+        2 => (Calc(bare.Wt), Calc(bare.Da), Calc(bare.Lk)),
+        3 => (Calc(bare.Hp), Calc(bare.Dp), Calc(bare.Hv)),
+        _ => (0, 0, 0)
+    };
+    state.Seed.SetBuffValues(group, v0, v1, v2);
+    var kinds = SoulSeedAuraStatKinds[group];
+    bonuses[kinds[0]] = v0;
+    bonuses[kinds[1]] = v1;
+    bonuses[kinds[2]] = v2;
+    return bonuses;
+}
+
 int[] ApplyEffectDeltas(InGameSessionState state)
 {
     var effectBase = state.CombatBase;
     var deltas = state.Effects.Deltas(EffectBasesOf(state), EffectCasterOf, bareBases: BareEffectBasesOf(state));
     var passiveBonuses = PassiveStats.Bonuses(state.Skills, skillBook);
     for (var stat = 0; stat < deltas.Length; stat++) deltas[stat] += passiveBonuses[stat];
+    var soulSeedBonuses = SoulSeedAuraBonuses(state);
+    for (var stat = 0; stat < deltas.Length && stat < soulSeedBonuses.Length; stat++) deltas[stat] += soulSeedBonuses[stat];
     state.PlayerMaxHp = Math.Clamp((long)effectBase.Hp + deltas[tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatHp], 0L, ServerRates.CapsSection.Limit(serverRatesProvider.Current.Caps.MaxHpPool));
     state.PlayerMaxMp = Math.Clamp((long)effectBase.Mp + deltas[tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatMp], 0L, ServerRates.CapsSection.Limit(serverRatesProvider.Current.Caps.MaxMpPool));
     state.PlayerMaxWt = effectBase.Wt + deltas[tPoseidon.Core.Game.Skills.Effects.SkillEffectKinds.StatWt];
