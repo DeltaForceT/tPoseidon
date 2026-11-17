@@ -126,12 +126,13 @@ internal sealed class CardIdentifyController
             if (outcome.Ends) await EndAsync(player).ConfigureAwait(false);
             return;
         }
-        var dropped = await GiveAsync(player, outcome.ItemId).ConfigureAwait(false);
+        var rewardResult = GiveItem(player, outcome.ItemId);
         await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_LIFE, CardIdentifyFrames.Life(game.Life)).ConfigureAwait(false);
-        await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_MATCHED, CardIdentifyFrames.Matched((uint)outcome.ItemId, game.Combo, (uint)Math.Max(0, game.Score), dropped)).ConfigureAwait(false);
+        await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_MATCHED, CardIdentifyFrames.Matched((uint)outcome.ItemId, game.Combo, (uint)Math.Max(0, game.Score), rewardResult.Dropped)).ConfigureAwait(false);
+        await SendGiveResultAsync(player, rewardResult).ConfigureAwait(false);
         if (SoulSeedRules.CardIdentifyComboEvent(game.Combo) is { } comboEvent) await _seedEvent(player, comboEvent, 1).ConfigureAwait(false);
         if (SoulSeedRules.SecretCardEvent(outcome.ItemId) is { } secretEvent) await _seedEvent(player, secretEvent, 1).ConfigureAwait(false);
-        Log(player, $"pair of item {outcome.ItemId}: combo {game.Combo}, score {game.Score}, life {game.Life}{(dropped ? ", dropped at the feet" : string.Empty)}");
+        Log(player, $"pair of item {outcome.ItemId}: combo {game.Combo}, score {game.Score}, life {game.Life}{(rewardResult.Dropped ? ", dropped at the feet" : string.Empty)}");
     }
 
     public async Task TakeAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)
@@ -139,11 +140,12 @@ internal sealed class CardIdentifyController
         ArgumentNullException.ThrowIfNull(player);
         if (!CardIdentifyFrames.TryReadPosition(payload.Span, out var position) || !player.CardIdentify || player.CardGame is not { } game) return;
         if (game.Take(position) is not { } taken) return;
-        var dropped = await GiveAsync(player, taken.ItemId).ConfigureAwait(false);
+        var rewardResult = GiveItem(player, taken.ItemId);
         if (taken.LifeChanged) await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_LIFE, CardIdentifyFrames.Life(game.Life)).ConfigureAwait(false);
         await SendAsync(player, Opcode.S2C_CARD_IDENTIFY_TAKEN, CardIdentifyFrames.Taken((uint)taken.ItemId)).ConfigureAwait(false);
+        await SendGiveResultAsync(player, rewardResult).ConfigureAwait(false);
         if (SoulSeedRules.SecretCardEvent(taken.ItemId) is { } secretEvent) await _seedEvent(player, secretEvent, 1).ConfigureAwait(false);
-        Log(player, $"single card {position} taken: item {taken.ItemId}, life {game.Life}{(dropped ? ", dropped at the feet" : string.Empty)}");
+        Log(player, $"single card {position} taken: item {taken.ItemId}, life {game.Life}{(rewardResult.Dropped ? ", dropped at the feet" : string.Empty)}");
     }
 
     public async Task EndAsync(InGameSessionState player)
@@ -170,39 +172,65 @@ internal sealed class CardIdentifyController
         Log(player, $"CardIdentifyEnd() - score {score}, exp {reward.Exp}, TM exp {reward.TmExp} (level {level}, {game?.Stage ?? 0} stages)");
     }
 
-    private async Task<bool> GiveAsync(InGameSessionState player, int itemId)
+    private readonly record struct CardGiveResult(bool Dropped, byte[]? AddPacket, FieldItem? GroundItem);
+
+    private CardGiveResult GiveItem(InGameSessionState player, int itemId)
     {
         if (player.Character is not { } character || _catalog.GetById(itemId) is not { } definition)
         {
             Log(player, $"reward item {itemId} has no item row");
-            return false;
+            return new CardGiveResult(false, null, null);
         }
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
         var stack = definition.IsStackable ? bag.FirstOrDefault(held => held.ItemIndex == itemId) : null;
         var bagWeight = bag.Sum(held => (_catalog.GetById(held.ItemIndex)?.Weight ?? 0) * held.WeightUnits);
         var fits = PickupRules.Fits(player.PlayerMaxWt, bagWeight, _items.BagSlotsInUse(character.CharacterId), stack is not null, definition.Weight, 1) && (stack is not null || _items.BagSlotsInUse(character.CharacterId) < _bagCapacity);
-        BagOperation operation;
         if (fits && stack is not null)
         {
             var total = _items.AdjustStack(stack.ItemUid, 1);
-            operation = new BagOperation(QuestResultFrames.StackChanged, definition.ObjectClass, (uint)itemId, BagItemIds.OnWire(stack.ItemUid), total);
+            var payload = GroundItemFrames.AddedToBag(
+                PickupRules.StackGrew,
+                definition.ObjectClass,
+                (uint)itemId,
+                BagItemIds.OnWire(stack.ItemUid),
+                total,
+                stack.ItemSlot,
+                Array.Empty<ItemProperty>());
+            return new CardGiveResult(false, payload, null);
         }
-        else if (fits)
+        if (fits)
         {
             var minted = _itemManager.GrantRewardItem(character.CharacterId, itemId, 1, itemClassOverride: definition.ObjectClass);
-            operation = new BagOperation(QuestResultFrames.Created, definition.ObjectClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);
+            var payload = GroundItemFrames.AddedToBag(
+                PickupRules.ItemCreated,
+                definition.ObjectClass,
+                (uint)itemId,
+                BagItemIds.OnWire(minted.ItemUid),
+                minted.Stack,
+                minted.ItemSlot,
+                Array.Empty<ItemProperty>());
+            return new CardGiveResult(false, payload, null);
         }
-        else
-        {
-            var item = new FieldItem(_newEntityId(), player.MapId, player.PlayerX, player.PlayerY, itemId, 1, definition.ObjectClass, false,
-                player.PlayerEntityId, player.PlayerEntityId, DateTimeOffset.UtcNow);
-            _groundItems.Add(item);
-            await _sendToMap(player.MapId, Opcode.S2C_OP_000C_TBD, GroundItemFrames.Dropped(item)).ConfigureAwait(false);
-            return true;
-        }
-        await SendAsync(player, Opcode.S2C_ITEM_OPERATION, QuestResultFrames.ItemOperation(operation)).ConfigureAwait(false);
-        return false;
+        var item = new FieldItem(_newEntityId(), player.MapId, player.PlayerX, player.PlayerY, itemId, 1, definition.ObjectClass, false,
+            player.PlayerEntityId, player.PlayerEntityId, DateTimeOffset.UtcNow);
+        _groundItems.Add(item);
+        return new CardGiveResult(true, null, item);
     }
+
+    private async Task SendGiveResultAsync(InGameSessionState player, CardGiveResult result)
+    {
+        if (result.GroundItem is { } item)
+        {
+            await _sendToMap(player.MapId, Opcode.S2C_OP_000C_TBD, GroundItemFrames.Dropped(item)).ConfigureAwait(false);
+            return;
+        }
+        if (result.AddPacket is { } payload)
+        {
+            await SendAsync(player, Opcode.S2C_ADD_TO_INVENTORY, payload).ConfigureAwait(false);
+        }
+    }
+
+
 
     private void Log(InGameSessionState player, string message) =>
         Console.WriteLine($"{_logTag} [card identify] 0x{player.PlayerEntityId:X4} {message}");
