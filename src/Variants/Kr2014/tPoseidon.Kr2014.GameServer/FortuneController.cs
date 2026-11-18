@@ -34,6 +34,8 @@ internal sealed class FortuneController
     private readonly IItemParamLookup _catalog;
     private readonly Func<InGameSessionState, int, Task> _seedEvent;
     private readonly string _logTag;
+    private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
+
     private readonly Random _rng = new();
     private readonly object _rngGate = new();
 
@@ -44,7 +46,8 @@ internal sealed class FortuneController
         IItemStore items,
         IItemParamLookup catalog,
         Func<InGameSessionState, int, Task> seedEvent,
-        string logTag)
+        string logTag,
+        Func<ushort, Opcode, byte[], Task> sendToMap)
     {
         _master = master ?? throw new ArgumentNullException(nameof(master));
         _tables = tables ?? throw new ArgumentNullException(nameof(tables));
@@ -53,6 +56,7 @@ internal sealed class FortuneController
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _seedEvent = seedEvent ?? throw new ArgumentNullException(nameof(seedEvent));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
+        _sendToMap = sendToMap ?? throw new ArgumentNullException(nameof(sendToMap));
     }
 
     public async Task<FortuneHold?> LoadAsync(ulong characterId, DateTimeOffset now, CancellationToken ct)
@@ -65,7 +69,7 @@ internal sealed class FortuneController
             UpdatedAt = FortuneHouse.NoRecordDate,
             ExpiresAt = FortuneHouse.NoRecordDate,
         };
-        var hold = new FortuneHold { Info = info, AppliedAt = now };
+        var hold = new FortuneHold { Info = info, AppliedAt = info.UpdatedAt };
         if (info.ItemAttrString.Length >= FortuneRules.UsesResetLength) hold.Info = info with { ViewCount = 0 };
         if (!FortuneRules.IsActive(now, info.ExpiresAt))
         {
@@ -82,7 +86,7 @@ internal sealed class FortuneController
         hold is { Active: false } && profileTitleType == FortuneProfileTitleType;
 
     public static byte[]? AppliedFrame(FortuneHold? hold) =>
-        hold is { Active: true } ? FortuneFrames.Applied(FortuneFrames.AppliedByAward, hold.Block()) : null;
+        hold is not null ? FortuneFrames.Applied(FortuneFrames.AppliedByAward, hold.Block()) : null;
 
     public async Task<bool> StarTearsAsync(InGameSessionState player, ItemParamEntry definition, CancellationToken ct)
     {
@@ -198,7 +202,7 @@ internal sealed class FortuneController
             var ranges = FortuneHouse.JokerRanges(tables.CardsInRowOrder);
             final = FortuneHouse.ExchangeJokers(before, current => FortuneHouse.JokerCard(ranges, _rng.Next) ?? current);
         }
-        var award = FortuneRules.Award(final.Results, tables);
+        var award = FortuneRules.Award(final.Results, tables, _catalog);
         hold.Round.Rolled(award);
         hold.Info = hold.Info with { ViewCount = uses, UpdatedAt = now };
 
@@ -238,16 +242,21 @@ internal sealed class FortuneController
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(recompute);
         if (player.Fortune is not { Round.InHouse: true } hold) return;
-        if (hold.Round.Step is not (FortuneStep.Rolled or FortuneStep.Dealt))
+        // 193번째 줄 조건에 FortuneStep.Changed 추가
+        if (hold.Round.Step is not (FortuneStep.Rolled or FortuneStep.Dealt or FortuneStep.Changed))
         {
             Log(player, $"[!!Exception!!] LeaveTrickFortuneHouse() at step {hold.Round.Step}");
+            // 예외 상황이어도 클라이언트가 갇히지 않도록 강제 종료 처리
+            hold.Round.Close();
+            await SendAsync(player, Opcode.S2C_FORTUNE_LEFT, Array.Empty<byte>()).ConfigureAwait(false);
+            await _sendToMap(player.MapId, (Opcode)PlayerSign.FortuneSignCleared, PlayerSign.Entity(player.PlayerEntityId)).ConfigureAwait(false);
             return;
         }
         if (hold.Round is { Step: FortuneStep.Rolled, Pending: { } award })
         {
             hold.Info = hold.Info with
             {
-                TitleId = award.TitleId,
+                TitleId = award.TitleDetermined ? award.TitleId : 0,
                 ItemAttrString = award.Text,
                 ExpiresAt = now.AddSeconds(award.DurationSeconds),
             };
@@ -255,7 +264,10 @@ internal sealed class FortuneController
             hold.Bonus = FortuneRules.Parse(award.Text);
             hold.Active = FortuneRules.IsActive(now, hold.Info.ExpiresAt);
             recompute();
-            await SendAsync(player, Opcode.GAME_ENTITY_ANNOUNCE_3D1, FortuneFrames.TitleAnnounce(player.PlayerEntityId, (uint)award.TitleId)).ConfigureAwait(false);
+            if (award.TitleDetermined && award.TitleId > 0)
+            {
+                await SendAsync(player, Opcode.GAME_ENTITY_ANNOUNCE_3D1, FortuneFrames.TitleAnnounce(player.PlayerEntityId, (uint)award.TitleId)).ConfigureAwait(false);
+            }
             await SendAsync(player, Opcode.S2C_FORTUNE_APPLIED, FortuneFrames.Applied(FortuneFrames.AppliedByAward, hold.Block())).ConfigureAwait(false);
             foreach (var eventType in FortuneHouse.StatEvents(hold.Bonus)) await _seedEvent(player, eventType).ConfigureAwait(false);
             await _master.UpdateAsync(hold.Info, ct).ConfigureAwait(false);
@@ -263,6 +275,7 @@ internal sealed class FortuneController
         }
         hold.Round.Close();
         await SendAsync(player, Opcode.S2C_FORTUNE_LEFT, Array.Empty<byte>()).ConfigureAwait(false);
+        await _sendToMap(player.MapId, (Opcode)PlayerSign.FortuneSignCleared, PlayerSign.Entity(player.PlayerEntityId)).ConfigureAwait(false);
         Log(player, "leaves the fortune house");
     }
 
