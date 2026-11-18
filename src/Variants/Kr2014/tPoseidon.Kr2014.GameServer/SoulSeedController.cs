@@ -23,6 +23,9 @@ internal sealed class SoulSeedController
     private readonly Random _rng = new();
     private readonly object _rngGate = new();
 
+    public Func<InGameSessionState, IReadOnlyList<int>>? BaseStatsOf { get; set; }
+    public Action<InGameSessionState>? OnBuffUpdated { get; set; }
+
     public SoulSeedController(
         MasterSoulSeeds master,
         MasterGuardian guardians,
@@ -104,7 +107,7 @@ internal sealed class SoulSeedController
         ArgumentNullException.ThrowIfNull(player);
         var tables = _tables();
         tables.EventsByType.TryGetValue(eventType, out var row);
-        var outcome = player.Seed.OnEvent(eventType, count, row);
+        var outcome = player.Seed.OnEvent(eventType, count, row, BaseStatsOf?.Invoke(player));
         if (!outcome.Processed || row is null) return Array.Empty<(Opcode Opcode, byte[] Payload)>();
         var frames = new List<(Opcode Opcode, byte[] Payload)>();
         if (!outcome.Granted)
@@ -117,7 +120,11 @@ internal sealed class SoulSeedController
             if (outcome.Changed)
             {
                 frames.Add((Opcode.S2C_SOUL_SEED_PROGRESS, SoulSeedFrames.Progress(true, outcome.Counter, row)));
-                if (outcome.BuffChanged) frames.Add((Opcode.S2C_SOUL_SEED_BUFF, SoulSeedFrames.Buff(player.Seed.Buff())));
+                if (outcome.BuffChanged)
+                {
+                    OnBuffUpdated?.Invoke(player);
+                    frames.Add((Opcode.S2C_SOUL_SEED_BUFF, SoulSeedFrames.Buff(player.Seed.Buff())));
+                }
             }
         }
         frames.Add((Opcode.S2C_SOUL_SEED_STATE, SoulSeedFrames.StateOf(player.Seed)));
@@ -138,6 +145,7 @@ internal sealed class SoulSeedController
         foreach (var player in players)
         {
             if (!player.Seed.TickBuff((int)elapsed.TotalMilliseconds)) continue;
+            OnBuffUpdated?.Invoke(player);
             await SendAsync(player, Opcode.S2C_SOUL_SEED_BUFF_ENDED, Array.Empty<byte>()).ConfigureAwait(false);
             Console.WriteLine($"{_logTag} [soul seed] 0x{player.PlayerEntityId:X4} buff ended");
         }

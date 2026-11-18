@@ -292,7 +292,7 @@ internal sealed class PuzzleController : IDisposable
         {
             if (Grant(owner, itemId, (ushort)Math.Clamp(count, 1, ushort.MaxValue)) is { } change)
             {
-                await SendAsync(owner, Opcode.S2C_ITEM_OPERATION, QuestResultFrames.ItemOperation(change)).ConfigureAwait(false);
+                await SendAsync(owner, Opcode.S2C_ADD_TO_INVENTORY, GroundItemFrames.AddedToBag(change)).ConfigureAwait(false);
             }
         }
         if (portalMap != 0 && owner.RequestZoneChange is { } requestZoneChange)
@@ -313,7 +313,7 @@ internal sealed class PuzzleController : IDisposable
             var total = _items.AdjustStack(stack.ItemUid, count);
             return new BagOperation(QuestResultFrames.StackChanged, itemClass, (uint)itemId, BagItemIds.OnWire(stack.ItemUid), total);
         }
-        if (bag.Count >= _bagCapacity)
+        if (_items.BagSlotsInUse(character.CharacterId) >= _bagCapacity)
         {
             Log(owner, $"puzzle reward {itemId} not given: bag full");
             return null;

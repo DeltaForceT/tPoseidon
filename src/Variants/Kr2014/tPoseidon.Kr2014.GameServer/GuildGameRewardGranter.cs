@@ -44,7 +44,7 @@ internal sealed class GuildGameRewardGranter
             var total = _items.AdjustStack(stack.ItemUid, amount);
             return new BagOperation(QuestResultFrames.StackChanged, itemClass, (uint)itemId, BagItemIds.OnWire(stack.ItemUid), total);
         }
-        if (bag.Count >= _bagCapacity) return null;
+        if (_items.BagSlotsInUse(characterId) >= _bagCapacity) return null;
         var minted = _itemManager.GrantRewardItem(characterId, itemId, amount, itemClassOverride: itemClass);
         return new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);
     }

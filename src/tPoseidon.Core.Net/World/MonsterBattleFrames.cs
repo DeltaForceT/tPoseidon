@@ -56,8 +56,11 @@ public static class MonsterBattleFrames
                 {
                     (Opcode.S2C_OP_001B_TBD, Swing(swung), MeleeSwingFrames.NoBlock),
                     (Opcode.S2C_OP_001F_TBD, Attack(swung), swingBlockId),
-                    (Opcode.S2C_OP_002A_TBD, HitResult(swung), swingBlockId),
                 };
+                foreach (var hit in swung.Hits ?? new[] { new MonsterSwingHit(swung.Damage, swung.Result, swung.GuardLeft) })
+                {
+                    frames.Add((Opcode.S2C_OP_002A_TBD, HitResult(swung.TargetEntityId, hit), swingBlockId));
+                }
                 if (insideSwingBlock is not null)
                 {
                     foreach (var (opcode, payload) in insideSwingBlock)
@@ -108,17 +111,17 @@ public static class MonsterBattleFrames
         return w.ToArray();
     }
 
-    private static byte[] HitResult(MonsterBattleSwung swung)
+    private static byte[] HitResult(ushort targetEntityId, MonsterSwingHit hit)
     {
         var w = new PacketWriter(MeleeSwingFrames.HitResultSize);
-        w.WriteUInt16(swung.TargetEntityId);
-        w.WriteInt32Field(swung.Damage);
+        w.WriteUInt16(targetEntityId);
+        w.WriteInt32Field(hit.Damage);
         w.WriteInt32(MeleeSwingFrames.DeathTypeNormal);
-        w.WriteInt32(swung.Result);
+        w.WriteInt32(hit.Result);
         w.WriteInt32(0);
         w.WriteInt32(0);
         w.WriteInt32(0);
-        w.WriteUInt16(swung.GuardLeft);
+        w.WriteUInt16(hit.GuardLeft);
         w.WriteUInt16(0);
         return w.ToArray();
     }

@@ -818,6 +818,7 @@ public enum Opcode : ushort
         S2C_SHADOW_WORLD_BONUS  = 0x0477,
         S2C_SCENARIO_NOTICE     = 0x04DE,
         S2C_SCENARIO_OUTCOME    = 0x04E7,
+        S2C_ESCORT_TEXT         = 0x04E8,
         C2S_HARCON_SHOP_BUY     = 0x056E,
         S2C_HARCON_SHOP_BOUGHT  = 0x056F,
         S2C_HARCON_SHOP_ERROR   = 0x0570,

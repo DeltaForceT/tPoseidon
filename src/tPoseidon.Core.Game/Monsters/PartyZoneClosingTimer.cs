@@ -8,7 +8,7 @@ public enum PartyZoneClosingKind
     Teleport,
 }
 
-public readonly record struct PartyZoneClosingEvent(ushort Zone, PartyZoneClosingKind Kind, int Value);
+public readonly record struct PartyZoneClosingEvent(ushort Zone, ushort Room, PartyZoneClosingKind Kind, int Value);
 
 public sealed class PartyZoneClosingTimer
 {
@@ -17,6 +17,7 @@ public sealed class PartyZoneClosingTimer
     private const int MillisecondsPerSecond = 1000;
 
     private readonly Dictionary<ushort, Zone> _zones = new();
+    private readonly Dictionary<(ushort Zone, ushort Room), RoomState> _rooms = new();
     private readonly object _gate = new();
 
     public PartyZoneClosingTimer(PartyZoneTables tables, IEnumerable<BossSpawnTableEntry> bossRows)
@@ -36,49 +37,63 @@ public sealed class PartyZoneClosingTimer
 
     public IReadOnlyCollection<ushort> Zones => _zones.Keys;
 
-    public bool IsClosing(ushort zone)
+    public bool IsClosing(ushort zone, ushort room)
     {
         lock (_gate)
         {
-            return _zones.TryGetValue(zone, out var state) && state.ClosingSince is not null;
+            return _rooms.TryGetValue((zone, room), out var state) && state.ClosingSince is not null;
         }
     }
 
-    public void BossKilled(ushort zone, int monsterId, long nowMs)
+    public IReadOnlyList<ushort> ClosingRooms(ushort zone)
     {
         lock (_gate)
         {
-            if (!_zones.TryGetValue(zone, out var state) || state.ClosingSince is not null || !state.BossIds.Contains(monsterId)) return;
+            return _rooms.Where(entry => entry.Key.Zone == zone && entry.Value.ClosingSince is not null).Select(entry => entry.Key.Room).ToArray();
+        }
+    }
+
+    public void BossKilled(ushort zone, ushort room, int monsterId, long nowMs)
+    {
+        lock (_gate)
+        {
+            if (!_zones.TryGetValue(zone, out var rule) || !rule.BossIds.Contains(monsterId)) return;
+            if (!_rooms.TryGetValue((zone, room), out var state))
+            {
+                state = new RoomState();
+                _rooms[(zone, room)] = state;
+            }
+            if (state.ClosingSince is not null) return;
             state.Killed++;
-            if (state.Killed < state.BossTotal) return;
+            if (state.Killed < rule.BossTotal) return;
             state.ClosingSince = nowMs;
             state.NextNotice = 0;
         }
     }
 
-    public IReadOnlyList<PartyZoneClosingEvent> Tick(long nowMs, Func<ushort, bool> occupied)
+    public IReadOnlyList<PartyZoneClosingEvent> Tick(long nowMs, Func<ushort, ushort, bool> occupied)
     {
         ArgumentNullException.ThrowIfNull(occupied);
         var events = new List<PartyZoneClosingEvent>();
         lock (_gate)
         {
-            foreach (var (zone, state) in _zones)
+            foreach (var ((zone, room), state) in _rooms.ToArray())
             {
-                if (!occupied(zone))
+                if (!occupied(zone, room) || !_zones.TryGetValue(zone, out var rule))
                 {
-                    state.Reset();
+                    _rooms.Remove((zone, room));
                     continue;
                 }
                 if (state.ClosingSince is not long since) continue;
-                var left = state.Closing.Seconds - (int)((nowMs - since) / MillisecondsPerSecond);
+                var left = rule.Closing.Seconds - (int)((nowMs - since) / MillisecondsPerSecond);
                 if (left <= 0)
                 {
-                    events.Add(new PartyZoneClosingEvent(zone, PartyZoneClosingKind.Teleport, state.Closing.DestZone));
-                    state.Reset();
+                    events.Add(new PartyZoneClosingEvent(zone, room, PartyZoneClosingKind.Teleport, rule.Closing.DestZone));
+                    _rooms.Remove((zone, room));
                     continue;
                 }
                 if (state.NextNotice >= NoticeSeconds.Count || left > NoticeSeconds[state.NextNotice]) continue;
-                if (left == NoticeSeconds[state.NextNotice]) events.Add(new PartyZoneClosingEvent(zone, PartyZoneClosingKind.Notice, left));
+                if (left == NoticeSeconds[state.NextNotice]) events.Add(new PartyZoneClosingEvent(zone, room, PartyZoneClosingKind.Notice, left));
                 do
                 {
                     state.NextNotice++;
@@ -101,15 +116,12 @@ public sealed class PartyZoneClosingTimer
         public PartyZoneClosing Closing { get; }
         public HashSet<int> BossIds { get; }
         public int BossTotal { get; }
+    }
+
+    private sealed class RoomState
+    {
         public int Killed { get; set; }
         public long? ClosingSince { get; set; }
         public int NextNotice { get; set; }
-
-        public void Reset()
-        {
-            Killed = 0;
-            ClosingSince = null;
-            NextNotice = 0;
-        }
     }
 }

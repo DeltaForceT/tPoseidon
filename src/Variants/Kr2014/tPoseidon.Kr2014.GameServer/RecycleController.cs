@@ -122,7 +122,7 @@ internal sealed class RecycleController
         var couponDefinition = _catalog.GetById(row.CouponItemId);
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
         var joins = couponDefinition is { IsStackable: true } && bag.Any(item => item.ItemIndex == row.CouponItemId);
-        if (!joins && bag.Count >= PickupRules.BagCapacity)
+        if (!joins && _items.BagSlotsInUse(character.CharacterId) >= PickupRules.BagCapacity)
         {
             Log(player, "my camp recycle HasAcceptableSpace refused");
             await SendAsync(player, Opcode.S2C_RECYCLE_MYCAMP_RESULT, RecycleFrames.MyCampRefused(RecycleRules.MyCampExchangeFailed)).ConfigureAwait(false);
@@ -204,7 +204,7 @@ internal sealed class RecycleController
         var couponDefinition = _catalog.GetById(couponItemId);
         var joins = couponDefinition is { IsStackable: true } && bag.Any(item => item.ItemIndex == couponItemId);
         var freed = picked.Count(entry => entry.Item.Stack <= 1);
-        if (!joins && bag.Count - freed >= PickupRules.BagCapacity)
+        if (!joins && _items.BagSlotsInUse(character.CharacterId) - freed >= PickupRules.BagCapacity)
         {
             Log(player, "HasAcceptableSpace refused");
             await SendAsync(player, Opcode.S2C_RECYCLE_ITEMS_RESULT, RecycleFrames.ItemsRefused()).ConfigureAwait(false);
@@ -272,7 +272,7 @@ internal sealed class RecycleController
         var source = bag.FirstOrDefault(item => item.ItemUid == BagItemIds.Stored(request.SourceWireUid));
         var resultDefinition = _catalog.GetById((int)request.ResultItemId);
         var joins = resultDefinition is { IsStackable: true } && bag.Any(item => item.ItemIndex == (int)request.ResultItemId);
-        var fits = joins || bag.Count < PickupRules.BagCapacity;
+        var fits = joins || _items.BagSlotsInUse(character.CharacterId) < PickupRules.BagCapacity;
         var refusal = RecycleRules.Check(request, row, source?.ItemIndex, source?.Stack ?? 0, fits);
         if (refusal is not null || source is null || row is null)
         {

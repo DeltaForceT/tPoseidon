@@ -186,7 +186,7 @@ internal sealed class PetEvolveMergeController
 
     private bool Fits(InGameSessionState player, IReadOnlyList<Item> bag, ItemParamEntry created)
     {
-        if (bag.Count >= _bagCapacity) return false;
+        if (player.Character is not { } fitter || _items.BagSlotsInUse(fitter.CharacterId) >= _bagCapacity) return false;
         var bagWeight = bag.Sum(held => (_catalog.GetById(held.ItemIndex)?.Weight ?? 0) * held.WeightUnits);
         return bagWeight + created.Weight <= player.PlayerMaxWt;
     }

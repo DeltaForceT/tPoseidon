@@ -97,6 +97,11 @@ public static class GroundItemFrames
         return w.ToArray();
     }
 
+    public static byte[] AddedToBag(BagOperation granted) =>
+        AddedToBag(
+            granted.Kind == QuestResultFrames.StackChanged ? PickupRules.StackGrew : PickupRules.ItemCreated,
+            granted.ItemClass, granted.ItemId, granted.ItemUid, granted.Count, granted.MixSlot, granted.Options);
+
     public static byte[] AddedToBag(byte kind, byte itemClass, uint itemId, ulong itemUid, ushort count, byte mixSlot = 0, IReadOnlyList<ItemProperty>? options = null)
     {
         var listed = itemClass == ItemParamEntry.RareClass && kind != PickupRules.StackGrew ? options ?? Array.Empty<ItemProperty>() : Array.Empty<ItemProperty>();

@@ -251,6 +251,8 @@ public sealed record SkillEffectKind(
 
     public bool StrikesOnStart { get; init; }
 
+    public bool FirstStrikeAtStart { get; init; }
+
     public int StrikeElement { get; init; }
 
     public int StrikeMagicLoss { get; init; }
@@ -258,6 +260,8 @@ public sealed record SkillEffectKind(
     public bool EndsWhenOwnerHit { get; init; }
 
     public bool AggroesOnEnd { get; init; }
+
+    public bool AggroesOnStart { get; init; }
 
     public bool EndsWhenOwnerMoves { get; init; }
 
@@ -559,7 +563,7 @@ public static class SkillEffectKinds
         new(1122, StatMd, SkillEffectRule.RatioOfBase, SkillEffectTail.Mode, RatioColumn, OnTarget: false),
         new(1274, StatAp, SkillEffectRule.RatioOfBase, SkillEffectTail.Mode, RatioColumn, OnTarget: false),
         new(1096, StatMa, SkillEffectRule.CasterAvoid, SkillEffectTail.TargetThenMode, RatioColumn, OnTarget: true),
-        new(1106, StatDx, SkillEffectRule.CasterMagicHundredthAdded, SkillEffectTail.Mode, RatioColumn, OnTarget: true),
+        new(1106, StatDx, SkillEffectRule.CasterMagicHundredthAdded, SkillEffectTail.Mode, RatioColumn, OnTarget: true) { AggroesOnStart = true, AggroesOnEnd = true },
         new(1107, StatAp, SkillEffectRule.CasterMagicOverFortyNineSixteenfold, SkillEffectTail.Mode, RatioColumn, OnTarget: true),
         new(1109, StatHv, SkillEffectRule.CasterDig, SkillEffectTail.Mode, RatioColumn, OnTarget: true),
         new(1110, StatDp, SkillEffectRule.OwnerDefence, SkillEffectTail.Mode, RatioColumn, OnTarget: true),
@@ -713,7 +717,7 @@ public static class SkillEffectKinds
         },
         new(FireFieldOnMonster, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, FieldPowerColumn, OnTarget: true)
         {
-            Periodic = SkillPeriodicHit.RepeatingStrike, PeriodMs = FireFieldStrikeMs, FixedCoefficient = 1f,
+            Periodic = SkillPeriodicHit.RepeatingStrike, PeriodMs = FireFieldStrikeMs, FixedCoefficient = 1f, FirstStrikeAtStart = true,
             StrikeElement = SkillActions.FireElement, StrikeMagicLoss = FieldMagicLoss, GrantsTm = false, HeaderClass = 0, HeaderState = 1,
             StrikeAddsElement = true,
         },

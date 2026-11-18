@@ -38,7 +38,7 @@ public sealed class MegaphoneRecovery
             _items.AdjustStack(held.ItemUid, 1);
             return true;
         }
-        if (bag.Count >= InventoryCapacity) return false;
+        if (_items.BagSlotsInUse(shout.CharacterId) >= InventoryCapacity) return false;
         var taken = bag.Select(item => item.SlotPosition).ToHashSet();
         var position = Enumerable.Range(0, InventoryCapacity).First(slot => !taken.Contains((byte)slot));
         _items.GrantToCharacter(shout.CharacterId, shout.Refund.ItemIndex, shout.Refund.ItemClass, SlotKind.Inventory, (byte)position);

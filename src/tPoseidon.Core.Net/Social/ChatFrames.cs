@@ -12,6 +12,8 @@ public static class ChatFrames
     public const ushort GhostSaid = 0x02C8;
     public const ushort HeadMessage = 0x00B6;
     public const ushort HeadMessageShown = 0x00B6;
+    public const ushort BoothSaid = 0x00B5;
+    public const ushort OxAnswer = 0x00B9;
     public const ushort FindPlayer = 0x0076;
     public const ushort PlayerFound = 0x0077;
     public const ushort PlayerNotFound = 0x0078;

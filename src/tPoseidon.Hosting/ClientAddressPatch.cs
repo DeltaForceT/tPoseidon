@@ -85,7 +85,7 @@ public static class ClientAddressPatch
             ?? throw new HostingException($"{trimmed} has no IPv4 address, and the KR 2014 client only connects to IPv4 addresses.", "Use the server's IPv4 address.", null);
     }
 
-    public static ClientAddressResult Apply(string executablePath, string serverAddress, int lobbyPort, int shopPort = 0)
+    public static ClientAddressResult Apply(string executablePath, string serverAddress, int lobbyPort, int shopPort = 0, int storageWeightLimit = ClientStorageWeightPatch.OriginalFormula)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         if (lobbyPort != ClientLobbyPort)
@@ -114,7 +114,8 @@ public static class ClientAddressPatch
         var minimapPlan = ClientMinimapPatch.FindUnpatched(bytes);
         var tooltipPlan = ClientTooltipPatch.FindUnpatched(bytes);
         var gmIconSite = ClientGmMailIconPatch.FindUnpatched(bytes);
-        if (!shopPending && imeSite < 0 && minimapPlan is null && tooltipPlan is null && gmIconSite < 0 && slots.All(slot => string.Equals(ReadAddress(bytes, slot), address, StringComparison.Ordinal)))
+        var storageWeightSite = ClientStorageWeightPatch.FindPending(bytes, storageWeightLimit);
+        if (!shopPending && imeSite < 0 && minimapPlan is null && tooltipPlan is null && gmIconSite < 0 && storageWeightSite < 0 && slots.All(slot => string.Equals(ReadAddress(bytes, slot), address, StringComparison.Ordinal)))
         {
             return new ClientAddressResult(address, false, null);
         }
@@ -161,6 +162,11 @@ public static class ClientAddressPatch
             if (gmIconSite >= 0)
             {
                 ClientGmMailIconPatch.Write(bytes, gmIconSite);
+            }
+
+            if (storageWeightSite >= 0)
+            {
+                ClientStorageWeightPatch.Write(bytes, storageWeightSite, storageWeightLimit);
             }
 
             File.WriteAllBytes(executablePath, bytes);

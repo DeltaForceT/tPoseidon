@@ -12,7 +12,7 @@ public sealed class BossSpawnCycle
     private readonly Random _rng;
     private readonly object _gate = new();
     private readonly Dictionary<(ushort MapId, ushort InstanceKey), Zone> _zones = new();
-    private readonly HashSet<ushort> _held = new();
+    private readonly HashSet<(ushort MapId, ushort Room)> _held = new();
 
     public BossSpawnCycle(MonsterManager monsters, IMonsterParamLookup catalog, Random? rng = null)
     {
@@ -60,12 +60,13 @@ public sealed class BossSpawnCycle
         }
     }
 
-    public void Hold(ushort mapId, bool held)
+    public void HoldRooms(ushort mapId, IReadOnlyCollection<ushort> closingRooms)
     {
+        ArgumentNullException.ThrowIfNull(closingRooms);
         lock (_gate)
         {
-            if (held) _held.Add(mapId);
-            else _held.Remove(mapId);
+            _held.RemoveWhere(entry => entry.MapId == mapId && !closingRooms.Contains(entry.Room));
+            foreach (var room in closingRooms) _held.Add((mapId, room));
         }
     }
 
@@ -74,7 +75,7 @@ public sealed class BossSpawnCycle
         var born = new List<MonsterEntity>();
         lock (_gate)
         {
-            if (_held.Contains(mapId) || !_zones.TryGetValue((mapId, 0), out var template)) return born;
+            if (_held.Contains((mapId, instanceKey)) || !_zones.TryGetValue((mapId, 0), out var template)) return born;
             if (template.PerInstance != (instanceKey != 0)) return born;
             if (!_zones.TryGetValue((mapId, instanceKey), out var zone))
             {

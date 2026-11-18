@@ -62,7 +62,7 @@ internal sealed class CardBattleController : IDisposable
         {
             if (Grant(character.CharacterId, card) is { } change)
             {
-                await SendAsync(player, Opcode.S2C_ITEM_OPERATION, QuestResultFrames.ItemOperation(change)).ConfigureAwait(false);
+                await SendAsync(player, Opcode.S2C_ADD_TO_INVENTORY, GroundItemFrames.AddedToBag(change)).ConfigureAwait(false);
                 Console.WriteLine($"{_logTag} [cardbattle] 0x{player.PlayerEntityId:X4} receives card {card}");
             }
             else
@@ -183,7 +183,7 @@ internal sealed class CardBattleController : IDisposable
             var total = _items.AdjustStack(stack.ItemUid, 1);
             return new BagOperation(QuestResultFrames.StackChanged, itemClass, (uint)itemId, BagItemIds.OnWire(stack.ItemUid), total);
         }
-        if (bag.Count >= _bagCapacity) return null;
+        if (_items.BagSlotsInUse(characterId) >= _bagCapacity) return null;
         var minted = _itemManager.GrantRewardItem(characterId, itemId, 1, itemClassOverride: itemClass);
         return new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId, BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot);
     }

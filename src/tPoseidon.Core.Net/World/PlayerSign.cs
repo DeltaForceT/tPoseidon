@@ -69,7 +69,8 @@ public sealed class PlayerSign
 
     public IReadOnlyList<SignFrame> EndFortuneSign(ushort entityId)
     {
-        if (Kind == SignKind.FortuneSign) Kind = SignKind.None;
+        if (Kind != SignKind.FortuneSign) return Array.Empty<SignFrame>();
+        Kind = SignKind.None;
         return new[] { new SignFrame(FortuneSignCleared, Entity(entityId)) };
     }
 

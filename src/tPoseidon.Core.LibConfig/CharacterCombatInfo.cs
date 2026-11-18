@@ -38,8 +38,6 @@ public sealed record CharacterCombatInfo
     public const int SmallestChaseRange = 16;
     public const int MissingAnimationMs = 1000;
     public const int DelayPerDxPointMs = 100;
-    public const int LowestDxModifier = -30;
-    public const double NegativeDxFactor = 0.01;
 
     public const string StandAnimation = "서있기_대각왼쪽앞";
     public const string AttackAnimation = "공격";
@@ -74,7 +72,7 @@ public sealed record CharacterCombatInfo
     private static int Adjusted(int baseMs, int dx)
         => dx >= 0
             ? baseMs + dx * DelayPerDxPointMs
-            : (int)(baseMs * (1 + Math.Max(dx, LowestDxModifier) * NegativeDxFactor));
+            : baseMs;
 
     public static CharacterCombatInfo From(CharacterInfoEntry entry, IReadOnlyList<NoriAnimation>? animations)
     {

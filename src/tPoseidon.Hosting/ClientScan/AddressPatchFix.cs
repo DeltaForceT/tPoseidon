@@ -23,7 +23,7 @@ public sealed class AddressPatchFix : IClientFix
             throw new HostingException("The server address is not set yet, so the client cannot be pointed at it. Finish the network step of the setup first.");
         }
 
-        var result = ClientAddressPatch.Apply(executable, context.ServerAddress, context.LobbyPort, context.ShopPort);
+        var result = ClientAddressPatch.Apply(executable, context.ServerAddress, context.LobbyPort, context.ShopPort, context.StorageWeightLimit);
         return result.Changed
             ? new FixOutcome(true, $"The client now connects to {result.Address}. The original is kept as {Path.GetFileName(executable)}{ClientAddressPatch.BackupSuffix}.")
             : new FixOutcome(false, $"The client already connects to {result.Address}.");

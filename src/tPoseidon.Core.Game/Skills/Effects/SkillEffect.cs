@@ -36,6 +36,7 @@ public sealed class SkillEffect
     public required SkillEffectMode Mode { get; init; }
     public long Sequence { get; set; }
     public int TickMs { get; init; }
+    public bool FirstStrikePending { get; set; }
     public long Charges { get; set; }
     public float Slow { get; init; }
     public double Threshold { get; init; }

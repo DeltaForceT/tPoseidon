@@ -220,7 +220,7 @@ internal sealed class SoulController
         {
             var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
             var stack = potion.IsStackable ? bag.FirstOrDefault(held => held.ItemIndex == potion.Id) : null;
-            if (stack is null && bag.Count >= _bagCapacity)
+            if (stack is null && _items.BagSlotsInUse(character.CharacterId) >= _bagCapacity)
             {
                 await NotifyAsync(player, SoulRules.NotifyBagFull, $"{bag.Count} items in the bag").ConfigureAwait(false);
                 return;

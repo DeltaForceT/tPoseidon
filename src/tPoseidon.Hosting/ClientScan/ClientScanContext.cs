@@ -6,7 +6,7 @@ public sealed class ClientScanContext
 {
     private readonly Lazy<string?> _executable;
 
-    public ClientScanContext(string clientFolder, string service, string? serverAddress, int lobbyPort, Func<string, bool>? isRunning = null, Func<string>? libConfigCopy = null, int shopPort = 0)
+    public ClientScanContext(string clientFolder, string service, string? serverAddress, int lobbyPort, Func<string, bool>? isRunning = null, Func<string>? libConfigCopy = null, int shopPort = 0, int storageWeightLimit = 0)
     {
         _libConfigCopy = libConfigCopy;
         ArgumentException.ThrowIfNullOrWhiteSpace(clientFolder);
@@ -15,6 +15,7 @@ public sealed class ClientScanContext
         ServerAddress = string.IsNullOrWhiteSpace(serverAddress) ? null : serverAddress.Trim();
         LobbyPort = lobbyPort;
         ShopPort = shopPort;
+        StorageWeightLimit = storageWeightLimit;
         IsRunning = isRunning ?? RunningClient.IsRunning;
         _executable = new Lazy<string?>(FindExecutable);
     }
@@ -31,6 +32,8 @@ public sealed class ClientScanContext
 
     public int ShopPort { get; }
 
+    public int StorageWeightLimit { get; }
+
     public Func<string, bool> IsRunning { get; }
 
     public string? ExecutablePath => _executable.Value;
@@ -45,13 +48,13 @@ public sealed class ClientScanContext
     {
         ArgumentNullException.ThrowIfNull(settings);
         var address = settings.Network.PublicAddress;
-        return new ClientScanContext(settings.ClientFolder, settings.Launch.ServiceName, address, settings.Ports.Lobby, shopPort: ShopPortOf(settings));
+        return new ClientScanContext(settings.ClientFolder, settings.Launch.ServiceName, address, settings.Ports.Lobby, shopPort: ShopPortOf(settings), storageWeightLimit: settings.StorageWeightLimit);
     }
 
     public static ClientScanContext For(HostSettings settings, InstallPaths paths)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        return new ClientScanContext(settings.ClientFolder, settings.Launch.ServiceName, settings.Network.PublicAddress, settings.Ports.Lobby, libConfigCopy: () => ServerClientData.Ensure(paths, settings), shopPort: ShopPortOf(settings));
+        return new ClientScanContext(settings.ClientFolder, settings.Launch.ServiceName, settings.Network.PublicAddress, settings.Ports.Lobby, libConfigCopy: () => ServerClientData.Ensure(paths, settings), shopPort: ShopPortOf(settings), storageWeightLimit: settings.StorageWeightLimit);
     }
 
     private static int ShopPortOf(HostSettings settings) => settings.ShopEnabled ? settings.Ports.Shop : 0;

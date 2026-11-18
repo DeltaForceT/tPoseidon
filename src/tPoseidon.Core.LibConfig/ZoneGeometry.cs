@@ -21,6 +21,7 @@ public sealed class ZoneGeometry
     public const int PointTypeSpawn = 3;
     public const int PointTypeRegionSpawn = 6;
     public const int PointTypeTeleportArrival = 7;
+    public const int PointTypeEscortWaypoint = 14;
 
     public const byte FlatHeight = 5;
     public const byte CellBlocked = 1;

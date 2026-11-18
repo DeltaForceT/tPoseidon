@@ -16,6 +16,7 @@ internal sealed class MyCampController : IDisposable
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
     private readonly Func<InGameSessionState, Opcode, byte[], Task> _sendToOthersOnMap;
     private readonly Func<InGameSessionState, Task> _showPlayers;
+    private readonly Func<InGameSessionState, Task> _restoreView;
     private readonly Func<ushort> _newEntityId;
     private readonly Func<ushort, int> _seatFlags;
     private readonly Encoding _text;
@@ -29,7 +30,7 @@ internal sealed class MyCampController : IDisposable
         IMyCampStore store, Func<ushort, int> zoneType, IReadOnlyDictionary<ushort, ZoneGeometry> geometry,
         Func<IReadOnlyCollection<InGameSessionState>> sessions, Func<ushort, Opcode, byte[], Task> sendToMap,
         Func<InGameSessionState, Opcode, byte[], Task> sendToOthersOnMap, Func<InGameSessionState, Task> showPlayers,
-        Func<ushort> newEntityId, Func<ushort, int> seatFlags, Encoding text, string logTag)
+        Func<InGameSessionState, Task> restoreView, Func<ushort> newEntityId, Func<ushort, int> seatFlags, Encoding text, string logTag)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _zoneType = zoneType ?? throw new ArgumentNullException(nameof(zoneType));
@@ -38,6 +39,7 @@ internal sealed class MyCampController : IDisposable
         _sendToMap = sendToMap ?? throw new ArgumentNullException(nameof(sendToMap));
         _sendToOthersOnMap = sendToOthersOnMap ?? throw new ArgumentNullException(nameof(sendToOthersOnMap));
         _showPlayers = showPlayers ?? throw new ArgumentNullException(nameof(showPlayers));
+        _restoreView = restoreView ?? throw new ArgumentNullException(nameof(restoreView));
         _newEntityId = newEntityId ?? throw new ArgumentNullException(nameof(newEntityId));
         _seatFlags = seatFlags ?? throw new ArgumentNullException(nameof(seatFlags));
         _text = text ?? throw new ArgumentNullException(nameof(text));
@@ -460,18 +462,15 @@ internal sealed class MyCampController : IDisposable
     private async Task ReturnAsync(InGameSessionState st, MyCampShell shell, byte? kickReason)
     {
         await _sendToOthersOnMap(st, Opcode.S2C_PLAYER_LEFT_MAP, MyCampFrames.ObjectId(st.PlayerEntityId)).ConfigureAwait(false);
-        var (zone, x, y) = st.MyCampReturn ?? (shell.FieldMap, shell.HouseX, shell.HouseY);
+        var zone = st.MyCampReturn?.Map ?? shell.FieldMap;
         st.MyCampReturn = null;
         if (kickReason is { } reason) await SendAsync(st, Opcode.S2C_MYCAMP_KICK_OUT, MyCampFrames.Kicked(zone, shell.HouseX, shell.HouseY, reason)).ConfigureAwait(false);
         else await SendAsync(st, Opcode.S2C_MYCAMP_RETURN, MyCampFrames.Return(zone, shell.HouseX, shell.HouseY)).ConfigureAwait(false);
         await SendAsync(st, Opcode.S2C_MYCAMP_LEFT, Array.Empty<byte>()).ConfigureAwait(false);
         st.MapId = zone;
-        st.PlayerX = x;
-        st.PlayerY = y;
-        if (st.RequestZoneChange is { } requestZoneChange)
-        {
-            await requestZoneChange(new ZoneChangeRequest(zone, TeleportArrival.ChangeZoneType, null, TimeSpan.Zero, (shell.HouseX, shell.HouseY)), default).ConfigureAwait(false);
-        }
+        st.PlayerX = shell.HouseX;
+        st.PlayerY = shell.HouseY;
+        await _restoreView(st).ConfigureAwait(false);
     }
 
     private void Save(MyCampShell shell)

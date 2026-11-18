@@ -11,7 +11,6 @@ internal sealed class FortuneHold
     public required FortuneInfo Info { get; set; }
     public FortuneBonus Bonus { get; set; } = FortuneBonus.None;
     public bool Active { get; set; }
-    public DateTimeOffset AppliedAt { get; set; }
     public FortuneRound Round { get; } = new();
     public bool DayChecked { get; set; }
 
@@ -19,7 +18,9 @@ internal sealed class FortuneHold
 
     public int ActiveRefine => Active ? Bonus.Refine : 0;
 
-    public FortuneBlock Block() => new((uint)Math.Max(0, Info.ViewCount), AppliedAt, Info.ExpiresAt, (uint)Info.TitleId, Bonus);
+    public bool Presented { get; set; } = true;
+
+    public FortuneBlock Block() => FortuneBlock.Of((uint)Math.Max(0, Info.ViewCount), Info.UpdatedAt, Info.ExpiresAt, (uint)Info.TitleId, Bonus, Active);
 }
 
 internal sealed class FortuneController
@@ -65,8 +66,13 @@ internal sealed class FortuneController
             UpdatedAt = FortuneHouse.NoRecordDate,
             ExpiresAt = FortuneHouse.NoRecordDate,
         };
-        var hold = new FortuneHold { Info = info, AppliedAt = now };
-        if (info.ItemAttrString.Length >= FortuneRules.UsesResetLength) hold.Info = info with { ViewCount = 0 };
+        var hold = new FortuneHold { Info = info };
+        if (!FortuneRules.StoredAwardUsable(info.ItemAttrString))
+        {
+            hold.Info = info with { ViewCount = 0 };
+            hold.Presented = false;
+            return hold;
+        }
         if (!FortuneRules.IsActive(now, info.ExpiresAt))
         {
             hold.Info = hold.Info with { ItemAttrString = string.Empty };
@@ -79,10 +85,10 @@ internal sealed class FortuneController
     }
 
     public static bool ClearsProfileTitle(FortuneHold? hold, ushort profileTitleType) =>
-        hold is { Active: false } && profileTitleType == FortuneProfileTitleType;
+        hold is { Active: false, Presented: true } && profileTitleType == FortuneProfileTitleType;
 
     public static byte[]? AppliedFrame(FortuneHold? hold) =>
-        hold is { Active: true } ? FortuneFrames.Applied(FortuneFrames.AppliedByAward, hold.Block()) : null;
+        hold is { Presented: true } ? FortuneFrames.Applied(FortuneFrames.AppliedByAward, hold.Block(), DateTimeOffset.UtcNow) : null;
 
     public async Task<bool> StarTearsAsync(InGameSessionState player, ItemParamEntry definition, CancellationToken ct)
     {
@@ -92,8 +98,27 @@ internal sealed class FortuneController
         if (extension <= 0 || player.Fortune is not { Active: true } hold) return false;
         hold.Info = hold.Info with { ExpiresAt = hold.Info.ExpiresAt.AddSeconds(extension) };
         await _master.UpdateAsync(hold.Info, ct).ConfigureAwait(false);
-        await SendAsync(player, Opcode.S2C_FORTUNE_APPLIED, FortuneFrames.Applied(FortuneFrames.AppliedByStarTears, hold.Block())).ConfigureAwait(false);
+        await SendAsync(player, Opcode.S2C_FORTUNE_APPLIED, FortuneFrames.Applied(FortuneFrames.AppliedByStarTears, hold.Block(), DateTimeOffset.UtcNow)).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [fortune] 0x{player.PlayerEntityId:X4} award extended to {hold.Info.ExpiresAt:u}");
+        return true;
+    }
+
+    public async Task<bool> ReleaseEndedAsync(InGameSessionState player, DateTimeOffset now, Func<byte[], Task> announceToOthers, Func<Task> clearProfileTitle)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(announceToOthers);
+        ArgumentNullException.ThrowIfNull(clearProfileTitle);
+        if (player.Fortune is not { Active: true } hold || FortuneRules.IsActive(now, hold.Info.ExpiresAt)) return false;
+        hold.Active = false;
+        hold.Bonus = FortuneBonus.None;
+        hold.Info = hold.Info with { TitleId = 0 };
+        player.RecomputeStats?.Invoke();
+        var announce = FortuneFrames.TitleAnnounce(player.PlayerEntityId, 0);
+        await SendAsync(player, Opcode.GAME_ENTITY_ANNOUNCE_3D1, announce).ConfigureAwait(false);
+        await announceToOthers(announce).ConfigureAwait(false);
+        if (player.ProfileTitle.TitleType == FortuneProfileTitleType) await clearProfileTitle().ConfigureAwait(false);
+        await SendAsync(player, Opcode.S2C_FORTUNE_APPLIED, FortuneFrames.Applied(FortuneFrames.AppliedByAward, FortuneBlock.Released, now)).ConfigureAwait(false);
+        Log(player, $"award ended at {hold.Info.ExpiresAt:u}");
         return true;
     }
 
@@ -198,9 +223,9 @@ internal sealed class FortuneController
             var ranges = FortuneHouse.JokerRanges(tables.CardsInRowOrder);
             final = FortuneHouse.ExchangeJokers(before, current => FortuneHouse.JokerCard(ranges, _rng.Next) ?? current);
         }
-        var award = FortuneRules.Award(final.Results, tables);
+        var award = FortuneRules.Award(final.Results, tables, _catalog, stats.Level);
         hold.Round.Rolled(award);
-        hold.Info = hold.Info with { ViewCount = uses, UpdatedAt = now };
+        hold.Info = hold.Info with { ViewCount = uses };
 
         await _seedEvent(player, FortuneHouse.RollEvent).ConfigureAwait(false);
         if (award.ThreeOfAKind) await _seedEvent(player, FortuneHouse.ThreeOfAKindEvent).ConfigureAwait(false);
@@ -215,7 +240,7 @@ internal sealed class FortuneController
         await SendAsync(player, Opcode.S2C_FORTUNE_PAID, FortuneFrames.Paid(character.CharacterId, stats.Money, paid)).ConfigureAwait(false);
         await SendAsync(player, Opcode.S2C_FORTUNE_ROLLED, FortuneFrames.Rolled(new FortuneRollFrame(
             award.ThreeOfAKind, before.Results, final.Results, award.DurationSeconds, (uint)award.TitleId, (uint)uses, award.Text))).ConfigureAwait(false);
-        Log(player, $"roll {uses}: power {request.Power}, picks {string.Join(",", request.Picks)}, cards {string.Join(",", final.Results.Select(result => result.CardId))}{(final.JokerHit ? " (joker)" : string.Empty)}, award '{award.Text}', {award.DurationSeconds} s, title {award.TitleId}{(award.TitleDetermined ? string.Empty : " (title rules not determined)")}, fee {fee}");
+        Log(player, $"roll {uses}: power {request.Power}, picks {string.Join(",", request.Picks)}, cards {string.Join(",", final.Results.Select(result => result.CardId))}{(final.JokerHit ? " (joker)" : string.Empty)}, award '{award.Text}', {award.DurationSeconds} s, title {award.TitleId}, fee {fee}");
     }
 
     public async Task AgainAsync(InGameSessionState player, CancellationToken ct)
@@ -250,13 +275,13 @@ internal sealed class FortuneController
                 TitleId = award.TitleId,
                 ItemAttrString = award.Text,
                 ExpiresAt = now.AddSeconds(award.DurationSeconds),
+                UpdatedAt = now,
             };
-            hold.AppliedAt = now;
             hold.Bonus = FortuneRules.Parse(award.Text);
             hold.Active = FortuneRules.IsActive(now, hold.Info.ExpiresAt);
             recompute();
             await SendAsync(player, Opcode.GAME_ENTITY_ANNOUNCE_3D1, FortuneFrames.TitleAnnounce(player.PlayerEntityId, (uint)award.TitleId)).ConfigureAwait(false);
-            await SendAsync(player, Opcode.S2C_FORTUNE_APPLIED, FortuneFrames.Applied(FortuneFrames.AppliedByAward, hold.Block())).ConfigureAwait(false);
+            await SendAsync(player, Opcode.S2C_FORTUNE_APPLIED, FortuneFrames.Applied(FortuneFrames.AppliedByAward, hold.Block(), now)).ConfigureAwait(false);
             foreach (var eventType in FortuneHouse.StatEvents(hold.Bonus)) await _seedEvent(player, eventType).ConfigureAwait(false);
             await _master.UpdateAsync(hold.Info, ct).ConfigureAwait(false);
             Log(player, $"award '{award.Text}' applied until {hold.Info.ExpiresAt:u}, title {award.TitleId}");

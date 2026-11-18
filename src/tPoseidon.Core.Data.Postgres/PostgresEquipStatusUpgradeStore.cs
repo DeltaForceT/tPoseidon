@@ -110,9 +110,10 @@ public sealed class PostgresEquipStatusUpgradeStore : IEquipStatusUpgradeStore
 
     private static int BagCount(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId)
     {
-        using var cmd = new NpgsqlCommand("SELECT COUNT(*) FROM item_char WHERE char_uid = @ch AND item_where = @w", conn, tx);
+        using var cmd = new NpgsqlCommand("SELECT COUNT(*) FROM item_char WHERE char_uid = @ch AND item_where IN (@w, @e)", conn, tx);
         cmd.Parameters.AddWithValue("ch", unchecked((long)characterId));
         cmd.Parameters.AddWithValue("w", (short)SlotKind.Inventory);
+        cmd.Parameters.AddWithValue("e", (short)SlotKind.Equipment);
         return Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 

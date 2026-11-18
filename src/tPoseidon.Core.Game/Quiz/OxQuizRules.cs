@@ -11,6 +11,7 @@ public enum OxVerdict
 
 public static class OxQuizRules
 {
+    public const byte BoothFloor = 1;
     public const byte CircleFloor = 2;
     public const byte CrossFloor = 3;
     public const byte CircleAnswer = 0;
@@ -23,6 +24,8 @@ public static class OxQuizRules
         ArgumentNullException.ThrowIfNull(geometry);
         return geometry.SecondaryCellAtPosition(x, y);
     }
+
+    public static bool IsBooth(byte floor) => floor == BoothFloor;
 
     public static OxVerdict Judge(byte floor, byte answer)
     {

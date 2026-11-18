@@ -201,7 +201,7 @@ internal sealed class GameMasterController : IDisposable
         }
     }
 
-    private async Task JudgeOxPlayersAsync(ushort mapId, byte answer, CancellationToken ct)
+    public async Task JudgeOxPlayersAsync(ushort mapId, byte answer, CancellationToken ct)
     {
         if (GeometryOf?.Invoke(mapId) is not { } geometry) return;
         foreach (var player in Players?.Invoke() ?? Array.Empty<InGameSessionState>())

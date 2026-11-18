@@ -50,6 +50,8 @@ public sealed class HostSettings
 
     public int CharacterSlots { get; set; } = CharacterSlotRules.Default;
 
+    public int StorageWeightLimit { get; set; } = ClientStorageWeightPatch.OriginalFormula;
+
     public string LastStartedVersion { get; set; } = "";
 
     public GuardSettings Security { get; set; } = new();

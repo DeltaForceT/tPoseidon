@@ -19,6 +19,7 @@ public sealed class MonsterOverrideEntry
     public int? GMax { get; set; }
     public int? ItemDropIdx { get; set; }
     public bool? IsBoss { get; set; }
+    public int? HitsPerSwing { get; set; }
 }
 
 public sealed class MonsterOverrides

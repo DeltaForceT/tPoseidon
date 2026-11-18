@@ -58,7 +58,10 @@ public sealed record MonsterBattleSwung(
     long Damage,
     byte Result,
     bool Fatal,
-    ushort GuardLeft = 0) : MonsterBattleEvent(EntityId);
+    ushort GuardLeft = 0,
+    IReadOnlyList<MonsterSwingHit>? Hits = null) : MonsterBattleEvent(EntityId);
+
+public sealed record MonsterSwingHit(long Damage, byte Result, ushort GuardLeft = 0);
 
 public sealed record MonsterBattleLeft(ushort EntityId, MonsterBattleLeaveReason Reason)
     : MonsterBattleEvent(EntityId);
@@ -350,6 +353,28 @@ public sealed class MonsterBattleCycle
         return _timedTactics.GetValue(monster, _ => new MonsterTactics(tactics));
     }
 
+    public const int RefollowChaseMs = 5000;
+
+    public Func<int, int>? HitsPerSwing { get; set; }
+
+    public bool Refollow(MonsterEntity monster, ushort targetEntityId)
+    {
+        ArgumentNullException.ThrowIfNull(monster);
+
+        lock (_gate)
+        {
+            if (monster.IsDead || !_fights.TryGetValue(monster.EntityId, out var fight)) return false;
+            fight.TargetEntityId = targetEntityId;
+            fight.Settled = false;
+            fight.SettlesOnArrival = false;
+            fight.ChaseBudgetMs = RefollowChaseMs;
+            fight.DestinationShifts = 0;
+            fight.Reapproaching = false;
+            fight.ReapproachFailures = 0;
+            return true;
+        }
+    }
+
     public bool Retarget(MonsterEntity monster, ushort targetEntityId)
     {
         ArgumentNullException.ThrowIfNull(monster);
@@ -593,23 +618,34 @@ public sealed class MonsterBattleCycle
             return;
         }
 
-        var outcome = MeleeResolution.MonsterAgainstPlayer(
-            definition.ApLv + monster.StatDelta(MonsterStat.Ap),
-            definition.AcLv + monster.StatDelta(MonsterStat.Ac),
-            definition.LkLv + monster.StatDelta(MonsterStat.Lk),
-            definition.Level,
-            definition.AccFormula,
-            target.Dp,
-            target.Hv,
-            target.Lk,
-            target.Level,
-            targetHp,
-            target.Protected,
-            _rng,
-            target.DefenceParalysed);
-        var fatal = outcome.Damage >= targetHp;
-        hpLeftByTarget[fight.TargetEntityId] = fatal ? 0 : targetHp - outcome.Damage;
-        var limitReached = !target.Monster && CountWeakHit(monster, fight.TargetEntityId, outcome.Result, outcome.Damage, target.MaxHp);
+        var hitCount = Math.Max(1, HitsPerSwing?.Invoke(monster.MonsterParamId) ?? 1);
+        var rolls = new List<MonsterSwingHit>(hitCount);
+        long totalDamage = 0;
+        var hpLeft = targetHp;
+        for (var hitIndex = 0; hitIndex < hitCount && hpLeft > 0; hitIndex++)
+        {
+            var rolled = MeleeResolution.MonsterAgainstPlayer(
+                definition.ApLv + monster.StatDelta(MonsterStat.Ap),
+                definition.AcLv + monster.StatDelta(MonsterStat.Ac),
+                definition.LkLv + monster.StatDelta(MonsterStat.Lk),
+                definition.Level,
+                definition.AccFormula,
+                target.Dp,
+                target.Hv,
+                target.Lk,
+                target.Level,
+                hpLeft,
+                target.Protected,
+                _rng,
+                target.DefenceParalysed);
+            rolls.Add(new MonsterSwingHit(rolled.Damage, rolled.Result));
+            totalDamage += rolled.Damage;
+            hpLeft = rolled.Damage >= hpLeft ? 0 : hpLeft - rolled.Damage;
+        }
+        var outcome = (Damage: totalDamage, Result: rolls[^1].Result);
+        var fatal = hpLeft == 0;
+        hpLeftByTarget[fight.TargetEntityId] = hpLeft;
+        var limitReached = !target.Monster && CountWeakHit(monster, fight.TargetEntityId, rolls[0].Result, outcome.Damage, target.MaxHp);
         fight.Settled = true;
         fight.NextSwingAt = now.AddMilliseconds(reach.MonsterSwingDelayMs(definition.DxLv + monster.StatDelta(MonsterStat.Dx)));
         Observer?.Invoke(new MonsterBattleReachSample(
@@ -626,7 +662,8 @@ public sealed class MonsterBattleCycle
             target.Y,
             outcome.Damage,
             outcome.Result,
-            fatal));
+            fatal,
+            Hits: rolls.Count > 1 ? rolls : null));
         if (limitReached) Leave(monster, MonsterBattleLeaveReason.AttackerLimitReached, events);
     }
 

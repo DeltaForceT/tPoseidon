@@ -34,6 +34,8 @@ public sealed class SkillCast
 
     public DateTimeOffset TickedAt { get; private set; }
 
+    public DateTimeOffset AcceptedAt { get; private set; }
+
     public ushort ResumeAttackOn { get; set; }
 
     public (ushort X, ushort Y)? TargetPoint { get; set; }
@@ -42,7 +44,11 @@ public sealed class SkillCast
 
     public void Chase(ushort targetEntityId, ushort toX, ushort toY, DateTimeOffset arrivesAt, DateTimeOffset now)
     {
-        if (Phase == SkillCastPhase.AwaitingTarget) TickedAt = now;
+        if (Phase == SkillCastPhase.AwaitingTarget)
+        {
+            TickedAt = now;
+            AcceptedAt = now;
+        }
         TargetEntityId = targetEntityId;
         ChaseEnd = (toX, toY);
         ChaseArrivesAt = arrivesAt;
@@ -51,6 +57,7 @@ public sealed class SkillCast
 
     public void StartCasting(ushort targetEntityId, DateTimeOffset now)
     {
+        if (Phase == SkillCastPhase.AwaitingTarget) AcceptedAt = now;
         TargetEntityId = targetEntityId;
         DelayLeftMs = SkillChecks.DelayMsOf(Skill.ConditionsAt(Level));
         TickedAt = now;

@@ -218,7 +218,7 @@ internal sealed class ItemComposingController
             await RefuseDecomposeAsync(player, DecomposeRules.NotDecomposable, $"no dummy skin for item kind {definition.Type}/{definition.SubType}").ConfigureAwait(false);
             return;
         }
-        if (bag.Count >= _bagCapacity)
+        if (_items.BagSlotsInUse(character.CharacterId) >= _bagCapacity)
         {
             await RefuseDecomposeAsync(player, DecomposeRules.BagFull, "bag full").ConfigureAwait(false);
             return;
@@ -258,15 +258,14 @@ internal sealed class ItemComposingController
 
     private async Task GivePresentAsync(InGameSessionState player, ulong characterId, int itemId)
     {
-        var bag = _items.GetForCharacterBySlotKind(characterId, SlotKind.Inventory);
-        if (bag.Count >= _bagCapacity)
+        if (_items.BagSlotsInUse(characterId) >= _bagCapacity)
         {
             Log(player, $"pet composing present {itemId}: bag full, not given");
             return;
         }
         var itemClass = _catalog.GetById(itemId)?.ObjectClass ?? (byte)ItemParamEntry.StackableClass;
         var minted = _itemManager.GrantRewardItem(characterId, itemId, 1, itemClassOverride: itemClass);
-        await SendAsync(player, Opcode.S2C_ITEM_OPERATION, QuestResultFrames.ItemOperation(new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId,
+        await SendAsync(player, Opcode.S2C_ADD_TO_INVENTORY, GroundItemFrames.AddedToBag(new BagOperation(QuestResultFrames.Created, itemClass, (uint)itemId,
             BagItemIds.OnWire(minted.ItemUid), minted.Stack, minted.ItemSlot))).ConfigureAwait(false);
         Log(player, $"pet composing present {itemId} given");
     }

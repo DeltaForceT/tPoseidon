@@ -9,7 +9,7 @@ public sealed record FortuneBonus(IReadOnlyList<int> Stats, int Refine, int Drop
     public static FortuneBonus None { get; } = new(new int[FortuneRules.StatSlots], 0, 0, 0);
 }
 
-public sealed record FortuneAward(string Text, long DurationSeconds, int TitleId, bool TitleDetermined, bool ThreeOfAKind);
+public sealed record FortuneAward(string Text, long DurationSeconds, int TitleId, bool ThreeOfAKind);
 
 public readonly record struct FortuneCard(ushort JokerSet, ushort IsBasic, uint CardId, ulong ItemUid, float Weight);
 
@@ -32,10 +32,18 @@ public static class FortuneRules
     public const int UsesResetLength = 100;
     public const int TitleCountCategory = 15;
     public const int TitleNoCategory = 0;
+    public const int TitleRankCategory = 1;
     public const int TitleCardCategory = 2;
+    public const int TitleFirstAttributeCategory = 3;
+    public const int TitleLastAttributeCategory = 14;
+    public const int LevelStep = 40;
     public const string RefineName = "RFIT";
     public const string DropName = "DROP";
     public const string ExpName = "EXP";
+
+    private static readonly string[] TitleAttributes = ["AP", "AC", "DX", "MA", "MD", "DA", "LK", "DP", "HV", RefineName, DropName, ExpName];
+
+    private static readonly HashSet<string> ScaledAttributes = new(["AP", "AC", "DX", "MA", "MD", "DA", "LK", "DP", "HV"], StringComparer.OrdinalIgnoreCase);
 
     private static readonly char[] Delimiters = ['\r', '\n', '\t', ' ', '|'];
 
@@ -72,45 +80,58 @@ public static class FortuneRules
         return new FortuneBonus(stats, refine, drop, exp);
     }
 
+    public static bool StoredAwardUsable(string award)
+    {
+        ArgumentNullException.ThrowIfNull(award);
+        return award.Length < UsesResetLength;
+    }
+
     public static bool IsActive(DateTimeOffset now, DateTimeOffset expiry) => now <= expiry;
 
-    public static FortuneAward Award(IReadOnlyList<FortuneResult> results, FortuneTables tables)
+    public static FortuneAward Award(IReadOnlyList<FortuneResult> results, FortuneTables tables, IItemParamLookup catalog, int level)
     {
         ArgumentNullException.ThrowIfNull(results);
         ArgumentNullException.ThrowIfNull(tables);
+        ArgumentNullException.ThrowIfNull(catalog);
         var text = new StringBuilder();
         long duration = 0;
         foreach (var result in results)
         {
             if (!tables.Cards.TryGetValue((int)result.CardId, out var card) || card.Attribute.Length == 0) continue;
-            Append(text, card.Attribute, card.Value);
+            Append(text, card.Attribute, Scaled(card.Attribute, card.Value, level));
             duration += card.Duration;
         }
-        var (titleId, determined) = Title(results, tables);
+        var titleId = Title(results, tables, catalog);
         var threeOfAKind = false;
         if (results.Count == ResultCount && results.All(result => result.CardId == results[0].CardId)
-            && tables.Cards.TryGetValue((int)results[0].CardId, out var same) && same.Cross.Any(cross => cross.Attribute.Length > 0))
+            && tables.Cards.TryGetValue((int)results[0].CardId, out var same))
         {
             threeOfAKind = true;
             foreach (var cross in same.Cross)
             {
-                if (cross.Attribute.Length > 0 && cross.Value != 0f) Append(text, cross.Attribute, cross.Value);
+                if (cross.Attribute.Length > 0 && cross.Value != 0f) Append(text, cross.Attribute, Scaled(cross.Attribute, cross.Value, level));
             }
         }
-        return new FortuneAward(text.ToString(), duration, titleId, determined, threeOfAKind);
+        return new FortuneAward(text.ToString(), duration, titleId, threeOfAKind);
     }
 
-    public static (int TitleId, bool Determined) Title(IReadOnlyList<FortuneResult> results, FortuneTables tables)
+    public static double Scaled(string attribute, float value, int level)
+    {
+        ArgumentNullException.ThrowIfNull(attribute);
+        return ScaledAttributes.Contains(attribute) ? (double)value * (level / LevelStep + 1) : value;
+    }
+
+    public static int Title(IReadOnlyList<FortuneResult> results, FortuneTables tables, IItemParamLookup catalog)
     {
         ArgumentNullException.ThrowIfNull(results);
         ArgumentNullException.ThrowIfNull(tables);
+        ArgumentNullException.ThrowIfNull(catalog);
         var ids = results.Select(result => (int)result.CardId).ToArray();
         foreach (var rule in tables.Titles.OrderBy(rule => rule.Index))
         {
-            if (rule.Conditions.Any(condition => condition.Category is not (TitleNoCategory or TitleCardCategory or TitleCountCategory))) return (0, false);
-            if (Matches(rule, ids)) return (rule.TitleId, true);
+            if (Matches(rule, ids, tables, catalog)) return rule.TitleId;
         }
-        return (0, true);
+        return 0;
     }
 
     public static FortuneDraw Draw(int power, IReadOnlyList<int> picks, IReadOnlyList<FortuneCard> cards, float needleSeed, float myCardSeed,
@@ -162,25 +183,39 @@ public static class FortuneRules
         return upper;
     }
 
-    private static bool Matches(FortuneTitleRule rule, IReadOnlyList<int> ids)
+    private static bool Matches(FortuneTitleRule rule, IReadOnlyList<int> ids, FortuneTables tables, IItemParamLookup catalog)
     {
         var count = rule.Conditions.FirstOrDefault(condition => condition.Category == TitleCountCategory);
         if (count.Category == TitleCountCategory)
         {
-            IEnumerable<int> remaining = ids;
+            var remaining = ids.ToList();
             foreach (var condition in rule.Conditions)
             {
-                if (condition.Category == TitleCardCategory) remaining = remaining.Where(id => id == condition.Value).ToArray();
+                if (remaining.Count == 0) break;
+                switch (condition.Category)
+                {
+                    case TitleRankCategory:
+                        remaining.RemoveAll(id => (catalog.GetById(id)?.CardNum ?? int.MinValue) != condition.Value);
+                        break;
+                    case TitleCardCategory:
+                        remaining.RemoveAll(id => id != condition.Value);
+                        break;
+                    case >= TitleFirstAttributeCategory and <= TitleLastAttributeCategory:
+                        var name = TitleAttributes[condition.Category - TitleFirstAttributeCategory];
+                        remaining.RemoveAll(id => !tables.Cards.TryGetValue(id, out var card) || !string.Equals(card.Attribute, name, StringComparison.OrdinalIgnoreCase));
+                        break;
+                }
             }
-            return remaining.Count() >= count.Value;
+            return remaining.Count >= count.Value;
         }
-        return rule.Conditions.Where(condition => condition.Category == TitleCardCategory).All(condition => ids.Contains(condition.Value));
+        var wanted = rule.Conditions.Where(condition => condition.Category == TitleCardCategory).ToArray();
+        return wanted.Sum(condition => ids.Count(id => id == condition.Value)) >= wanted.Length;
     }
 
-    private static void Append(StringBuilder text, string attribute, float value)
+    private static void Append(StringBuilder text, string attribute, double value)
     {
         if (text.Length > 0) text.Append(' ');
         text.Append(attribute).Append('|')
-            .Append(Math.Round((double)value, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture));
+            .Append(Math.Round(value, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture));
     }
 }

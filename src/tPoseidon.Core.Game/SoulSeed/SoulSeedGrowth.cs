@@ -35,6 +35,20 @@ public static class SoulSeedRules
     public const int MaxBuffStacks = 5;
     public const int BuffValueSlots = 12;
     public const int NoBuffGroup = -1;
+    public const double BuffRatioPerStack = 0.019999999552965164;
+    public static readonly int[][] BuffStats =
+    [
+        [0, 1, 2],
+        [4, 5, 3],
+        [6, 7, 8],
+        [9, 10, 11],
+    ];
+
+    public static int BuffValue(int baseStat, int stacks)
+    {
+        var ratio = (float)(stacks * BuffRatioPerStack);
+        return (int)(baseStat * (double)ratio);
+    }
     public const int SeedSubType = 72;
     public const int SummonGuardianSkill = 8003;
     public const int GuardianSlotsFullCode = 10;
@@ -143,6 +157,11 @@ public sealed class SoulSeedGrowth
         lock (_gate) return new SoulSeedBuff(BuffGroup, BuffMillisecondsLeft, BuffStacks, _buffValues.ToArray());
     }
 
+    public int BuffValueOf(int stat)
+    {
+        lock (_gate) return stat >= 0 && stat < _buffValues.Length ? _buffValues[stat] : 0;
+    }
+
     public bool TickBuff(int elapsedMilliseconds)
     {
         lock (_gate)
@@ -212,7 +231,7 @@ public sealed class SoulSeedGrowth
         }
     }
 
-    public SoulSeedEventOutcome OnEvent(int eventType, int count, SoulSeedEventEntry? row)
+    public SoulSeedEventOutcome OnEvent(int eventType, int count, SoulSeedEventEntry? row, IReadOnlyList<int>? baseStats = null)
     {
         lock (_gate)
         {
@@ -245,7 +264,7 @@ public sealed class SoulSeedGrowth
             }
             var complete = changed && !wasComplete && CompleteNow();
             if (complete) Complete = true;
-            var buffChanged = changed && buffGroup != SoulSeedRules.NoBuffGroup && ApplyBuff(buffGroup);
+            var buffChanged = changed && buffGroup != SoulSeedRules.NoBuffGroup && ApplyBuff(buffGroup, baseStats);
             return new SoulSeedEventOutcome(true, true, counter, changed, buffChanged, complete, backups);
         }
     }
@@ -286,7 +305,7 @@ public sealed class SoulSeedGrowth
         return new SoulSeedRecord(Planted, SeedItemId, StartAt, LastUpdateAt, _saved.ToArray());
     }
 
-    private bool ApplyBuff(int group)
+    private bool ApplyBuff(int group, IReadOnlyList<int>? baseStats)
     {
         if (group != BuffGroup)
         {
@@ -299,6 +318,10 @@ public sealed class SoulSeedGrowth
         {
             BuffGroup = group;
             BuffStacks++;
+            foreach (var stat in SoulSeedRules.BuffStats[group])
+            {
+                _buffValues[stat] = baseStats is not null && stat < baseStats.Count ? SoulSeedRules.BuffValue(baseStats[stat], BuffStacks) : 0;
+            }
         }
         BuffMillisecondsLeft = SoulSeedRules.BuffMilliseconds;
         return true;

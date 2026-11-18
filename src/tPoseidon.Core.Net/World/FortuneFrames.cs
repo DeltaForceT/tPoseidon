@@ -5,7 +5,13 @@ using tPoseidon.Core.Game.Fortune;
 
 namespace tPoseidon.Core.Net.World;
 
-public sealed record FortuneBlock(uint UsesToday, DateTimeOffset AppliedAt, DateTimeOffset Expiry, uint TitleId, FortuneBonus Bonus);
+public sealed record FortuneBlock(uint UsesToday, DateTimeOffset AppliedAt, DateTimeOffset Expiry, uint TitleId, FortuneBonus Bonus)
+{
+    public static FortuneBlock Of(uint usesToday, DateTimeOffset appliedAt, DateTimeOffset expiry, uint titleId, FortuneBonus bonus, bool active) =>
+        active ? new FortuneBlock(usesToday, appliedAt, expiry, titleId, bonus) : new FortuneBlock(usesToday, appliedAt, expiry, 0, FortuneBonus.None);
+
+    public static readonly FortuneBlock Released = new(0, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, 0, FortuneBonus.None);
+}
 
 public sealed record FortuneChangeRequest(IReadOnlyList<ulong> JokerUids, IReadOnlyList<uint> Indices);
 
@@ -25,6 +31,7 @@ public static class FortuneFrames
     public const int UsesOffset = 0x00;
     public const int AppliedAtOffset = 0x04;
     public const int ExpiryOffset = 0x0C;
+    public const int SentAtOffset = 0x14;
     public const int TitleOffset = 0x1C;
     public const int StatsOffset = 0x24;
     public const int RefineOffset = 0x68;
@@ -192,11 +199,12 @@ public static class FortuneFrames
         return bytes;
     }
 
-    public static byte[] Applied(byte source, FortuneBlock block)
+    public static byte[] Applied(byte source, FortuneBlock block, DateTimeOffset sentAt)
     {
         var frame = new byte[AppliedSize];
         frame[0] = source;
         Block(block).CopyTo(frame, 1);
+        BinaryPrimitives.WriteInt64LittleEndian(frame.AsSpan(1 + SentAtOffset), sentAt.ToUnixTimeSeconds());
         return frame;
     }
 

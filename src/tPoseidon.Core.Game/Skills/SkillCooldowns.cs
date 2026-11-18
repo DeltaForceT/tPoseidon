@@ -9,7 +9,7 @@ public sealed class SkillCooldowns
 
     public bool IsRunning(int skillId) => _running.ContainsKey(skillId);
 
-    public void Start(int skillId, float coolTimeSeconds) => Begin(skillId, coolTimeSeconds - StartedEarlierBy);
+    public void Start(int skillId, float coolTimeSeconds, float alreadyElapsedSeconds = 0f) => Begin(skillId, coolTimeSeconds - StartedEarlierBy - alreadyElapsedSeconds);
 
     public void Begin(int skillId, float seconds)
     {

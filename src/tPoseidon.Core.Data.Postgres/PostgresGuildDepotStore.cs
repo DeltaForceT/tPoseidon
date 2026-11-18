@@ -167,7 +167,7 @@ public sealed class PostgresGuildDepotStore : IGuildDepotStore
         var carried = BagPositions(conn, tx, request.CharacterId);
         var merge = request.Stackable ? BagMergeTarget(conn, tx, request.CharacterId, stored) : null;
         if (merge is not null && merge.Stack + request.Count > GuildDepotRules.StackLimit) return GuildDepotTransfer.Fail(GuildDepotErrors.CannotAdd);
-        if (merge is null && carried.Count >= GuildDepotRules.BagCapacity) return GuildDepotTransfer.Fail(GuildDepotErrors.TooManyCarried);
+        if (merge is null && carried.Count + WornCount(conn, tx, request.CharacterId) >= GuildDepotRules.BagCapacity) return GuildDepotTransfer.Fail(GuildDepotErrors.TooManyCarried);
 
         var whole = stored.Stack == request.Count;
         GuildDepotSide bagSide;
@@ -294,6 +294,14 @@ public sealed class PostgresGuildDepotStore : IGuildDepotStore
         cmd.Parameters.AddWithValue("u", unchecked((long)like.ItemUid));
         using var reader = cmd.ExecuteReader();
         return reader.Read() ? ReadDepotItem(reader) : null;
+    }
+
+    private static int WornCount(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId)
+    {
+        using var cmd = new NpgsqlCommand("SELECT COUNT(*) FROM item_char WHERE char_uid = @c AND item_where = @w", conn, tx);
+        cmd.Parameters.AddWithValue("c", unchecked((long)characterId));
+        cmd.Parameters.AddWithValue("w", (short)SlotKind.Equipment);
+        return Convert.ToInt32(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static List<int> BagPositions(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId)
