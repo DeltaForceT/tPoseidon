@@ -74,10 +74,11 @@ public static class FortuneRules
 
     public static bool IsActive(DateTimeOffset now, DateTimeOffset expiry) => now <= expiry;
 
-    public static FortuneAward Award(IReadOnlyList<FortuneResult> results, FortuneTables tables)
+    public static FortuneAward Award(IReadOnlyList<FortuneResult> results, FortuneTables tables, IItemParamLookup catalog)
     {
         ArgumentNullException.ThrowIfNull(results);
         ArgumentNullException.ThrowIfNull(tables);
+        ArgumentNullException.ThrowIfNull(catalog);
         var text = new StringBuilder();
         long duration = 0;
         foreach (var result in results)
@@ -86,32 +87,40 @@ public static class FortuneRules
             Append(text, card.Attribute, card.Value);
             duration += card.Duration;
         }
-        var (titleId, determined) = Title(results, tables);
+        var (titleId, determined) = Title(results, tables, catalog);
         var threeOfAKind = false;
         if (results.Count == ResultCount && results.All(result => result.CardId == results[0].CardId)
             && tables.Cards.TryGetValue((int)results[0].CardId, out var same) && same.Cross.Any(cross => cross.Attribute.Length > 0))
         {
             threeOfAKind = true;
+            var item = catalog.GetById((int)results[0].CardId);
+            var rankScale = item is not null && item.CardNum > 0 ? item.CardNum : 1;
             foreach (var cross in same.Cross)
             {
-                if (cross.Attribute.Length > 0 && cross.Value != 0f) Append(text, cross.Attribute, cross.Value);
+                if (cross.Attribute.Length > 0 && cross.Value != 0f)
+                {
+                    Append(text, cross.Attribute, cross.Value * rankScale);
+                }
             }
         }
         return new FortuneAward(text.ToString(), duration, titleId, determined, threeOfAKind);
     }
 
-    public static (int TitleId, bool Determined) Title(IReadOnlyList<FortuneResult> results, FortuneTables tables)
+    public static (int TitleId, bool Determined) Title(IReadOnlyList<FortuneResult> results, FortuneTables tables, IItemParamLookup catalog)
     {
         ArgumentNullException.ThrowIfNull(results);
         ArgumentNullException.ThrowIfNull(tables);
-        var ids = results.Select(result => (int)result.CardId).ToArray();
+        ArgumentNullException.ThrowIfNull(catalog);
         foreach (var rule in tables.Titles.OrderBy(rule => rule.Index))
         {
-            if (rule.Conditions.Any(condition => condition.Category is not (TitleNoCategory or TitleCardCategory or TitleCountCategory))) return (0, false);
-            if (Matches(rule, ids)) return (rule.TitleId, true);
+            if (TryMatchRule(rule, results, tables, catalog, out var resolvedTitleId))
+            {
+                return (resolvedTitleId, true);
+            }
         }
         return (0, true);
     }
+
 
     public static FortuneDraw Draw(int power, IReadOnlyList<int> picks, IReadOnlyList<FortuneCard> cards, float needleSeed, float myCardSeed,
         Func<FortuneCard, float> jokerWeight, Func<int, int> rand)
@@ -162,20 +171,88 @@ public static class FortuneRules
         return upper;
     }
 
-    private static bool Matches(FortuneTitleRule rule, IReadOnlyList<int> ids)
+    private static int EffectIndexFromAttribute(string attr) => attr switch
     {
-        var count = rule.Conditions.FirstOrDefault(condition => condition.Category == TitleCountCategory);
-        if (count.Category == TitleCountCategory)
+        "AP" => 3,
+        "AC" => 4,
+        "DX" => 5,
+        "MA" => 6,
+        "MD" => 7,
+        "DA" => 8,
+        "LK" => 9,
+        "DP" => 10,
+        "HV" => 11,
+        "RFIT" => 12,
+        "DROP" => 13,
+        "EXP" => 14,
+        _ => -1,
+    };
+
+    private static bool TryMatchRule(FortuneTitleRule rule, IReadOnlyList<FortuneResult> results, FortuneTables tables, IItemParamLookup catalog, out int titleId)
+    {
+        titleId = rule.TitleId;
+        var validConditions = rule.Conditions.Where(c => c.Category != TitleNoCategory).ToArray();
+        if (validConditions.Length == 0) return false;
+
+        var countCond = validConditions.FirstOrDefault(c => c.Category == TitleCountCategory);
+        var requiredCount = countCond.Category == TitleCountCategory ? countCond.Value : 3;
+        if (requiredCount <= 0) return false;
+
+        var typeCond = validConditions.FirstOrDefault(c => c.Category == 1);
+        var subCond = validConditions.FirstOrDefault(c => c.Category is >= 3 and <= 14);
+
+        // 1) Cat=1:Val=1 -> 같은 카드 3장 일치 (등급 1~9 -> Cat=3~11 -> 실제 타이틀ID 3~11번)
+        if (typeCond.Category == 1 && typeCond.Value == 1 && subCond.Category is >= 3 and <= 11 && requiredCount == 3)
         {
-            IEnumerable<int> remaining = ids;
-            foreach (var condition in rule.Conditions)
+            var targetRank = subCond.Category - 2; // Cat=3 -> 1등급(머큐리), Cat=11 -> 9등급(아폴론)
+            if (results.Count < 3) return false;
+            if (results.Select(r => r.CardId).Distinct().Count() != 1) return false;
+            var item = catalog.GetById((int)results[0].CardId);
+            if (item is not null && item.CardNum == targetRank)
             {
-                if (condition.Category == TitleCardCategory) remaining = remaining.Where(id => id == condition.Value).ToArray();
+                // 테이블에 TitleId가 3으로 고정된 버그 보정: Cat=3(3번) ~ Cat=11(11번)
+                titleId = subCond.Category;
+                return true;
             }
-            return remaining.Count() >= count.Value;
+            return false;
         }
-        return rule.Conditions.Where(condition => condition.Category == TitleCardCategory).All(condition => ids.Contains(condition.Value));
+
+        // 2) Cat=1:Val=2 -> 같은 종류(옵션) 3장 일치 (카펠라 ~ 제련신)
+        if (typeCond.Category == 1 && typeCond.Value == 2 && subCond.Category is >= 3 and <= 14 && requiredCount == 3)
+        {
+            var matched = results.Count(r =>
+            {
+                if (!tables.Cards.TryGetValue((int)r.CardId, out var card)) return false;
+                return EffectIndexFromAttribute(card.Attribute) == subCond.Category;
+            });
+            return matched >= 3;
+        }
+
+        // 3) Cat=1:Val=0 -> 대흉의 (0등급 기본 카드 3장)
+        if (typeCond.Category == 1 && typeCond.Value == 0 && !validConditions.Any(c => c.Category == TitleCardCategory))
+        {
+            var basicCount = results.Count(r =>
+            {
+                var item = catalog.GetById((int)r.CardId);
+                return item is not null && item.CardNum == 0;
+            });
+            return basicCount >= requiredCount;
+        }
+
+        // 4) 특정 카드 번호(Cat=2) 2장 또는 3장 일치 (신 내린 제련사 등 - 다른 Cat 조건이 섞여 있어도 Cat=2 우선 검사)
+        var cardConds = validConditions.Where(c => c.Category == TitleCardCategory).ToArray();
+        if (cardConds.Length > 0)
+        {
+            foreach (var cond in cardConds)
+            {
+                if (results.Count(r => (int)r.CardId == cond.Value) < requiredCount) return false;
+            }
+            return true;
+        }
+
+        return false;
     }
+
 
     private static void Append(StringBuilder text, string attribute, float value)
     {
@@ -184,3 +261,5 @@ public static class FortuneRules
             .Append(Math.Round((double)value, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture));
     }
 }
+
+
