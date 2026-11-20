@@ -8,6 +8,7 @@ body:
         Thanks for testing. One bug per report, please.
         Take personal stuff out of logs and screenshots before you send (real names, passwords, IP addresses, paths with your user name).
         Security bugs don't go here; report them privately, see [SECURITY.md](https://github.com/DeltaForceT/tPoseidon/blob/main/SECURITY.md).
+        If a closed issue still happens, comment `/reopen` followed by the reason (for example the version you tested) and the issue opens again.
 
   - type: checkboxes
     id: checks
