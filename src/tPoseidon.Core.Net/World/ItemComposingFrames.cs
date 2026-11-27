@@ -7,6 +7,8 @@ public static class ItemComposingFrames
 {
     public const int RequestSize = 1 + 3 * sizeof(ulong);
     public const int CloseSize = sizeof(ushort);
+    public const ushort CharacterPetClose = 0x050C;
+    public const ushort CharacterPetClosed = 0x050D;
     public const ushort DecomposeOpened = 0x04F0;
     public const ushort Decompose = 0x04F1;
     public const ushort Decomposed = 0x04F2;

@@ -118,7 +118,7 @@ internal sealed class PetCollectionController
             run.Filters = frame.Filters;
             run.NextTickAt = now + plan.TickPeriod;
             await SendAsync(player, Opcode.S2C_PET_COLLECTION_STARTED, Array.Empty<byte>()).ConfigureAwait(false);
-            Log(player, $"pet {plan.PetItemId} collects with {run.FoodLeft} x {plan.Food.ItemId} every {plan.Food.SpeedSeconds} s on map {player.MapId}, filters 0x{frame.Filters:X2}");
+            Log(player, $"pet {plan.PetItemId} collects with {run.FoodLeft} x {plan.Food.ItemId} every {plan.Food.SpeedSeconds} s on map {plan.MapId}, filters 0x{frame.Filters:X2}");
         }
         finally
         {
@@ -276,14 +276,14 @@ internal sealed class PetCollectionController
                 return;
             }
             var tables = _tables();
-            var areaCode = PetCollectionRules.CheckArea(tables, player.MapId, plan);
+            var areaCode = PetCollectionRules.CheckArea(tables, plan.MapId, plan);
             if (areaCode != PetCollectionRules.Ok)
             {
-                await HaltAsync(player, run, $"map {player.MapId} does not allow this pet (code {areaCode})").ConfigureAwait(false);
+                await HaltAsync(player, run, $"map {plan.MapId} does not allow this pet (code {areaCode})").ConfigureAwait(false);
                 return;
             }
             PetCollectionDraw? draw;
-            lock (_rngGate) draw = PetCollectionRules.Draw(plan, PetCollectionRules.DepthPenalty(tables, player.MapId, _rng.Next), _rng.Next, () => GroundItem(player.MapId),
+            lock (_rngGate) draw = PetCollectionRules.Draw(plan, PetCollectionRules.DepthPenalty(tables, plan.MapId, _rng.Next), _rng.Next, () => GroundItem((ushort)plan.MapId),
                 PetCollectionRules.ExAllowed(run.Filters));
             var spent = SpendOne(food);
             run.FoodLeft--;

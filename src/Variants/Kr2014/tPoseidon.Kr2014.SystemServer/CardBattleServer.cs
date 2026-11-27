@@ -26,8 +26,7 @@ public sealed class CardBattleServer
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(ctx);
-        On(dispatcher, ctx, CardBattleFrames.MakeBattle, (member, p) =>
-            CardBattleFrames.TryReadText(p, _text, out var target) ? _battles.Make(Player(member), target) : null);
+        On(dispatcher, ctx, CardBattleFrames.MakeBattle, (member, _) => _battles.Make(Player(member)));
         On(dispatcher, ctx, CardBattleFrames.Ask, (member, p) =>
             CardBattleFrames.TryReadText(p, _text, out var target) ? _battles.Ask(Player(member), target) : null);
         On(dispatcher, ctx, CardBattleFrames.AnswerYes, (member, _) => _battles.Answer(Player(member), yes: true));
@@ -42,22 +41,45 @@ public sealed class CardBattleServer
         On(dispatcher, ctx, CardBattleFrames.ReserveExit, (member, _) => _battles.ReserveExit(member.Character.CharacterId));
         On(dispatcher, ctx, CardBattleFrames.Chat, (member, p) =>
             CardBattleFrames.TryReadText(p, _text, out var line) ? _battles.ChatLine(member.Character.CharacterId, line) : null);
+        On(dispatcher, ctx, CardBattleFrames.ExtraCardRequest, (member, _) => _battles.ExtraCard(member.Character.CharacterId));
         On(dispatcher, ctx, CardBattleFrames.ResultOk, (member, _) => _battles.ResultOk(member.Character.CharacterId));
     }
 
     public Task ReportAsync(OfficerOrder report, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(report);
+        if (report.OrderType == CardBattleFrames.OrderCheckReply)
+        {
+            if (CardBattleFrames.ReadCheckReply(report.Data) is not { } check)
+            {
+                _log($"[cardbattle] ORDER 0x{CardBattleFrames.OrderCheckReply:X2} from 0x{report.CharacterId:X}: {report.Data.Length} B is shorter than the check reply");
+                return Task.CompletedTask;
+            }
+            var checkOutbox = _battles.CheckReported(report.CharacterId, check);
+            foreach (var note in checkOutbox.Notes) _log($"[cardbattle] ORDER 0x{CardBattleFrames.OrderCheckReply:X2} from 0x{report.CharacterId:X}: {note}");
+            return DeliverAsync(checkOutbox, ct);
+        }
         if (report.OrderType != CardBattleFrames.OrderStatusReply || CardBattleFrames.ReadStatusReply(report.Data) is not { } reply) return Task.CompletedTask;
-        var outbox = _battles.StatusReported(reply.CharacterId, reply.Code, reply.Reward);
+        var outbox = _battles.StatusReported(reply.CharacterId, reply.Code, reply.Reward, reply.DeckReady);
         foreach (var note in outbox.Notes) _log($"[cardbattle] ORDER 0x{CardBattleFrames.OrderStatusReply:X2} from 0x{reply.CharacterId:X}: {note}");
         return DeliverAsync(outbox, ct);
+    }
+
+    public async Task RunTimersAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(CardBattleFrames.TimerTickMs));
+        while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+        {
+            var outbox = _battles.Tick(CardBattleFrames.TimerTickMs);
+            foreach (var note in outbox.Notes) _log($"[cardbattle] {note}");
+            await DeliverAsync(outbox, ct).ConfigureAwait(false);
+        }
     }
 
     public Task ClosedAsync(SocialMember member, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(member);
-        return DeliverAsync(_battles.Leave(member.Character.CharacterId, 0), ct);
+        return DeliverAsync(_battles.Closed(member.Character.CharacterId), ct);
     }
 
     private static CardBattlePlayer Player(SocialMember member) =>
@@ -86,7 +108,9 @@ public sealed class CardBattleServer
     {
         foreach (var (characterId, orderType, data) in outbox.Orders)
         {
-            await _games.SendOnceAsync(characterId, orderType, data, ct).ConfigureAwait(false);
+            if (await _games.TrySendOnceAsync(characterId, orderType, data, ct).ConfigureAwait(false) || orderType != CardBattleFrames.OrderCheck) continue;
+            _log($"[cardbattle] ORDER 0x{orderType:X2} to 0x{characterId:X} not sent");
+            await DeliverAsync(_battles.CheckNotSent(characterId), ct).ConfigureAwait(false);
         }
         foreach (var message in outbox.Messages)
         {

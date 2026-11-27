@@ -53,7 +53,10 @@ var characterCreationManager = new tPoseidon.Core.Game.Characters.CharacterCreat
 Console.WriteLine($"{LogTag} account store ready (Postgres-backed); ChannelIntro is checked against the lobby authcode");
 
 var LocalHostIp = ServerEndpointConfig.PublicIp;
-var GameServerPort = ServerEndpointConfig.GamePort;
+var zoneRouting = tPoseidon.Core.InterServer.ZoneRoutingConfig.Load(
+    ServerIniLocator.Resolve(ServerIniLocator.ServerKind.Master, ServerIniLocator.Variant.Kr2014),
+    RepoRoot.Data("master-zone-routing.json"),
+    msg => Console.WriteLine($"{LogTag} {msg}"));
 var LoginServerPort = ServerEndpointConfig.LoginPort;
 
 var channelSessions = new System.Collections.Concurrent.ConcurrentDictionary<uint, TridentSessionContext>();
@@ -180,9 +183,11 @@ var host = new TridentServerHost
 
         ctx.Dispatcher.Register((ushort)Kr2014Opcode.C2S_KR_CHARCREATE_QUERY_07F6, async (_, _, innerCt) =>
         {
+            await SendRawFrameAsync(ctx, ChannelLogin.TimeCapsuleCouponOpcode, randKey: 0x12,
+                ChannelLogin.TimeCapsuleCouponPayload(0), innerCt);
             await SendRawFrameAsync(ctx, (ushort)Kr2014Opcode.S2C_KR_CHARSELECT_WAIT_CLEAR,
                 randKey: 0x12, new byte[] { 0x00, 0x00 }, innerCt);
-            Console.WriteLine($"{LogTag} {ctx.Remote} 0x07F6 received → sent 0x0818 [00 00] (clears CharSelect wait flag, skips 30-60s watchdog)");
+            Console.WriteLine($"{LogTag} {ctx.Remote} 0x07F6 received → sent 0x07F7 [count 0] and 0x0818 [00 00] (clears CharSelect wait flag, skips 30-60s watchdog)");
         });
         ctx.Dispatcher.Register((ushort)Kr2014Opcode.C2S_KR_CHARCREATE_QUERY_0817, async (_, _, innerCt) =>
         {
@@ -337,13 +342,15 @@ var host = new TridentServerHost
 
             var sessionToken = accountStore.IssueSessionToken(sessionAccountId.Value, TimeSpan.FromMinutes(5));
 
+            var gameServer = tPoseidon.Core.InterServer.ZoneRoutingConfig.ResolveLoginServer(zoneRouting.Table, character.MapId);
+            var gameServerPort = gameServer.GameListenPort;
             var runningBlock = gmBlockStore.LatestRunningBlock(selectedCharUid);
             var handoff = new ChannelHandoffReplyPacket
             {
                 BaseBytes = ChannelHandoffReplyPacket.SnapshotBytes,
                 SelectedCharUid = selectedCharUid,
                 IpAddress = LocalHostIp,
-                GamePort = GameServerPort,
+                GamePort = gameServerPort,
                 BlockMinutes = GmBlockRules.LoginBlockMinutes(runningBlock),
             };
             if (runningBlock is { } block)
@@ -366,7 +373,7 @@ var host = new TridentServerHost
             await SendFrameAsync(ctx, Opcode.SESSION_PARAM_1, randKey: 0x4D,
                 sessionParam.EncodePayload(), innerCt);
 
-            Console.WriteLine($"{LogTag} {ctx.Remote} sent 3-frame handoff bundle (uid=0x{selectedCharUid:X16}, GameServer={LocalHostIp}:{GameServerPort}, account={sessionAccountId.Value} state=4 token=0x{sessionToken.Value:X8})");
+            Console.WriteLine($"{LogTag} {ctx.Remote} sent 3-frame handoff bundle (uid=0x{selectedCharUid:X16}, GameServer={LocalHostIp}:{gameServerPort} ({gameServer.Name} hosts zone {character.MapId}), account={sessionAccountId.Value} state=4 token=0x{sessionToken.Value:X8})");
         });
 
         ctx.Dispatcher.Register(tPoseidon.Core.Net.Social.SecondPasswordFrames.Envelope, async (_, payload, innerCt) =>

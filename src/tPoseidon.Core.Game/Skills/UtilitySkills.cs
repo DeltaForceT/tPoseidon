@@ -17,6 +17,8 @@ public static class UtilitySkills
     public const string ApplyRatioColumn = "ApplyRatio";
     public const string TrapPowerColumn = "TrapAp";
     public const string RadiusColumn = "Radius";
+    public const string DepthColumn = "Depth";
+    public const string DepthRatioColumn = "DepthRatio";
     public const string SecondsColumn = "Seconds";
     public const string SecondColumn = "Second";
 

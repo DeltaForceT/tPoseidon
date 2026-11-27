@@ -122,6 +122,8 @@ public static class CoupleFrames
         return w.ToArray();
     }
 
+    public const ushort WeddingMessage = 0x0490;
+
     public static byte[] Stage(uint stage)
     {
         var w = new PacketWriter(4);

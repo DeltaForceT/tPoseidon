@@ -49,6 +49,11 @@ public sealed class PostgresEquipStatusUpgradeStore : IEquipStatusUpgradeStore
             }
         }
         if (BagCount(conn, tx, upgrade.CharacterId) > upgrade.BagCapacity) return EquipStatusUpgradeResult.Refused(EquipStatusUpgradeRules.BagFull);
+        foreach (var write in upgrade.PropertyWrites ?? Array.Empty<ItemPropertyWrite>())
+        {
+            if (!HeldBy(conn, tx, upgrade.CharacterId, write.ItemUid)) return EquipStatusUpgradeResult.Refused(EquipStatusUpgradeRules.ItemMismatch);
+            WriteProperties(conn, tx, write);
+        }
         var remain = money - upgrade.Fee;
         Execute(conn, tx, "UPDATE characters SET money = @m WHERE character_id = @ch", ("m", remain), ("ch", unchecked((long)upgrade.CharacterId)));
         tx.Commit();
@@ -66,6 +71,31 @@ public sealed class PostgresEquipStatusUpgradeStore : IEquipStatusUpgradeStore
         cmd.Parameters.AddWithValue("ch", unchecked((long)characterId));
         cmd.Parameters.AddWithValue("w", (short)SlotKind.Inventory);
         return cmd.ExecuteScalar() is int index && index == item.ItemIndex;
+    }
+
+    private static bool HeldBy(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId, ulong itemUid)
+    {
+        using var cmd = new NpgsqlCommand(
+            "SELECT 1 FROM item_char WHERE item_uid = @u AND char_uid = @ch AND item_where = @w FOR UPDATE", conn, tx);
+        cmd.Parameters.AddWithValue("u", unchecked((long)itemUid));
+        cmd.Parameters.AddWithValue("ch", unchecked((long)characterId));
+        cmd.Parameters.AddWithValue("w", (short)SlotKind.Inventory);
+        return cmd.ExecuteScalar() is not null;
+    }
+
+    private static void WriteProperties(NpgsqlConnection conn, NpgsqlTransaction tx, ItemPropertyWrite write)
+    {
+        Execute(conn, tx, "DELETE FROM item_option WHERE item_uid = @item_uid", ("item_uid", unchecked((long)write.ItemUid)));
+        for (var position = 0; position < write.Properties.Count; position++)
+        {
+            var property = write.Properties[position];
+            Execute(conn, tx, """
+                INSERT INTO item_option (item_uid, position, prop_type, prop_id, prop_value, prop_extra)
+                VALUES (@item_uid, @position, @prop_type, @prop_id, @prop_value, @prop_extra)
+                """,
+                ("item_uid", unchecked((long)write.ItemUid)), ("position", (short)position), ("prop_type", (short)property.Type),
+                ("prop_id", property.Id), ("prop_value", property.Value), ("prop_extra", (long)property.Extra));
+        }
     }
 
     private static ulong Insert(NpgsqlConnection conn, NpgsqlTransaction tx, ulong characterId, EquipUpgradeItem item, DateTimeOffset breakedAt)

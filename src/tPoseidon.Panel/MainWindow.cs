@@ -250,6 +250,11 @@ public sealed class MainWindow : Window
         var publish = new MenuItem { Header = "Publish launcher update" };
         publish.Click += async (_, _) => await _host.PublishLauncherUpdateAsync().ConfigureAwait(true);
         var launcherDrawer = new MenuItem { Header = "Launcher", Items = { launcher, channel, publish } };
+        var checkUpdates = new MenuItem { Header = "Check for updates now" };
+        checkUpdates.Click += async (_, _) => await _host.Updater.CheckAsync(manual: true).ConfigureAwait(true);
+        var updateSettings = new MenuItem { Header = "Update settings..." };
+        updateSettings.Click += (_, _) => Tools.EditUpdateSettings();
+        var updatesDrawer = new MenuItem { Header = "Updates", Items = { checkUpdates, updateSettings } };
         var language = new MenuItem { Header = "Client language" };
         foreach (var choice in Tools.Languages)
         {
@@ -291,6 +296,7 @@ public sealed class MainWindow : Window
                 backup,
                 share,
                 launcherDrawer,
+                updatesDrawer,
                 language,
                 gameWindow,
                 guildCoins,
@@ -311,6 +317,7 @@ public sealed class MainWindow : Window
             launcher.IsEnabled = _host.IsSetUp;
             channel.IsEnabled = _host.IsSetUp;
             publish.IsEnabled = _host.IsSetUp;
+            updatesDrawer.IsEnabled = _host.IsSetUp;
             guildCoins.IsEnabled = _host.IsSetUp;
             characterSlots.IsEnabled = _host.IsSetUp;
             language.IsEnabled = _host.IsSetUp;
@@ -404,6 +411,8 @@ public sealed class MainWindow : Window
         area.Children.Add(new ScrollViewer { Content = _rowStack, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto });
         _toast.PointerPressed += (_, _) => _toast.Hide();
         area.Children.Add(_toast);
+        area.Children.Add(new UpdateStrip(_host.Updater, _host, this));
+        _host.Updater.ExitRequested += Exit;
         return area;
     }
 

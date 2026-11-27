@@ -30,6 +30,12 @@ public static class PassiveStats
         return bonuses;
     }
 
+    public static IReadOnlyList<int> StatsOfSkill(int skillId, SkillBook book)
+    {
+        ArgumentNullException.ThrowIfNull(book);
+        return book.Find(skillId) is { IsPassive: true } skill && Flat.TryGetValue(skill.ActionId, out var flat) ? new[] { flat.Stat } : Array.Empty<int>();
+    }
+
     public static IReadOnlyList<int> StatsOf(IReadOnlyDictionary<int, int> learned, SkillBook book)
     {
         ArgumentNullException.ThrowIfNull(learned);

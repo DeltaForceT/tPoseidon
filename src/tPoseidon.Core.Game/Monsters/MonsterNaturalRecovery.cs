@@ -18,9 +18,9 @@ public static class MonsterNaturalRecovery
         return (hpRegen != 0 ? hpRegen : hp, mpRegen != 0 ? mpRegen : mp);
     }
 
-    public static long Tick(MonsterEntity monster, bool fighting, DateTimeOffset now)
+    public static long Tick(MonsterEntity monster, bool fighting, DateTimeOffset now, bool recoveryBlocked = false)
     {
         ArgumentNullException.ThrowIfNull(monster);
-        return monster.RecoverHp(now, fighting, PeriodMs);
+        return monster.RecoverHp(now, fighting || recoveryBlocked, PeriodMs);
     }
 }

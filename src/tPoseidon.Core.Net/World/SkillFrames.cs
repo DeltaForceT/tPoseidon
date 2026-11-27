@@ -211,11 +211,19 @@ public static class SkillFrames
         return w.ToArray();
     }
 
-    public static byte[] DetectorTail(bool found)
+    public static byte[] DetectorTail(bool found, IReadOnlyList<(ushort X, ushort Y)> positions, ushort seconds)
     {
-        var w = new PacketWriter(3);
+        ArgumentNullException.ThrowIfNull(positions);
+        var w = new PacketWriter(5 + 4 * positions.Count);
         w.WriteByte(found ? (byte)1 : (byte)0);
-        if (found) w.WriteUInt16(0);
+        if (!found) return w.ToArray();
+        w.WriteUInt16((ushort)positions.Count);
+        foreach (var (x, y) in positions)
+        {
+            w.WriteUInt16(x);
+            w.WriteUInt16(y);
+        }
+        if (positions.Count > 0) w.WriteUInt16(seconds);
         return w.ToArray();
     }
 
@@ -284,7 +292,7 @@ public static class SkillFrames
         w.WriteInt32(hit.Element);
         w.WriteInt32(hit.Flags);
         w.WriteInt32(0);
-        w.WriteInt32(guardLeft);
+        w.WriteInt32(guardLeft == 0 ? hit.GuardLeft : guardLeft);
         return w.ToArray();
     }
 

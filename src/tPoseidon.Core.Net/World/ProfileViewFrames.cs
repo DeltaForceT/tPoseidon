@@ -85,7 +85,7 @@ public static class ProfileViewFrames
         return w.ToArray();
     }
 
-    public static byte[] CoverLetterRefused() => [ProfileViewRules.CoverLetterRefusedCode];
+    public static byte[] CoverLetterRefused() => Options(ProfileViewRules.CoverLetterRefusedCode);
 
     public static byte[] Options(uint flags)
     {

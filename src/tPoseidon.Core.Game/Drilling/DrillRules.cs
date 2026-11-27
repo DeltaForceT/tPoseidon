@@ -24,6 +24,14 @@ public static class DrillRules
     public const int TmLevelCap = 500;
     public const int InvincibleDrillSkill = 3001;
 
+    public static bool SpotOutOfReach(DrillParamEntry drill, int mapDepth)
+    {
+        ArgumentNullException.ThrowIfNull(drill);
+        return mapDepth > drill.DigDepth;
+    }
+
+    public static byte? SkillStopResult(bool digging) => digging ? DrillResult.Stopped : null;
+
     public static int Wear(int life, int presses, int drillNature, int cellNature)
     {
         var used = drillNature == 0 || drillNature == cellNature ? presses : 2 * presses;

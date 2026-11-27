@@ -76,7 +76,7 @@ public static class GuildRecruitFrames
         return list;
     }
 
-    public static byte[] ListFor(IReadOnlyList<GuildRecruitView> posts, GuildRecruitListRequest request, bool ownPostExists, Encoding text, Func<uint, GuildEmblem>? emblemOf = null)
+    public static byte[] ListFor(IReadOnlyList<GuildRecruitView> posts, GuildRecruitListRequest request, bool ownPostExists, Encoding text, TimeZoneInfo zone, Func<uint, GuildEmblem>? emblemOf = null)
     {
         ArgumentNullException.ThrowIfNull(posts);
         ArgumentNullException.ThrowIfNull(text);
@@ -93,7 +93,7 @@ public static class GuildRecruitFrames
             WriteText(w, post.Guild.GuildName, GuildNameLength, text);
             WriteText(w, post.MasterName, MasterNameLength, text);
             WriteText(w, post.Post.RecruitTitle, TitleLength, text);
-            WriteText(w, Date(post.Post.RecruitUpdatedAt), DateLength, text);
+            WriteText(w, GuildFrames.LocalDate(post.Post.RecruitUpdatedAt, zone), DateLength, text);
             var emblem = emblemOf?.Invoke((uint)post.Guild.GuildCode) ?? default;
             w.WriteByte(emblem.Template);
             w.WriteByte(emblem.Colour);
@@ -112,7 +112,7 @@ public static class GuildRecruitFrames
         return body;
     }
 
-    public static byte[] ContentFor(GuildRecruitView? view, Encoding text)
+    public static byte[] ContentFor(GuildRecruitView? view, Encoding text, TimeZoneInfo zone)
     {
         var w = new PacketWriter(ContentReplyLength);
         if (view is null)
@@ -127,15 +127,13 @@ public static class GuildRecruitFrames
         w.WriteInt32(view.Guild.GuildPoint);
         w.WriteByte((byte)Math.Clamp((int)view.Guild.GuildMembers, 0, byte.MaxValue));
         WriteText(w, view.Post.RecruitTitle, TitleLength, text);
-        WriteText(w, Date(view.Post.RecruitUpdatedAt), DateLength, text);
+        WriteText(w, GuildFrames.LocalDate(view.Post.RecruitUpdatedAt, zone), DateLength, text);
         WriteText(w, view.Post.RecruitContent, ContentLength, text);
         WriteText(w, view.Guild.GuildName, GuildNameLength, text);
         WriteText(w, view.MasterName, MasterNameLength, text);
-        WriteText(w, Date(view.Guild.GuildCreatedAt), DateLength, text);
+        WriteText(w, GuildFrames.LocalDate(view.Guild.GuildCreatedAt, zone), DateLength, text);
         return w.ToArray();
     }
-
-    private static string Date(DateTimeOffset at) => at.UtcDateTime.ToString("yy-MM-dd", CultureInfo.InvariantCulture);
 
     private static string Text(ReadOnlySpan<byte> field, Encoding text)
     {

@@ -51,6 +51,8 @@ public sealed class NaturalRecovery
         };
     }
 
+    public static bool PausedByMonsterResult(bool hiddenFromVictim, bool immortal) => !hiddenFromVictim && !immortal;
+
     public void PauseAfterDamage()
     {
         lock (_gate)

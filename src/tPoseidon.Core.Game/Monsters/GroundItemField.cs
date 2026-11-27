@@ -20,6 +20,8 @@ public sealed record FieldItem(
     public bool IsHidden { get; init; }
 
     public ulong ItemUid { get; init; }
+
+    public bool OwnerReleased { get; init; }
 }
 
 public sealed class GroundItemField
@@ -50,10 +52,22 @@ public sealed class GroundItemField
         return onMap;
     }
 
+    public int ReleaseOwnedBy(ushort mapId, ushort ownerEntityId, DateTimeOffset now)
+    {
+        if (ownerEntityId == FieldItem.NoOwner) return 0;
+        var released = 0;
+        foreach (var item in _items.Values)
+        {
+            if (item.MapId != mapId || OwnerAt(item, now) != ownerEntityId) continue;
+            if (_items.TryUpdate(item.EntityId, item with { OwnerReleased = true }, item)) released++;
+        }
+        return released;
+    }
+
     public static ushort OwnerAt(FieldItem item, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(item);
-        return item.OwnerEntityId != FieldItem.NoOwner && now - item.DroppedAt <= OwnedFor
+        return item.OwnerEntityId != FieldItem.NoOwner && !item.OwnerReleased && now - item.DroppedAt <= OwnedFor
             ? item.OwnerEntityId
             : FieldItem.NoOwner;
     }
@@ -62,7 +76,7 @@ public sealed class GroundItemField
     {
         ArgumentNullException.ThrowIfNull(item);
         var free = item.IsMoney ? MoneyFreeFor : FreeFor;
-        return item.OwnerEntityId == FieldItem.NoOwner
+        return item.OwnerEntityId == FieldItem.NoOwner && !item.OwnerReleased
             ? item.DroppedAt + free
             : item.DroppedAt + OwnedFor + free;
     }

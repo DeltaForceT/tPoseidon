@@ -33,6 +33,9 @@ public static class GuardianFrames
         return w.ToArray();
     }
 
+    public static byte[] WindRuneHeader(ushort guardianEntityId, ushort monsterEntityId, ushort actionId, sbyte effectClass, ushort skillId, ushort effectState, ushort effectObjectId) =>
+        SkillFrames.EffectHeader(guardianEntityId, monsterEntityId, actionId, effectClass, skillId, effectState, effectObjectId);
+
     public const int FTypeOffset = 0x1E;
     public const int RareTypeOffset = 0x1F;
     public const int TitleIndexOffset = 0x20;

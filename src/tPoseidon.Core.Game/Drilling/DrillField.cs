@@ -45,6 +45,11 @@ public sealed class DrillField
         && _geometry.AttributeAt(cellX, cellY) != ZoneGeometry.CellBlocked
         && NatureAt(cellX, cellY) != DrillRules.NotDiggableNature;
 
+    public bool IsOpenForDetection(int cellX, int cellY) =>
+        _geometry.ContainsCell(cellX, cellY)
+        && _geometry.AttributeAt(cellX, cellY) == 0
+        && NatureAt(cellX, cellY) != DrillRules.NotDiggableNature;
+
     public int? LaidDepth(int cellX, int cellY) => _laid.TryGetValue((cellX, cellY), out var depth) ? depth : null;
 
     public int CellsX => _geometry.CellsX;

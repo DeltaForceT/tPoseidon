@@ -24,6 +24,8 @@ public sealed partial class ItemUseService
         await SendAsync(Opcode.S2C_KEYBOX_OPENED, Array.Empty<byte>(), ct).ConfigureAwait(false);
     }
 
+    public Task CloseKeyBoxWindowAsync(CancellationToken ct) => SendAsync(Opcode.S2C_KEYBOX_CLOSED, Array.Empty<byte>(), ct);
+
     public async Task ConfirmKeyBoxAsync(ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (!KeyBoxFrames.TryReadConfirm(payload.Span, out var boxUid, out var keyUid)) return;

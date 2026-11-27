@@ -23,6 +23,8 @@ public sealed record ShadowBonus(int RewardId, IReadOnlyList<int> Stats, DateTim
 
     public bool IsActive(DateTimeOffset now) => now < Expires;
 
+    public static bool HasEnded(ShadowBonus? held, DateTimeOffset now) => held is not null && !held.IsActive(now);
+
     public int[] ActiveStats(DateTimeOffset now)
     {
         var stats = new int[FortuneRules.StatSlots];

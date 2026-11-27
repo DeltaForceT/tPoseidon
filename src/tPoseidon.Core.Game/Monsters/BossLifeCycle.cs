@@ -30,7 +30,9 @@ public sealed class BossLifeCycle
 
     public Func<MonsterEntity, bool>? HasTarget { get; set; }
 
-    public Func<MonsterEntity, BossSkillSlot, bool>? CanCast { get; set; }
+    public Func<MonsterEntity, BossCastRequest, BossCastPlan>? PlanCast { get; set; }
+
+    public Action<MonsterEntity, BossCastRequest>? CastStarted { get; set; }
 
     public IReadOnlyList<ushort> ChildrenOf(ushort bossEntityId) =>
         _families.TryGetValue(bossEntityId, out var family) ? family.Children.ToArray() : Array.Empty<ushort>();
@@ -52,11 +54,10 @@ public sealed class BossLifeCycle
             var called = boss.TickBoss(
                 nowMs, elapsed, engaged, _monsters.GetByScene(boss.MapId, boss.InstanceKey).Count, family.Children.Count, _rng.Next(2) == 0);
             if (called) Summon(boss, life.Profile, family);
-            var skills = life.Profile.Skills;
-            var ready = skills is { Count: > 0 } && CanCast is { } canCast
-                ? skills.Select(slot => canCast(boss, slot)).ToArray()
-                : null;
-            boss.TickBossTimers(elapsed, HasTarget?.Invoke(boss) ?? engaged, NextRoll, ready is null ? null : slot => ready[slot]);
+            var plans = PlansOf(boss, life.Profile);
+            var started = boss.TickBossTimers(
+                elapsed, HasTarget?.Invoke(boss) ?? engaged, NextRoll, plans is null ? null : request => plans.GetValueOrDefault(request));
+            foreach (var request in started) CastStarted?.Invoke(boss, request);
             DespawnWhenIdle(boss, life.Profile, family, elapsed, engaged);
         }
         foreach (var gone in _families.Keys.Where(id => !live.Contains(id)).ToArray())
@@ -69,6 +70,29 @@ public sealed class BossLifeCycle
     }
 
     private int NextRoll() => _rng.Next();
+
+    private Dictionary<BossCastRequest, BossCastPlan>? PlansOf(MonsterEntity boss, BossLifeProfile profile)
+    {
+        if (PlanCast is not { } planCast) return null;
+        var plans = new Dictionary<BossCastRequest, BossCastPlan>();
+        if (profile.Heals is { } heals)
+        {
+            foreach (var heal in heals)
+            {
+                var request = new BossCastRequest(BossEventKind.HealCast, BossLife.HealSkillId, heal.Level);
+                plans.TryAdd(request, planCast(boss, request));
+            }
+        }
+        if (profile.Skills is { } skills)
+        {
+            foreach (var slot in skills)
+            {
+                var request = new BossCastRequest(BossEventKind.SkillCast, slot.SkillId, slot.Level);
+                plans.TryAdd(request, planCast(boss, request));
+            }
+        }
+        return plans;
+    }
 
     private Family FamilyOf(ushort bossEntityId)
     {

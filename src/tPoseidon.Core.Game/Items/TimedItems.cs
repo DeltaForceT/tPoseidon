@@ -1,4 +1,5 @@
 using tPoseidon.Core.Data;
+using tPoseidon.Core.Game.ShadowWorld;
 
 namespace tPoseidon.Core.Game.Items;
 
@@ -11,6 +12,12 @@ public static class TimedItemRules
     public const int NoticeWindowMinutes = 1440;
     public static readonly TimeSpan TickInterval = TimeSpan.FromMinutes(1);
     public static readonly TimeSpan ShortestListed = TimeSpan.FromMinutes(1);
+
+    public static bool NeedsTick(int timedItems, ImprintBook imprints, ShadowBonus? shadowBonus)
+    {
+        ArgumentNullException.ThrowIfNull(imprints);
+        return timedItems > 0 || imprints.HoldsAny || shadowBonus is not null;
+    }
 
     private static readonly int[] BandFloors = { 60, 10, 1, 0 };
 

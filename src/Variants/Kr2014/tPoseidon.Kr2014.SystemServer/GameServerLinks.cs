@@ -36,6 +36,8 @@ public sealed class GameServerLinks
 
     public Action<ulong, uint>? OnCancelPartyQuest { get; set; }
 
+    public Func<ulong, CancellationToken, Task>? OnRemovePartyQuest { get; set; }
+
     public Func<ulong, bool, CancellationToken, Task>? OnDeadChanged { get; set; }
 
     public Func<ulong, uint, CancellationToken, Task>? OnLevelChanged { get; set; }
@@ -143,11 +145,15 @@ public sealed class GameServerLinks
         return orderId;
     }
 
-    public async Task SendOnceAsync(ulong characterId, ushort orderType, byte[] data, CancellationToken ct)
+    public async Task SendOnceAsync(ulong characterId, ushort orderType, byte[] data, CancellationToken ct) =>
+        await TrySendOnceAsync(characterId, orderType, data, ct).ConfigureAwait(false);
+
+    public async Task<bool> TrySendOnceAsync(ulong characterId, ushort orderType, byte[] data, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(data);
-        if (!_whereabouts.TryGetValue(characterId, out var where)) return;
+        if (!_whereabouts.TryGetValue(characterId, out var where)) return false;
         await SendOrderAsync(where, new OfficerOrder(0, NextOrderId(), orderType, characterId, data), ct).ConfigureAwait(false);
+        return true;
     }
 
     public async Task SendToZoneAsync(ushort zone, ushort orderType, byte[] data, CancellationToken ct)
@@ -202,8 +208,9 @@ public sealed class GameServerLinks
         link.Dispatcher.Register(SystemLinkFrames.LoggedOut, async (opcode, payload, ct) =>
         {
             var characterId = SystemLinkFrames.ReadCharacter(payload.Span);
-            if (_whereabouts.TryGetValue(characterId, out var where) && ReferenceEquals(where.Link, link))
+            if (_whereabouts.TryGetValue(characterId, out var where))
             {
+                if (!ReferenceEquals(where.Link, link)) return;
                 _whereabouts.TryRemove(characterId, out _);
                 _transit.TryRemove(characterId, out var transitEnded);
                 ForgetOrders(characterId);
@@ -313,6 +320,10 @@ public sealed class GameServerLinks
         link.Dispatcher.Register(SystemLinkFrames.Revived, async (opcode, payload, ct) =>
         {
             if (OnDeadChanged is not null) await OnDeadChanged(SystemLinkFrames.ReadCharacter(payload.Span), false, ct).ConfigureAwait(false);
+        });
+        link.Dispatcher.Register(SystemLinkFrames.RemovePartyQuest, async (opcode, payload, ct) =>
+        {
+            if (OnRemovePartyQuest is not null) await OnRemovePartyQuest(SystemLinkFrames.ReadCharacter(payload.Span), ct).ConfigureAwait(false);
         });
         link.Dispatcher.Register(SystemLinkFrames.CancelPartyQuest, (opcode, payload, ct) =>
         {

@@ -15,6 +15,7 @@ public static class EquipStatusUpgradeMessages
         w.WriteUInt32(upgrade.Fee);
         w.WriteInt32(upgrade.BagCapacity);
         WriteItems(w, upgrade.Items);
+        WriteProperties(w, upgrade.PropertyWrites ?? Array.Empty<ItemPropertyWrite>());
         return w.ToArray();
     }
 
@@ -24,7 +25,8 @@ public static class EquipStatusUpgradeMessages
         var characterId = r.ReadUInt64();
         var fee = r.ReadUInt32();
         var bagCapacity = r.ReadInt32();
-        return new EquipStatusUpgrade(characterId, fee, bagCapacity, ReadItems(ref r));
+        var items = ReadItems(ref r);
+        return new EquipStatusUpgrade(characterId, fee, bagCapacity, items, ReadProperties(ref r));
     }
 
     public static byte[] EncodeResult(EquipStatusUpgradeResult result)
@@ -70,6 +72,46 @@ public static class EquipStatusUpgradeMessages
             w.WriteInt32(item.PeriodMinutes);
             w.WriteInt64(item.BreakedAt?.UtcTicks ?? NoExpiryTicks);
         }
+    }
+
+    private static void WriteProperties(PacketWriter w, IReadOnlyList<ItemPropertyWrite> writes)
+    {
+        w.WriteUInt16((ushort)writes.Count);
+        foreach (var write in writes)
+        {
+            w.WriteUInt64(write.ItemUid);
+            w.WriteUInt16((ushort)write.Properties.Count);
+            foreach (var property in write.Properties)
+            {
+                w.WriteInt32(property.Type);
+                w.WriteInt32(property.Id);
+                w.WriteInt16(property.Value);
+                w.WriteUInt32(property.Extra);
+            }
+        }
+    }
+
+    private static List<ItemPropertyWrite> ReadProperties(ref PacketReader r)
+    {
+        var writes = new List<ItemPropertyWrite>();
+        if (r.Remaining == 0) return writes;
+        var count = r.ReadUInt16();
+        for (var i = 0; i < count; i++)
+        {
+            var uid = r.ReadUInt64();
+            var propertyCount = r.ReadUInt16();
+            var properties = new List<ItemProperty>(propertyCount);
+            for (var j = 0; j < propertyCount; j++)
+            {
+                var type = r.ReadInt32();
+                var id = r.ReadInt32();
+                var value = r.ReadInt16();
+                var extra = r.ReadUInt32();
+                properties.Add(new ItemProperty(type, id, value, extra));
+            }
+            writes.Add(new ItemPropertyWrite(uid, properties));
+        }
+        return writes;
     }
 
     private static List<EquipUpgradeItem> ReadItems(ref PacketReader r)

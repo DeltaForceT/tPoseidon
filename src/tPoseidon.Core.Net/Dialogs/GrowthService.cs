@@ -16,6 +16,7 @@ public sealed record GrowthPlayer
     public required Func<StatManager?> Stats { get; init; }
     public required Func<int> Luck { get; init; }
     public required Func<IReadOnlyDictionary<int, int>> Skills { get; init; }
+    public Func<int, Task>? SeedEvent { get; init; }
 }
 
 public sealed class GrowthService
@@ -167,6 +168,7 @@ public sealed class GrowthService
         foreach (var operation in aidOperations) w.WriteBytes(QuestResultFrames.ItemOperation(operation));
         await SendAsync(Opcode.S2C_GROWTH_RESULT, w.ToArray(), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   maturing compound item {target.ItemIndex} slot {slot}: property {materialRow.EnableProperty} = {ability} (chance {chance}%, fee {fee})");
+        if (_player.SeedEvent is { } seedEvent) await seedEvent(tPoseidon.Core.Game.SoulSeed.SoulSeedRules.GrowthCompoundEvent).ConfigureAwait(false);
     }
 
     public async Task ResetAsync(ReadOnlyMemory<byte> payload, CancellationToken ct)

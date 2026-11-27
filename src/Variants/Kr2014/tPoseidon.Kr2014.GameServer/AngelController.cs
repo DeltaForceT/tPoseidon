@@ -1,6 +1,7 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Angel;
+using tPoseidon.Core.Game.SoulSeed;
 using tPoseidon.Core.Game.Warp;
 using tPoseidon.Core.Net.Dialogs;
 using tPoseidon.Core.Net.Social;
@@ -11,14 +12,16 @@ internal sealed class AngelController
     private readonly Func<ulong, InGameSessionState?> _playerById;
     private readonly IAngelStore _store;
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
+    private readonly Func<InGameSessionState, int, int, Task> _seedEvent;
     private readonly string _logTag;
 
-    public AngelController(SystemServerLink link, Func<ulong, InGameSessionState?> playerById, IAngelStore store, Func<ushort, Opcode, byte[], Task> sendToMap, string logTag)
+    public AngelController(SystemServerLink link, Func<ulong, InGameSessionState?> playerById, IAngelStore store, Func<ushort, Opcode, byte[], Task> sendToMap, Func<InGameSessionState, int, int, Task> seedEvent, string logTag)
     {
         _link = link ?? throw new ArgumentNullException(nameof(link));
         _playerById = playerById ?? throw new ArgumentNullException(nameof(playerById));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _sendToMap = sendToMap ?? throw new ArgumentNullException(nameof(sendToMap));
+        _seedEvent = seedEvent ?? throw new ArgumentNullException(nameof(seedEvent));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
         _link.OrderReceived += OrderAsync;
         _link.MessageReceived += MessageAsync;
@@ -56,13 +59,14 @@ internal sealed class AngelController
         Console.WriteLine($"{_logTag} [angel] 0x{angelId:X} rewarded: wing mark for 7 days, {count} graduations");
     }
 
-    private Task MessageAsync(ushort opcode, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    private async Task MessageAsync(ushort opcode, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         if (opcode != AngelFrames.Portal || !AngelFrames.TryReadReturnMessage(payload.Span, out var angelId, out var x, out var y, out var zone))
         {
-            return Task.CompletedTask;
+            return;
         }
-        return WarpAsync(angelId, zone, x, y, "back", ct);
+        if (_playerById(angelId) is { } returning) await _seedEvent(returning, SoulSeedRules.AngelReturnEvent, 1).ConfigureAwait(false);
+        await WarpAsync(angelId, zone, x, y, "back", ct).ConfigureAwait(false);
     }
 
     private async Task WarpAsync(ulong angelId, ushort zone, ushort x, ushort y, string where, CancellationToken ct)

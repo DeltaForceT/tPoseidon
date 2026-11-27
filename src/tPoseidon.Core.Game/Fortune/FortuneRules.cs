@@ -25,6 +25,8 @@ public static class FortuneRules
     public const int ResultCount = 3;
     public const int MaxPower = 5000;
     public const int RangeScale = 10000;
+    public const int MostDropRolls = 9;
+    public const double ExpRateFactor = 0.009999999776482582;
     public const float DrawnWeightFactor = 0.3f;
     public const float MinimumWeight = 0.01f;
     public const int StarTearsEffect = 37;
@@ -86,6 +88,23 @@ public static class FortuneRules
         return award.Length < UsesResetLength;
     }
 
+    public static float ExpRate(int percent) =>
+        percent > 0 ? (float)(percent * ExpRateFactor) : 0f;
+
+    public static int DropExtra(int rolls, int percent, Random rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        var extra = percent > 0 && KrRand.Below(rng, 100) < percent ? 1 : 0;
+        return rolls + extra > MostDropRolls ? 0 : extra;
+    }
+
+    public static long ExpExtra(long baseGain, int percent)
+    {
+        var rate = ExpRate(percent);
+        if (baseGain <= 0 || rate <= 0f) return 0;
+        return (long)Math.Truncate(baseGain * (double)rate);
+    }
+
     public static bool IsActive(DateTimeOffset now, DateTimeOffset expiry) => now <= expiry;
 
     public static FortuneAward Award(IReadOnlyList<FortuneResult> results, FortuneTables tables, IItemParamLookup catalog, int level)
@@ -143,20 +162,22 @@ public static class FortuneRules
         ArgumentNullException.ThrowIfNull(rand);
         power = Math.Clamp(power, 0, MaxPower);
         var weights = cards.Select(card => card.Weight).ToArray();
+        var lift = (float)((double)power / MaxPower) * needleSeed;
         foreach (var pick in picks.Take(ResultCount))
         {
             var index = pick is >= 0 and <= JokerSlot ? pick : JokerSlot;
-            if (index < weights.Length) weights[index] += power / (float)MaxPower * needleSeed;
+            if (index < weights.Length) weights[index] += lift;
         }
         for (var i = 0; i < cards.Count; i++)
         {
-            if (cards[i].JokerSet != 0) weights[i] = jokerWeight(cards[i]) + power * myCardSeed / MaxPower;
+            if (cards[i].JokerSet != 0) weights[i] = (float)((double)power * myCardSeed / MaxPower + jokerWeight(cards[i]));
         }
+        Normalize(weights);
+        var upper = Bounds(weights);
         var results = new List<FortuneResult>(ResultCount);
         var jokerHit = false;
         for (var draw = 0; draw < ResultCount; draw++)
         {
-            var upper = Ranges(weights);
             var roll = rand(RangeScale);
             var chosen = Array.FindIndex(upper, high => roll < high);
             if (chosen < 0) chosen = upper.Length - 1;
@@ -164,7 +185,11 @@ public static class FortuneRules
             var joker = card.IsBasic == 0;
             jokerHit |= joker;
             results.Add(new FortuneResult(chosen, card.CardId, joker));
-            if (!joker) weights[chosen] = Math.Max(MinimumWeight, weights[chosen] * DrawnWeightFactor);
+            if (joker) continue;
+            weights[chosen] *= DrawnWeightFactor;
+            if (weights[chosen] < MinimumWeight) weights[chosen] = MinimumWeight;
+            Normalize(weights);
+            upper = Bounds(weights);
         }
         return new FortuneDraw(results, jokerHit);
     }
@@ -172,13 +197,29 @@ public static class FortuneRules
     public static int[] Ranges(IReadOnlyList<float> weights)
     {
         ArgumentNullException.ThrowIfNull(weights);
-        var total = weights.Sum(weight => (double)weight);
+        var normalized = weights.ToArray();
+        Normalize(normalized);
+        return Bounds(normalized);
+    }
+
+    public static void Normalize(float[] weights)
+    {
+        ArgumentNullException.ThrowIfNull(weights);
+        var total = 0f;
+        foreach (var weight in weights) total += weight;
+        if (!(total > 0f)) return;
+        for (var i = 0; i < weights.Length; i++) weights[i] /= total;
+    }
+
+    public static int[] Bounds(IReadOnlyList<float> weights)
+    {
+        ArgumentNullException.ThrowIfNull(weights);
         var upper = new int[weights.Count];
-        double cumulative = 0;
+        var lower = 0;
         for (var i = 0; i < weights.Count; i++)
         {
-            cumulative += total > 0 ? weights[i] / total : 0;
-            upper[i] = (int)Math.Round(cumulative * RangeScale, MidpointRounding.AwayFromZero);
+            lower += (int)Math.Truncate((double)weights[i] * RangeScale);
+            upper[i] = lower;
         }
         return upper;
     }

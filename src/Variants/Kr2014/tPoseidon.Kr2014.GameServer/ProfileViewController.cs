@@ -11,6 +11,7 @@ internal sealed class ProfileViewController
     private readonly Func<ushort, ushort, InGameSessionState?> _playerOnMap;
     private readonly Func<ulong, string> _guildNameOf;
     private readonly Func<InGameSessionState, ProfileGear> _gearOf;
+    private readonly Func<InGameSessionState, int, Task> _seedEvent;
     private readonly Encoding _text;
     private readonly string _logTag;
     private readonly Random _rng = new();
@@ -22,6 +23,7 @@ internal sealed class ProfileViewController
         Func<ushort, ushort, InGameSessionState?> playerOnMap,
         Func<ulong, string> guildNameOf,
         Func<InGameSessionState, ProfileGear> gearOf,
+        Func<InGameSessionState, int, Task> seedEvent,
         Encoding text,
         string logTag)
     {
@@ -30,6 +32,7 @@ internal sealed class ProfileViewController
         _playerOnMap = playerOnMap ?? throw new ArgumentNullException(nameof(playerOnMap));
         _guildNameOf = guildNameOf ?? throw new ArgumentNullException(nameof(guildNameOf));
         _gearOf = gearOf ?? throw new ArgumentNullException(nameof(gearOf));
+        _seedEvent = seedEvent ?? throw new ArgumentNullException(nameof(seedEvent));
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
@@ -70,6 +73,7 @@ internal sealed class ProfileViewController
             bossKills);
         var view = ProfileViewBuilder.Build(source, _text);
         await SendAsync(asker, Opcode.S2C_PROFILE_VIEW, ProfileViewFrames.View(view, _text)).ConfigureAwait(false);
+        await _seedEvent(asker, tPoseidon.Core.Game.SoulSeed.SoulSeedRules.ProfileViewEvent).ConfigureAwait(false);
     }
 
     public Task CoverLetterAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)

@@ -154,5 +154,9 @@ public interface IGuildRulesStore
 
     int UpdateMember(uint guildCode, ulong characterId, byte? gradeCode, string? nick);
 
+    int AddMemberSmsPoint(ulong characterId);
+
+    IReadOnlyList<GuildLogEntry> History(uint guildCode);
+
     int UpdateGrades(uint guildCode, IReadOnlyList<string> names, IReadOnlyList<int> points);
 }

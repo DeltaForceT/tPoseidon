@@ -26,8 +26,6 @@ internal sealed class CoupleMaking
 
 internal sealed class CoupleController
 {
-    private const int GroomSayScene = 2;
-    private const int BrideSayScene = 3;
     private static readonly TimeSpan LoverMoveDelay = TimeSpan.FromMilliseconds(500);
 
     private readonly ICoupleRulesStore _store;
@@ -242,6 +240,18 @@ internal sealed class CoupleController
         partner.CoupleSelecting = false;
     }
 
+    public Task MessageAsync(InGameSessionState st, ReadOnlyMemory<byte> payload)
+    {
+        ArgumentNullException.ThrowIfNull(st);
+        var message = WeddingMessageRules.Read(payload.Span, _text);
+        if (st.Character is not { } character || !_tables().HallZones.Contains(st.MapId)) return Task.CompletedTask;
+        if (_halls.Find(st.MapId) is not { } hall || !hall.IsInvited(character.CharacterId)) return Task.CompletedTask;
+        var bride = CoupleRules.IsFemale(character.Species);
+        hall.SetMessage(bride, message);
+        Log(st, $"{(bride ? "bride" : "groom")} message of wedding hall {hall.CoupleCode} set");
+        return Task.CompletedTask;
+    }
+
     public Task LeftAsync(InGameSessionState st)
     {
         ArgumentNullException.ThrowIfNull(st);
@@ -430,7 +440,9 @@ internal sealed class CoupleController
                 new WeddingPartner(groom.CharacterId, groom.Name),
                 new WeddingPartner(bride.CharacterId, bride.Name),
                 join.Members,
-                new WeddingCeremony(lengths));
+                new WeddingCeremony(lengths),
+                _tables().GroomMessage,
+                _tables().BrideMessage);
         }
         if (hall is null || !_halls.TryOpen(hall))
         {
@@ -490,11 +502,10 @@ internal sealed class CoupleController
                     break;
                 case WeddingEventKind.Scene:
                     if (!WeddingScene.IsSent(weddingEvent.Value)) break;
-                    var lines = _tables().OfficiateLines;
                     await _sendToMap(hall.Zone, Opcode.S2C_WEDDING_SCENE, CoupleFrames.Scene(
                         weddingEvent.Value, hall.Groom.Name, hall.Bride.Name,
-                        lines.FirstOrDefault(line => line.Scene == GroomSayScene)?.Text ?? string.Empty,
-                        lines.FirstOrDefault(line => line.Scene == BrideSayScene)?.Text ?? string.Empty,
+                        hall.GroomMessage,
+                        hall.BrideMessage,
                         _text)).ConfigureAwait(false);
                     break;
                 case WeddingEventKind.CeremonyEnded:

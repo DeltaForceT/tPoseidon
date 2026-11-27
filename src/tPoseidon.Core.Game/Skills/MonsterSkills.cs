@@ -116,6 +116,8 @@ public static class MonsterSkills
         castDelaySeconds is > 0f ? (int)Math.Round(castDelaySeconds.Value * 1000.0) : 0,
         (int)Math.Round((coolSeconds ?? DefaultCoolSeconds) * 1000.0));
 
+    public static int ArrowsPerVolley(int? rowCount) => Math.Max(rowCount ?? 0, 0);
+
     public static bool IsBuilt(int actionId) =>
         actionId is Heal or ChainArrow or MagicRing or FireBreath or ThunderBreath or SharpBrandish or Thunderbolt or WindSlash or Siren
             or DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
@@ -132,6 +134,10 @@ public static class MonsterSkills
         SkillEffectKinds.Find(actionId) is { ChangesStat: true, Holds: false, ChangesSpeed: false, HalvesHits: false, Periodic: SkillPeriodicHit.None } kind
         && kind.SecondStat == SkillEffectKinds.NoStat && kind.ThirdStat == SkillEffectKinds.NoStat && kind.FlatColumn is null;
 
+    public static bool RunsWithoutEffectKind(int actionId) =>
+        actionId is ElectricShock or Destruction or Poison or Charging or ElectricField or ObjectEffects.IceCrystal or ChainHits.QuadPunch or ChainHits.TetraPunch
+            or SkillEffectKinds.Harden or ObjectHits.GaleBreak or ObjectEffects.DeadlyFunk;
+
     public static bool IsObject(int actionId) =>
         actionId is DefenseParalysis or PowerStun or Berserk or WaterNet or ElectricShock or WhirlWind or CruelFlame or FluentWaist
             or Destruction or Vampiric or Poison or Charging or Warp or Unshield or DarkSlow or Guard
@@ -140,6 +146,9 @@ public static class MonsterSkills
             or ObjectHits.GaleBreak or ObjectEffects.DeadlyFunk or SkillEffectKinds.Berserk or SkillEffectKinds.Bind or SkillEffectKinds.ChillingPrison
             or SkillEffectKinds.FireField or GunSkills.BreakBarrier
         || IsStatEffect(actionId);
+
+    public static IReadOnlyList<T> BuffCancelTargets<T>(IEnumerable<T> inRadius, Func<T, bool> holdsBuffs) =>
+        inRadius.Take(BuffCancelVictims).Where(holdsBuffs).ToList();
 
     public static long BuffCancelDamage(long power, long step, int index) => WireLimits.Saturate(power + step * (double)index);
 

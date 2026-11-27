@@ -47,37 +47,33 @@ public static class GuildListFrames
         return list;
     }
 
-    public static byte[] ReplyFor(IReadOnlyList<GuildListEntry> guilds, GuildListRequest request, Encoding text)
+    public static byte[] ReplyFor(IReadOnlyList<GuildListEntry> guilds, GuildListRequest request, Encoding text, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(guilds);
         ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(zone);
         var sorted = Sorted(guilds, request.Sort, request.Natural);
         var skip = Math.Min(request.Page * PageSize, sorted.Count);
         var page = sorted.Skip(skip).Take(PageSize).ToArray();
         var w = new PacketWriter(3 + page.Length * EntryLength);
         w.WriteUInt16((ushort)Math.Min(sorted.Count, ushort.MaxValue));
         w.WriteByte((byte)page.Length);
-        foreach (var entry in page) WriteEntry(w, entry, text);
+        foreach (var entry in page) WriteEntry(w, entry, text, zone);
         return w.ToArray();
     }
 
-    private static void WriteEntry(PacketWriter w, GuildListEntry entry, Encoding text)
+    private static void WriteEntry(PacketWriter w, GuildListEntry entry, Encoding text, TimeZoneInfo zone)
     {
         var guild = entry.Guild;
         w.WriteUInt32((uint)guild.GuildCode);
         w.WriteInt32(guild.GuildPoint);
-        w.WriteInt32(guild.GuildPointIncrease);
-        w.WriteInt32(guild.GuildRanking);
-        w.WriteInt32(guild.GuildRankingPoint);
+        w.WriteUInt32(0);
         WriteText(w, guild.GuildName, NameLength, text);
         WriteText(w, entry.MasterName, MasterNameLength, text);
         w.WriteUInt16((ushort)Math.Clamp(entry.MasterLevel, 0, ushort.MaxValue));
-        WriteText(w, guild.GuildCreatedAt.UtcDateTime.ToString("yy-MM-dd", CultureInfo.InvariantCulture), DateLength, text);
+        WriteText(w, GuildFrames.LocalDate(guild.GuildCreatedAt, zone), DateLength, text);
         w.WriteByte((byte)Math.Clamp((int)guild.GuildMembers, 0, byte.MaxValue));
-        w.WriteByte(entry.Emblem.Template);
-        w.WriteByte(entry.Emblem.Colour);
-        w.WriteUInt32(entry.Emblem.Icon);
-        w.WriteByte(0);
+        w.WriteZero(EntryLength - 0x45);
     }
 
     private static void WriteText(PacketWriter w, string value, int field, Encoding text)

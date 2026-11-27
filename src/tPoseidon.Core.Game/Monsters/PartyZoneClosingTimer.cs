@@ -53,6 +53,14 @@ public sealed class PartyZoneClosingTimer
         }
     }
 
+    public bool IsPartyBoss(ushort zone, int monsterId)
+    {
+        lock (_gate)
+        {
+            return _zones.TryGetValue(zone, out var rule) && rule.BossIds.Contains(monsterId);
+        }
+    }
+
     public void BossKilled(ushort zone, ushort room, int monsterId, long nowMs)
     {
         lock (_gate)

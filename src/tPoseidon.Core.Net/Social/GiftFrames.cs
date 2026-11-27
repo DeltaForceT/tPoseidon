@@ -25,7 +25,9 @@ public static class GiftFrames
     public const int NameBytes = 0x20 - 1;
     public const int DateBytes = 0x20 - 1;
     public const int MessageBytes = 0x80 - 1;
-    public const uint ClientRowExtension = 0;
+    public const uint ReceivedRowExtension = 1;
+    public const uint PendingRowExtension = 1;
+    public const uint SentRowExtension = 0;
 
     public static bool TryReadAccept(ReadOnlySpan<byte> payload, Encoding text, out GiftAcceptRequest request)
     {
@@ -54,7 +56,7 @@ public static class GiftFrames
             w.WriteNulTerminated(Clip(row.SenderName, NameBytes, text), text);
             w.WriteNulTerminated(Clip(row.GiftMessage, MessageBytes, text), text);
             w.WriteUInt32(unchecked((uint)row.SenderType));
-            w.WriteUInt32(ClientRowExtension);
+            w.WriteUInt32(ReceivedRowExtension);
         });
 
     public static byte[] Pending(IReadOnlyList<GiftPendingRow> rows, Encoding text) =>
@@ -66,7 +68,7 @@ public static class GiftFrames
             w.WriteNulTerminated(Clip(Date(row.GiftDate), DateBytes, text), text);
             w.WriteNulTerminated(Clip(row.GiftMessage, MessageBytes, text), text);
             w.WriteUInt32(unchecked((uint)row.SenderType));
-            w.WriteUInt32(ClientRowExtension);
+            w.WriteUInt32(PendingRowExtension);
         });
 
     public static byte[] Sent(IReadOnlyList<GiftSentRow> rows, Encoding text) =>
@@ -78,7 +80,7 @@ public static class GiftFrames
             w.WriteNulTerminated(Clip(row.ReceiveMessage, MessageBytes, text), text);
             w.WriteUInt32(row.Taken ? 1u : 0u);
             w.WriteUInt32(unchecked((uint)row.ReceiverType));
-            w.WriteUInt32(ClientRowExtension);
+            w.WriteUInt32(SentRowExtension);
         });
 
     public static byte[] Remain(int count)

@@ -5,6 +5,8 @@ namespace tPoseidon.Core.Game.Combat;
 
 public readonly record struct AggroPlayer(ushort EntityId, int X, int Y, bool SeesShadowWorld = false);
 
+public readonly record struct AggroEscort(ushort EntityId, int X, int Y);
+
 public sealed class AggressiveMonsterScan
 {
     public const int ScanIntervalMs = 500;
@@ -17,7 +19,8 @@ public sealed class AggressiveMonsterScan
         IEnumerable<MonsterEntity> monsters,
         IReadOnlyList<AggroPlayer> players,
         DateTimeOffset now,
-        Func<MonsterEntity, AggroPlayer, bool>? ignores = null)
+        Func<MonsterEntity, AggroPlayer, bool>? ignores = null,
+        IReadOnlyList<AggroEscort>? escorts = null)
     {
         ArgumentNullException.ThrowIfNull(monsters);
         ArgumentNullException.ThrowIfNull(players);
@@ -31,7 +34,11 @@ public sealed class AggressiveMonsterScan
                 _nextScanAt[monster.EntityId] = now.AddMilliseconds(ScanIntervalMs);
             }
 
-            if (Nearest(monster, players, now, ignores) is { } target)
+            if (NearestEscort(monster, escorts, now) is { } escort)
+            {
+                engagements.Add((monster, escort));
+            }
+            else if (Nearest(monster, players, now, ignores) is { } target)
             {
                 engagements.Add((monster, target));
             }
@@ -56,6 +63,27 @@ public sealed class AggressiveMonsterScan
         {
             _nextScanAt.Remove(monsterEntityId);
         }
+    }
+
+    private static ushort? NearestEscort(MonsterEntity monster, IReadOnlyList<AggroEscort>? escorts, DateTimeOffset now)
+    {
+        if (escorts is null || escorts.Count == 0) return null;
+        var range = RangeOf(monster);
+        var radiusSquared = (long)range * range;
+        var (monsterX, monsterY) = monster.GetInterpolatedPosition(now);
+        ushort? best = null;
+        var bestDistance = long.MaxValue;
+        foreach (var escort in escorts)
+        {
+            var dx = (long)escort.X - monsterX;
+            var dy = (long)escort.Y - monsterY;
+            var distance = dx * dx + dy * dy;
+            if (distance > radiusSquared || distance >= bestDistance) continue;
+            bestDistance = distance;
+            best = escort.EntityId;
+        }
+
+        return best;
     }
 
     private static ushort? Nearest(MonsterEntity monster, IReadOnlyList<AggroPlayer> players, DateTimeOffset now, Func<MonsterEntity, AggroPlayer, bool>? ignores)

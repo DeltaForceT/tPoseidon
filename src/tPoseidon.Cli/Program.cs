@@ -15,7 +15,7 @@ try
     var commandLine = CommandLine.Parse(args);
     var paths = InstallPaths.Resolve(commandLine.Option("home"));
     var prompt = new Prompt(commandLine.AssumeDefaults);
-    if (commandLine.Command is not ("gm" or "scripts" or "security" or "launcher" or "client" or "account") && commandLine.Positionals.Count > 0)
+    if (commandLine.Command is not ("gm" or "scripts" or "security" or "launcher" or "client" or "account" or "update") && commandLine.Positionals.Count > 0)
     {
         throw new CliException($"Unexpected argument '{commandLine.Positionals[0]}'.");
     }
@@ -41,6 +41,7 @@ try
         "gm" => GmCommand.Run(paths, commandLine, prompt),
         "server-file" => ServerFileCommand.Run(paths, commandLine),
         "launcher" => LauncherCommand.Run(paths, commandLine),
+        "update" => await UpdateCommand.RunAsync(paths, commandLine, prompt, cancellation.Token).ConfigureAwait(false),
         "client" => ClientCommand.Run(paths, commandLine),
         "cash" => CashCommand.Run(paths, commandLine),
         "shop" => ShopCommand.Run(paths, commandLine),

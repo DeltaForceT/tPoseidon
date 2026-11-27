@@ -126,7 +126,7 @@ internal sealed class MemoryPortController
         var uid = BagItemIds.Stored(use.WireItemUid);
         if (BagItem(character.CharacterId, uid) is not { } item || _catalog.GetById(item.ItemIndex) is not { } definition) return false;
         if (ItemUseRules.HelperOf(definition.Type) != ItemUseHelper.Use || !MemoryPortRules.IsMemoryPort(definition.Effect, definition.Options)) return false;
-        if (ItemUseRules.Check(definition, stats.Level) is { } refusal)
+        if (ItemUseRules.Check(definition, stats.Level, tPoseidon.Core.Game.Characters.LookChangeRules.BodyTypeOf(character)) is { } refusal)
         {
             Log(player, $"item {item.ItemIndex}: {refusal}");
             await SendAsync(player, Opcode.S2C_ITEM_USE_REFUSED, Array.Empty<byte>()).ConfigureAwait(false);

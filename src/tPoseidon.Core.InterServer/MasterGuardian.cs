@@ -24,6 +24,14 @@ public sealed class MasterGuardian
     public Task SaveStatusAsync(ulong charUid, GuardianStatusUpdate update, CancellationToken ct) =>
         _channel.SendAsync(charUid, InterServerOpcode.CcmdGuardianStatus, GuardianMessages.EncodeStatus(update), ct);
 
+    public Task SaveCheckedAsync(ulong charUid, GuardianState loaded, GuardianState checkedState, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(loaded);
+        ArgumentNullException.ThrowIfNull(checkedState);
+        if (loaded.SkillPoint == checkedState.SkillPoint && loaded.StatPoints.SequenceEqual(checkedState.StatPoints)) return Task.CompletedTask;
+        return SaveStatusAsync(charUid, new GuardianStatusUpdate(checkedState.GuardianUid, checkedState.Level, checkedState.SkillPoint, checkedState.StatPoints), ct);
+    }
+
     public async Task<GuardianLogin?> LoadAsync(ulong charUid, CancellationToken ct)
     {
         var reply = await CallAsync(charUid, InterServerOpcode.TpGuardianLoad, InterServerOpcode.TpGuardianLoadAckOk,

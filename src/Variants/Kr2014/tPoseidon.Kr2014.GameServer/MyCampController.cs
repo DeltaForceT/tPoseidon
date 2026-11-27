@@ -58,6 +58,8 @@ internal sealed class MyCampController : IDisposable
         }
     }
 
+    public Func<InGameSessionState, int, Task>? SeedEvent { get; init; }
+
     public Task OpenAsync(InGameSessionState st, ReadOnlyMemory<byte> payload) => Locked(async () =>
     {
         if (st.Character is not { } character) return;
@@ -67,14 +69,13 @@ internal sealed class MyCampController : IDisposable
             return;
         }
         _geometry.TryGetValue(st.MapId, out var geometry);
-        var inRegion = geometry?.Regions.Any(region => Inside(region, st.PlayerX, st.PlayerY)) ?? false;
         var refusal = MyCampRules.OpenRefusal(
-            st.IsDead || st.Trade is not null || st.Mission is not null,
+            st.IsDead || st.Trade is not null || st.Mission is not null || !MyCampRules.InNormalState(st.Posture.State),
             Shell(character.CharacterId) is not null,
             _zoneType(st.MapId),
             MyCampRules.IsShellZone(st.MapId),
-            inRegion,
-            TileAt(geometry, st.PlayerX, st.PlayerY));
+            geometry is null ? null : MyCampPlacement.RefusalCode(geometry, st.PlayerX, st.PlayerY),
+            MyCampPlacement.FloorAt(geometry, st.PlayerX, st.PlayerY));
         var slot = refusal is null ? SlotOf(character.CharacterId) : null;
         if (refusal is null && slot is null) refusal = MyCampRules.OpenBusy;
         if (refusal is { } code)
@@ -97,9 +98,10 @@ internal sealed class MyCampController : IDisposable
         st.MapId = shell.ShellZone;
         st.PlayerX = MyCampRules.OwnerX;
         st.PlayerY = MyCampRules.OwnerY;
-        await _sendToMap(shell.FieldMap, Opcode.S2C_PLAYER_SPAWN_POST_WARP, MyCampFrames.House(shell, shell.OwnerId, _text)).ConfigureAwait(false);
+        await _sendToMap(shell.FieldMap, MyCampFrames.HouseSpawnOpcode, MyCampFrames.House(shell, shell.OwnerId, _text)).ConfigureAwait(false);
         await StartTransferAsync(st, character.CharacterId, shell.Layout.Values.ToArray(), MyCampTransferKind.Open).ConfigureAwait(false);
         Log(st, $"opens camp (slot {shell.SlotCode}, mode {shell.Mode}, house 0x{shell.HouseId:X4} on map {shell.FieldMap}, {shell.Layout.Count} items)");
+        if (SeedEvent is { } openedEvent) await openedEvent(st, tPoseidon.Core.Game.SoulSeed.SoulSeedRules.MyCampOpenEvent).ConfigureAwait(false);
     });
 
     public Task OwnerReadyAsync(InGameSessionState st, ReadOnlyMemory<byte> payload) => Locked(async () =>
@@ -215,9 +217,12 @@ internal sealed class MyCampController : IDisposable
         if (st.Character is not { } character || !MyCampFrames.TryReadEnter(payload.Span, _text, out var request)) return;
         MyCampShell? shell;
         lock (_byOwner) shell = _byOwner.Values.FirstOrDefault(candidate => candidate.HouseId == request.HouseId && candidate.FieldMap == st.MapId);
-        var refusal = MyCampRules.IsShellZone(st.MapId) || shell is null || GuestShell(character.CharacterId) is not null
-            ? MyCampRules.EnterFailed
-            : shell.EnterRefusal(character.CharacterId, request.Password, st.GameMasterAttribute, DateTimeOffset.UtcNow);
+        _geometry.TryGetValue(st.MapId, out var geometry);
+        byte? refusal;
+        if (MyCampRules.IsShellZone(st.MapId) || shell is null) refusal = MyCampRules.EnterFailed;
+        else if (MyCampRules.BlockedTile(MyCampPlacement.FloorAt(geometry, st.PlayerX, st.PlayerY))) refusal = MyCampRules.EnterOxQuizFloor;
+        else if (GuestShell(character.CharacterId) is not null || !MyCampRules.InNormalState(st.Posture.State)) refusal = MyCampRules.EnterFailed;
+        else refusal = shell.EnterRefusal(character.CharacterId, request.Password, st.GameMasterAttribute, DateTimeOffset.UtcNow);
         if (refusal is { } code)
         {
             await SendAsync(st, Opcode.S2C_MYCAMP_ENTER_REFUSED, new[] { code }).ConfigureAwait(false);
@@ -566,18 +571,6 @@ internal sealed class MyCampController : IDisposable
 
     private InGameSessionState? Session(ulong characterId) =>
         _sessions().FirstOrDefault(session => session.Character?.CharacterId == characterId);
-
-    private static bool Inside(ZoneRegion region, int x, int y) =>
-        x >= Math.Min(region.X1, region.X2) && x <= Math.Max(region.X1, region.X2) && y >= Math.Min(region.Y1, region.Y2) && y <= Math.Max(region.Y1, region.Y2);
-
-    private static byte TileAt(ZoneGeometry? geometry, int x, int y)
-    {
-        if (geometry is null) return 0;
-        var cellX = ZoneGeometry.CellOf(x);
-        var cellY = ZoneGeometry.CellOf(y);
-        if (cellX < 0 || cellY < 0 || cellX >= geometry.CellsX || cellY >= geometry.CellsY) return ZoneGeometry.CellBlocked;
-        return geometry.AttributeAt(cellX, cellY);
-    }
 
     private async Task Locked(Func<Task> action)
     {

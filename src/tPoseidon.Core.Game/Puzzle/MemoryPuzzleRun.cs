@@ -14,6 +14,8 @@ public static class PuzzleRules
     public const uint Solved = 0;
     public const uint Failed = 1;
     public const ushort FailureMap = 104;
+    public const int CountdownMs = 5000;
+    public const int ResultScreenMs = 4000;
 }
 
 public sealed class MemoryPuzzleRun
@@ -29,7 +31,7 @@ public sealed class MemoryPuzzleRun
         ArgumentNullException.ThrowIfNull(order);
         MapId = mapId;
         _order = order.ToList();
-        _nextShow = now;
+        _nextShow = now.AddMilliseconds(PuzzleRules.CountdownMs);
     }
 
     public MemoryPuzzleEntry Puzzle { get; }

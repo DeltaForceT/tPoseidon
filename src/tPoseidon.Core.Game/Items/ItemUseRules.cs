@@ -20,6 +20,7 @@ public enum ItemUseRefusal
 {
     NotUsable,
     BelowLevel,
+    WrongCharacterType,
     PotionNotNeeded,
 }
 
@@ -54,11 +55,16 @@ public static class ItemUseRules
         _ => ItemUseHelper.NoHelper,
     };
 
-    public static ItemUseRefusal? Check(ItemParamEntry definition, int level)
+    public static ItemUseRefusal? Check(ItemParamEntry definition, int level, int characterType)
     {
         ArgumentNullException.ThrowIfNull(definition);
         if (!definition.IsUsable) return ItemUseRefusal.NotUsable;
         if (level < definition.MinLevel) return ItemUseRefusal.BelowLevel;
+        if ((definition.Options & EquipmentRules.CharacterTypeOption) != 0
+            && !EquipmentRules.FitsCharacterType(EquipmentRules.CharacterTypeMask(definition), characterType))
+        {
+            return ItemUseRefusal.WrongCharacterType;
+        }
         return null;
     }
 

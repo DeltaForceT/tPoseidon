@@ -622,6 +622,16 @@ public sealed class LibConfigXmlReader
         return new GuildRankBonusTable(ratios);
     }
 
+    public GuildLevelTable LoadGuildLevelTable()
+    {
+        var rows = new List<GuildLevelRow>();
+        LoadTablesNamed(new HashSet<string>(StringComparer.Ordinal) { GuildLevelTable.TableName }, (_, row) =>
+        {
+            rows.Add(new GuildLevelRow(ReadInt(row, "Lv"), ReadInt(row, "Point")));
+        });
+        return new GuildLevelTable(rows);
+    }
+
     public FortuneTables LoadFortuneTables()
     {
         var cards = new Dictionary<int, FortuneCardEntry>();
@@ -900,7 +910,7 @@ public sealed class LibConfigXmlReader
             new ReformElixirEntry(ReadInt(row, "ID"), ReadInt(row, "minShift"), ReadInt(row, "maxShift"))));
         float? discount = null;
         LoadTable(EquipReformTables.DiscountTable, row => discount ??= ReadFloat(row, "ratio"));
-        var accepted = discount is >= 0 and < 1 ? discount.Value : 0;
+        var accepted = discount is >= 0 and <= 1 ? discount.Value : 0;
         return new EquipReformTables(materials, curves, min ?? 0, max, elixirs, accepted);
     }
 
@@ -1024,7 +1034,8 @@ public sealed class LibConfigXmlReader
                     ReadInt(row, "ID"), ReadInt(row, "ZoneID"), ReadInt(row, "PortalIndex"), ReadInt(row, "PortalOpenMinute"),
                     ReadInt(row, "In_Year"), ReadInt(row, "In_Month"), ReadInt(row, "In_Day"),
                     ReadInt(row, "In_Hour") * 60 + ReadInt(row, "In_Minute"),
-                    ReadInt(row, "Out_Hour") * 60 + ReadInt(row, "Out_Minute")));
+                    ReadInt(row, "Out_Hour") * 60 + ReadInt(row, "Out_Minute"),
+                    ReadInt(row, "Out_Year"), ReadInt(row, "Out_Month"), ReadInt(row, "Out_Day")));
                 return;
             }
             var bands = Enumerable.Range(0, FiestaTables.LevelPortBands)
@@ -1428,6 +1439,8 @@ public sealed class LibConfigXmlReader
         var quests = new List<int>();
         var skills = new List<int>();
         var eventPoints = new Dictionary<int, CoupleEventPoints>();
+        var groomMessage = string.Empty;
+        var brideMessage = string.Empty;
         static CouplePointRange Points(IReadOnlyDictionary<string, string> row) => new(
             ReadInt(row, "Min_Relation"), ReadInt(row, "Max_Relation"),
             ReadInt(row, "Min_Love"), ReadInt(row, "Max_Love"),
@@ -1459,6 +1472,11 @@ public sealed class LibConfigXmlReader
                 case CoupleTables.HallTable:
                     halls.Add(ReadInt(row, "ZoneID"));
                     break;
+                case CoupleTables.UiParamsTable:
+                    var uiName = ReadString(row, "Name");
+                    if (string.Equals(uiName, CoupleTables.GroomMessageKey, StringComparison.Ordinal)) groomMessage = ReadString(row, "Value");
+                    else if (string.Equals(uiName, CoupleTables.BrideMessageKey, StringComparison.Ordinal)) brideMessage = ReadString(row, "Value");
+                    break;
                 case CoupleTables.DeleteTable:
                     var ids = Enumerable.Range(0, CoupleTables.DeleteIdColumns)
                         .Select(column => ReadInt(row, $"ID{column:D2}"))
@@ -1470,7 +1488,7 @@ public sealed class LibConfigXmlReader
             }
         });
         lines.Sort((a, b) => a.Index.CompareTo(b.Index));
-        return new CoupleTables(exchange, titles, rings, dresses, lines, halls, quests, skills, eventPoints);
+        return new CoupleTables(exchange, titles, rings, dresses, lines, halls, quests, skills, eventPoints, groomMessage, brideMessage);
     }
 
     public SlotExtendTables LoadSlotExtendTables()
@@ -1616,6 +1634,24 @@ public sealed class LibConfigXmlReader
             .Where(entry => entry.Item1 != 0 && entry.Item2 > 0)
             .ToArray()));
         return sets;
+    }
+
+    public CardGenTables LoadCardGenTables()
+    {
+        var grades = new List<CardGenGradeEntry>(20);
+        LoadTable(CardGenTables.GradeTable, row => grades.Add(new CardGenGradeEntry(ReadInt(row, "Grade"), ReadFloat(row, "Param"))));
+        var cards = new SortedDictionary<int, CardGenCardEntry>();
+        foreach (var table in new[] { CardGenTables.ItemTable, CardGenTables.ItemExtensionTable })
+        {
+            LoadTable(table, row =>
+            {
+                if (ReadInt(row, "Type") != CardGenTables.CardItemType) return;
+                var id = ReadInt(row, "ID");
+                cards[id] = new CardGenCardEntry(id, ReadInt(row, "ItemFType"), ReadInt(row, "CardNum"), ReadInt(row, "MPCon"),
+                    ReadInt(row, "CardGenGrade"), ReadFloat(row, "CardGenParam"), ReadInt(row, "DailyGenCnt"));
+            });
+        }
+        return new CardGenTables(grades.OrderBy(entry => entry.Grade).ToArray(), cards.Values.ToArray());
     }
 
     public IReadOnlyList<CardSpecialSetEntry> LoadCardSpecialSets()
@@ -2683,7 +2719,7 @@ public sealed class LibConfigXmlReader
         LoadTable("Maturing_Compound_CostDiscount", row => discount ??= ReadFloat(row, "ratio"));
         var ratios = new Dictionary<int, float>();
         LoadTable("ESAction_CompoundMaster", row => ratios.TryAdd(ReadInt(row, "Level"), ReadFloat(row, "CompoundRatio")));
-        var accepted = discount is >= 0 and < 1 ? discount.Value : 0;
+        var accepted = discount is >= 0 and <= 1 ? discount.Value : 0;
         return new GrowthTables { EquipProperties = equip, Materials = materials, Aids = aids, CostDiscount = accepted, CompoundMasterRatios = ratios };
     }
 

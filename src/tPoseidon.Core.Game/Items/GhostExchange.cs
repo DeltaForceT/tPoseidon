@@ -1,3 +1,4 @@
+using tPoseidon.Core.Data;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Items;
@@ -66,5 +67,17 @@ public static class GhostExchangeRules
     {
         ArgumentNullException.ThrowIfNull(tables);
         return refineLevel >= 0 && refineLevel < tables.RefineLevels.Count ? tables.RefineLevels[refineLevel] : null;
+    }
+
+    public static ItemProperty? NeoRefineBonus(RefineTables tables, ItemParamEntry target, IEnumerable<ItemProperty> baseProperties, int level)
+    {
+        ArgumentNullException.ThrowIfNull(tables);
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(baseProperties);
+        if (level <= 0 || RefineRules.PropertyIdFor(target.RefineType) is not { } propertyId) return null;
+        if (!tables.LevelRows.TryGetValue(target.RefineIndex, out var row) || level > row.Accumulation.Count) return null;
+        var stat = baseProperties.FirstOrDefault(p => p.Type == ItemPropertyTypes.Stat && p.Id == propertyId);
+        if (stat.Id == 0) return null;
+        return new ItemProperty(ItemPropertyTypes.RefineBonus, propertyId, RefineRules.Bonus(stat.Value, row.Accumulation[level - 1]), 0);
     }
 }

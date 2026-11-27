@@ -11,7 +11,11 @@ public sealed partial class NpcScriptExecutor
     private (int Kind, ushort? Message)? _eventTalk;
     private int? _lastMessage;
 
+    private readonly EventSceneState _sceneState = new();
+
     public bool EventSceneRunning => _eventTalk is { Kind: NpcEventTalk.Scene };
+
+    public void EventSceneLanded() => _sceneState.Land();
 
 
     private async Task<int> NotifyCardBattleRankAsync(CancellationToken ct)
@@ -131,9 +135,12 @@ public sealed partial class NpcScriptExecutor
 
     public async Task EventTalkEndedAsync(ushort opcode, CancellationToken ct)
     {
-        if (NpcFunctionFrames.EventKindOfEnd(opcode) is not int kind || _eventTalk is not { } pending || pending.Kind != kind) return;
+        if (NpcFunctionFrames.EventKindOfEnd(opcode) is not int kind) return;
+        var pendingOfKind = _eventTalk is { } started && started.Kind == kind ? started : ((int Kind, ushort? Message)?)null;
+        if (kind == NpcEventTalk.Scene ? !_sceneState.AnswersEnd(pendingOfKind is not null) : pendingOfKind is null) return;
         _eventTalk = null;
-        if (pending.Message is ushort message && _npc is not null)
+        if (kind == NpcEventTalk.Scene) _sceneState.Leave();
+        if (pendingOfKind?.Message is ushort message && _npc is not null)
         {
             _lastMessage = message;
             await SendAsync(NpcFunctionFrames.EventEndedOpcode(kind), NpcFunctionFrames.EventEnded(_npcEntityId, message), ct).ConfigureAwait(false);

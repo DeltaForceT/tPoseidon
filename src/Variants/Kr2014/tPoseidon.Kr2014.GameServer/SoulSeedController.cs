@@ -25,6 +25,7 @@ internal sealed class SoulSeedController
 
     public Func<InGameSessionState, IReadOnlyList<int>>? BaseStatsOf { get; set; }
     public Action<InGameSessionState>? OnBuffUpdated { get; set; }
+    public Func<InGameSessionState, Task>? Hatched { get; set; }
 
     public SoulSeedController(
         MasterSoulSeeds master,
@@ -63,8 +64,8 @@ internal sealed class SoulSeedController
         if (!loaded) return;
         if (state is not null)
         {
-            player.Seed.Restore(new SoulSeedRecord(true, state.SeedItemIndex, state.StartAt, state.LastUpdateAt, state.Points));
-            Console.WriteLine($"{_logTag} [soul seed] char 0x{characterId:X16} seed {state.SeedItemIndex} planted, points {string.Join(",", state.Points)}");
+            var restored = player.Seed.RestoreUnlessLive(new SoulSeedRecord(true, state.SeedItemIndex, state.StartAt, state.LastUpdateAt, state.Points));
+            if (restored) Console.WriteLine($"{_logTag} [soul seed] char 0x{characterId:X16} seed {state.SeedItemIndex} planted, points {string.Join(",", state.Points)}");
             if (loggingIn) await SendAsync(player, Opcode.S2C_SOUL_SEED_PLANTED, SoulSeedFrames.Planted(player.Seed.Record(), false)).ConfigureAwait(false);
         }
         await SendAsync(player, Opcode.S2C_SOUL_SEED_STATE, SoulSeedFrames.StateOf(player.Seed)).ConfigureAwait(false);
@@ -137,6 +138,14 @@ internal sealed class SoulSeedController
             }
         }
         return frames;
+    }
+
+    public async Task SaveOnLeaveAsync(InGameSessionState player)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        if (player.Character is not { } character || player.Seed.Flush() is not { } record) return;
+        await _master.SavePointsAsync(character.CharacterId, record.SavedPoints, CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} [soul seed] 0x{player.PlayerEntityId:X4} points saved on leaving: {string.Join(",", record.SavedPoints)}");
     }
 
     public async Task TickAsync(IEnumerable<InGameSessionState> players, TimeSpan elapsed)
@@ -264,7 +273,9 @@ internal sealed class SoulSeedController
             player.Guardians = await _guardians.LoadAsync(awakening.CharacterId, CancellationToken.None).ConfigureAwait(false);
             if (player.Guardians is { Equipped: { } hatched } hatchedLogin)
             {
-                player.Guardians = hatchedLogin with { Equipped = tPoseidon.Core.Game.Guardian.GuardianLoginCheck.Validate(hatched, _guardianTables().NextExpByLevel, _guardianTables().BasicStats) };
+                var checkedHatched = tPoseidon.Core.Game.Guardian.GuardianLoginCheck.Validate(hatched, _guardianTables().NextExpByLevel, _guardianTables().BasicStats, player.Stats?.Level ?? player.Character?.Level ?? 0);
+                player.Guardians = hatchedLogin with { Equipped = checkedHatched };
+                await _guardians.SaveCheckedAsync(awakening.CharacterId, hatched, checkedHatched, CancellationToken.None).ConfigureAwait(false);
             }
             if (player.Quests is { } talk)
             {
@@ -279,6 +290,7 @@ internal sealed class SoulSeedController
                 await _broadcast(player, Opcode.S2C_SKILL_LEARN_SEEN, SkillFrames.LearnSeen(player.PlayerEntityId)).ConfigureAwait(false);
             }
             await _showGuardians(player, CancellationToken.None).ConfigureAwait(false);
+            if (Hatched is { } afterHatch) await afterHatch(player).ConfigureAwait(false);
             await SendAsync(player, first ? Opcode.S2C_AWAKENED : Opcode.S2C_GUARDIAN_AWAKENED,
                 GuardianFrames.Awakened(player.PlayerEntityId, awakening.RareType)).ConfigureAwait(false);
             Console.WriteLine($"{_logTag} [awaken] 0x{player.PlayerEntityId:X4} guardian {awakened.GuardianUid} ({awakening.Name}) in slot {awakened.SlotNum}");

@@ -88,9 +88,14 @@ public sealed class PlayerPosture
 
     public void Disturb() => _idleMs = 0;
 
-    public bool IdleEmoteDue(int elapsedMs, int level, bool moving, Func<int, int> nextBelow)
+    public bool IdleEmoteDue(int elapsedMs, int level, bool moving, Func<int, int> nextBelow, bool digging = false)
     {
         ArgumentNullException.ThrowIfNull(nextBelow);
+        if (digging)
+        {
+            _idleMs = 0;
+            return false;
+        }
         if (State != PostureState.Standing || moving || level < IdleEmoteMinLevel) return false;
         _idleMs += elapsedMs;
         if (_idleMs < IdleEmoteAfterMs) return false;

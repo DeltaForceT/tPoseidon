@@ -35,6 +35,11 @@ public sealed class ImprintBook
         lock (_gate) _active[imprint.Type] = imprint;
     }
 
+    public bool HoldsAny
+    {
+        get { lock (_gate) return _active.Count > 0; }
+    }
+
     public IReadOnlyList<ActiveImprint> Active(DateTimeOffset now)
     {
         lock (_gate) return _active.Values.Where(imprint => now < imprint.Until).OrderBy(imprint => imprint.Type).ToArray();

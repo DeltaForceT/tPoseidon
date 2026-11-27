@@ -5,6 +5,7 @@ namespace tPoseidon.Core.Data;
 public sealed class InMemoryCharStore : ICharStore
 {
     private readonly ConcurrentDictionary<ulong, Character> _byId = new();
+    private readonly object _nameGate = new();
 
     public IReadOnlyList<Character> GetCharactersForAccount(uint accountId)
     {
@@ -23,10 +24,18 @@ public sealed class InMemoryCharStore : ICharStore
     public void AddCharacter(Character character)
     {
         ArgumentNullException.ThrowIfNull(character);
-        if (!_byId.TryAdd(character.CharacterId, character))
+        lock (_nameGate)
         {
-            throw new InvalidOperationException(
-                $"Cannot add character {character.CharacterId}: already present.");
+            if (_byId.Values.Any(c => c.CharacterId != character.CharacterId
+                && string.Equals(c.Name, character.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new CharacterNameTakenException(character.Name);
+            }
+            if (!_byId.TryAdd(character.CharacterId, character))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot add character {character.CharacterId}: already present.");
+            }
         }
     }
 

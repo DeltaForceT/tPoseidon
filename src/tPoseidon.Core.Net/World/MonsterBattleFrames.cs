@@ -6,6 +6,8 @@ namespace tPoseidon.Core.Net.World;
 
 public static class MonsterBattleFrames
 {
+    public const int MonsterHitPresentation = 3;
+
     public static IReadOnlyList<(Opcode Opcode, byte[] Payload, ushort BlockId)> Encode(
         MonsterBattleEvent battleEvent,
         ushort swingBlockId,
@@ -120,7 +122,7 @@ public static class MonsterBattleFrames
         w.WriteInt32(hit.Result);
         w.WriteInt32(0);
         w.WriteInt32(0);
-        w.WriteInt32(0);
+        w.WriteInt32(MonsterHitPresentation);
         w.WriteUInt16(hit.GuardLeft);
         w.WriteUInt16(0);
         return w.ToArray();

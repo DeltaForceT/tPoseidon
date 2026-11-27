@@ -75,7 +75,7 @@ public static class SpeciesDefaults
         species == Species.PolarBear ? PolarBearStarterItems : Array.Empty<int>();
 
         public static ushort SecondJobClassIdForFirstJob(Species species) =>
-        (ushort)((byte)species + 8);
+        (ushort)((byte)species + OccupationRules.FirstSecondJobType - 1);
 
     public static (byte PtsP, byte PtsM, byte PtsS, byte PtsC) GrowthGraphForFType(FType ftype) => ftype switch
     {

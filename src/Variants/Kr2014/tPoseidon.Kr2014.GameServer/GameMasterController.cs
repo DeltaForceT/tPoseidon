@@ -105,7 +105,7 @@ internal sealed class GameMasterController : IDisposable
     public async Task EnteredZoneAsync(InGameSessionState player)
     {
         ArgumentNullException.ThrowIfNull(player);
-        if (Rates.HasExp) await SendRateSlotsAsync(player, CancellationToken.None).ConfigureAwait(false);
+        if (Rates.HasExp || player.Fortune is { ActiveExp: > 0 }) await SendRateSlotsAsync(player, CancellationToken.None).ConfigureAwait(false);
     }
 
     private async Task ApplyAbilityAsync(ReadOnlyMemory<byte> payload, CancellationToken ct)
@@ -155,11 +155,13 @@ internal sealed class GameMasterController : IDisposable
 
     private Task SendRateSlotsAsync(InGameSessionState player, CancellationToken ct) => SendRateSlotsAsync(player, expFirst: false, ct);
 
+    public Task SendRateSlotsAsync(InGameSessionState player) => SendRateSlotsAsync(player, expFirst: false, CancellationToken.None);
+
     public async Task SendRateSlotsAsync(InGameSessionState player, bool expFirst, CancellationToken ct)
     {
         var fixedRates = FixedBonusRates?.Invoke(player.Character?.IsMember == true) ?? (0f, 0f);
         var tm = (Opcode.GAME_BATCH_CONST_377, GameBatchFloatArrayPacket.ForRateSlotsKr2014(fixedRates.Tm, Rates.TmSlotRate, player.GuildBonusRatio).EncodePayload());
-        var exp = (Opcode.GAME_BATCH_CONST_376, GameBatchFloatArrayPacket.ForRateSlotsKr2014(fixedRates.Exp, Rates.ExpSlotRate, player.GuildBonusRatio).EncodePayload());
+        var exp = (Opcode.GAME_BATCH_CONST_376, GameBatchFloatArrayPacket.ForRateSlotsKr2014(fixedRates.Exp, Rates.ExpSlotRate, player.GuildBonusRatio, tPoseidon.Core.Game.Fortune.FortuneRules.ExpRate(player.Fortune?.ActiveExp ?? 0)).EncodePayload());
         try
         {
             foreach (var (opcode, payload) in expFirst ? new[] { exp, tm } : new[] { tm, exp })

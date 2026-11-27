@@ -31,11 +31,11 @@ public static class GuardianStats
         return result;
     }
 
-    public static IReadOnlyList<short> WithBaseValues(IReadOnlyList<short> points, short level, IReadOnlyDictionary<int, GuardianBasicStatEntry> basicStats)
+    public static IReadOnlyList<short> WithBaseValues(IReadOnlyList<short> points, int ownerLevel, IReadOnlyDictionary<int, GuardianBasicStatEntry> basicStats)
     {
         ArgumentNullException.ThrowIfNull(points);
         ArgumentNullException.ThrowIfNull(basicStats);
-        if (points.Sum(point => (int)point) != 0 || !basicStats.TryGetValue(level, out var row)) return points;
+        if (points.Sum(point => (int)point) != 0 || !basicStats.TryGetValue(ownerLevel, out var row)) return points;
         return row.Points.Take(GuardianTables.GrowthColumns.Length).Select(value => (short)value).ToArray();
     }
 

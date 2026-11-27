@@ -35,7 +35,11 @@ public readonly record struct ReformRefineBonus(int PropertyId, short Value)
     public static ReformRefineBonus None { get; } = new(0, 0);
 }
 
-public sealed record EquipReformOutcome(IReadOnlyList<ItemProperty> Stored, IReadOnlyList<ItemProperty> Rolled, int Remaining, ReformRefineBonus Refine);
+public sealed record EquipReformOutcome(IReadOnlyList<ItemProperty> Stored, IReadOnlyList<ItemProperty> Rolled, int Remaining, ReformRefineBonus Refine)
+{
+    public IReadOnlyList<ItemProperty> Reported =>
+        [.. Rolled, new ItemProperty(ItemPropertyTypes.Stat, EquipReformRules.RemainingId, (short)Remaining, 0)];
+}
 
 public static class StatReroll
 {
@@ -49,21 +53,65 @@ public static class StatReroll
         return table;
     }
 
-    public static (int Low, int High) Range(int baseValue, int minPercent, int maxPercent) =>
-        (baseValue + (int)Math.Truncate(baseValue * minPercent / PercentBase),
-         baseValue + (int)Math.Truncate(baseValue * maxPercent / PercentBase));
+    public static (int Low, int High) Range(int baseValue, int minPercent, int maxPercent)
+    {
+        var minRatio = minPercent / PercentBase;
+        var maxRatio = maxPercent / PercentBase;
+        return (baseValue + (int)Math.Truncate(baseValue * minRatio),
+                baseValue + (int)Math.Truncate(baseValue * maxRatio));
+    }
 
     public static int Shift(int value, int shift)
     {
-        var product = value * (1 + shift * ShiftUnit);
-        var whole = Math.Truncate(product);
-        return (int)(whole == product ? whole : whole + 1.0);
+        var product = value * (shift * ShiftUnit + 1.0);
+        var whole = (int)Math.Truncate(product);
+        if (whole < product) product += 1.0;
+        return (int)Math.Truncate(product);
     }
 
     public static int Roll(int low, int high, int bin)
     {
         var value = low + (int)Math.Truncate((high - low) / PercentBase * bin);
         return value < low ? low : value;
+    }
+
+    public static int FloatSpanRoll(int low, int high, int bin)
+    {
+        var span = (float)((high - low) / PercentBase);
+        var value = low + (int)Math.Truncate(bin * (double)span);
+        return value < low ? low : value;
+    }
+
+    public static int[] RandomTable(int min, int max)
+    {
+        var table = new int[ItemPropertyRules.CurveBins];
+        var step = (float)((max - min) / PercentBase);
+        var accumulated = 0f;
+        for (var i = 0; i < ItemPropertyRules.CurveBins - 1; i++)
+        {
+            table[i] = (int)Math.Truncate(min + (double)accumulated);
+            accumulated = (float)(accumulated + (double)step);
+        }
+        table[^1] = max;
+        return table;
+    }
+
+    public static int RandomValue(int min, int max, int bin, IReadOnlyList<(int MinShift, int MaxShift)> shifts)
+    {
+        ArgumentNullException.ThrowIfNull(shifts);
+        var table = RandomTable(min, max);
+        var value = table[bin];
+        foreach (var (minShift, maxShift) in shifts)
+        {
+            var shiftedLow = Shift(min, minShift);
+            var shiftedHigh = Shift(max, maxShift);
+            var ratio = (float)((double)(shiftedHigh - shiftedLow) / (max - min));
+            var offset = table[bin] - min;
+            value = offset < 1
+                ? shiftedLow + (int)Math.Truncate((double)ratio)
+                : shiftedLow + (int)Math.Truncate((float)(offset * (double)ratio));
+        }
+        return value;
     }
 }
 
@@ -81,6 +129,7 @@ public static class EquipReformRules
     public const int NotReformOption = ItemParamEntry.NotReformOption;
     public const int GunApSlot = ItemPropertyRules.BaseStatCount;
     public const int ResetMaterialEffect = 0x26;
+    public const int RandRange = 0x8000;
     public const double FeeMarkup = 0.75;
     public const int FeePerLevel = 100;
 
@@ -104,6 +153,18 @@ public static class EquipReformRules
         0x22 => CapeCurve,
         _ => ClothCurve,
     };
+
+    public static int FixedCurveIndex(Random rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        return rng.Next(RandRange) * ItemPropertyRules.CurveRolls >> 15;
+    }
+
+    public static int RandomCurveIndex(Random rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        return rng.Next(RandRange) % ItemPropertyRules.CurveRolls;
+    }
 
     public static int ElixirsNeeded(EquipReformRequest request) => request.SecondElixirWireUid != 0 ? 2 : 1;
 
@@ -167,7 +228,9 @@ public static class EquipReformRules
         EquipReformTables tables,
         RefineTables refineTables,
         Func<int> curveRoll,
-        RandomStatRow? randomRow = null)
+        RandomStatRow? randomRow = null,
+        IReadOnlyDictionary<string, IReadOnlyList<int>>? importCurves = null,
+        Func<int>? randomCurveRoll = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(stored);
@@ -175,30 +238,38 @@ public static class EquipReformRules
         ArgumentNullException.ThrowIfNull(refineTables);
         ArgumentNullException.ThrowIfNull(curveRoll);
         var curve = tables.Curves.TryGetValue(CurveFor(definition.Type), out var steps) ? StatReroll.Curve(steps) : null;
+        var imported = new Dictionary<string, int[]>(StringComparer.Ordinal);
+        var randomRoll = randomCurveRoll ?? curveRoll;
         var rolled = new List<ItemProperty>(ItemPropertyRules.BaseStatCount + 1);
         for (var slot = 0; slot <= GunApSlot; slot++)
         {
-            int low, high;
+            var matching = ElixirsFor(request, slot, tables);
             if (definition.HasRandomStats && randomRow is not null)
             {
                 if (slot >= randomRow.Stats.Count || randomRow.Stats[slot] is not { } range) continue;
-                (low, high) = (range.Min, range.Max);
+                if (!imported.TryGetValue(range.Curve, out var importedCurve))
+                {
+                    var known = importCurves is not null && importCurves.TryGetValue(range.Curve, out var importSteps) ? importSteps
+                        : tables.Curves.TryGetValue(range.Curve, out var reformSteps) ? reformSteps : null;
+                    if (known is null) continue;
+                    imported[range.Curve] = importedCurve = StatReroll.Curve(known);
+                }
+                var randomValue = StatReroll.RandomValue(range.Min, range.Max, importedCurve[randomRoll()], matching.TakeLast(1).Select(e => (e.MinShift, e.MaxShift)).ToList());
+                rolled.Add(new ItemProperty(ItemPropertyTypes.Stat, ItemPropertyRules.FirstStatId + slot, (short)randomValue, 0));
+                continue;
             }
-            else
-            {
-                var baseValue = slot < GunApSlot
-                    ? slot < definition.StatBonuses.Count ? definition.StatBonuses[slot] : 0
-                    : hasGunAp ? definition.Ap : 0;
-                if (baseValue == 0) continue;
-                (low, high) = StatReroll.Range(baseValue, tables.RandomStatMinPercent, tables.RandomStatMaxPercent);
-            }
-            if (ElixirFor(request, slot, tables) is { } elixir)
+            var baseValue = slot < GunApSlot
+                ? slot < definition.StatBonuses.Count ? definition.StatBonuses[slot] : 0
+                : hasGunAp ? definition.Ap : 0;
+            if (baseValue == 0) continue;
+            var (low, high) = StatReroll.Range(baseValue, tables.RandomStatMinPercent, tables.RandomStatMaxPercent);
+            foreach (var elixir in matching)
             {
                 low = StatReroll.Shift(low, elixir.MinShift);
                 high = StatReroll.Shift(high, elixir.MaxShift);
             }
             var bin = curve is null ? 0 : curve[curveRoll()];
-            rolled.Add(new ItemProperty(ItemPropertyTypes.Stat, ItemPropertyRules.FirstStatId + slot, (short)StatReroll.Roll(low, high, bin), 0));
+            rolled.Add(new ItemProperty(ItemPropertyTypes.Stat, ItemPropertyRules.FirstStatId + slot, (short)StatReroll.FloatSpanRoll(low, high, bin), 0));
         }
         var remaining = RemainingAfter(definition, stored);
         var result = stored.ToList();
@@ -227,13 +298,14 @@ public static class EquipReformRules
         return ReformRefineBonus.None;
     }
 
-    private static ReformElixirEntry? ElixirFor(EquipReformRequest request, int slot, EquipReformTables tables)
+    private static List<ReformElixirEntry> ElixirsFor(EquipReformRequest request, int slot, EquipReformTables tables)
     {
+        var matching = new List<ReformElixirEntry>(2);
         foreach (var choice in request.Choices)
         {
-            if (choice.IsChosen && choice.Slot == slot && tables.Elixirs.TryGetValue(choice.ElixirItemId, out var elixir)) return elixir;
+            if (choice.IsChosen && choice.Slot == slot && tables.Elixirs.TryGetValue(choice.ElixirItemId, out var elixir)) matching.Add(elixir);
         }
-        return null;
+        return matching;
     }
 
     private static List<ItemProperty> WithStat(IReadOnlyList<ItemProperty> stored, int id, short value)

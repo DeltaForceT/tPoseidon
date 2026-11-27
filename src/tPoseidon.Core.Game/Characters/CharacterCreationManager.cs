@@ -50,7 +50,7 @@ public sealed class CharacterCreationManager
         {
             _accountStore.AddCharacter(character);
         }
-        catch (Exception ex) when (IsUniqueViolation(ex))
+        catch (CharacterNameTakenException)
         {
             return CharCreationOutcome.Fail(CharCreationError.NameTaken);
         }
@@ -152,14 +152,6 @@ public sealed class CharacterCreationManager
 
     private static bool IsValidCharacterName(string name) =>
         !string.IsNullOrEmpty(name) && CharacterNameRules.Accepts(tPoseidon.Core.Common.ClientText.Encoding.GetBytes(name));
-
-    private static bool IsUniqueViolation(Exception ex)
-    {
-        var msg = ex.Message ?? string.Empty;
-        return msg.Contains("23505", StringComparison.Ordinal)
-            || msg.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)
-            || msg.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase);
-    }
 
     private static Character BuildCharacterRow(CharacterCreationRequest request)
     {

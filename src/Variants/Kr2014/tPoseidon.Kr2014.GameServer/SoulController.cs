@@ -61,7 +61,7 @@ internal sealed class SoulController
             player.Soul = new SoulHold(account.Soul, account.Guardians);
             await CatchUpAsync(player, false).ConfigureAwait(false);
         }
-        await SendStatusAsync(player, null).ConfigureAwait(false);
+        if (SoulRules.ReportsStatusOnEntry(player.Guardians?.Equipped)) await SendStatusAsync(player, null).ConfigureAwait(false);
     }
 
     public async Task GuardianChangedAsync(InGameSessionState player, ulong previousGuardianUid, ulong guardianUid)

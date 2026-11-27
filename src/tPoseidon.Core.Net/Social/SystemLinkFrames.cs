@@ -57,6 +57,7 @@ public static class SystemLinkFrames
     public const ushort PartyQuestKill = 0x15B5;
     public const ushort GuildPointForQuest = 0x15BB;
     public const ushort CancelPartyQuest = 0x15D5;
+    public const ushort RemovePartyQuest = PartyFrames.RemovePartyQuest;
 
     public const ushort OrderCancel = 2;
     public const ushort OrderObserve = 0x0B;
@@ -74,7 +75,10 @@ public static class SystemLinkFrames
     public const int ObserveLength = 62;
     public const int QuestTallyLength = 75;
     public const int QuestRecoveryLength = 96;
+    public const uint QuestCancelByBreak = 1;
     public const uint QuestCancelByMaster = 3;
+    public const uint QuestCancelByTimeout = 4;
+    public const uint QuestCancelByLeave = 8;
 
     public static byte[] Character(ulong characterId)
     {

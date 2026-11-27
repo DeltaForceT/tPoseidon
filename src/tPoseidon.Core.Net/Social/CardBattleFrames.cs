@@ -13,6 +13,23 @@ public readonly record struct CardBattleStatusOrder(ulong CharacterId, ushort Cl
     public uint WonCardItemId => Status.WonCardItemId;
 }
 
+public readonly record struct CardBattleCheck(
+    ushort ClientId,
+    ushort OtherClientId,
+    bool OwnNormal,
+    bool OtherNormal,
+    bool DeckValid,
+    bool MapAllowed,
+    bool OwnLevel,
+    bool OtherLevel,
+    bool BagFull,
+    uint Level,
+    uint Money,
+    uint EntityId)
+{
+    public bool Passes => OwnNormal && OtherNormal && OwnLevel && OtherLevel && DeckValid && MapAllowed && !BagFull;
+}
+
 public static class CardBattleFrames
 {
     public const int MaxSnatchOperations = 3;
@@ -25,19 +42,23 @@ public static class CardBattleFrames
     }
 
     public const ushort MakeBattle = 0x1F41;
+    public const ushort Made = 0x1F42;
     public const ushort MakeRefused = 0x1F43;
     public const ushort Ask = 0x1F44;
     public const ushort Accepted = 0x1F45;
     public const ushort AskRefused = 0x1F46;
     public const ushort Asked = 0x1F47;
+    public const ushort AskSent = 0x1F48;
     public const ushort AnswerYes = 0x1F49;
     public const ushort OpponentStart = 0x1F4A;
     public const ushort AnswerRefused = 0x1F4B;
     public const ushort AnswerNo = 0x1F4C;
     public const ushort Leave = 0x1F4D;
     public const ushort MasterStart = 0x1F4E;
+    public const ushort PlayerLeft = 0x1F4F;
     public const ushort OpponentLeft = 0x1F50;
     public const ushort Deck = 0x1F51;
+    public const ushort DeckAccepted = 0x1F52;
     public const ushort DeckRefused = 0x1F53;
     public const ushort BattleCards = 0x1F54;
     public const ushort Drop = 0x1F55;
@@ -45,7 +66,12 @@ public static class CardBattleFrames
     public const ushort DropRefused = 0x1F57;
     public const ushort OpponentDropped = 0x1F58;
     public const ushort RoundResult = 0x1F5D;
-    public const ushort DrawResult = 0x1F5E;
+    public const ushort ExtraCardRequest = 0x1F59;
+    public const ushort ExtraCard = 0x1F5A;
+    public const ushort ExtraCardFailed = 0x1F5B;
+    public const ushort OpponentExtraCard = 0x1F5C;
+    public const ushort ExtraStart = 0x1F5E;
+    public const ushort ExtraTie = 0x1F5F;
     public const ushort FinalResult = 0x1F60;
     public const ushort ReserveExit = 0x1F61;
     public const ushort Chance = 0x1F6C;
@@ -64,8 +90,30 @@ public static class CardBattleFrames
     public const ushort ResultOk = 0x1F75;
     public const ushort ResultWaiting = 0x1F76;
     public const ushort ResultClosed = 0x1F77;
+    public const ushort PlayerClosed = 0x1F6B;
     public const ushort BattleError = 0x1F7B;
+    public const ushort DeckTimeOver = 0x1F69;
+    public const ushort DropTimeOver = 0x1F6A;
+    public const ushort RuleTimeOver = 0x1F74;
+    public const int TimerTickMs = 1000;
 
+    public const ushort PlayerEntered = 0x1F79;
+    public const ushort PlayerLeftBattle = 0x1F7A;
+    public const ushort OrderClearState = 0x97;
+    public const ushort OrderCheck = 0x98;
+    public const ushort OrderCheckReply = 0x97;
+    public const int CheckRequestSize = 12;
+    public const int ClearStateSize = 4;
+    public const int CheckReplySize = 0x17;
+    public const byte MakeCheckFailed = 0x16;
+    public const byte AskCheckFailed = 0x17;
+    public const byte CheckTargetStateCode = 0x17;
+    public const byte CheckOwnStateCode = 0x16;
+    public const byte CheckOwnLevelCode = 4;
+    public const byte CheckOtherLevelCode = 0x18;
+    public const byte CheckDeckCode = 0x0C;
+    public const byte CheckMapCode = 0x13;
+    public const byte CheckBagCode = 0x1E;
     public const ushort OrderStatusUpdate = 0x9A;
     public const ushort OrderStatusReply = 0x99;
     public const int StatusSize = 0x36;
@@ -87,6 +135,7 @@ public static class CardBattleFrames
     public const byte Refused = 9;
     public const byte NoAsk = 0x0B;
     public const byte OpponentMissing = 0x19;
+    public const byte AskerClosed = 5;
 
     public const int PlayerRecordSize = 0x48;
     public const int StatBlockSize = 0x24;
@@ -98,10 +147,87 @@ public static class CardBattleFrames
 
     public static byte[] Code(byte code) => new[] { code };
 
+    public static byte[] EntityId(ushort entityId) => ClientId(entityId);
+
+    public static byte[] CheckRequest(ushort clientId, ushort otherClientId, ulong characterId)
+    {
+        var w = new PacketWriter(CheckRequestSize);
+        w.WriteUInt16(clientId);
+        w.WriteUInt16(otherClientId);
+        w.WriteUInt64(characterId);
+        return w.ToArray();
+    }
+
+    public static byte[] ClearState(ushort clientId, ushort reason)
+    {
+        var w = new PacketWriter(ClearStateSize);
+        w.WriteUInt16(clientId);
+        w.WriteUInt16(reason);
+        return w.ToArray();
+    }
+
+    public static bool TryReadCheckRequest(ReadOnlySpan<byte> data, out ushort clientId, out ushort otherClientId, out ulong characterId)
+    {
+        clientId = 0;
+        otherClientId = 0;
+        characterId = 0;
+        if (data.Length < CheckRequestSize) return false;
+        var r = new PacketReader(data);
+        clientId = r.ReadUInt16();
+        otherClientId = r.ReadUInt16();
+        characterId = r.ReadUInt64();
+        return true;
+    }
+
+    public static byte[] CheckReply(CardBattleCheck check)
+    {
+        var w = new PacketWriter(CheckReplySize);
+        w.WriteUInt16(check.ClientId);
+        w.WriteUInt16(check.OtherClientId);
+        w.WriteByte(check.OwnNormal ? (byte)1 : (byte)0);
+        w.WriteByte(check.OtherNormal ? (byte)1 : (byte)0);
+        w.WriteByte(check.DeckValid ? (byte)1 : (byte)0);
+        w.WriteByte(check.MapAllowed ? (byte)1 : (byte)0);
+        w.WriteByte(check.OwnLevel ? (byte)1 : (byte)0);
+        w.WriteByte(check.OtherLevel ? (byte)1 : (byte)0);
+        w.WriteByte(check.BagFull ? (byte)1 : (byte)0);
+        w.WriteUInt32(check.Level);
+        w.WriteUInt32(check.Money);
+        w.WriteUInt32(check.EntityId);
+        return w.ToArray();
+    }
+
+    public static CardBattleCheck? ReadCheckReply(ReadOnlySpan<byte> data)
+    {
+        if (data.Length < CheckReplySize) return null;
+        var r = new PacketReader(data);
+        var client = r.ReadUInt16();
+        var other = r.ReadUInt16();
+        var flags = new bool[7];
+        for (var i = 0; i < flags.Length; i++) flags[i] = r.ReadByte() != 0;
+        return new CardBattleCheck(client, other, flags[0], flags[1], flags[2], flags[3], flags[4], flags[5], flags[6], r.ReadUInt32(), r.ReadUInt32(), r.ReadUInt32());
+    }
+
     public static byte[] Named(string name, Encoding text)
     {
         var w = new PacketWriter(24);
         w.WriteNulTerminated(name, text);
+        return w.ToArray();
+    }
+
+    public static byte[] ClientId(ushort clientId)
+    {
+        var w = new PacketWriter(sizeof(ushort));
+        w.WriteUInt16(clientId);
+        return w.ToArray();
+    }
+
+    public static byte[] MadeBattle(CardBattleMatch match, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(match);
+        var w = new PacketWriter(sizeof(ushort) + PlayerRecordSize);
+        w.WriteUInt16(match.BattleId);
+        WritePlayer(w, match.Master, new CardBattleStats(0, 0, 0, 0, 0, 0, 0), text);
         return w.ToArray();
     }
 
@@ -167,10 +293,10 @@ public static class CardBattleFrames
         var winner = match.Winner;
         w.WriteUInt16(winner is null ? (ushort)0 : ReferenceEquals(winner, match.Master) ? (ushort)0 : (ushort)1);
         w.WriteUInt16(winner?.ClientId ?? 0);
-        w.WriteUInt16(0);
-        w.WriteUInt16(0);
-        w.WriteUInt16(CardBattleRules.FirstPlayCount);
-        w.WriteUInt16(0);
+        w.WriteUInt16(match.ExitReservedBy);
+        w.WriteUInt16(match.NoDeckClient);
+        w.WriteUInt16(match.PlayCount);
+        w.WriteUInt16(match.NextChooser);
         WriteSide(w, own);
         WriteSide(w, other);
         WriteScore(w, own.Score);
@@ -193,7 +319,7 @@ public static class CardBattleFrames
         w.WriteUInt64(side.CharacterId);
         w.WriteUInt16(side.ClientId);
         WriteScore(w, side.Score);
-        w.WriteByte(0);
+        w.WriteByte(side.OverDis ? (byte)1 : (byte)0);
         w.WriteUInt32(payout.WonCardItemId);
         w.WriteByte(won ? (byte)1 : (byte)0);
         w.WriteUInt64(payout.OpponentCharacterId);
@@ -206,7 +332,7 @@ public static class CardBattleFrames
         w.WriteUInt16(won && side.Set is { } set ? (ushort)set.Grade : (ushort)0);
         w.WriteUInt32(payout.SecondWonCardItemId);
         w.WriteUInt32(payout.SecondLostCardItemId);
-        w.WriteByte(0);
+        w.WriteByte(side.NoExperience ? (byte)1 : (byte)0);
         return w.ToArray();
     }
 
@@ -267,7 +393,7 @@ public static class CardBattleFrames
         return w.ToArray();
     }
 
-    public static (ulong CharacterId, ushort ClientId, byte Code, CardBattleRewardBlock Reward)? ReadStatusReply(ReadOnlySpan<byte> data)
+    public static (ulong CharacterId, ushort ClientId, byte Code, CardBattleRewardBlock Reward, bool DeckReady)? ReadStatusReply(ReadOnlySpan<byte> data)
     {
         if (data.Length < StatusReplySize) return null;
         var r = new PacketReader(data);
@@ -285,7 +411,8 @@ public static class CardBattleFrames
         var lostCard = r.ReadUInt32();
         var secondWonCard = r.ReadUInt32();
         var secondLostCard = r.ReadUInt32();
-        return (characterId, clientId, code, new CardBattleRewardBlock(level, special, exp, expTotal, card, lostCard, money, present, secondWonCard, secondLostCard));
+        var deckReady = r.ReadByte() != 0;
+        return (characterId, clientId, code, new CardBattleRewardBlock(level, special, exp, expTotal, card, lostCard, money, present, secondWonCard, secondLostCard), deckReady);
     }
 
     private static void WriteReward(PacketWriter w, CardBattleRewardBlock reward)
@@ -341,6 +468,13 @@ public static class CardBattleFrames
     private static BattleCard ReadCard(ref PacketReader r) =>
         new(r.ReadUInt64(), r.ReadUInt32(), r.ReadUInt32(), r.ReadByte(), r.ReadUInt32(), r.ReadUInt32(), r.ReadByte());
 
+    public static byte[] ExtraCardBody(BattleCard card)
+    {
+        var w = new PacketWriter(BattleCard.Size);
+        WriteCard(w, card.Encoded());
+        return w.ToArray();
+    }
+
     private static void WriteCard(PacketWriter w, BattleCard card)
     {
         w.WriteUInt64(card.ItemUid);
@@ -376,9 +510,8 @@ public static class CardBattleFrames
     private static void WriteStats(PacketWriter w, CardBattleStats stats)
     {
         ArgumentNullException.ThrowIfNull(stats);
-        var values = new[] { stats.WinPoint, stats.WinCount, stats.BattleCount, stats.Dis, stats.SpecialDis, stats.TotalBattleToday, stats.OtherBattleToday };
+        var values = new[] { stats.WinPoint, stats.WinCount, stats.BattleCount, stats.Lose, stats.Grade, stats.Dis, stats.SpecialDis, stats.TotalBattleToday, stats.OtherBattleToday };
         foreach (var value in values) w.WriteUInt32((uint)Math.Max(0, value));
-        w.WriteZero((StatCount - values.Length) * sizeof(uint));
     }
 
     private static void WritePlayer(PacketWriter w, BattleSide side, CardBattleStats stats, Encoding text)
@@ -387,13 +520,13 @@ public static class CardBattleFrames
         ArgumentNullException.ThrowIfNull(text);
         w.WriteUInt16(side.ClientId);
         w.WriteUInt32((uint)Math.Max(0, side.Level));
-        w.WriteUInt16(0);
+        w.WriteUInt16(side.GameLevel);
         var name = text.GetBytes(side.Name);
         var length = Math.Min(name.Length, NameSize - 1);
         w.WriteBytes(name.AsSpan(0, length));
         w.WriteZero(NameSize - length);
-        w.WriteUInt32(0);
-        w.WriteUInt32(0);
+        w.WriteUInt32(side.GameMoney);
+        w.WriteUInt32(side.GameEntityId);
         WriteStats(w, stats);
     }
 }

@@ -33,18 +33,39 @@ public sealed class PostgresCardBattleStore : ICardBattleStore
             (int)reader.GetInt64(5), (int)reader.GetInt64(6));
     }
 
-    public void Record(ulong characterId, ulong otherId, bool won)
+    public void Record(ulong characterId, ulong otherId, bool won, int winPointChange)
     {
         using var conn = _dataSource.OpenConnectionForActiveSchema();
         using var tx = conn.BeginTransaction();
         using (var update = new NpgsqlCommand("""
-            INSERT INTO cardbattle (char_uid, wincount, battlecount) VALUES (@c, @w, 1)
-            ON CONFLICT (char_uid) DO UPDATE SET wincount = cardbattle.wincount + @w, battlecount = cardbattle.battlecount + 1
+            INSERT INTO cardbattle (char_uid, winpoint, wincount, battlecount) VALUES (@c, GREATEST(0, @p), @w, 1)
+            ON CONFLICT (char_uid) DO UPDATE SET winpoint = GREATEST(0, cardbattle.winpoint + @p), wincount = cardbattle.wincount + @w, battlecount = cardbattle.battlecount + 1
             """, conn, tx))
         {
             update.Parameters.AddWithValue("c", (long)characterId);
             update.Parameters.AddWithValue("w", won ? 1 : 0);
+            update.Parameters.AddWithValue("p", winPointChange);
             update.ExecuteNonQuery();
+        }
+        using (var history = new NpgsqlCommand("INSERT INTO cardbattle_count (char_uid, other_uid) VALUES (@c, @o)", conn, tx))
+        {
+            history.Parameters.AddWithValue("c", (long)characterId);
+            history.Parameters.AddWithValue("o", (long)otherId);
+            history.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
+    public void RecordClosed(ulong characterId, ulong otherId, int disIncrease, int specialDisIncrease)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        using (var update = new NpgsqlCommand("UPDATE cardbattle SET dis = dis + @d, specialdis = specialdis + @s WHERE char_uid = @c", conn, tx))
+        {
+            update.Parameters.AddWithValue("c", (long)characterId);
+            update.Parameters.AddWithValue("d", disIncrease);
+            update.Parameters.AddWithValue("s", specialDisIncrease);
+            if (update.ExecuteNonQuery() != 1) throw new InvalidOperationException($"No card battle record for character 0x{characterId:X}.");
         }
         using (var history = new NpgsqlCommand("INSERT INTO cardbattle_count (char_uid, other_uid) VALUES (@c, @o)", conn, tx))
         {

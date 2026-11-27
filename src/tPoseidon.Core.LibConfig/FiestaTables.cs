@@ -9,7 +9,10 @@ public sealed record FiestaSlotEntry(
     int InMonth,
     int InDay,
     int InMinuteOfDay,
-    int OutMinuteOfDay);
+    int OutMinuteOfDay,
+    int OutYear = 0,
+    int OutMonth = 0,
+    int OutDay = 0);
 
 public sealed record LevelPortBand(int ZoneId, int MinLevel, int MaxLevel);
 

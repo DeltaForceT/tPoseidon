@@ -21,6 +21,8 @@ public sealed class SurpriseSpot
     public DateTimeOffset EndsAt { get; }
     public bool CreviceFound { get; set; }
     public bool IsTreasure { get; }
+
+    public SurpriseSpot MovedTo(short x, short y) => new(ItemId, Zone, x, y, EndsAt, IsTreasure) { CreviceFound = CreviceFound };
 }
 
 public static class SurpriseSpotRules
@@ -37,6 +39,7 @@ public static class SurpriseSpotRules
     public const byte CreviceClosedAsDeclined = 1;
     public const byte CreviceUsed = 0;
     public static readonly TimeSpan TeleportProtection = TimeSpan.FromMilliseconds(2000);
+    public static readonly TimeSpan TeleportDelay = TimeSpan.FromMilliseconds(2000);
 
     public static bool IsOnSpot(SurpriseSpot spot, ushort mapId, int x, int y)
     {
@@ -56,6 +59,23 @@ public static class SurpriseSpotRules
     {
         ArgumentNullException.ThrowIfNull(geometry);
         return geometry.PointsOfType(ZoneGeometry.PointTypeSpawn).Concat(geometry.PointsOfType(ZoneGeometry.PointTypeRegionSpawn)).ToList();
+    }
+
+    public static ZonePoint? PickPoint(IReadOnlyList<ZonePoint> monsterPoints, Func<ZonePoint, bool> diggable, Func<int, int> next)
+    {
+        ArgumentNullException.ThrowIfNull(monsterPoints);
+        ArgumentNullException.ThrowIfNull(diggable);
+        ArgumentNullException.ThrowIfNull(next);
+        var candidates = monsterPoints.Where(diggable).ToList();
+        return candidates.Count == 0 ? null : candidates[next(candidates.Count)];
+    }
+
+    public static SurpriseSpot OnEnteringMap(SurpriseSpot spot, ushort mapId, Func<ZonePoint?> pickPoint)
+    {
+        ArgumentNullException.ThrowIfNull(spot);
+        ArgumentNullException.ThrowIfNull(pickPoint);
+        if (spot.Zone != mapId || pickPoint() is not { } point) return spot;
+        return spot.MovedTo((short)point.X, (short)point.Y);
     }
 
     public static TreasureTeleportDestination? PickDestination(TreasureTeleportEntry row, Func<double> roll)

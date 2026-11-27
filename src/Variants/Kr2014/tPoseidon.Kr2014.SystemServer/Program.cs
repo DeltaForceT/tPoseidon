@@ -56,11 +56,17 @@ var gameLinks = new tPoseidon.Kr2014.SystemServer.GameServerLinks(tPoseidon.Core
 {
     Text = tPoseidon.Core.Common.ClientText.Encoding,
 };
+var chatRoomIds = new tPoseidon.Core.Net.Social.ChatRoomIdIssuer(tPoseidon.Core.Net.Social.InstantChatRooms.LobbyRoomId);
 var instantChatRooms = new tPoseidon.Core.Net.Social.InstantChatRooms(
     tPoseidon.Core.Common.ClientText.Encoding,
     (ushort)(systemIni?.GetInt("ChatNoticeMakeLimitLevel", tPoseidon.Core.Net.Social.InstantChatRooms.DefaultMakeLimitLevel) ?? tPoseidon.Core.Net.Social.InstantChatRooms.DefaultMakeLimitLevel),
-    (ushort)(systemIni?.GetInt("ChatNoticeJoinLimitLevel", tPoseidon.Core.Net.Social.InstantChatRooms.DefaultJoinLimitLevel) ?? tPoseidon.Core.Net.Social.InstantChatRooms.DefaultJoinLimitLevel));
-var chatServer = new tPoseidon.Kr2014.SystemServer.ChatServer(socialRoom, instantChatRooms, gameLinks, tPoseidon.Core.Common.ClientText.Encoding, Log);
+    (ushort)(systemIni?.GetInt("ChatNoticeJoinLimitLevel", tPoseidon.Core.Net.Social.InstantChatRooms.DefaultJoinLimitLevel) ?? tPoseidon.Core.Net.Social.InstantChatRooms.DefaultJoinLimitLevel),
+    chatRoomIds);
+var channelChatRooms = new tPoseidon.Core.Net.Social.ChannelChatRooms(
+    tPoseidon.Core.Common.ClientText.Encoding,
+    (ushort)(systemIni?.GetInt("ChannelChatMakeLimitLevel", tPoseidon.Core.Net.Social.ChannelChatRooms.DefaultMakeLimitLevel) ?? tPoseidon.Core.Net.Social.ChannelChatRooms.DefaultMakeLimitLevel),
+    chatRoomIds);
+var chatServer = new tPoseidon.Kr2014.SystemServer.ChatServer(socialRoom, instantChatRooms, channelChatRooms, gameLinks, tPoseidon.Core.Common.ClientText.Encoding, Log);
 var partyServer = new tPoseidon.Kr2014.SystemServer.PartyServer(
     new tPoseidon.Core.Net.Social.PartyService(tPoseidon.Core.Common.ClientText.Encoding, partyRules, TimeProvider.System),
     socialRoom,
@@ -81,6 +87,10 @@ var guildShopTables = libConfigData is null
     ? tPoseidon.Core.LibConfig.GuildShopTables.Empty
     : libConfigData!.Shops.GuildShopTables;
 Log($"guild shop from libconfig: {guildShopTables.Goods.Count} goods (GuildShopGoodsTable)");
+var guildLevels = libConfigData is null
+    ? tPoseidon.Core.LibConfig.GuildLevelTable.Empty
+    : libConfigData.SocialSystems.GuildLevelTable;
+Log($"guild levels from libconfig: {guildLevels.Rows.Count} rows (GuildLevelInfo)");
 var guildEmblemItems = new tPoseidon.Core.Data.Postgres.PostgresItemStore(postgres.DataSource);
 var guildEmblemProperties = new tPoseidon.Core.Data.Postgres.PostgresItemPropertyStore(postgres.DataSource);
 var guildServer = new tPoseidon.Kr2014.SystemServer.GuildServer(
@@ -90,7 +100,8 @@ var guildServer = new tPoseidon.Kr2014.SystemServer.GuildServer(
         guildShopTables,
         tPoseidon.Core.Common.ClientText.Encoding,
         TimeProvider.System,
-        (characterId, itemUid) => tPoseidon.Core.Game.Guild.GuildEmblemIcon.Resolve(guildEmblemItems, guildEmblemProperties, characterId, itemUid)),
+        (characterId, itemUid) => tPoseidon.Core.Game.Guild.GuildEmblemIcon.Resolve(guildEmblemItems, guildEmblemProperties, characterId, itemUid),
+        guildLevels),
     new tPoseidon.Core.Data.Postgres.PostgresGuildMatchStore(postgres.DataSource),
     TimeProvider.System,
     socialRoom,
@@ -165,7 +176,8 @@ var giftServer = new tPoseidon.Kr2014.SystemServer.GiftServer(
     GiftAccepted = coupleServer.GiftAccepted,
 };
 
-var itemPrices = new tPoseidon.Kr2014.SystemServer.ItemPriceServer();
+var itemPrices = new tPoseidon.Kr2014.SystemServer.ItemPriceServer(tPoseidon.Kr2014.SystemServer.ItemPriceServer.DefaultFileName, () => DateTime.Now, Log);
+itemPrices.Load();
 var angelServer = new tPoseidon.Kr2014.SystemServer.AngelServer(
     new AngelService(
         new tPoseidon.Core.Data.Postgres.PostgresAngelStore(postgres.DataSource),
@@ -177,7 +189,19 @@ var angelServer = new tPoseidon.Kr2014.SystemServer.AngelServer(
     tPoseidon.Core.Common.ClientText.Encoding,
     Log);
 
+var cardBattlePoints = new tPoseidon.Core.Game.CardBattle.CardBattlePoints(
+    systemIni?.GetInt(tPoseidon.Core.Game.CardBattle.CardBattlePoints.Key0, tPoseidon.Core.Game.CardBattle.CardBattlePoints.Default.Point0) ?? tPoseidon.Core.Game.CardBattle.CardBattlePoints.Default.Point0,
+    systemIni?.GetInt(tPoseidon.Core.Game.CardBattle.CardBattlePoints.Key1, tPoseidon.Core.Game.CardBattle.CardBattlePoints.Default.Point1) ?? tPoseidon.Core.Game.CardBattle.CardBattlePoints.Default.Point1,
+    systemIni?.GetInt(tPoseidon.Core.Game.CardBattle.CardBattlePoints.Key2, tPoseidon.Core.Game.CardBattle.CardBattlePoints.Default.Point2) ?? tPoseidon.Core.Game.CardBattle.CardBattlePoints.Default.Point2,
+    systemIni?.GetInt(tPoseidon.Core.Game.CardBattle.CardBattlePoints.Key3, tPoseidon.Core.Game.CardBattle.CardBattlePoints.Default.Point3) ?? tPoseidon.Core.Game.CardBattle.CardBattlePoints.Default.Point3,
+    systemIni?.GetInt(tPoseidon.Core.Game.CardBattle.CardBattlePoints.Key4, tPoseidon.Core.Game.CardBattle.CardBattlePoints.Default.Point4) ?? tPoseidon.Core.Game.CardBattle.CardBattlePoints.Default.Point4);
 var cardBattleItems = new tPoseidon.Core.Data.Postgres.PostgresItemStore(postgres.DataSource);
+var cardGenerator = libConfigPath is null
+    ? null
+    : new tPoseidon.Core.Game.CardBattle.CardGenerator(
+        libConfigData!.GuardianSoul.CardGenTables,
+        Random.Shared.Next,
+        () => DateOnly.FromDateTime(DateTime.Now));
 var cardBattleServer = new tPoseidon.Kr2014.SystemServer.CardBattleServer(
     new CardBattleService(
         new tPoseidon.Core.Data.Postgres.PostgresCardBattleStore(postgres.DataSource),
@@ -188,7 +212,9 @@ var cardBattleServer = new tPoseidon.Kr2014.SystemServer.CardBattleServer(
         tPoseidon.Core.Common.ClientText.Encoding,
         libConfigPath is null
             ? null
-            : new tPoseidon.Core.Game.CardBattle.SpecialCardSets(libConfigData!.GuardianSoul.CardSpecialSets)),
+            : new tPoseidon.Core.Game.CardBattle.SpecialCardSets(libConfigData!.GuardianSoul.CardSpecialSets),
+        cardBattlePoints,
+        cardGenerator),
     socialRoom,
     gameLinks,
     tPoseidon.Core.Common.ClientText.Encoding,
@@ -382,6 +408,7 @@ gameLinks.OnLeaveZone = partyServer.ZoneLeftAsync;
 gameLinks.OnBeginPartyQuest = partyServer.BeginQuest;
 gameLinks.OnPartyQuestKill = partyServer.QuestKillAsync;
 gameLinks.OnCancelPartyQuest = partyServer.CancelQuest;
+gameLinks.OnRemovePartyQuest = partyServer.RemoveQuestAsync;
 gameLinks.OnDeadChanged = partyServer.DeadChangedAsync;
 gameLinks.OnKindChanged = async (characterId, kind, job, ct) =>
 {
@@ -437,6 +464,8 @@ var gameLinkTasks = new[] { ServerEndpointConfig.GamePort, ServerEndpointConfig.
     .ToArray();
 var rankJobTask = rankServer.RunJobAsync(stopCts.Token);
 var guildRankJobTask = new tPoseidon.Kr2014.SystemServer.GuildRankJob(new tPoseidon.Core.Data.Postgres.PostgresGuildStore(postgres.DataSource), Log).RunAsync(stopCts.Token);
+var itemPriceSaveTask = itemPrices.RunAsync(stopCts.Token);
+var cardBattleTimerTask = cardBattleServer.RunTimersAsync(stopCts.Token);
 var partyExpiryTask = partyServer.ExpireOfflineMembersAsync(partyRules.OfflineMemberKeepTime / 10, stopCts.Token);
 var gameMasterRateTask = gameMasterServer.RunRateEventsAsync(stopCts.Token);
 Log($"listening on {ServerEndpointConfig.ClientBindAddress}:{port}");
@@ -465,6 +494,8 @@ try
     await gameMasterRateTask.ConfigureAwait(false);
     await rankJobTask.ConfigureAwait(false);
     await guildRankJobTask.ConfigureAwait(false);
+    await itemPriceSaveTask.ConfigureAwait(false);
+    await cardBattleTimerTask.ConfigureAwait(false);
     await Task.WhenAll(gameLinkTasks).ConfigureAwait(false);
 }
 catch (OperationCanceledException)
@@ -472,6 +503,7 @@ catch (OperationCanceledException)
 }
 finally
 {
+    itemPrices.Save();
     if (masterClient is not null)
     {
         await masterClient.DisposeAsync().ConfigureAwait(false);

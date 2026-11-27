@@ -404,7 +404,16 @@ public sealed class MonsterEntity
 
     public BossLife? Boss { get; private set; }
 
-    public ushort HpBarsField => (ushort)(Boss?.BarsLeft ?? 0);
+    public const int HarconBarCount = 5;
+
+    private int _plainBars;
+
+    public ushort HpBarsField => (ushort)(Boss?.BarsLeft ?? Volatile.Read(ref _plainBars));
+
+    public void GrantPlainBars(int bars)
+    {
+        Volatile.Write(ref _plainBars, Math.Max(0, bars));
+    }
 
     public void AttachBoss(BossLifeProfile profile, BossEventOutbox events, Func<int, int> elementCodeOf)
     {
@@ -434,14 +443,18 @@ public sealed class MonsterEntity
         get { lock (_lock) return Boss?.Guarded ?? false; }
     }
 
-    public void TickBossTimers(int elapsedMs, bool hasTarget, Func<int> roll, Func<int, bool>? castable = null)
+    public IReadOnlyList<BossCastRequest> TickBossTimers(
+        int elapsedMs, bool hasTarget, Func<int> roll, Func<BossCastRequest, BossCastPlan>? planOf = null)
     {
         ArgumentNullException.ThrowIfNull(roll);
-        castable ??= static _ => true;
-        lock (_lock) Boss?.TickTimers(this, elapsedMs, hasTarget, _hp < MaxHp, roll, castable);
+        planOf ??= static _ => new BossCastPlan(true, 0, false, false);
+        lock (_lock)
+        {
+            return Boss?.TickTimers(this, elapsedMs, hasTarget, _hp < MaxHp, roll, planOf) ?? Array.Empty<BossCastRequest>();
+        }
     }
 
-    private bool DeadLocked => _hp <= 0 && (Boss?.Exhausted ?? true);
+    private bool DeadLocked => _hp <= 0 && (Boss?.Exhausted ?? _plainBars == 0);
 
     private long ApplyBossDamage(BossLife boss, long amount)
     {
@@ -480,8 +493,13 @@ public sealed class MonsterEntity
             }
             else
             {
-                actual = Math.Min(amount, _hp);
+                actual = Math.Min(amount, _hp + _plainBars * MaxHp);
                 _hp -= actual;
+                while (_hp < 0 && _plainBars > 0)
+                {
+                    _hp += MaxHp;
+                    _plainBars--;
+                }
             }
         }
         DamageObserver?.Damaged(this, actual);
@@ -489,6 +507,69 @@ public sealed class MonsterEntity
     }
 
     public int HpRecoveryAmount { get; init; }
+
+    public int MaxMp { get; init; }
+
+    public int MpRecoveryAmount { get; init; }
+
+    private int _mp;
+
+    public int CurrentMp
+    {
+        get { lock (_lock) return _mp; }
+    }
+
+    public void InitMp(int mp)
+    {
+        lock (_lock) _mp = mp;
+    }
+
+    public bool TryPayMp(int cost)
+    {
+        if (cost == 0) return false;
+        lock (_lock)
+        {
+            if (_mp < cost) return false;
+            _mp = Math.Min(MaxMp, _mp - cost);
+            return true;
+        }
+    }
+
+    public void RefillMp()
+    {
+        lock (_lock) _mp = MaxMp;
+    }
+
+    public long VampiricCapacity
+    {
+        get { lock (_lock) return Boss is { } boss ? boss.Profile.LifeCount * MaxHp : MaxHp; }
+    }
+
+    public bool TryVampiricHeal(long heal, out long hp, out ushort bars)
+    {
+        lock (_lock)
+        {
+            hp = 0;
+            bars = 0;
+            if (_hp <= 0 || heal <= 0) return false;
+            _hp += heal;
+            if (_hp >= MaxHp)
+            {
+                if (Boss is { BarsLeft: > 0 } boss)
+                {
+                    _hp -= MaxHp;
+                    boss.GainBar();
+                }
+                else
+                {
+                    _hp = MaxHp;
+                }
+            }
+            hp = _hp;
+            bars = HpBarsField;
+            return true;
+        }
+    }
 
     private int _hpRecoveryElapsedMs;
     private DateTimeOffset? _hpRecoveryClockAt;
@@ -505,6 +586,7 @@ public sealed class MonsterEntity
             _hpRecoveryElapsedMs = 0;
             var before = _hp;
             _hp = before < MaxHp ? Math.Min(MaxHp, before + HpRecoveryAmount) : MaxHp;
+            _mp = _mp < MaxMp ? Math.Min(MaxMp, _mp + MpRecoveryAmount) : MaxMp;
             return _hp - before;
         }
     }

@@ -308,6 +308,16 @@ public sealed class StatManager
         }
     }
 
+    public (long Hp, long Mp) ClampVitals(long maxHp, long maxMp)
+    {
+        lock (_lock)
+        {
+            _hp = Math.Min(_hp, Math.Max(0L, maxHp));
+            _mp = Math.Min(_mp, Math.Max(0L, maxMp));
+            return (_hp, _mp);
+        }
+    }
+
     public void SetVitals(long hp, long mp)
     {
         lock (_lock)

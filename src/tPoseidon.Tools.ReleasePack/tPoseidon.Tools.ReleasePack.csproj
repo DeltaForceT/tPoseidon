@@ -10,6 +10,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="tPoseidon.Updater.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\tPoseidon.Core.Common\tPoseidon.Core.Common.csproj" />
     <ProjectReference Include="..\tPoseidon.Core.Crypto\tPoseidon.Core.Crypto.csproj" />
   </ItemGroup>

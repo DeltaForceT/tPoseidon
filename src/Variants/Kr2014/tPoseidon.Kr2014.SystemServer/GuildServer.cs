@@ -102,6 +102,9 @@ public sealed class GuildServer
             GuildFrames.ReadDetailByCodeRequest(p) is { } guildCode ? _guilds.DetailByCode(id, guildCode) : null);
         On(dispatcher, ctx, GuildFrames.DetailByCharacter, (id, p) =>
             GuildFrames.ReadDetailByCharacterRequest(p, _text) is { } name ? _guilds.DetailByCharacter(id, name) : null);
+        On(dispatcher, ctx, GuildFrames.HistoryRequest, (id, p) =>
+            GuildFrames.ReadHistoryRequest(p) is { } guildCode ? _guilds.History(id, guildCode) : null);
+        dispatcher.Register(GuildFrames.GuildMemberSms, (_, payload, ct) => GuildMemberSmsAsync(ctx, payload, ct));
         dispatcher.Register(GuildFrames.GuildMemo, (_, payload, ct) => GuildMemoAsync(ctx, payload, ct));
         dispatcher.Register(GuildFrames.GuildSms, (_, payload, ct) => GuildSmsAsync(ctx, payload, ct));
         dispatcher.Register(GuildGameRooms.DetailRequest, async (_, payload, ct) =>
@@ -462,6 +465,27 @@ public sealed class GuildServer
         });
 
     public IFriendStore? Friends { get; set; }
+
+    private async Task GuildMemberSmsAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
+    {
+        if (_room.Find(ctx) is not { } member || GuildFrames.ReadMemberSms(payload.Span, _text) is not { } sms) return;
+        var owner = member.Character.CharacterId;
+        if (_guilds.MemberSms(owner, sms.Targets) is not { } plan) return;
+        foreach (var targetId in plan.Targets)
+        {
+            if (_room.Find(targetId) is { } target)
+            {
+                await target.Context.SendFrameAsync(FriendFrames.GuildSmsReceived,
+                    FriendFrames.GuildSmsFrom(owner, plan.SenderName, sms.Text, _text), (byte)Random.Shared.Next(1, 256), ct).ConfigureAwait(false);
+                _log($"[guild] member sms from 0x{owner:X} to 0x{targetId:X}");
+            }
+            else
+            {
+                var kept = Friends?.SendMessage(targetId, owner, FriendRules.GuildMessageKind, FriendRules.Truncate(sms.Text, FriendRules.MessageContentLength, _text)) == true;
+                _log($"[guild] member sms from 0x{owner:X} to the offline 0x{targetId:X}: {(kept ? "stored" : "not stored")}");
+            }
+        }
+    }
 
     private async Task GuildMemoAsync(TridentSessionContext ctx, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {

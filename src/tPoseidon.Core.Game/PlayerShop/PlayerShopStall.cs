@@ -1,3 +1,5 @@
+using tPoseidon.Core.Game.Posture;
+
 namespace tPoseidon.Core.Game.PlayerShop;
 
 public readonly record struct PlayerShopSlot(ulong WireUid, uint ItemId, int UnitPrice, ushort Count);
@@ -157,6 +159,10 @@ public static class PlayerShopRules
     private static readonly int[] ShopZoneTypes = [1, 2, 5];
 
     public static bool OpensInZone(int zoneType) => ShopZoneTypes.Contains(zoneType);
+
+    public static bool VisitorMayEnter(PostureState posture) => posture == PostureState.Standing;
+
+    public static bool BusyInShop(bool keepsShop, bool visitsShop) => keepsShop || visitsShop;
 
     public static bool PriceAllowed(int unitPrice) => unitPrice is >= 0 and <= MaxUnitPrice;
 

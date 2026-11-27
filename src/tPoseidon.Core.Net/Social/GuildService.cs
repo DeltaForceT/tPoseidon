@@ -23,6 +23,8 @@ public enum GuildMemoOutcome
 
 public sealed record GuildMemoPlan(GuildMemoOutcome Outcome, string SenderName);
 
+public sealed record GuildMemberSmsPlan(string SenderName, IReadOnlyList<ulong> Targets, bool PointAdded);
+
 public sealed record GuildSmsPlan(GuildSmsOutcome Outcome, ulong MasterCharacterId, string SenderName);
 
 public sealed record GuildNameOrder(ulong CharacterId, string GuildName, string Alias, GuildEmblem Emblem);
@@ -64,9 +66,11 @@ public sealed class GuildService
     private readonly Encoding _text;
     private readonly TimeProvider _time;
     private readonly Func<ulong, ulong, uint?> _emblemIcon;
+    private readonly GuildLevelTable _levels;
 
-    public GuildService(IGuildRulesStore rules, IGuildShopStore shop, GuildShopTables goods, Encoding text, TimeProvider time, Func<ulong, ulong, uint?> emblemIcon)
+    public GuildService(IGuildRulesStore rules, IGuildShopStore shop, GuildShopTables goods, Encoding text, TimeProvider time, Func<ulong, ulong, uint?> emblemIcon, GuildLevelTable? levels = null)
     {
+        _levels = levels ?? GuildLevelTable.Empty;
         _emblemIcon = emblemIcon ?? throw new ArgumentNullException(nameof(emblemIcon));
         _rules = rules ?? throw new ArgumentNullException(nameof(rules));
         _shop = shop ?? throw new ArgumentNullException(nameof(shop));
@@ -84,9 +88,19 @@ public sealed class GuildService
             var member = new Member(characterId, name);
             _online[characterId] = member;
             Refresh(member);
-            if (member.State == GuildRules.Joined) outbox.Order(new GuildNameOrder(characterId, member.GuildName, member.Nick, member.Emblem));
+            if (member.State == GuildRules.Joined)
+            {
+                outbox.Order(new GuildNameOrder(characterId, member.GuildName, member.Nick, member.Emblem));
+                AnnounceLogin(outbox, member);
+            }
         }
         return outbox;
+    }
+
+    private void AnnounceLogin(GuildOutbox outbox, Member member)
+    {
+        var notice = GuildFrames.MemberLoginFor(member.Name, _text);
+        foreach (var recipient in OnlineMembers(member.GuildCode)) outbox.Add(new GuildMessage(recipient.CharacterId, GuildFrames.MemberLogin, notice));
     }
 
     public void MemberRenamed(ulong characterId, string newName)
@@ -183,6 +197,9 @@ public sealed class GuildService
             }
             outbox.Add(new GuildMessage(characterId, GuildFrames.Created,
                 GuildFrames.CreatedFor(BlockOf(member, detail), GradeIndexOf(member.GradeCode), member.Rights, _text)));
+            SendOwnState(outbox, member, detail);
+            outbox.Order(new GuildNameOrder(characterId, member.GuildName, member.Nick, member.Emblem));
+            AnnounceLogin(outbox, member);
             outbox.Charge(new GuildCreateFeeOrder(characterId));
         }
         return outbox;
@@ -370,6 +387,7 @@ public sealed class GuildService
                 var today = GuildFrames.ShortDate(Local(_time.GetUtcNow()));
                 var notice = GuildFrames.MemberJoinedFor(applicantId, joined.CharName, (ushort)joined.Level, (byte)joined.Job, today, today, _text);
                 foreach (var recipient in existing) outbox.Add(new GuildMessage(recipient.CharacterId, GuildFrames.MemberJoined, notice));
+                if (_online.TryGetValue(applicantId, out var online) && online.State == GuildRules.Joined) AnnounceLogin(outbox, online);
             }
         }
         return outbox;
@@ -655,6 +673,25 @@ public sealed class GuildService
         }
     }
 
+    public const int MemberPointCap = 99999;
+
+    public GuildMemberSmsPlan? MemberSms(ulong characterId, IReadOnlyList<ulong> targets)
+    {
+        ArgumentNullException.ThrowIfNull(targets);
+        lock (_gate)
+        {
+            if (Session(characterId) is not { } sender) return null;
+            var added = false;
+            if (sender.GuildCode != 0 && _rules.Detail(sender.GuildCode) is { } detail
+                && _rules.Members(sender.GuildCode).FirstOrDefault(m => m.CharacterId == characterId) is { } entry
+                && entry.MemberPoint + detail.Guild.GuildSmsPoint <= MemberPointCap)
+            {
+                added = _rules.AddMemberSmsPoint(characterId) == GuildRules.Ok;
+            }
+            return new GuildMemberSmsPlan(sender.Name, targets.Distinct().ToArray(), added);
+        }
+    }
+
     public GuildSmsPlan GuildSms(ulong characterId, uint guildCode)
     {
         lock (_gate)
@@ -673,7 +710,7 @@ public sealed class GuildService
         lock (_gate)
         {
             if (Session(characterId) is null) return outbox;
-            outbox.Add(new GuildMessage(characterId, GuildListFrames.Reply, GuildListFrames.ReplyFor(_rules.AllGuilds(), request, _text)));
+            outbox.Add(new GuildMessage(characterId, GuildListFrames.Reply, GuildListFrames.ReplyFor(_rules.AllGuilds(), request, _text, _time.LocalTimeZone)));
         }
         return outbox;
     }
@@ -685,7 +722,7 @@ public sealed class GuildService
         {
             if (Session(characterId) is not { } member) return outbox;
             var own = member.State == GuildRules.Joined && _rules.RecruitPost(member.GuildCode) is not null;
-            outbox.Add(new GuildMessage(characterId, GuildRecruitFrames.ListReply, GuildRecruitFrames.ListFor(_rules.RecruitPosts(), request, own, _text, code => _shop.EmblemOf(code)?.Emblem ?? default)));
+            outbox.Add(new GuildMessage(characterId, GuildRecruitFrames.ListReply, GuildRecruitFrames.ListFor(_rules.RecruitPosts(), request, own, _text, _time.LocalTimeZone, code => _shop.EmblemOf(code)?.Emblem ?? default)));
         }
         return outbox;
     }
@@ -715,7 +752,7 @@ public sealed class GuildService
         lock (_gate)
         {
             if (Session(characterId) is null) return outbox;
-            outbox.Add(new GuildMessage(characterId, GuildRecruitFrames.ContentReply, GuildRecruitFrames.ContentFor(_rules.RecruitPost(guildCode), _text)));
+            outbox.Add(new GuildMessage(characterId, GuildRecruitFrames.ContentReply, GuildRecruitFrames.ContentFor(_rules.RecruitPost(guildCode), _text, _time.LocalTimeZone)));
         }
         return outbox;
     }
@@ -759,6 +796,20 @@ public sealed class GuildService
         return outbox;
     }
 
+    public GuildOutbox History(ulong characterId, uint guildCode)
+    {
+        var outbox = new GuildOutbox();
+        lock (_gate)
+        {
+            if (Session(characterId) is null) return outbox;
+            var rows = _rules.History(guildCode)
+                .Select(entry => (Local(entry.LogAt).ToString(GuildFrames.HistoryDateFormat, System.Globalization.CultureInfo.InvariantCulture), entry.LogMsg))
+                .ToArray();
+            outbox.Add(new GuildMessage(characterId, GuildFrames.HistoryReply, GuildFrames.HistoryFor(rows, _text)));
+        }
+        return outbox;
+    }
+
     public GuildOutbox DetailByCharacter(ulong characterId, string characterName)
     {
         ArgumentNullException.ThrowIfNull(characterName);
@@ -782,7 +833,8 @@ public sealed class GuildService
         if (_rules.Detail(guildCode) is not { } detail) return GuildFrames.DetailRefused(GuildFrames.DetailNotFound);
         var guild = detail.Guild;
         return GuildFrames.DetailFor(
-            new GuildDetailView(guildCode, guild.GuildName, detail.MasterName, guild.GuildPoint, guild.GuildMembers, guild.GuildIntro), _text);
+            new GuildDetailView(guildCode, guild.GuildName, detail.MasterName, guild.GuildPoint, guild.GuildMembers, guild.GuildIntro,
+                (byte)_levels.LevelOf(guild.GuildPoint), GuildFrames.LocalDate(guild.GuildCreatedAt, _time.LocalTimeZone), guild.GuildUrl), _text);
     }
 
     private void SendOwnState(GuildOutbox outbox, Member member, GuildDetail? detail)
@@ -801,7 +853,7 @@ public sealed class GuildService
             outbox.Add(new GuildMessage(id, GuildFrames.OwnInfoResult, GuildFrames.OwnInfoFailed(GuildFrames.OwnInfoApplying)));
             return;
         }
-        outbox.Add(new GuildMessage(id, GuildFrames.OwnInfoResult, GuildFrames.OwnInfoFor(0, id, string.Empty, 0, false, inGuild: false, _text)));
+        outbox.Add(new GuildMessage(id, GuildFrames.OwnInfoResult, GuildFrames.OwnInfoFailed(GuildFrames.OwnInfoNoGuild)));
     }
 
     private void AddState(GuildOutbox outbox, Member member, GuildDetail detail)
@@ -809,7 +861,8 @@ public sealed class GuildService
         var grades = GradeNamesOf(detail);
         var state = new GuildStateView(
             BlockOf(member, detail), (ushort)detail.MaxMembers, GradeIndexOf(member.GradeCode), member.Rights, grades, (byte)detail.DepotTabs, (uint)detail.Coins,
-            detail.Notices.Select(NoticeRowOf).ToArray(), detail.Auth, GradePointsOf(detail));
+            detail.Notices.Select(NoticeRowOf).ToArray(), detail.Auth, GradePointsOf(detail),
+            detail.Guild.GuildPoint, (byte)Math.Clamp((int)detail.Guild.GuildMembers, 0, byte.MaxValue));
         outbox.Add(new GuildMessage(member.CharacterId, GuildFrames.State, GuildFrames.StateFor(state, _text)));
         AddEmblem(outbox, member.CharacterId, detail.Emblem);
     }

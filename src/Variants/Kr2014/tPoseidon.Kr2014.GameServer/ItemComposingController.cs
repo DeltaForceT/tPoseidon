@@ -68,6 +68,14 @@ internal sealed class ItemComposingController
         Log(player, $"window closed ({value})");
     }
 
+    public async Task CloseCharacterPetAsync(InGameSessionState player)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        player.Upgrade = ItemComposingRules.WindowAfterCharacterPetClose(player.Upgrade);
+        await SendAsync(player, (Opcode)ItemComposingFrames.CharacterPetClosed, Array.Empty<byte>()).ConfigureAwait(false);
+        Log(player, "character pet composing window closed");
+    }
+
     public async Task ComposeAsync(InGameSessionState player, ReadOnlyMemory<byte> payload)
     {
         ArgumentNullException.ThrowIfNull(player);

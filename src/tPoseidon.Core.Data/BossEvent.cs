@@ -23,7 +23,19 @@ public readonly record struct BossEvent(
     string Speech,
     ushort ParentId = 0,
     int SkillId = 0,
-    int SkillLevel = 0);
+    int SkillLevel = 0,
+    bool CostPaid = false);
+
+public enum BossCastOutcome
+{
+    Refused = 0,
+    Cast = 1,
+    CastDelay = 2,
+}
+
+public readonly record struct BossCastRequest(BossEventKind Kind, int SkillId, int Level);
+
+public readonly record struct BossCastPlan(bool Allowed, int MpCost, bool Delayed, bool CooldownApplies);
 
 public sealed class BossEventOutbox
 {

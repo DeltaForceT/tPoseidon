@@ -1,6 +1,7 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Drilling;
+using tPoseidon.Core.Game.SoulSeed;
 using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.Game.Warp;
 using tPoseidon.Core.LibConfig;
@@ -22,6 +23,7 @@ internal sealed class DrillDig
 internal sealed class DrillController
 {
     private readonly DrillTables _tables;
+    private DropEventItems? _eventItems;
     private readonly IReadOnlyDictionary<ushort, ZoneGeometry> _geometry;
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
@@ -35,9 +37,12 @@ internal sealed class DrillController
     private readonly Dictionary<ushort, DrillLoot?> _loot = new();
     private readonly object _lock = new();
     private readonly Func<TreasureMapTables> _treasureMaps;
+    private readonly Func<FortuneTables> _fortune;
     private readonly Func<int, ushort, ushort, ushort, Task<bool>> _spawnMonster;
     private readonly Func<ushort, int> _mapOption;
     private readonly Func<ushort, int> _mapType;
+    private readonly Func<ulong, int, Task<bool>> _shareExp;
+    private readonly Func<ulong, Func<int, bool>> _questNeeds;
 
     public DrillController(
         DrillTables tables,
@@ -49,14 +54,20 @@ internal sealed class DrillController
         Func<ushort, Opcode, byte[], Task> sendToMap,
         Func<InGameSessionState, Task> disconnect,
         Func<TreasureMapTables> treasureMaps,
+        Func<FortuneTables> fortune,
         Func<int, ushort, ushort, ushort, Task<bool>> spawnMonster,
         Func<ushort, int> mapOption,
         Func<ushort, int> mapType,
+        Func<ulong, int, Task<bool>> shareExp,
+        Func<ulong, Func<int, bool>> questNeeds,
         string logTag)
     {
+        _questNeeds = questNeeds ?? throw new ArgumentNullException(nameof(questNeeds));
+        _shareExp = shareExp ?? throw new ArgumentNullException(nameof(shareExp));
         _mapType = mapType ?? throw new ArgumentNullException(nameof(mapType));
         _mapOption = mapOption ?? throw new ArgumentNullException(nameof(mapOption));
         _spawnMonster = spawnMonster ?? throw new ArgumentNullException(nameof(spawnMonster));
+        _fortune = fortune ?? throw new ArgumentNullException(nameof(fortune));
         _treasureMaps = treasureMaps ?? throw new ArgumentNullException(nameof(treasureMaps));
         _tables = tables ?? throw new ArgumentNullException(nameof(tables));
         _geometry = geometry ?? throw new ArgumentNullException(nameof(geometry));
@@ -68,6 +79,8 @@ internal sealed class DrillController
         _disconnect = disconnect ?? throw new ArgumentNullException(nameof(disconnect));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
+
+    public Func<InGameSessionState, int, Task>? SeedEvent { get; set; }
 
     public IReadOnlyDictionary<int, int> AutoDrillPets => _tables.AutoDrillPets;
 
@@ -110,6 +123,15 @@ internal sealed class DrillController
             (Opcode.S2C_AUTO_DRILL_STOPPED, Array.Empty<byte>(), true),
             (Opcode.AUTO_DRILL_END, AutoDrillFrames.Player(digger.PlayerEntityId), false),
         ];
+    }
+
+    public IReadOnlyList<(ushort X, ushort Y)> DetectItems(ushort mapId, int centreX, int centreY, int radius, int deepest)
+    {
+        lock (_lock)
+        {
+            if (FieldOf(mapId) is not { } field) return Array.Empty<(ushort X, ushort Y)>();
+            return ItemDetection.Scan(centreX, centreY, radius, deepest, field.IsOpenForDetection, field.LaidDepth);
+        }
     }
 
     public Item? WornDrill(InGameSessionState digger)
@@ -197,7 +219,11 @@ internal sealed class DrillController
 
     public async Task EndAsync(InGameSessionState digger, ReadOnlyMemory<byte> payload)
     {
-        if (digger.Dig is not { } dig) return;
+        if (digger.Dig is not { } dig)
+        {
+            await FinishAsync(digger, DrillResult.Nothing, DrillFrames.CurrentLife, 0).ConfigureAwait(false);
+            return;
+        }
         if (!DrillFrames.TryReadEnd(payload.Span, out var presses, out var depth, out var check))
         {
             Console.WriteLine($"{_logTag} [drill] 0x{digger.PlayerEntityId:X4} end: {payload.Length} bytes is not a dig result");
@@ -233,8 +259,13 @@ internal sealed class DrillController
             await FinishAsync(digger, DrillResult.Spot, life, 0).ConfigureAwait(false);
             return;
         }
-        if (digger.SurpriseSpot is { IsTreasure: true } treasureSpot && SurpriseSpotRules.IsOnSpot(treasureSpot, digger.MapId, digger.PlayerX, digger.PlayerY))
+        if (digger.SurpriseSpot is { IsTreasure: true } treasureSpot && SurpriseSpotRules.IsOnSpot(treasureSpot, digger.MapId, dig.X, dig.Y))
         {
+            if (DrillRules.SpotOutOfReach(parameters, mapDepth))
+            {
+                await FinishAsync(digger, DrillResult.TooShallow, life, 0).ConfigureAwait(false);
+                return;
+            }
             digger.SurpriseSpot = null;
             if (_treasureMaps().Items.TryGetValue(treasureSpot.ItemId, out var treasureRow))
             {
@@ -243,8 +274,13 @@ internal sealed class DrillController
             await FinishAsync(digger, DrillResult.Spot, life, 0).ConfigureAwait(false);
             return;
         }
-        if (digger.SurpriseSpot is { CreviceFound: false, IsTreasure: false } drilledSpot && SurpriseSpotRules.IsOnSpot(drilledSpot, digger.MapId, digger.PlayerX, digger.PlayerY))
+        if (digger.SurpriseSpot is { CreviceFound: false, IsTreasure: false } drilledSpot && SurpriseSpotRules.IsOnSpot(drilledSpot, digger.MapId, dig.X, dig.Y))
         {
+            if (DrillRules.SpotOutOfReach(parameters, mapDepth))
+            {
+                await FinishAsync(digger, DrillResult.TooShallow, life, 0).ConfigureAwait(false);
+                return;
+            }
             drilledSpot.CreviceFound = true;
             await _sendToMap(digger.MapId, Opcode.SPOT_CREVICE, SpotFrame(digger.PlayerEntityId, SurpriseSpotRules.CreviceOpened)).ConfigureAwait(false);
             Console.WriteLine($"{_logTag} [spot] 0x{digger.PlayerEntityId:X4} found the crevice of treasure map {drilledSpot.ItemId}");
@@ -254,10 +290,11 @@ internal sealed class DrillController
 
         int? laid;
         var rolled = 0;
+        var questNeeds = QuestNeedsOf(digger);
         lock (_lock)
         {
             laid = field?.LaidDepth(cell.X, cell.Y);
-            if (laid is not null && LootOf(digger.MapId) is { } loot) rolled = loot.Pop(_ => false, _rng);
+            if (laid is not null && LootOf(digger.MapId) is { } loot) rolled = loot.Pop(questNeeds, _rng);
         }
         var result = DrillRules.EndResult(laid, rolled, depth, mapDepth);
         if (CrazyDrillRules.EndPoint(laid, rolled, depth, mapDepth, result) is var gaugeKind and >= 0) AddGauge(digger, parameters, gaugeKind);
@@ -279,6 +316,9 @@ internal sealed class DrillController
         }
 
         var count = _tables.Drills.TryGetValue(rolled, out var dugDrill) ? dugDrill.DrillLife : 1;
+        int eventRoll;
+        lock (_lock) eventRoll = _rng.Next(DropEventItems.RollScale);
+        (rolled, count) = EventItems().DrillDrop(DateTime.Now, eventRoll, rolled, count);
         var placed = MonsterDropBatch.Items(
             new DropSource(digger.PlayerEntityId, 0, digger.MapId, digger.PlayerX, digger.PlayerY, digger.PlayerEntityId, DateTimeOffset.UtcNow),
             new[] { new RolledDrop(rolled, count) },
@@ -301,6 +341,15 @@ internal sealed class DrillController
         Console.WriteLine($"{_logTag} [drill] 0x{digger.PlayerEntityId:X4} dug up item {rolled} x{count} at depth {depth}; drill life {life}");
         if (tooFast) await _disconnect(digger).ConfigureAwait(false);
     }
+
+    public async Task StopForSkillAsync(InGameSessionState digger)
+    {
+        if (DrillRules.SkillStopResult(digger.Dig is not null) is not { } result) return;
+        await FinishAsync(digger, result, DrillFrames.CurrentLife, 0).ConfigureAwait(false);
+    }
+
+    private Func<int, bool> QuestNeedsOf(InGameSessionState digger) =>
+        digger.Character is { } character ? _questNeeds(character.CharacterId) : _ => false;
 
     public async Task InterruptAsync(InGameSessionState digger)
     {
@@ -366,6 +415,7 @@ internal sealed class DrillController
         if (meter.StartNoticePending)
         {
             meter.NoticeSent();
+            if (SeedEvent is { } startedEvent) await startedEvent(digger, SoulSeedRules.CrazyDrillStartEvent).ConfigureAwait(false);
             await SendCrazyAllAsync(digger, CrazyDrillRules.Started, meter.DurationMs / CrazyDrillRules.MillisecondsPerSecond).ConfigureAwait(false);
         }
         if (meter.Expired(now))
@@ -395,6 +445,7 @@ internal sealed class DrillController
         if (digger.AutoDrill)
         {
             digger.Dig = null;
+            digger.Posture.Disturb();
             return;
         }
         if ((_mapOption(digger.MapId) & CrazyDrillRules.MapOptionNoCrazy) != 0)
@@ -418,10 +469,11 @@ internal sealed class DrillController
         int? laid;
         var rolled = 0;
         var mapDepth = field?.MapDepth ?? 0;
+        var questNeeds = QuestNeedsOf(digger);
         lock (_lock)
         {
             laid = field?.LaidDepth(cell.X, cell.Y);
-            if (laid is not null && parameters.DigDepth >= mapDepth && LootOf(digger.MapId) is { } loot) rolled = loot.Pop(_ => false, _rng);
+            if (laid is not null && parameters.DigDepth >= mapDepth && LootOf(digger.MapId) is { } loot) rolled = loot.Pop(questNeeds, _rng);
         }
         if (laid is null || rolled == 0)
         {
@@ -458,13 +510,14 @@ internal sealed class DrillController
         lock (_lock) roll = _rng.NextDouble();
         if (!CrazyDrillRules.Bangs(roll, digger.Crazy.RatioBang)) return;
         IReadOnlyList<(int CellX, int CellY, int ItemId)>? burst;
+        var questNeeds = QuestNeedsOf(digger);
         lock (_lock)
         {
             var loot = LootOf(digger.MapId);
             burst = loot is null ? null : CrazyDrillRules.Bang(cell.X, cell.Y, field.CellsX, field.CellsY,
                 () => _rng.Next(CrazyDrillRules.BangWindow),
                 (x, y) => field.LaidDepth(x, y) is not null,
-                () => loot.Pop(_ => false, _rng));
+                () => loot.Pop(questNeeds, _rng));
             if (burst is { Count: > 0 })
             {
                 foreach (var hit in burst) field.Remove(hit.CellX, hit.CellY);
@@ -505,7 +558,9 @@ internal sealed class DrillController
     private async Task GrantEndExpAsync(InGameSessionState digger, DrillParamEntry parameters, int depth)
     {
         if (digger.Stats is not { } stats || digger.GainHitExp is not { } gainExp) return;
-        foreach (var (opcode, payload, audience) in gainExp(DrillRules.EndExp(_tables.GradeExpRates, parameters.Grade, depth, stats.Level)))
+        var amount = DrillRules.EndExp(_tables.GradeExpRates, parameters.Grade, depth, stats.Level);
+        if (digger.Character is { } character && await _shareExp(character.CharacterId, amount).ConfigureAwait(false)) return;
+        foreach (var (opcode, payload, audience) in gainExp(amount))
         {
             if (audience == SwingAudience.Everyone) await _sendToMap(digger.MapId, opcode, payload).ConfigureAwait(false);
             else await SendAsync(digger, opcode, payload).ConfigureAwait(false);
@@ -518,9 +573,10 @@ internal sealed class DrillController
         ArgumentNullException.ThrowIfNull(spot);
         var remaining = spot.EndsAt - DateTimeOffset.UtcNow;
         if (remaining <= TimeSpan.Zero) return;
+        lock (_lock) spot = SurpriseSpotRules.OnEnteringMap(spot, owner.MapId, () => PickSpotPoint(spot.Zone));
         owner.SurpriseSpot = spot;
         await SendAsync(owner, Opcode.S2C_SPOT_CREATED, SpotCreatedFrame(spot, remaining)).ConfigureAwait(false);
-        Console.WriteLine($"{_logTag} [spot] 0x{owner.PlayerEntityId:X4} keeps the spot of treasure map {spot.ItemId} on map {spot.Zone} through the warp: {(int)remaining.TotalSeconds} s left");
+        Console.WriteLine($"{_logTag} [spot] 0x{owner.PlayerEntityId:X4} keeps the spot of treasure map {spot.ItemId} on map {spot.Zone} ({spot.X},{spot.Y}) through the warp: {(int)remaining.TotalSeconds} s left");
     }
 
     private static byte[] SpotCreatedFrame(SurpriseSpot spot, TimeSpan remaining)
@@ -560,21 +616,24 @@ internal sealed class DrillController
         return await PlaceSpotAsync(owner, treasureMap.Id, row.TimeMinutes, row.SpotMaps, treasure: true).ConfigureAwait(false);
     }
 
+    private ZonePoint? PickSpotPoint(ushort zone)
+    {
+        if (!_geometry.TryGetValue(zone, out var geometry)) return null;
+        var field = FieldOf(zone);
+        return SurpriseSpotRules.PickPoint(
+            SurpriseSpotRules.MonsterPoints(geometry),
+            candidate => field is null || field.IsDiggable(ZoneGeometry.CellOf(candidate.X), ZoneGeometry.CellOf(candidate.Y)),
+            _rng.Next);
+    }
+
     private async Task<bool> PlaceSpotAsync(InGameSessionState owner, int itemId, int timeMinutes, IReadOnlyList<int> spotMaps, bool treasure)
     {
         ushort zone;
-        ZonePoint? point = null;
+        ZonePoint? point;
         lock (_lock)
         {
             zone = (ushort)spotMaps[_rng.Next(spotMaps.Count)];
-            if (_geometry.TryGetValue(zone, out var geometry))
-            {
-                var field = FieldOf(zone);
-                var candidates = SurpriseSpotRules.MonsterPoints(geometry)
-                    .Where(candidate => field is null || field.IsDiggable(ZoneGeometry.CellOf(candidate.X), ZoneGeometry.CellOf(candidate.Y)))
-                    .ToList();
-                if (candidates.Count > 0) point = candidates[_rng.Next(candidates.Count)];
-            }
+            point = PickSpotPoint(zone);
         }
         if (point is not { } spotPoint)
         {
@@ -589,7 +648,7 @@ internal sealed class DrillController
         return true;
     }
 
-    public async Task CreviceAnswerAsync(InGameSessionState owner, ReadOnlyMemory<byte> payload)
+    public async Task CreviceAnswerAsync(InGameSessionState owner, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(owner);
         if (payload.Length < 2 || owner.SurpriseSpot is not { } spot || SurpriseSpotRules.HasExpired(spot, DateTimeOffset.UtcNow)) return;
@@ -612,8 +671,8 @@ internal sealed class DrillController
         owner.ProtectedUntil = DateTimeOffset.UtcNow + SurpriseSpotRules.TeleportProtection;
         await _sendToMap(owner.MapId, Opcode.S2C_SPOT_TELEPORT_RESULT, SpotFrame(owner.PlayerEntityId, SurpriseSpotRules.CreviceUsed)).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} [spot] 0x{owner.PlayerEntityId:X4} goes through the crevice to map {destination.ZoneId} point {destination.PointId}");
-        await requestZoneChange(new ZoneChangeRequest(
-            (ushort)destination.ZoneId, TeleportArrival.ChangeZoneType, destination.PointId == 0 ? null : destination.PointId, TimeSpan.Zero), default).ConfigureAwait(false);
+        _ = requestZoneChange(new ZoneChangeRequest(
+            (ushort)destination.ZoneId, TeleportArrival.ChangeZoneType, destination.PointId == 0 ? null : destination.PointId, SurpriseSpotRules.TeleportDelay), ct);
     }
 
     public async Task TickSpotAsync(InGameSessionState owner, DateTimeOffset now)
@@ -664,8 +723,7 @@ internal sealed class DrillController
     private async Task PopTreasureAsync(InGameSessionState owner, TreasureItemEntry row, Opcode opcode, bool limitCount)
     {
         if (owner.Character is not { } character) return;
-        var seconds = (DateTimeOffset.UtcNow - character.GenTime).TotalSeconds;
-        var today = TreasureLoot.TodayValue((int)character.Species, seconds, TreasureLoot.DefaultMultiplier);
+        var today = TreasureLoot.TodayValue(_fortune(), (int)character.Species, character.GenTime, DateTimeOffset.UtcNow);
         var lootCount = TreasureLoot.Count(row, today);
         if (limitCount && !RandomSpot.CountAllowed(lootCount))
         {
@@ -675,10 +733,13 @@ internal sealed class DrillController
         IReadOnlyList<(int ItemId, int Count)> picked;
         lock (_lock) picked = TreasureLoot.Pick(row, lootCount, _rng.NextDouble, () => _rng.Next(TreasureLoot.RandRange));
         var dropped = new List<FieldItem>(picked.Count);
+        _geometry.TryGetValue(owner.MapId, out var geometry);
+        IReadOnlyList<(ushort X, ushort Y)> positions;
+        lock (_lock) positions = TreasureLoot.Scatter(geometry, owner.PlayerX, owner.PlayerY, picked.Count, _rng);
         var index = 0;
         foreach (var (itemId, count) in picked)
         {
-            var (x, y) = TreasureLoot.RingPosition(owner.PlayerX, owner.PlayerY, index++, picked.Count);
+            var (x, y) = positions[index++];
             var item = new FieldItem(_newEntityId(), owner.MapId, x, y, itemId, count,
                 _catalog.GetById(itemId)?.ObjectClass ?? (byte)ItemParamEntry.StackableClass, false,
                 owner.PlayerEntityId, owner.PlayerEntityId, DateTimeOffset.UtcNow);
@@ -697,10 +758,14 @@ internal sealed class DrillController
         return w.ToArray();
     }
 
+    private DropEventItems EventItems() => _eventItems ??= new DropEventItems(_tables.EventItems);
+
     private async Task FinishAsync(InGameSessionState digger, byte result, int life, int itemId)
     {
         digger.Dig = null;
+        digger.Posture.Disturb();
         var reported = life == DrillFrames.CurrentLife ? WornDrill(digger)?.Stack ?? 0 : life;
+        if (SeedEvent is { } seedEvent && SoulSeedRules.DrillFinishEvent(result) is { } finishEvent) await seedEvent(digger, finishEvent).ConfigureAwait(false);
         await SendAsync(digger, Opcode.S2C_DRILL_RESULT, DrillFrames.Result(result, reported, itemId)).ConfigureAwait(false);
         await _sendToMap(digger.MapId, Opcode.S2C_DRILL_SEEN_RESULT, DrillFrames.SeenResult(digger.PlayerEntityId, result)).ConfigureAwait(false);
     }

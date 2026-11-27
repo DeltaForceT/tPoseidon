@@ -14,6 +14,7 @@ public sealed partial class GuardianSoulTables
     private readonly Lazy<IReadOnlyList<MemoryPortEntry>> _memoryPorts;
     private readonly Lazy<CardIdentifyTables> _cardIdentifyTables;
     private readonly Lazy<IReadOnlyList<CardSpecialSetEntry>> _cardSpecialSets;
+    private readonly Lazy<CardGenTables> _cardGenTables;
 
     public GuardianSoulTables(FastLibConfigReader reader)
     {
@@ -27,6 +28,7 @@ public sealed partial class GuardianSoulTables
         _memoryPorts = new Lazy<IReadOnlyList<MemoryPortEntry>>(reader.LoadMemoryPorts);
         _cardIdentifyTables = new Lazy<CardIdentifyTables>(reader.LoadCardIdentifyTables);
         _cardSpecialSets = new Lazy<IReadOnlyList<CardSpecialSetEntry>>(reader.LoadCardSpecialSets);
+        _cardGenTables = new Lazy<CardGenTables>(reader.LoadCardGenTables);
     }
 
     public GuardianTables GuardianTables => _guardianTables.Value;
@@ -44,4 +46,6 @@ public sealed partial class GuardianSoulTables
     public CardIdentifyTables CardIdentifyTables => _cardIdentifyTables.Value;
 
     public IReadOnlyList<CardSpecialSetEntry> CardSpecialSets => _cardSpecialSets.Value;
+
+    public CardGenTables CardGenTables => _cardGenTables.Value;
 }

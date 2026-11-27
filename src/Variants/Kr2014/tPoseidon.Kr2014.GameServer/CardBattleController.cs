@@ -14,12 +14,14 @@ internal sealed class CardBattleController : IDisposable
     private readonly ItemManager _itemManager;
     private readonly IItemParamLookup _catalog;
     private readonly int _bagCapacity;
+    private readonly Func<int, MapKindEntry?> _mapKind;
+    private readonly Func<InGameSessionState, Opcode, byte[], Task> _broadcast;
     private readonly string _logTag;
     private readonly Random _rng = new();
 
     public CardBattleController(
         SystemServerLink link, Func<ulong, InGameSessionState?> playerById, IItemStore items, ItemManager itemManager,
-        IItemParamLookup catalog, int bagCapacity, string logTag)
+        IItemParamLookup catalog, int bagCapacity, Func<int, MapKindEntry?> mapKind, Func<InGameSessionState, Opcode, byte[], Task> broadcast, string logTag)
     {
         _link = link ?? throw new ArgumentNullException(nameof(link));
         _playerById = playerById ?? throw new ArgumentNullException(nameof(playerById));
@@ -27,6 +29,8 @@ internal sealed class CardBattleController : IDisposable
         _itemManager = itemManager ?? throw new ArgumentNullException(nameof(itemManager));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _bagCapacity = bagCapacity;
+        _mapKind = mapKind ?? throw new ArgumentNullException(nameof(mapKind));
+        _broadcast = broadcast ?? throw new ArgumentNullException(nameof(broadcast));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
         _link.OrderReceived += OrderAsync;
     }
@@ -35,6 +39,16 @@ internal sealed class CardBattleController : IDisposable
 
     private async Task OrderAsync(OfficerOrder order, CancellationToken ct)
     {
+        if (order.OrderType == CardBattleFrames.OrderCheck)
+        {
+            await CheckAsync(order, ct).ConfigureAwait(false);
+            return;
+        }
+        if (order.OrderType == CardBattleFrames.OrderClearState)
+        {
+            await ClearStateAsync(order).ConfigureAwait(false);
+            return;
+        }
         if (order.OrderType != CardBattleFrames.OrderStatusUpdate) return;
         if (CardBattleFrames.ReadStatus(order.Data) is not { } update)
         {
@@ -102,6 +116,64 @@ internal sealed class CardBattleController : IDisposable
             status.SecondLostCardItemId);
         var deckReady = CardBattleRules.CanStillBuildDeck(HeldCards(character.CharacterId), status.LostCardItemId, status.SecondLostCardItemId);
         await ReplyAsync(order, update, code, block, deckReady, ct).ConfigureAwait(false);
+    }
+
+    private async Task CheckAsync(OfficerOrder order, CancellationToken ct)
+    {
+        if (!CardBattleFrames.TryReadCheckRequest(order.Data, out var clientId, out var otherClientId, out var otherCharacterId))
+        {
+            Console.WriteLine($"{_logTag} [cardbattle] ORDER 0x98 of {order.Data.Length} B not read");
+            return;
+        }
+        var own = _playerById(order.CharacterId);
+        var other = _playerById(otherCharacterId);
+        var ownCharacter = own?.Character;
+        var ownNormal = own is not null && CardBattleCheckRules.Normal(own.Posture.State, own.Stall is not null, own.VisitingKeeper is not null, own.Trade is not null, own.IsDead, own.InCardBattle);
+        var otherNormal = other is not null && CardBattleCheckRules.Normal(other.Posture.State, other.Stall is not null, other.VisitingKeeper is not null, other.Trade is not null, other.IsDead, other.InCardBattle);
+        var ownLevel = own is null ? 0 : own.Stats?.Level ?? ownCharacter?.Level ?? 0;
+        var otherLevel = other is null ? 0 : other.Stats?.Level ?? other.Character?.Level ?? 0;
+        var check = new CardBattleCheck(clientId, otherClientId, ownNormal, false, false, false, false, false, false, 0, 0, 0);
+        if (own is not null && ownCharacter is not null && ownNormal)
+        {
+            check = check with { Level = (uint)ownLevel, Money = WireLimits.Int32FieldUnsigned(own.Stats?.Money ?? 0L), EntityId = own.PlayerEntityId };
+            if (otherNormal)
+            {
+                check = check with { OtherNormal = true };
+                var levelOk = CardBattleCheckRules.LevelAllowed(ownLevel);
+                check = check with { OwnLevel = levelOk };
+                if (levelOk)
+                {
+                    var otherLevelOk = CardBattleCheckRules.LevelAllowed(otherLevel);
+                    check = check with { OtherLevel = otherLevelOk };
+                    if (otherLevelOk)
+                    {
+                        var deckValid = CardBattleRules.CanStillBuildDeck(HeldCards(ownCharacter.CharacterId), 0, 0);
+                        check = check with { DeckValid = deckValid };
+                        if (deckValid)
+                        {
+                            var mapAllowed = CardBattleCheckRules.MapAllowed(_mapKind(own.MapId));
+                            check = check with { MapAllowed = mapAllowed };
+                            if (mapAllowed) check = check with { BagFull = CardBattleCheckRules.BagFull(_items.BagSlotsInUse(ownCharacter.CharacterId)) };
+                        }
+                    }
+                }
+            }
+        }
+        if (own is not null && check.Passes && !own.InCardBattle)
+        {
+            own.InCardBattle = true;
+            await _broadcast(own, (Opcode)CardBattleFrames.PlayerEntered, CardBattleFrames.EntityId(own.PlayerEntityId)).ConfigureAwait(false);
+        }
+        Console.WriteLine($"{_logTag} [cardbattle] check of 0x{order.CharacterId:X}: {(check.Passes ? "passed" : "refused")}");
+        await _link.ReportAsync(order with { OrderType = CardBattleFrames.OrderCheckReply, Data = CardBattleFrames.CheckReply(check) }, ct).ConfigureAwait(false);
+    }
+
+    private async Task ClearStateAsync(OfficerOrder order)
+    {
+        if (_playerById(order.CharacterId) is not { InCardBattle: true } player) return;
+        player.InCardBattle = false;
+        await _broadcast(player, (Opcode)CardBattleFrames.PlayerLeftBattle, CardBattleFrames.EntityId(player.PlayerEntityId)).ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} [cardbattle] 0x{player.PlayerEntityId:X4} leaves the card battle state");
     }
 
     private async Task<bool> SnatchAsync(InGameSessionState winner, InGameSessionState opponent, CardBattleStatus status)

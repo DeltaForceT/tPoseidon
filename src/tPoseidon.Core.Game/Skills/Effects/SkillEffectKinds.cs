@@ -119,6 +119,10 @@ public sealed record SkillEffectKind(
 
     public bool Holds { get; init; }
 
+    public bool EndsWithCaster { get; init; }
+
+    public bool Untouchable { get; init; }
+
     public bool ChangesSpeed { get; init; }
 
     public IReadOnlyList<int> BareBaseStats { get; init; } = Array.Empty<int>();
@@ -154,6 +158,7 @@ public sealed record SkillEffectKind(
     public float SlowScale { get; init; } = 1f;
 
     public bool HalvesHits { get; init; }
+    public int UseStyleLock { get; init; }
 
     public bool GrantsTm { get; init; } = true;
 
@@ -243,6 +248,8 @@ public sealed record SkillEffectKind(
 
     public bool PreventsEvade { get; init; }
 
+    public bool BlocksRecovery { get; init; }
+
     public bool SkipsRoll { get; init; }
 
     public IReadOnlyList<int> StripsActions { get; init; } = Array.Empty<int>();
@@ -308,8 +315,6 @@ public sealed record SkillEffectKind(
     public int? RequiresWornSlot { get; init; }
 
     public bool GmStats { get; init; }
-
-    public bool SilentEnd { get; init; }
 
     public bool EndsWithOwner { get; init; }
 
@@ -678,12 +683,15 @@ public static class SkillEffectKinds
         {
             Holds = true, GrantsTm = false, PlayerCondition = MonsterSkills.StunnedCondition, HeldDebuff = true, AggroesOnEnd = true,
         },
-        new(WinkOfCharm, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: true, SecondColumn),
+        new(WinkOfCharm, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: true, SecondColumn)
+        {
+            UseStyleLock = SkillUseStyle.MagicLock,
+        },
         new(ChillingPrison, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeThenTarget, PrisonPowerColumn, OnTarget: true)
         {
             Holds = true, StrikesOnStart = true, StrikeGatesMode = true, ChanceColumn = PrisonChanceColumn,
             StrikeElement = SkillActions.WaterElement, StrikeMagicLoss = PrisonMagicLoss, StrikeAddsElement = true,
-            PlayerCondition = MonsterSkills.StunnedCondition, HeldDebuff = true,
+            PlayerCondition = MonsterSkills.StunnedCondition, HeldDebuff = true, Untouchable = true,
         },
         new(Adhesive, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: false)
         {
@@ -743,7 +751,7 @@ public static class SkillEffectKinds
         },
         new(DimensionOnMonster, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: true)
         {
-            Holds = true, GrantsTm = false, HeaderClass = 1,
+            Holds = true, GrantsTm = false, HeaderClass = 1, PlayerCondition = MonsterSkills.StunnedCondition, HeldDebuff = true,
         },
         new(BuffCanclerOnMonster, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: true)
         {
@@ -929,23 +937,23 @@ public static class SkillEffectKinds
         },
         new(MonsterSkills.DefenseParalysis, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: true, MonsterSkills.SecondColumn)
         {
-            HeaderClass = 1, GrantsTm = false, PlayerCondition = MonsterSkills.ParalysedCondition,
+            HeaderClass = 1, GrantsTm = false, PlayerCondition = MonsterSkills.ParalysedCondition, EndsWithCaster = true,
         },
         new(MonsterSkills.PowerStun, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, RatioColumn, OnTarget: true, MonsterSkills.SecondColumn)
         {
-            HeaderClass = 1, GrantsTm = false, PlayerCondition = MonsterSkills.StunnedCondition,
+            HeaderClass = 1, GrantsTm = false, PlayerCondition = MonsterSkills.StunnedCondition, EndsWithCaster = true,
         },
         new(MonsterSkills.ChargingDo, NoStat, SkillEffectRule.NoChange, SkillEffectTail.ModeThenPoint, RatioColumn, OnTarget: true)
         {
-            GrantsTm = false, FixedDurationMs = MonsterSkills.ChargingMoveMs, PlayerCondition = MonsterSkills.FrozenCondition,
+            GrantsTm = false, FixedDurationMs = MonsterSkills.ChargingMoveMs, PlayerCondition = MonsterSkills.FrozenCondition, EndsWithCaster = true,
         },
         new(MonsterSkills.Warp, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: false)
         {
-            HeaderClass = -1, GrantsTm = false, Periodic = SkillPeriodicHit.MonsterWarp, SilentEnd = true,
+            HeaderClass = -1, GrantsTm = false, Periodic = SkillPeriodicHit.MonsterWarp,
         },
         new(MonsterSkills.Destruction, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: false)
         {
-            HeaderClass = -1, GrantsTm = false, Periodic = SkillPeriodicHit.SelfDestruct, SilentEnd = true,
+            HeaderClass = -1, GrantsTm = false, Periodic = SkillPeriodicHit.SelfDestruct,
             FixedDurationMs = MonsterSkills.SelfDestructMs, PeriodMs = MonsterSkills.SelfDestructMs,
         },
         new(MonsterSkills.Berserk, StatAp, SkillEffectRule.RatioOfBase, SkillEffectTail.Mode, RatioColumn, OnTarget: false, MonsterSkills.SecondsColumn)
@@ -954,15 +962,15 @@ public static class SkillEffectKinds
         },
         new(MonsterSkills.WaterNet, StatDx, SkillEffectRule.Flat, SkillEffectTail.Mode, RatioColumn, OnTarget: true, MonsterSkills.SecondsColumn)
         {
-            HeaderClass = 1, GrantsTm = false,
+            HeaderClass = 1, GrantsTm = false, EndsWithCaster = true,
         },
         new(MonsterSkills.WhirlWind, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: true, MonsterSkills.SecondsColumn)
         {
-            HeaderClass = 1, GrantsTm = false, Periodic = SkillPeriodicHit.MonsterDot, PeriodMs = MonsterSkills.DotPeriodMs,
+            HeaderClass = 1, GrantsTm = false, Periodic = SkillPeriodicHit.MonsterDot, PeriodMs = MonsterSkills.DotPeriodMs, EndsWithCaster = true,
         },
         new(MonsterSkills.CruelFlame, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: true, MonsterSkills.SecondsColumn)
         {
-            HeaderClass = 1, GrantsTm = false, Periodic = SkillPeriodicHit.MonsterDot, PeriodMs = MonsterSkills.DotPeriodMs,
+            HeaderClass = 1, GrantsTm = false, Periodic = SkillPeriodicHit.MonsterDot, PeriodMs = MonsterSkills.DotPeriodMs, EndsWithCaster = true,
         },
         new(MonsterSkills.FluentWaist, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Empty, RatioColumn, OnTarget: false, MonsterSkills.SecondsColumn)
         {
@@ -998,7 +1006,7 @@ public static class SkillEffectKinds
         },
         new(SkillRiders.UnableRecovery, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Mode, SecondsColumn, OnTarget: true)
         {
-            HeaderClass = 1, GrantsTm = false,
+            HeaderClass = 1, GrantsTm = false, BlocksRecovery = true,
         },
         new(SkillRiders.QuakeParalysis, NoStat, SkillEffectRule.NoChange, SkillEffectTail.Duration, ParalysisRatioColumn, OnTarget: true, ParalysisSecondsColumn)
         {

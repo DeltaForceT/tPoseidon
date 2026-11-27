@@ -86,6 +86,7 @@ public sealed class MonsterManager : IMonsterEntityProvider
         var level = ovr?.Level ?? def.Level;
         var isBoss = ovr?.IsBoss ?? def.IsBoss;
         var maxHp = ResolveMaxHpWithOverride(def, ovr);
+        var maxMp = ovr?.MaxMpLv is { } overriddenMp ? Math.Max(0, overriddenMp) : ResolveMaxMp(def);
 
         var entityId = explicitEntityId ?? _idAllocator.NewId();
         var atype = MonsterStrategyFactory.FromByte((byte)def.Type);
@@ -106,16 +107,21 @@ public sealed class MonsterManager : IMonsterEntityProvider
             Atype = atype,
             AiViewRange = def.AiViewRange,
             HpRecoveryAmount = MonsterNaturalRecovery.Amounts(MonsterNaturalRecovery.SpawnFType, def.HpRegen, def.MpRegen).Hp,
+            MaxMp = maxMp,
+            MpRecoveryAmount = MonsterNaturalRecovery.Amounts(MonsterNaturalRecovery.SpawnFType, def.HpRegen, def.MpRegen).Mp,
             DamageLimit = _damageLimit,
             DamageObserver = _damageObserver,
         };
         entity.InitHp(maxHp);
+        entity.InitMp(maxMp);
         entity.InitPosition(x, y);
         entity.InitSpeed(ClientSpeed.Drawn(def.WalkSpeed));
         if (HasBossLives(atype) && BossLives.TryGetValue(monsterParamId, out var bossProfile))
         {
             entity.AttachBoss(bossProfile, BossEvents, BossElements.CodeOf);
         }
+
+        if (atype == MonsterAType.HarconMonster) entity.GrantPlainBars(MonsterEntity.HarconBarCount);
 
         var strategy = MonsterStrategyFactory.Create(atype);
         strategy.OnSpawn(entity);

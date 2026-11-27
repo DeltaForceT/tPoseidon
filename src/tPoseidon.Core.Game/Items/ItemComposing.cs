@@ -26,6 +26,8 @@ public static class ItemComposingRules
     public const byte EquipmentKind = 0;
     public const byte PetKind = 1;
 
+    public static UpgradeWindow WindowAfterCharacterPetClose(UpgradeWindow current) => current == UpgradeWindow.PetComposing ? UpgradeWindow.None : current;
+
     public const byte Ok = 0;
     public const byte NotInBag = 2;
     public const byte NotComposable = 6;

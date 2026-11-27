@@ -25,9 +25,9 @@ public static class PartyFollowRules
 
     public static readonly TimeSpan Period = TimeSpan.FromMilliseconds(PeriodMilliseconds);
 
-    public static PartyFollowStep Decide(bool followerAlive, bool targetPresent, bool sameParty, double distanceSquared)
+    public static PartyFollowStep Decide(bool followerAlive, bool targetPresent, bool sameParty, bool targetInSight, double distanceSquared)
     {
-        if (!followerAlive || !targetPresent || !sameParty) return PartyFollowStep.Stop;
+        if (!followerAlive || !targetPresent || !sameParty || !targetInSight) return PartyFollowStep.Stop;
         return distanceSquared > (double)StopDistance * StopDistance ? PartyFollowStep.Move : PartyFollowStep.Keep;
     }
 }

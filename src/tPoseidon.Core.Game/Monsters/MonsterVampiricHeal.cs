@@ -36,11 +36,10 @@ public sealed class MonsterVampiricHeal : IMonsterDamageObserver
     public void Damaged(MonsterEntity monster, long damage)
     {
         if (damage <= 0 || monster.IsDead || !HasVampiricState(monster.EntityId)) return;
-        var healed = HealAmount(damage, monster.MaxHp);
-        if (healed <= 0) return;
-        var hp = monster.Heal(healed);
+        var healed = HealAmount(damage, monster.VampiricCapacity);
+        if (healed <= 0 || !monster.TryVampiricHeal(healed, out var hp, out var bars)) return;
         _notices.Enqueue(new VampiricHealNotice(
-            monster.EntityId, monster.MapId, (int)hp, monster.HpBarsField, IsBossFlagged(monster.Atype), healed));
+            monster.EntityId, monster.MapId, (int)hp, bars, IsBossFlagged(monster.Atype), healed));
     }
 
     public void Absorbed(MonsterEntity monster, long healed)

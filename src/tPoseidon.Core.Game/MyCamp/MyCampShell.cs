@@ -1,3 +1,5 @@
+using tPoseidon.Core.Game.Posture;
+
 namespace tPoseidon.Core.Game.MyCamp;
 
 public static class MyCampRules
@@ -27,7 +29,8 @@ public static class MyCampRules
     public const byte OpenBusy = 1;
     public const byte OpenHasCamp = 4;
     public const byte OpenZoneType = 5;
-    public const byte OpenInRegion = 6;
+    public const byte OpenNearPortal = 6;
+    public const byte OpenNearPoint = 7;
     public const byte OpenBlockedTile = 8;
 
     public const byte EnterFailed = 1;
@@ -35,6 +38,7 @@ public static class MyCampRules
     public const byte EnterNotOpen = 0x0B;
     public const byte EnterWrongPassword = 0x0C;
     public const byte EnterFull = 0x0D;
+    public const byte EnterOxQuizFloor = 0x0F;
     public const byte EnterBanned = 0x10;
 
     public const byte CloseReasonSave = 1;
@@ -46,18 +50,20 @@ public static class MyCampRules
 
     public static bool OpenZone(int zoneType) => zoneType is 1 or 2 or 10;
 
-    public static bool BlockedTile(byte attribute) => attribute is 1 or 2 or 3;
+    public static bool BlockedTile(byte floor) => floor is 1 or 2 or 3;
 
     public static bool IsShellZone(ushort mapId) => mapId >= ShellZoneBase;
 
-    public static byte? OpenRefusal(bool busy, bool hasCamp, int zoneType, bool inShell, bool inRegion, byte tileAttribute)
+    public static bool InNormalState(PostureState posture) => posture == PostureState.Standing;
+
+    public static byte? OpenRefusal(bool busy, bool hasCamp, int zoneType, bool inShell, byte? placement, byte floor)
     {
         if (busy) return OpenBusy;
         if (hasCamp) return OpenHasCamp;
         if (!OpenZone(zoneType)) return OpenZoneType;
         if (inShell) return OpenBusy;
-        if (inRegion) return OpenInRegion;
-        if (BlockedTile(tileAttribute)) return OpenBlockedTile;
+        if (placement is { } near) return near;
+        if (BlockedTile(floor)) return OpenBlockedTile;
         return null;
     }
 }

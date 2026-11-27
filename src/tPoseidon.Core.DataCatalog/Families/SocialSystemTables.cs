@@ -7,6 +7,7 @@ public sealed partial class SocialSystemTables
 {
     private readonly FastLibConfigReader _reader;
     private readonly Lazy<GuildRankBonusTable> _guildRankBonusTable;
+    private readonly Lazy<GuildLevelTable> _guildLevelTable;
     private readonly Lazy<GuildGameTypeTables> _guildGameTypeTables;
     private readonly Lazy<GuildGameRewardTables> _guildGameRewardTables;
     private readonly Lazy<PkInfoTables> _pkInfo;
@@ -21,6 +22,7 @@ public sealed partial class SocialSystemTables
         ArgumentNullException.ThrowIfNull(reader);
         _reader = reader;
         _guildRankBonusTable = new Lazy<GuildRankBonusTable>(reader.LoadGuildRankBonusTable);
+        _guildLevelTable = new Lazy<GuildLevelTable>(reader.LoadGuildLevelTable);
         _guildGameTypeTables = new Lazy<GuildGameTypeTables>(reader.LoadGuildGameTypeTables);
         _guildGameRewardTables = new Lazy<GuildGameRewardTables>(reader.LoadGuildGameRewardTables);
         _pkInfo = new Lazy<PkInfoTables>(reader.LoadPkInfo);
@@ -32,6 +34,8 @@ public sealed partial class SocialSystemTables
     }
 
     public GuildRankBonusTable GuildRankBonusTable => _guildRankBonusTable.Value;
+
+    public GuildLevelTable GuildLevelTable => _guildLevelTable.Value;
 
     public GuildGameTypeTables GuildGameTypeTables => _guildGameTypeTables.Value;
 

@@ -134,7 +134,9 @@ internal sealed class EquipReformController
         EquipReformOutcome outcome;
         lock (_rngGate)
         {
-            outcome = EquipReformRules.Reform(definition, stored, hasGunAp, target.RefineLevel, request, tables, _refineTables(), () => _rng.Next(ItemPropertyRules.CurveRolls), _propertyRules().RandomRow(definition.Id));
+            var propertyRules = _propertyRules();
+            outcome = EquipReformRules.Reform(definition, stored, hasGunAp, target.RefineLevel, request, tables, _refineTables(),
+                () => EquipReformRules.FixedCurveIndex(_rng), propertyRules.RandomRow(definition.Id), propertyRules.CurveSteps, () => EquipReformRules.RandomCurveIndex(_rng));
         }
         var rows = new List<EquipUpgradeItem>(2) { EquipUpgradeOperations.Take(material, (ushort)row.ItemCount) };
         if (elixir is not null) rows.Add(EquipUpgradeOperations.Take(elixir, (ushort)needed));
@@ -142,7 +144,7 @@ internal sealed class EquipReformController
         EquipStatusUpgradeResult result;
         try
         {
-            result = await _master.ApplyAsync(new EquipStatusUpgrade(character.CharacterId, (uint)fee, _bagCapacity, rows), default).ConfigureAwait(false);
+            result = await _master.ApplyAsync(new EquipStatusUpgrade(character.CharacterId, (uint)fee, _bagCapacity, rows, [new ItemPropertyWrite(target.ItemUid, outcome.Stored)]), default).ConfigureAwait(false);
         }
         finally
         {
@@ -154,7 +156,6 @@ internal sealed class EquipReformController
                 $"store refused with code {result.Error}").ConfigureAwait(false);
             return;
         }
-        _properties.Replace(target.ItemUid, outcome.Stored);
         stats.GrantMoney(result.RemainMoney - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
         foreach (var removed in result.Items.Where(item => item.Action == EquipUpgradeAction.Delete)) player.TimedItems.Forget(removed.ItemUid);
         var materialOperation = EquipUpgradeOperations.ToBag(result.Items.First(item => item.ItemUid == material.ItemUid));
@@ -164,7 +165,7 @@ internal sealed class EquipReformController
             elixirOperation,
             BagItemIds.OnWire(target.ItemUid),
             (uint)target.ItemIndex,
-            _propertyRules().Full(definition, outcome.Stored),
+            outcome.Reported,
             result.RemainMoney,
             outcome.Refine)).ConfigureAwait(false);
         Log(player, $"item {definition.Id} reformed for {fee} gelder: {string.Join(", ", outcome.Rolled.Select(property => $"{property.Id}={property.Value}"))}; {outcome.Remaining} reforms left, refine bonus {outcome.Refine.PropertyId}={outcome.Refine.Value}");
@@ -202,7 +203,8 @@ internal sealed class EquipReformController
         EquipStatusUpgradeResult result;
         try
         {
-            result = await _master.ApplyAsync(new EquipStatusUpgrade(character.CharacterId, 0, _bagCapacity, [EquipUpgradeOperations.Take(material, 1)]), default).ConfigureAwait(false);
+            var reset = EquipReformRules.Reset(definition, stored);
+            result = await _master.ApplyAsync(new EquipStatusUpgrade(character.CharacterId, 0, _bagCapacity, [EquipUpgradeOperations.Take(material, 1)], [new ItemPropertyWrite(target.ItemUid, reset)]), default).ConfigureAwait(false);
         }
         finally
         {
@@ -213,7 +215,6 @@ internal sealed class EquipReformController
             await RefuseAsync(player, EquipReformRules.Failed, $"store refused with code {result.Error}").ConfigureAwait(false);
             return;
         }
-        _properties.Replace(target.ItemUid, EquipReformRules.Reset(definition, stored));
         if (result.Items.Any(item => item.Action == EquipUpgradeAction.Delete)) player.TimedItems.Forget(material.ItemUid);
         await SendAsync(player, Opcode.S2C_REFORM_RESET_DONE, EquipReformFrames.ResetDone(BagItemIds.OnWire(target.ItemUid), BagItemIds.OnWire(material.ItemUid))).ConfigureAwait(false);
         Log(player, $"item {definition.Id} reform count reset to {definition.ReformCount} with item {material.ItemIndex}");

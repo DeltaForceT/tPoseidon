@@ -5,6 +5,7 @@ using tPoseidon.Hosting;
 using tPoseidon.Hosting.Database;
 using tPoseidon.Hosting.Processes;
 using tPoseidon.Hosting.Servers;
+using tPoseidon.Hosting.Updates;
 
 namespace tPoseidon.Panel;
 
@@ -73,6 +74,7 @@ public sealed class PanelHost
     public PanelHost(InstallPaths paths)
     {
         Paths = paths;
+        Updater = new PanelUpdater(this);
         _poll.Tick += (_, _) => Poll();
     }
 
@@ -85,6 +87,8 @@ public sealed class PanelHost
     public event Action? PlayAccountChanged;
 
     public InstallPaths Paths { get; }
+
+    public PanelUpdater Updater { get; }
 
     public HostSettings? Settings { get; private set; }
 
@@ -133,12 +137,14 @@ public sealed class PanelHost
     {
         _ended = false;
         _poll.Start();
+        Updater.Begin();
     }
 
     public void End()
     {
         _ended = true;
         _poll.Stop();
+        Updater.End();
         LogHub.StopFollowing();
     }
 
@@ -436,6 +442,33 @@ public sealed class PanelHost
         catch (HostingException ex)
         {
             Fail(LogHub.PanelSource, ex);
+        }
+    }
+
+    public async Task<bool> SaveUpdateSettingsAsync(UpdateSettings value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (Settings is not { } settings || value.Problems().Count > 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                settings.Updates = value;
+                settings.Save(Paths);
+            }).ConfigureAwait(true);
+            LogHub.Write(LogHub.PanelSource, LogLevel.Info, $"Update settings saved: {value.Mode}, {value.Channel} channel.");
+            Notify(BannerKind.Success, "Update settings saved.", null);
+            await Updater.CheckAsync(manual: false).ConfigureAwait(true);
+            return true;
+        }
+        catch (Exception ex) when (ex is HostingException or IOException or UnauthorizedAccessException)
+        {
+            LogHub.Write(LogHub.PanelSource, LogLevel.Error, $"The update settings could not be saved: {ex.Message}");
+            return false;
         }
     }
 

@@ -10,6 +10,8 @@ public sealed class BossLife
     public const int BarLossGuardMs = 2000;
     public const int HealSkillId = 0x13ED;
     public const int SkillRollModulus = 5;
+    public const int CooldownExemptSkillClass = 1;
+    public const int MpRefillMonsterId = 0x7ED;
 
     private readonly BossLifeProfile _profile;
     private readonly BossEventOutbox _events;
@@ -66,6 +68,8 @@ public sealed class BossLife
         }
     }
 
+    internal void GainBar() => Volatile.Write(ref _barsLeft, _barsLeft + 1);
+
     internal void ReportDeath(MonsterEntity owner) =>
         _events.Enqueue(new BossEvent(BossEventKind.Died, owner.EntityId, owner.MapId, 0, _profile.NotEarthQuake, string.Empty));
 
@@ -111,11 +115,14 @@ public sealed class BossLife
         return called;
     }
 
-    internal void TickTimers(MonsterEntity owner, int elapsedMs, bool hasTarget, bool hpBelowMax, Func<int> roll, Func<int, bool> castable)
+    internal IReadOnlyList<BossCastRequest> TickTimers(
+        MonsterEntity owner, int elapsedMs, bool hasTarget, bool hpBelowMax, Func<int> roll, Func<BossCastRequest, BossCastPlan> planOf)
     {
         if (_guardMs > 0) _guardMs = Math.Max(0, _guardMs - elapsedMs);
-        TickHeal(owner, elapsedMs, hpBelowMax, roll);
-        TickSkills(owner, elapsedMs, hasTarget, roll, castable);
+        var started = new List<BossCastRequest>();
+        TickHeal(owner, elapsedMs, hpBelowMax, roll, planOf, started);
+        TickSkills(owner, elapsedMs, hasTarget, roll, planOf, started);
+        return started;
     }
 
     public static bool SkillRollPasses(MonsterAType atype, int roll) =>
@@ -123,7 +130,21 @@ public sealed class BossLife
 
     public ushort OwnerEntityId { get; set; }
 
-    private void TickHeal(MonsterEntity owner, int elapsedMs, bool hpBelowMax, Func<int> roll)
+    private static BossCastOutcome Attempt(
+        MonsterEntity owner, BossCastRequest request, Func<BossCastRequest, BossCastPlan> planOf, List<BossCastRequest> started)
+    {
+        var plan = planOf(request);
+        if (!plan.Allowed || owner.CurrentMp < plan.MpCost) return BossCastOutcome.Refused;
+        if (plan.CooldownApplies && started.Any(earlier => earlier.SkillId == request.SkillId)) return BossCastOutcome.Refused;
+        if (plan.Delayed) return BossCastOutcome.CastDelay;
+        owner.TryPayMp(plan.MpCost);
+        if (owner.MonsterParamId == MpRefillMonsterId) owner.RefillMp();
+        started.Add(request);
+        return BossCastOutcome.Cast;
+    }
+
+    private void TickHeal(
+        MonsterEntity owner, int elapsedMs, bool hpBelowMax, Func<int> roll, Func<BossCastRequest, BossCastPlan> planOf, List<BossCastRequest> started)
     {
         _healTimerMs -= elapsedMs;
         if (_healTimerMs >= 0 || _profile.Heals is not { } heals) return;
@@ -132,16 +153,22 @@ public sealed class BossLife
         {
             var heal = heals[slot];
             if (BarsLeft > heal.LeftLife || !hpBelowMax || heal.Level == 0 || (roll() & 1) == 0) continue;
-            _events.Enqueue(new BossEvent(
-                BossEventKind.HealCast, owner.EntityId, owner.MapId, 0, _profile.NotEarthQuake, string.Empty,
-                SkillId: HealSkillId, SkillLevel: heal.Level));
             fired = slot;
+            var request = new BossCastRequest(BossEventKind.HealCast, HealSkillId, heal.Level);
+            var outcome = Attempt(owner, request, planOf, started);
+            if (outcome != BossCastOutcome.Refused)
+            {
+                _events.Enqueue(new BossEvent(
+                    BossEventKind.HealCast, owner.EntityId, owner.MapId, 0, _profile.NotEarthQuake, string.Empty,
+                    SkillId: HealSkillId, SkillLevel: heal.Level, CostPaid: outcome == BossCastOutcome.Cast));
+            }
             break;
         }
         _healTimerMs = heals.Count > 0 ? heals[fired].TimeMs : 0;
     }
 
-    private void TickSkills(MonsterEntity owner, int elapsedMs, bool hasTarget, Func<int> roll, Func<int, bool> castable)
+    private void TickSkills(
+        MonsterEntity owner, int elapsedMs, bool hasTarget, Func<int> roll, Func<BossCastRequest, BossCastPlan> planOf, List<BossCastRequest> started)
     {
         _skillTimerMs -= elapsedMs;
         if (_skillTimerMs >= 0 || _profile.Skills is not { } skills) return;
@@ -151,11 +178,13 @@ public sealed class BossLife
             var skill = skills[slot];
             if (BarsLeft > skill.LeftLife || !hasTarget || skill.Level == 0 || !SkillRollPasses(owner.Atype, roll())) continue;
             fired = slot;
-            if (!castable(slot)) continue;
+            var request = new BossCastRequest(BossEventKind.SkillCast, skill.SkillId, skill.Level);
+            var outcome = Attempt(owner, request, planOf, started);
+            if (outcome == BossCastOutcome.Refused) continue;
             _events.Enqueue(new BossEvent(
                 BossEventKind.SkillCast, owner.EntityId, owner.MapId, 0, _profile.NotEarthQuake, string.Empty,
-                SkillId: skill.SkillId, SkillLevel: skill.Level));
-            break;
+                SkillId: skill.SkillId, SkillLevel: skill.Level, CostPaid: outcome == BossCastOutcome.Cast));
+            if (outcome == BossCastOutcome.CastDelay) break;
         }
         _skillTimerMs = skills.Count > 0 ? skills[fired].TimeMs : 0;
     }

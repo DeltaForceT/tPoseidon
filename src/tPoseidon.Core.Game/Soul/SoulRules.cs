@@ -22,6 +22,8 @@ public static class SoulRules
 
     public const byte Ok = 0;
 
+    public static bool ReportsStatusOnEntry(GuardianState? equipped) => equipped is not null;
+
     public const byte NotifyBadItem = 1;
     public const byte NotifyNotEnoughSource = 2;
     public const byte NotifyBadPotionInfo = 3;

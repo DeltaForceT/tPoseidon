@@ -30,6 +30,8 @@ public static class PlayerRevivalFrames
         return w.ToArray();
     }
 
+    public static byte[] LoggedOut(ushort playerId) => LeftMap(playerId);
+
     public static byte[] LeftMap(ushort playerId)
     {
         var w = new PacketWriter(LeftMapSize);

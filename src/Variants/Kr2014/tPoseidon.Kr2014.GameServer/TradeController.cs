@@ -78,7 +78,8 @@ internal sealed class TradeController
     {
         if (self.Character is not { } character || !TradeFrames.TryReadInvite(body.Span, out var targetId)) return;
         var target = _playerOnMap(self.MapId, targetId);
-        if (target is null || ReferenceEquals(target, self) || target.Trade is not null || target.IsDead)
+        if (target is null || ReferenceEquals(target, self) || target.Trade is not null || target.InCardBattle || target.IsDead
+            || tPoseidon.Core.Game.PlayerShop.PlayerShopRules.BusyInShop(target.Stall is not null, target.VisitingKeeper is not null))
         {
             await SendAsync(self, Opcode.TRADE_UNAVAILABLE).ConfigureAwait(false);
             return;

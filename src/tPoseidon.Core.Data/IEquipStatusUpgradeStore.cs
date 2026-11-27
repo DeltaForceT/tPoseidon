@@ -20,7 +20,9 @@ public sealed record EquipUpgradeItem(
     int PeriodMinutes = 0,
     DateTimeOffset? BreakedAt = null);
 
-public sealed record EquipStatusUpgrade(ulong CharacterId, uint Fee, int BagCapacity, IReadOnlyList<EquipUpgradeItem> Items);
+public sealed record ItemPropertyWrite(ulong ItemUid, IReadOnlyList<ItemProperty> Properties);
+
+public sealed record EquipStatusUpgrade(ulong CharacterId, uint Fee, int BagCapacity, IReadOnlyList<EquipUpgradeItem> Items, IReadOnlyList<ItemPropertyWrite>? PropertyWrites = null);
 
 public sealed record EquipStatusUpgradeResult(int Error, long RemainMoney, IReadOnlyList<EquipUpgradeItem> Items)
 {

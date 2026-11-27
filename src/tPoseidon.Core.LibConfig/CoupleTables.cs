@@ -31,7 +31,9 @@ public sealed record CoupleTables(
     IReadOnlySet<int> HallZones,
     IReadOnlyList<int> DeleteQuestIds,
     IReadOnlyList<int> DeleteSkillIds,
-    IReadOnlyDictionary<int, CoupleEventPoints> EventPoints)
+    IReadOnlyDictionary<int, CoupleEventPoints> EventPoints,
+    string GroomMessage = "",
+    string BrideMessage = "")
 {
     private readonly SourceBoundIndex<int, MarriageTitleEntry> _titlesByIndex = new(row => row.Index);
 
@@ -45,13 +47,16 @@ public sealed record CoupleTables(
     public const string HallTable = "WeddingHallInfo";
     public const string DeleteTable = "CoupleDeleteInfo";
     public const string StatusTable = "CoupleStatusInfo";
+    public const string UiParamsTable = "CoupleUIParams";
+    public const string GroomMessageKey = "WeddingMsgGroom";
+    public const string BrideMessageKey = "WeddingMsgBride";
     public const string DeleteQuestType = "quest";
     public const string DeleteSkillType = "skill";
     public const int DeleteIdColumns = 25;
 
     public static IReadOnlySet<string> TableNames { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
-        ExchangeTable, TitleTable, RingTable, DressTable, OfficiateTable, HallTable, DeleteTable, StatusTable,
+        ExchangeTable, TitleTable, RingTable, DressTable, OfficiateTable, HallTable, DeleteTable, StatusTable, UiParamsTable,
     };
 
     public static CoupleTables Empty { get; } = new(

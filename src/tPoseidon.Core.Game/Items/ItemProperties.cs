@@ -22,6 +22,8 @@ public sealed class ItemPropertyRules
         foreach (var (name, steps) in tables.Curves) _curves[name] = Curve(steps);
     }
 
+    public IReadOnlyDictionary<string, IReadOnlyList<int>> CurveSteps => _tables.Curves;
+
     public RandomStatRow? RandomRow(int itemId) => _tables.RandomStats.TryGetValue(itemId, out var row) ? row : null;
 
     public int MixSlots(int itemId, int current, Random rng)
@@ -198,6 +200,7 @@ public sealed class ItemPropertyRules
             values[i] = (int)Math.Truncate(current);
             current += step;
         }
+        values[CurveBins - 1] = max;
         return values;
     }
 

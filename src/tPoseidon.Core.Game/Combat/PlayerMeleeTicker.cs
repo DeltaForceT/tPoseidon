@@ -66,7 +66,7 @@ public sealed class PlayerMeleeTicker
             if (monster.Guarded) outcome = outcome with { Damage = 0, Result = MeleeResolution.ResultBlock };
             var elementMask = 0;
             long absorbed = 0;
-            if (outcome.Damage > 0 && definition is not null)
+            if (outcome.Damage > 0 && definition is not null && armed != MeleeResolution.ResultCritical)
             {
                 var elemental = ElementalAttack.Apply(
                     outcome.Damage,
@@ -88,6 +88,7 @@ public sealed class PlayerMeleeTicker
                 };
             }
 
+            ushort guardLeft = 0;
             if (intercept is not null)
             {
                 var incoming = new Skills.Effects.IncomingHit(
@@ -100,6 +101,7 @@ public sealed class PlayerMeleeTicker
                         Damage = received.Damage,
                         Result = (byte)(received.Kind | (received.Damage >= monster.CurrentHp ? MeleeResolution.ResultFinishingFlag : 0)),
                     };
+                    if (received.Kind == Skills.Effects.IncomingHits.KindBlockedByGuard) guardLeft = received.Extra;
                 }
             }
 
@@ -128,7 +130,8 @@ public sealed class PlayerMeleeTicker
                 NextSwingAtUtc: now,
                 MonsterParamId: monster.MonsterParamId,
                 MobMaxHp: monster.MaxHp,
-                MobHpBefore: hpBefore));
+                MobHpBefore: hpBefore,
+                GuardLeft: guardLeft));
         }
         return strikes;
     }

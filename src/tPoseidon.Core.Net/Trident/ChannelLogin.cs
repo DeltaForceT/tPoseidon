@@ -80,6 +80,7 @@ public readonly record struct ChannelLoginToken(uint AccountId, long Authcode)
 public static class ChannelLogin
 {
     public const ushort RefusalOpcode = 0x07D1;
+    public const ushort TimeCapsuleCouponOpcode = 0x07F7;
     public const short ServerSelectedState = 3;
     public const short World = 1;
     public const short Island = 1;
@@ -113,6 +114,13 @@ public static class ChannelLogin
     {
         var payload = new byte[sizeof(uint)];
         BinaryPrimitives.WriteUInt32LittleEndian(payload, (uint)refusal);
+        return payload;
+    }
+
+    public static byte[] TimeCapsuleCouponPayload(uint count)
+    {
+        var payload = new byte[sizeof(uint)];
+        BinaryPrimitives.WriteUInt32LittleEndian(payload, count);
         return payload;
     }
 }

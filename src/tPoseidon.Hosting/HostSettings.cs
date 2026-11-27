@@ -56,6 +56,8 @@ public sealed class HostSettings
 
     public GuardSettings Security { get; set; } = new();
 
+    public UpdateSettings Updates { get; set; } = new();
+
     public static HostSettings? Load(InstallPaths paths)
     {
         ArgumentNullException.ThrowIfNull(paths);
@@ -78,6 +80,7 @@ public sealed class HostSettings
 
         settings.Security ??= new GuardSettings();
         settings.Launch ??= new ClientLaunchSettings();
+        settings.Updates ??= new UpdateSettings();
         settings.Upgrade();
         var problems = settings.Security.Problems();
         if (problems.Count > 0)
@@ -85,6 +88,14 @@ public sealed class HostSettings
             throw new HostingException(
                 $"{paths.SettingsFile} has security settings that do not work: {string.Join(" ", problems)}",
                 "Fix them, or remove the \"security\" section to go back to the defaults.",
+                null);
+        }
+
+        if (settings.Updates.Problems() is { Count: > 0 } updateProblems)
+        {
+            throw new HostingException(
+                $"{paths.SettingsFile} has update settings that do not work: {string.Join(" ", updateProblems)}",
+                "Fix them, or remove the \"updates\" section to go back to the defaults.",
                 null);
         }
 

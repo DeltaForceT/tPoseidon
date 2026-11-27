@@ -15,6 +15,7 @@ public sealed record RefinePlayer
     public required Func<Character?> Character { get; init; }
     public required Func<StatManager?> Stats { get; init; }
     public Func<int> Fortune { get; init; } = () => 0;
+    public Func<int, Task>? SeedEvent { get; init; }
 }
 
 public sealed class RefineService
@@ -120,25 +121,25 @@ public sealed class RefineService
         var bag = _items.GetForCharacterBySlotKind(character.CharacterId, SlotKind.Inventory);
         var target = bag.FirstOrDefault(item => item.ItemUid == targetUid);
         var definition = target is null ? null : _catalog.GetById(target.ItemIndex);
-        if (target is null || definition is null || RepairRules.Check(definition, target, Phantom) != RepairRules.NoError
-            || RepairRules.Material(_tables, definition, target) is not { } repairRow)
+        if (target is null || definition is null || RepairRules.Check(definition, target) != RepairRules.NoError
+            || RepairRules.Material(_tables, definition, target, Phantom) is not { } repairRow)
         {
             await RepairRefusedAsync(RepairRules.ImpossibleItem, $"item 0x{targetUid:X} cannot be repaired here", ct).ConfigureAwait(false);
             return;
         }
         var count = repairRow.RepairCount;
-        var material = bag.FirstOrDefault(item => item.ItemIndex == repairRow.RepairItemId && item.Stack >= count);
-        if (material is null)
+        var plan = RepairRules.Gather(bag, repairRow.RepairItemId, count);
+        if (plan is null)
         {
             await RepairRefusedAsync(RepairRules.NoMaterial, $"no item {repairRow.RepairItemId} x{count} for item {target.ItemIndex}", ct).ConfigureAwait(false);
             return;
         }
-        var materialOperation = Take(material, count);
+        var operations = plan.Select(step => Take(step.Stack, step.Take)).ToList();
         _refines.SetRefine(target.ItemUid, target.RefineLevel, RepairRules.Repaired);
         var repaired = new BagOperation(QuestResultFrames.StackChanged, ItemParamEntry.RareClass, (uint)target.ItemIndex, BagItemIds.OnWire(target.ItemUid),
             target.Stack, target.ItemSlot, (byte)definition.RefineType, target.RefineLevel, RepairRules.Repaired);
-        await _ctx.SendFrameAsync(Repaired, QuestResultFrames.ItemOperations(new[] { materialOperation, repaired }), randKey: NextRandKey(), ct).ConfigureAwait(false);
-        Console.WriteLine($"{_logTag} {_ctx.Remote}   repair item {target.ItemIndex} level {target.RefineLevel} with {count} x {material.ItemIndex}{(Phantom ? " (phantom academy)" : string.Empty)}");
+        await _ctx.SendFrameAsync(Repaired, QuestResultFrames.ItemOperations(operations.Append(repaired).ToArray()), randKey: NextRandKey(), ct).ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} {_ctx.Remote}   repair item {target.ItemIndex} level {target.RefineLevel} with {count} x {repairRow.RepairItemId}{(Phantom ? " (phantom academy)" : string.Empty)}");
     }
 
     private async Task RepairRefusedAsync(byte code, string reason, CancellationToken ct)
@@ -172,7 +173,7 @@ public sealed class RefineService
             return;
         }
         var level = (int)target.RefineLevel;
-        var fee = RefineRules.Fee(definition, level, _tables.CostDiscount);
+        var fee = RefineRules.Fee(definition, level, _tables.CostDiscount, Phantom);
         if (stats.Money < fee || !RefineRules.CanRefine(definition, target))
         {
             await RefuseAsync($"item {target.ItemIndex} level {level} state {target.RefineState}: cannot be refined (fee {fee}, money {stats.Money})", ct).ConfigureAwait(false);
@@ -207,7 +208,7 @@ public sealed class RefineService
 
         var chance = RefineRules.Chance(levelRow.Ratio[level], _player.Fortune(), _tables.RefineSeed, supportRow?.Prob ?? 0);
         bool success;
-        lock (_rng) success = _rng.Next(RefineRules.RollRange) < chance;
+        lock (_rng) success = RefineRules.Succeeds(chance, RefineRules.Roll(_rng));
 
         stats.GrantMoney(-(int)fee, StatChangeSource.Refine);
         var materialOperation = Take(material, materialRow.ItemCounts[level]);
@@ -240,6 +241,10 @@ public sealed class RefineService
         w.WriteUInt32Field(stats.Money);
         await SendAsync(Opcode.S2C_REFINE_RESULT, w.ToArray(), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   refine item {target.ItemIndex} level {level} -> {(success ? level + 1 : level)}: {(success ? $"success, property {propertyId} = {value}" : "failed, item broken")} (chance {chance / 100:F2}%, fee {fee})");
+        if (success && _player.SeedEvent is { } seedEvent)
+        {
+            foreach (var refinedEvent in tPoseidon.Core.Game.SoulSeed.SoulSeedRules.RefineEvents(level + 1)) await seedEvent(refinedEvent).ConfigureAwait(false);
+        }
     }
 
     public static (ulong Target, ulong Material, ulong Support, int SupportRow) ReadRequest(ReadOnlySpan<byte> payload) => (

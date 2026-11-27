@@ -56,15 +56,94 @@ public static class SoulSeedRules
     public const int MonsterKillLevelGap = 20;
     public const int LevelUpEvent = 0;
     public const int TmLevelUpEvent = 1;
+    public const int StatPointEventBase = 2;
+    public const int StatPointEventGroups = 4;
+    public const int StatPointEventGroupSize = 3;
+    public const int HitLevelGap = 20;
+    public const int CriticalLandedEvent = 13;
+    public const int HitMissedEvent = 14;
+    public const int HitBlockedEvent = 15;
+    public const int MissKind = 1;
+    public const int BlockKind = 2;
+    public const int CriticalKind = 3;
+    public const int StrongCriticalKind = 4;
+    public const uint KindMask = 0x7F;
+    public const int BossKillEvent = 0x0B;
+    public const int ItemUseEvent = 0x0C;
+    public const int PlayerDeathEvent = 0x10;
+    public const int DrillFoundEvent = 0x19;
+    public const int DrillFailedEvent = 0x1A;
+    public const int DrillEndedEvent = 0x1B;
+    public const int MyCampOpenEvent = 0x23;
+    public const int CrazyDrillStartEvent = 0x1C;
+    public const int PlayerShopBuyEvent = 0x1E;
+    public const int ProfileViewEvent = 0x1F;
+    public const int MoneyPickupEvent = 0x16;
+    public const int RefineEvent = 0x17;
+    public const int GrowthCompoundEvent = 0x18;
+    public const int ExchangeEvent = 0x21;
+    public const int CompoundEvent = 0x22;
+    public const int ShopTradeEvent = 0x20;
+    public const int BulletSpentEvent = 0x11;
+    public const int ThrowItemSpentEvent = 0x12;
+    public const int ThrowCardSpentEvent = 0x13;
+    public const int BulletSubTypeFirst = 56;
+    public const int BulletSubTypeLast = 59;
+    public const int ThrowItemSubType = 39;
+    public const int ThrowCardSubType = 60;
     public const int HpPotionEvent = 0x14;
     public const int MpPotionEvent = 0x15;
     public const int CardIdentifyDealEvent = 44;
     public const int SecretCardEventBase = 51;
+    public const int AngelReturnEvent = 42;
     public const int SecretCardFirstItem = 26500;
     public const int SecretCardLastItem = 26515;
     public const int SecretCardKinds = 4;
     public const byte RemoveAfterUse = 0;
     public const byte DecrementAfterUse = 2;
+
+    public static IEnumerable<int> StatPointEvents(IReadOnlyList<short> amounts)
+    {
+        ArgumentNullException.ThrowIfNull(amounts);
+        for (var group = 0; group < StatPointEventGroups; group++)
+        {
+            var points = 0;
+            for (var slot = 0; slot < StatPointEventGroupSize; slot++) points += amounts[group * StatPointEventGroupSize + slot];
+            for (var point = 0; point < points; point++) yield return StatPointEventBase + group;
+        }
+    }
+
+    public static int? DrillFinishEvent(byte result) => result switch
+    {
+        1 => DrillEndedEvent,
+        2 or 9 => DrillFailedEvent,
+        3 or 8 => DrillFoundEvent,
+        _ => null,
+    };
+
+    public static IReadOnlyList<int> RefineEvents(int newLevel) => Enumerable.Repeat(RefineEvent, Math.Max(newLevel, 0)).ToArray();
+
+    public static IReadOnlyList<int> ItemSpentEvents(int subType, int spent, int left)
+    {
+        var spentEvent = subType switch
+        {
+            ThrowCardSubType => ThrowCardSpentEvent,
+            ThrowItemSubType => ThrowItemSpentEvent,
+            >= BulletSubTypeFirst and <= BulletSubTypeLast when left > 0 => BulletSpentEvent,
+            _ => 0,
+        };
+        if (spentEvent == 0 || spent <= 0) return [];
+        return left > 0 ? Enumerable.Repeat(spentEvent, spent).ToArray() : [spentEvent];
+    }
+
+    public static int? CriticalLandedByPlayer(int attackerLevel, int targetLevel, uint kind) =>
+        attackerLevel - targetLevel < HitLevelGap && (kind & KindMask) is CriticalKind or StrongCriticalKind ? CriticalLandedEvent : null;
+
+    public static int? HitAvoidedByPlayer(int victimLevel, int attackerLevel, uint kind) =>
+        victimLevel - attackerLevel >= HitLevelGap ? null
+        : kind == MissKind ? HitMissedEvent
+        : kind == BlockKind ? HitBlockedEvent
+        : null;
 
     private static readonly Dictionary<byte, int> QuestEvents = new()
     {
@@ -111,11 +190,15 @@ public static class SoulSeedRules
     public static byte RareType(IReadOnlyList<int> combinedLevels, int baseLevelSum, int specialLevelSum)
     {
         ArgumentNullException.ThrowIfNull(combinedLevels);
-        var allEqual = combinedLevels.All(level => level == combinedLevels[0]);
-        if (allEqual && baseLevelSum >= 8 && baseLevelSum <= 11) return 4;
-        if (allEqual && baseLevelSum > 11) return 3;
-        if (baseLevelSum > 12) return specialLevelSum > 3 ? (byte)1 : (byte)2;
-        return 0;
+        byte rare = 0;
+        if (combinedLevels.All(level => level == combinedLevels[0]))
+        {
+            if (baseLevelSum is >= 8 and <= 11) rare = 4;
+            else if (baseLevelSum > 11) rare = 3;
+        }
+        if (baseLevelSum > 12) rare = 2;
+        if (baseLevelSum > 12 && specialLevelSum > 3) rare = 1;
+        return rare;
     }
 }
 
@@ -218,6 +301,22 @@ public sealed class SoulSeedGrowth
         }
     }
 
+    public bool RestoreUnlessLive(SoulSeedRecord record)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        lock (_gate)
+        {
+            if (Planted) return false;
+        }
+        Restore(record);
+        return true;
+    }
+
+    public SoulSeedRecord? Flush()
+    {
+        lock (_gate) return Planted ? Backup() : null;
+    }
+
     public void Clear()
     {
         lock (_gate)
@@ -244,26 +343,29 @@ public sealed class SoulSeedGrowth
                 return new SoulSeedEventOutcome(true, false, counter, false, false, false, Array.Empty<SoulSeedRecord>());
             }
             _counters[eventType] = (short)Math.Clamp(counter - row.Rate, short.MinValue, short.MaxValue);
-            var wasComplete = Complete;
             var first = row.Special ? SoulSeedRules.NormalTypes : 0;
             var buffGroup = SoulSeedRules.NoBuffGroup;
             var changed = false;
+            var complete = false;
             var backups = new List<SoulSeedRecord>();
             for (var t = 0; t < SoulSeedRules.NormalTypes && t < row.Points.Count; t++)
             {
                 var type = first + t;
+                if (row.Points[t] < 1 || !CanAdd(type, row.Special, row.MaximumLevel)) continue;
                 for (var point = 0; point < row.Points[t]; point++)
                 {
-                    if (!CanAdd(type, row.Special, row.MaximumLevel)) break;
                     _session[type]++;
-                    changed = true;
                     var total = TotalOf(type);
                     if (total % SoulSeedRules.BuffPointStep == 0) buffGroup = type % SoulSeedRules.NormalTypes;
                     if (total % SoulSeedRules.PointsPerLevel == 0) backups.Add(Backup());
                 }
+                changed = true;
+                if (CompleteNow())
+                {
+                    Complete = true;
+                    complete = true;
+                }
             }
-            var complete = changed && !wasComplete && CompleteNow();
-            if (complete) Complete = true;
             var buffChanged = changed && buffGroup != SoulSeedRules.NoBuffGroup && ApplyBuff(buffGroup, baseStats);
             return new SoulSeedEventOutcome(true, true, counter, changed, buffChanged, complete, backups);
         }

@@ -17,6 +17,8 @@ internal sealed class FiestaController
     private readonly IFiestaEntryStore _store;
     private readonly Func<ushort, int> _mapOption;
     private readonly Func<int, int> _mapClass;
+    private readonly Func<int, bool> _zoneHosted;
+    private readonly FiestaAnnouncer _announcer = new();
     private readonly Func<PortalLevelBands> _portalBands;
     private readonly Func<IReadOnlyCollection<InGameSessionState>> _sessions;
     private readonly Func<ushort, Opcode, byte[], Task> _sendToMap;
@@ -28,9 +30,10 @@ internal sealed class FiestaController
     private readonly Random _rng = new();
 
     public FiestaController(
-        Func<FiestaTables> tables, IFiestaEntryStore store, Func<ushort, int> mapOption, Func<int, int> mapClass, Func<PortalLevelBands> portalBands,
+        Func<FiestaTables> tables, IFiestaEntryStore store, Func<ushort, int> mapOption, Func<int, int> mapClass, Func<int, bool> zoneHosted, Func<PortalLevelBands> portalBands,
         Func<IReadOnlyCollection<InGameSessionState>> sessions, Func<ushort, Opcode, byte[], Task> sendToMap, Encoding text, string logTag)
     {
+        _zoneHosted = zoneHosted ?? throw new ArgumentNullException(nameof(zoneHosted));
         _mapClass = mapClass ?? throw new ArgumentNullException(nameof(mapClass));
         _portalBands = portalBands ?? throw new ArgumentNullException(nameof(portalBands));
         _tables = tables ?? throw new ArgumentNullException(nameof(tables));
@@ -105,6 +108,7 @@ internal sealed class FiestaController
     {
         var now = DateTime.Now;
         var slots = _tables().Slots;
+        if (_announcer.Step(slots, now, _zoneHosted) is { } notice) await BroadcastAsync(notice).ConfigureAwait(false);
         foreach (var zone in slots.Select(row => row.ZoneId).Distinct())
         {
             if (FiestaRules.OpenInZone(slots, zone, now) is { } window)
@@ -135,6 +139,13 @@ internal sealed class FiestaController
             }
         }
         lock (_gate) _evicting.RemoveWhere(guest => !slots.Any(row => row.ZoneId == guest.MapId));
+    }
+
+    private async Task BroadcastAsync(byte state)
+    {
+        var maps = _sessions().Where(guest => guest.ClientReady && guest.Character is not null).Select(guest => guest.MapId).Distinct().ToArray();
+        foreach (var map in maps) await _sendToMap(map, Opcode.S2C_FIESTA_STATE, new[] { state }).ConfigureAwait(false);
+        Console.WriteLine($"{_logTag} [fiesta] notice {state} sent to {maps.Length} zones");
     }
 
     private async Task EvictAsync(InGameSessionState guest)

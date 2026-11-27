@@ -148,7 +148,11 @@ public static class SkillActions
     public const int GuardAbsorbedKind = 6;
 
     public static TornadoOutcome ResolveTornado(
-        SkillTableRow action, SkillAttacker attacker, SkillTarget target, Random rng, TornadoShields shields = default)
+        SkillTableRow action, SkillAttacker attacker, SkillTarget target, Random rng, TornadoShields shields = default) =>
+        RecordTornadoHits(RollTornado(action, attacker, target, rng), shields);
+
+    public static IReadOnlyList<SkillHit> RollTornado(
+        SkillTableRow action, SkillAttacker attacker, SkillTarget target, Random rng)
     {
         ArgumentNullException.ThrowIfNull(action);
         var power = attacker.Ap + (action.Amount(ArrowPowerColumn) ?? 0);
@@ -160,7 +164,7 @@ public static class SkillActions
             var counts = hit.Damage > 0 && hit.Kind != SkillDamage.KindMiss && hit.Kind != TornadoUncountedKind;
             hits.Add(counts ? hit with { Damage = hit.Damage / TornadoHitCount } : hit);
         }
-        return RecordTornadoHits(hits, shields);
+        return hits;
     }
 
     public static TornadoOutcome RecordTornadoHits(IReadOnlyList<SkillHit> hits, TornadoShields shields)

@@ -33,6 +33,31 @@ public static class ToolRunner
         return new ToolResult(process.ExitCode, stderr.GetAwaiter().GetResult().Trim());
     }
 
+    public static ToolResult CaptureFrom(string executable, IEnumerable<string> arguments, IReadOnlyDictionary<string, string>? environment, Stream source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var info = Build(executable, arguments, environment);
+        info.RedirectStandardInput = true;
+        info.RedirectStandardOutput = true;
+        info.RedirectStandardError = true;
+        info.CreateNoWindow = true;
+        using var process = StartOrThrow(info);
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        try
+        {
+            source.CopyTo(process.StandardInput.BaseStream);
+            process.StandardInput.Close();
+        }
+        catch (IOException)
+        {
+            process.StandardInput.Dispose();
+        }
+
+        process.WaitForExit();
+        return new ToolResult(process.ExitCode, (stdout.GetAwaiter().GetResult() + stderr.GetAwaiter().GetResult()).Trim());
+    }
+
     public static string? FindOnPath(string name)
     {
         var path = Environment.GetEnvironmentVariable("PATH");

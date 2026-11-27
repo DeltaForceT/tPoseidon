@@ -16,7 +16,7 @@ public sealed record GuildNoticeRow(uint Code, string Created, string Content);
 
 public sealed record GuildStateView(
     GuildBlock Block, ushort MaxMembers, byte GradeIndex, ushort Rights, IReadOnlyList<string> GradeNames, byte DepotTabs = 0, uint Coins = 0,
-    IReadOnlyList<GuildNoticeRow>? Notices = null, byte[]? Auth = null, IReadOnlyList<int>? GradePoints = null);
+    IReadOnlyList<GuildNoticeRow>? Notices = null, byte[]? Auth = null, IReadOnlyList<int>? GradePoints = null, int Point = 0, byte MemberCount = 0);
 
 public sealed record GuildMemberRow(
     ulong CharacterId,
@@ -30,7 +30,7 @@ public sealed record GuildMemberRow(
 
 public sealed record GuildVolunteerRow(ulong CharacterId, ushort Level, string Name, uint Job, DateTimeOffset AppliedAt);
 
-public sealed record GuildDetailView(uint GuildCode, string GuildName, string MasterName, int GuildPoint, int MemberCount, string Intro);
+public sealed record GuildDetailView(uint GuildCode, string GuildName, string MasterName, int GuildPoint, int MemberCount, string Intro, byte Level, string Founded, string Url);
 
 public sealed record GuildCreateRequest(string GuildName, string Intro);
 
@@ -74,6 +74,13 @@ public static class GuildFrames
     public const ushort AuthSaved = 0x2BD3;
     public const ushort PasswordChange = 0x2C47;
     public const ushort PasswordChanged = 0x2C48;
+    public const ushort HistoryRequest = 0x2C63;
+    public const ushort HistoryReply = 0x2C64;
+    public const int HistoryRequestLength = sizeof(uint);
+    public const string HistoryDateFormat = "yyyy-MM-dd HH:mm:ss.fff";
+    public const ushort GuildMemberSms = 0x2B88;
+    public const int MemberSmsHeaderBytes = 0x35;
+    public const int MemberSmsTextBytes = 0x33;
     public const ushort GuildMemo = 0x2B89;
     public const ushort GuildMemoNoGuild = 0x2B8A;
     public const ushort GuildSms = 0x2B8B;
@@ -89,6 +96,7 @@ public static class GuildFrames
     public const ushort MemberListResult = (ushort)Opcode.S2C_GUILD_MEMBER_LIST;
     public const ushort MembersRemoved = (ushort)Opcode.S2C_GUILD_MEMBERS_REMOVED;
     public const ushort MemberJoined = (ushort)Opcode.S2C_GUILD_MEMBER_JOINED;
+    public const ushort MemberLogin = 0x2C5B;
     public const ushort VolunteerListResult = (ushort)Opcode.S2C_GUILD_VOLUNTEER_LIST;
     public const ushort ForceOutResult = (ushort)Opcode.S2C_GUILD_FORCE_OUT_RESULT;
     public const ushort AnswerApplyResult = (ushort)Opcode.S2C_GUILD_ANSWER_APPLY_RESULT;
@@ -189,13 +197,16 @@ public static class GuildFrames
     public const int GreetingLength = 0x3D;
     public const int DateLength = 9;
     public const int DetailMasterNameLength = 0x23;
-    public const int DetailIntroLength = 0x43;
+    public const int DetailIntroLength = 0x65;
+    public const int DetailUrlLength = 0x43;
+    public const int DetailDateLength = DateLength;
 
     public const byte Ok = 0;
     public const byte Failed = 1;
     public const byte InGuildFlag = 1;
 
     public const byte OwnInfoNotMyCharacter = 1;
+    public const byte OwnInfoNoGuild = 2;
     public const byte OwnInfoApplying = 3;
 
     public const byte CreateExistingName = 1;
@@ -266,6 +277,8 @@ public static class GuildFrames
 
     public static string ShortDate(DateTimeOffset at) => at.ToString("yy-MM-dd", CultureInfo.InvariantCulture);
 
+    public static string LocalDate(DateTimeOffset at, TimeZoneInfo zone) => ShortDate(TimeZoneInfo.ConvertTime(at, zone));
+
     public static byte[] OwnInfoFor(uint guildCode, ulong characterId, string alias, byte gradeIndex, bool newNotice, bool inGuild, Encoding text)
     {
         ArgumentNullException.ThrowIfNull(alias);
@@ -299,7 +312,9 @@ public static class GuildFrames
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(text);
         var w = new PacketWriter(StateLength);
-        w.WriteZero(0x11);
+        w.WriteZero(0x0C);
+        w.WriteInt32(state.Point);
+        w.WriteByte(state.MemberCount);
         w.WriteUInt16(state.MaxMembers);
         w.WriteByte(state.DepotTabs);
         w.WriteUInt32(state.Coins);
@@ -455,6 +470,17 @@ public static class GuildFrames
         return w.ToArray();
     }
 
+    public static byte[] MemberLoginFor(string name, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(name.Length + 8);
+        w.WriteNulTerminated(name, text);
+        w.WriteUInt16(0);
+        w.WriteUInt32(0);
+        return w.ToArray();
+    }
+
     public static byte[] VolunteerListFor(IReadOnlyList<GuildVolunteerRow> volunteers, Encoding text)
     {
         ArgumentNullException.ThrowIfNull(volunteers);
@@ -516,10 +542,13 @@ public static class GuildFrames
         WriteText(w, detail.GuildName, GuildNameLength, text);
         WriteText(w, detail.MasterName, DetailMasterNameLength, text);
         w.WriteInt32(detail.GuildPoint);
-        w.WriteZero(0x58 - 0x40);
+        w.WriteByte(detail.Level);
+        w.WriteZero(0x4E - 0x41);
+        WriteText(w, detail.Founded, DetailDateLength, text);
+        w.WriteZero(0x58 - 0x57);
         w.WriteInt32(detail.MemberCount);
-        w.WriteZero(0xC1 - 0x5C);
         WriteText(w, detail.Intro, DetailIntroLength, text);
+        WriteText(w, detail.Url, DetailUrlLength, text);
         w.WriteUInt32(detail.GuildCode);
         w.WriteZero(DetailLength - 0x108);
         return w.ToArray();
@@ -748,6 +777,34 @@ public static class GuildFrames
         ArgumentNullException.ThrowIfNull(text);
         if (payload.Length < CreateRequestLength) return null;
         return new GuildCreateRequest(ReadText(payload, 0, GuildNameLength, text), ReadText(payload, 0x2D, IntroLength, text));
+    }
+
+    public static uint? ReadHistoryRequest(ReadOnlySpan<byte> payload) =>
+        payload.Length < HistoryRequestLength ? null : BinaryPrimitives.ReadUInt32LittleEndian(payload);
+
+    public static byte[] HistoryFor(IReadOnlyList<(string Date, string Message)> rows, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        ArgumentNullException.ThrowIfNull(text);
+        var w = new PacketWriter(1 + rows.Count * 48);
+        w.WriteByte((byte)rows.Count);
+        foreach (var (date, message) in rows)
+        {
+            w.WriteNulTerminated(date, text);
+            w.WriteNulTerminated(message, text);
+        }
+        return w.ToArray();
+    }
+
+    public static (string Text, IReadOnlyList<ulong> Targets)? ReadMemberSms(ReadOnlySpan<byte> payload, Encoding text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (payload.Length < MemberSmsHeaderBytes) return null;
+        var count = BinaryPrimitives.ReadUInt16LittleEndian(payload);
+        if (payload.Length < MemberSmsHeaderBytes + count * sizeof(ulong)) return null;
+        var targets = new ulong[count];
+        for (var i = 0; i < count; i++) targets[i] = BinaryPrimitives.ReadUInt64LittleEndian(payload[(MemberSmsHeaderBytes + i * sizeof(ulong))..]);
+        return (ReadText(payload, sizeof(ushort), MemberSmsTextBytes, text), targets);
     }
 
     public static (string TargetName, string Text)? ReadGuildMemo(ReadOnlySpan<byte> payload, Encoding text)

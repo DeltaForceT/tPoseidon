@@ -11,6 +11,8 @@ internal sealed class GhostExchangeController
     private readonly MasterEquipStatusUpgrade _master;
     private readonly Func<GhostExchangeTables> _tables;
     private readonly Func<ItemPropertyRules> _propertyRules;
+    private readonly Func<RefineTables> _refineTables;
+    private readonly IItemPropertyStore _properties;
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
     private readonly int _bagCapacity;
@@ -22,6 +24,8 @@ internal sealed class GhostExchangeController
         MasterEquipStatusUpgrade master,
         Func<GhostExchangeTables> tables,
         Func<ItemPropertyRules> propertyRules,
+        Func<RefineTables> refineTables,
+        IItemPropertyStore properties,
         IItemStore items,
         IItemParamLookup catalog,
         int bagCapacity,
@@ -30,6 +34,8 @@ internal sealed class GhostExchangeController
         _master = master ?? throw new ArgumentNullException(nameof(master));
         _tables = tables ?? throw new ArgumentNullException(nameof(tables));
         _propertyRules = propertyRules ?? throw new ArgumentNullException(nameof(propertyRules));
+        _refineTables = refineTables ?? throw new ArgumentNullException(nameof(refineTables));
+        _properties = properties ?? throw new ArgumentNullException(nameof(properties));
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _bagCapacity = bagCapacity;
@@ -140,18 +146,20 @@ internal sealed class GhostExchangeController
         }
         int slots;
         lock (_rngGate) slots = _propertyRules().MixSlots(target.Id, target.CompoundSlot, _rng);
+        var bonus = GhostExchangeRules.NeoRefineBonus(_refineTables(), target, _propertyRules().Defaults(target), level);
         var rows = new List<EquipUpgradeItem>
         {
             EquipUpgradeOperations.Delete(source),
-            EquipUpgradeOperations.Insert(target.Id, target.ObjectClass, 1, (byte)Math.Clamp(slots, 0, byte.MaxValue), source.RefineType, (byte)level),
+            EquipUpgradeOperations.Insert(target.Id, target.ObjectClass, 1, (byte)Math.Clamp(slots, 0, byte.MaxValue), (short)target.RefineType, (byte)level),
         };
-        if (await ApplyAsync(player, character.CharacterId, stats, rows).ConfigureAwait(false))
+        var created = bonus is { } refineBonus ? new List<ItemProperty> { refineBonus } : new List<ItemProperty>();
+        if (await ApplyAsync(player, character.CharacterId, stats, rows, created, source.ItemUid).ConfigureAwait(false))
         {
             Log(player, $"exchanges Neo item {source.ItemIndex} +{source.RefineLevel} for item {target.Id} +{level}");
         }
     }
 
-    private async Task<bool> ApplyAsync(InGameSessionState player, ulong characterId, tPoseidon.Core.Game.Stats.StatManager stats, IReadOnlyList<EquipUpgradeItem> rows)
+    private async Task<bool> ApplyAsync(InGameSessionState player, ulong characterId, tPoseidon.Core.Game.Stats.StatManager stats, IReadOnlyList<EquipUpgradeItem> rows, IReadOnlyList<ItemProperty>? created = null, ulong removedUid = 0)
     {
         player.UpgradeBusy = true;
         EquipStatusUpgradeResult result;
@@ -171,7 +179,16 @@ internal sealed class GhostExchangeController
         }
         stats.GrantMoney(result.RemainMoney - stats.Money, tPoseidon.Core.Game.Stats.StatChangeSource.EquipUpgrade);
         foreach (var removed in result.Items.Where(row => row.Action == EquipUpgradeAction.Delete)) player.TimedItems.Forget(removed.ItemUid);
-        await SendAsync(player, Opcode.S2C_GHOST_EXCHANGED, GhostExchangeFrames.Exchanged(result.Items.Select(EquipUpgradeOperations.ToBag).ToList())).ConfigureAwait(false);
+        if (created is { Count: > 0 })
+        {
+            var insert = result.Items.First(row => row.Action == EquipUpgradeAction.Insert);
+            _properties.Replace(insert.ItemUid, created.ToList());
+        }
+        if (removedUid != 0) _properties.Delete(removedUid);
+        var operations = created is { Count: > 0 }
+            ? EquipUpgradeOperations.ToBagWithProperties(result.Items, created)
+            : result.Items.Select(EquipUpgradeOperations.ToBag).ToList();
+        await SendAsync(player, Opcode.S2C_GHOST_EXCHANGED, GhostExchangeFrames.Exchanged(operations)).ConfigureAwait(false);
         return true;
     }
 

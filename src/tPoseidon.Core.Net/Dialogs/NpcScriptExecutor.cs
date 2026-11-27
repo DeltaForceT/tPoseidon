@@ -1004,6 +1004,7 @@ public sealed partial class NpcScriptExecutor : IJobQuests
             _monsterEntry = null;
             _savedAtDeath = null;
         }
+        _sceneState.Leave();
         Close();
     }
 

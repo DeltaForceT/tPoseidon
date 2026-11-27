@@ -18,6 +18,8 @@ public static class ImprintFrames
         return w.ToArray();
     }
 
+    public static ImprintSync SyncFor(IReadOnlyList<ActiveImprint> active, DateTimeOffset now) => new(ListOf(active, now), active.Count > 0);
+
     public static byte[] UsedWith(ActiveImprint imprint, DateTimeOffset now, BagOperation consumed)
     {
         ArgumentNullException.ThrowIfNull(imprint);
@@ -37,3 +39,5 @@ public static class ImprintFrames
         w.WriteUInt64(ClientClock.FileTime(imprint.Until));
     }
 }
+
+public readonly record struct ImprintSync(byte[] Frame, bool RecomputeStats);

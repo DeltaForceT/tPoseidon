@@ -13,7 +13,7 @@ public sealed record HitInterception(
     IReadOnlyList<HitReflection> Reflections,
     IReadOnlyList<CounterStrike> Counters);
 
-public readonly record struct HitDefender(ushort EntityId, long Ma, long Ac, long Lk, long Hv);
+public readonly record struct HitDefender(ushort EntityId, long Ma, long Ac, long Lk, long Hv, bool IsMonster = false);
 
 public static class IncomingHits
 {
@@ -31,6 +31,8 @@ public static class IncomingHits
     public const int KindUntouchable = 9;
     public const int KindUntouchableOther = 10;
 
+    public const uint FlagUntouched = 0x200;
+
     public const uint FlagReflected = 0x01;
     public const uint FlagReduced = 0x02;
     public const uint FlagBarrier = 0x04;
@@ -46,6 +48,7 @@ public static class IncomingHits
     public const int BuffCancelFlag = 0x4000;
 
     private const double KnightShare = 0.5;
+    private const double HardenShare = 0.5;
     private const double ReflectAvoidScale = 100.0;
     private const double ReflectFloor = 0.3;
     private const double ReflectCap = 0.8;
@@ -67,7 +70,12 @@ public static class IncomingHits
         var shields = new List<SkillEffect>();
         var reflections = new List<HitReflection>();
         var counters = new List<CounterStrike>();
-        foreach (var effect in effects)
+        var held = effects as IReadOnlyCollection<SkillEffect> ?? effects.ToList();
+        if (held.Any(effect => effect.IsApplied && effect.Kind.Untouchable))
+        {
+            return new HitInterception(hit with { Damage = 0, Kind = KindMiss, Flags = hit.Flags | FlagUntouched }, shields, reflections, counters);
+        }
+        foreach (var effect in held)
         {
             if (!effect.IsApplied) continue;
             var kind = effect.Kind;
@@ -81,8 +89,13 @@ public static class IncomingHits
                 if ((hit.Flags & FlagMultiHit) != 0)
                 {
                     effect.Charges = effect.Charges <= hit.Extra ? 0 : effect.Charges - hit.Extra;
+                    if (owner.IsMonster)
+                    {
+                        if (effect.Charges <= 0) effect.EndNow();
+                        continue;
+                    }
                 }
-                else if (hit.Damage == 0 || hit.Kind is KindMiss or KindGuarded || hit.Type is MagicType or OtherType || Unabsorbable(hit))
+                else if (hit.Kind is KindMiss or KindGuarded || !owner.IsMonster && (hit.Damage == 0 || hit.Type is MagicType or OtherType || Unabsorbable(hit)))
                 {
                     continue;
                 }
@@ -132,6 +145,14 @@ public static class IncomingHits
                         if (reduction > 0) hit = hit with { Damage = hit.Damage - reduction };
                     }
                     hit = hit with { Flags = hit.Flags | FlagReduced };
+                }
+                continue;
+            }
+            if (kind.HalvesHits)
+            {
+                if (!owner.IsMonster && hit.Flags == 0 && hit.Type is BasicAttackType or 0)
+                {
+                    hit = hit with { Damage = (long)(hit.Damage * HardenShare), Flags = FlagReflected };
                 }
                 continue;
             }

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text;
 
 namespace tPoseidon.Core.Game.Wedding;
 
@@ -28,9 +29,12 @@ public sealed class WeddingHall
     private readonly object _gate = new();
     private readonly HashSet<ulong> _guests = new();
     private readonly HashSet<ulong> _invited;
+    private string _groomMessage;
+    private string _brideMessage;
 
     public WeddingHall(
-        ushort zone, ulong coupleCode, ulong masterId, WeddingPartner groom, WeddingPartner bride, IEnumerable<ulong> invited, WeddingCeremony ceremony)
+        ushort zone, ulong coupleCode, ulong masterId, WeddingPartner groom, WeddingPartner bride, IEnumerable<ulong> invited, WeddingCeremony ceremony,
+        string groomMessage = "", string brideMessage = "")
     {
         ArgumentNullException.ThrowIfNull(invited);
         Zone = zone;
@@ -40,6 +44,8 @@ public sealed class WeddingHall
         Bride = bride ?? throw new ArgumentNullException(nameof(bride));
         Ceremony = ceremony ?? throw new ArgumentNullException(nameof(ceremony));
         _invited = new HashSet<ulong>(invited);
+        _groomMessage = groomMessage ?? throw new ArgumentNullException(nameof(groomMessage));
+        _brideMessage = brideMessage ?? throw new ArgumentNullException(nameof(brideMessage));
     }
 
     public ushort Zone { get; }
@@ -48,6 +54,32 @@ public sealed class WeddingHall
     public WeddingPartner Groom { get; }
     public WeddingPartner Bride { get; }
     public WeddingCeremony Ceremony { get; }
+
+    public string GroomMessage
+    {
+        get
+        {
+            lock (_gate) return _groomMessage;
+        }
+    }
+
+    public string BrideMessage
+    {
+        get
+        {
+            lock (_gate) return _brideMessage;
+        }
+    }
+
+    public void SetMessage(bool bride, string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        lock (_gate)
+        {
+            if (bride) _brideMessage = text;
+            else _groomMessage = text;
+        }
+    }
 
     public bool IsMember(ulong characterId) => characterId == Groom.CharacterId || characterId == Bride.CharacterId;
 
@@ -71,3 +103,33 @@ public sealed class WeddingHall
 }
 
 public sealed record WeddingPartner(ulong CharacterId, string Name);
+
+public static class WeddingMessageRules
+{
+    public const int BufferBytes = 0x80;
+
+    public static string Read(ReadOnlySpan<byte> payload, Encoding encoding)
+    {
+        ArgumentNullException.ThrowIfNull(encoding);
+        var end = payload.IndexOf((byte)0);
+        return end < 0 ? string.Empty : Fit(encoding.GetString(payload[..end]), encoding);
+    }
+
+    public static string Fit(string text, Encoding encoding)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(encoding);
+        var room = BufferBytes - 1;
+        if (encoding.GetByteCount(text) <= room) return text;
+        var kept = 0;
+        var bytes = 0;
+        foreach (var rune in text.EnumerateRunes())
+        {
+            var size = encoding.GetByteCount(rune.ToString());
+            if (bytes + size > room) break;
+            bytes += size;
+            kept += rune.Utf16SequenceLength;
+        }
+        return text[..kept];
+    }
+}

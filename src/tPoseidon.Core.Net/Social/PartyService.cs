@@ -178,6 +178,11 @@ public sealed class PartyService
             ClearInviteState(member);
             DropSeekerPost(outbox, characterId);
             if (member.Party is not { } party) return outbox;
+            if (party.Online.Count == 1)
+            {
+                Break(outbox, party);
+                return outbox;
+            }
             var wasMaster = party.MasterMemberId == member.MemberId;
             _depot[characterId] = new DepotEntry(party.Id, _time.GetUtcNow() + _rules.OfflineMemberKeepTime);
             party.Online.Remove(member);
@@ -211,6 +216,12 @@ public sealed class PartyService
                 if (!_parties.TryGetValue(entry.PartyId, out var party)) continue;
                 party.Offline.RemoveAll(m => m.CharacterId == characterId);
                 Broadcast(outbox, party, PartyFrames.OfflineMemberExpired, PartyFrames.Character(characterId), except: null);
+                if (party.Size < 2)
+                {
+                    Break(outbox, party);
+                    continue;
+                }
+                RefreshMirrors(outbox, party);
                 RefreshPartyPost(outbox, party);
                 ForgetIfAbandoned(outbox, party);
             }
@@ -431,6 +442,7 @@ public sealed class PartyService
                 return outbox;
             }
             Broadcast(outbox, party, PartyFrames.MemberKicked, PartyFrames.Member(memberId), except: null);
+            CancelQuestFor(outbox, party, target.CharacterId, SystemLinkFrames.QuestCancelByLeave);
             party.Online.Remove(target);
             target.Party = null;
             outbox.Order(new PartyOrder(target.CharacterId, SystemLinkFrames.OrderNotifyPartyPlayer, 0, null));
@@ -458,7 +470,11 @@ public sealed class PartyService
                 _depot.Remove(offlineCharacterId);
                 Broadcast(outbox, party, PartyFrames.OfflineMemberRemoved, PartyFrames.Character(offlineCharacterId), except: null);
                 if (party.Size < 2) Break(outbox, party);
-                else RefreshPartyPost(outbox, party);
+                else
+                {
+                    RefreshMirrors(outbox, party);
+                    RefreshPartyPost(outbox, party);
+                }
             }
             else
             {
@@ -913,14 +929,10 @@ public sealed class PartyService
             if (levels.Distinct().Count() == 1) return PartyType.Level;
             var sorted = levels.OrderBy(l => l).ToArray();
             if (Enumerable.Range(1, sorted.Length - 1).All(i => sorted[i] == (i + 1) * sorted[0])) return PartyType.MultipleLv;
-            var genders = members.Select(m => GenderOf(m.Kind)).ToArray();
-            if (genders.All(g => g is not null) && genders.Distinct().Count() == 1) return PartyType.SameGender;
+            if (members.Select(m => GenderOf(m.Kind)).Distinct().Count() == 1) return PartyType.SameGender;
             var classes = members.Select(m => ClassOf(m.Kind)).ToArray();
-            if (classes.All(c => c is not null))
-            {
-                if (Enumerable.Range(0, 4).All(c => classes.Contains((byte)c))) return PartyType.Royal;
-                if (classes.Distinct().Count() == 1) return PartyType.Type;
-            }
+            if (Enumerable.Range(0, 4).All(c => classes.Contains((byte)c))) return PartyType.Royal;
+            if (classes.Distinct().Count() == 1) return PartyType.Type;
         }
         return PartyType.Normal;
     }
@@ -932,11 +944,11 @@ public sealed class PartyService
     public static int? SpeciesOf(ushort kind) =>
         kind is >= 1 and <= TypesPerJobTier * JobTiers ? (kind - 1) % TypesPerJobTier + 1 : null;
 
-    public static byte? ClassOf(ushort kind) =>
-        SpeciesOf(kind) is int species && species <= PairedSpecies ? (byte)((species - 1) / 2) : null;
+    public static byte ClassOf(ushort kind) =>
+        SpeciesOf(kind) is int species && species <= PairedSpecies ? (byte)((species - 1) / 2) : (byte)0;
 
-    public static byte? GenderOf(ushort kind) =>
-        SpeciesOf(kind) is int species && species <= PairedSpecies ? (byte)((species - 1) % 2) : null;
+    public static byte GenderOf(ushort kind) =>
+        SpeciesOf(kind) is int species && species <= PairedSpecies ? (byte)((species - 1) % 2) : (byte)0;
 
     public static IReadOnlyList<PartyDivisionShare> LevelShares(IReadOnlyList<(ushort MemberId, ushort Level)> members)
     {
@@ -1153,7 +1165,7 @@ public sealed class PartyService
         foreach (var group in party.Online.Where(m => m.Zone != 0 && !m.Dead).GroupBy(m => m.Zone))
         {
             var members = group.Take(PartyBonusTables.MostGroupSize).ToArray();
-            var qualifies = shareFlag == 1 && members.Length >= 2;
+            var qualifies = members.Length >= 2;
             var expBonus = qualifies ? PartyBonusTables.ExpMultiplier(type, members.Length) - 1f : 0f;
             var tmBonus = qualifies ? PartyBonusTables.TmMultiplier(type, members.Length) - 1f : 0f;
             var percentOf = party.Shares.ToDictionary(s => s.MemberId, s => (int)s.Percent);
@@ -1201,7 +1213,7 @@ public sealed class PartyService
     private static byte[] MirrorFor(Party party, Member recipient)
     {
         var master = party.Online.Concat(party.Offline).FirstOrDefault(m => m.MemberId == party.MasterMemberId);
-        var others = party.Online.Where(m => !ReferenceEquals(m, recipient))
+        var others = party.Online.Where(m => !ReferenceEquals(m, recipient)).Concat(party.Offline)
             .Select(m => new PartyMirrorEntry(m.CharacterId, m.MemberId))
             .Take(SystemLinkFrames.MirrorSlots)
             .ToArray();
@@ -1265,6 +1277,7 @@ public sealed class PartyService
     private void LeaveParty(PartyOutbox outbox, Member member)
     {
         var party = member.Party!;
+        CancelQuestFor(outbox, party, member.CharacterId, SystemLinkFrames.QuestCancelByLeave);
         party.Online.Remove(member);
         member.Party = null;
         var handedOver = false;
@@ -1286,8 +1299,17 @@ public sealed class PartyService
         outbox.Add(new(member.CharacterId, PartyFrames.LeaveDone, PartyFrames.Empty()));
     }
 
+    private static void CancelQuestFor(PartyOutbox outbox, Party party, ulong characterId, uint reason)
+    {
+        if (party.Quest is not { } quest) return;
+        outbox.Order(new PartyOrder(characterId, SystemLinkFrames.OrderCancelQuest, party.Id,
+            SystemLinkFrames.EncodeQuestCancel(new PartyQuestCancel(characterId, quest.QuestId, 0, reason))));
+    }
+
     private void Break(PartyOutbox outbox, Party party)
     {
+        foreach (var member in party.Online) CancelQuestFor(outbox, party, member.CharacterId, SystemLinkFrames.QuestCancelByBreak);
+        party.Quest = null;
         DropPartyPost(outbox, party);
         Broadcast(outbox, party, PartyFrames.Broken, PartyFrames.Empty(), except: null);
         foreach (var owner in party.ShareOwners) outbox.Order(new PartyOrder(owner, SystemLinkFrames.OrderShareExp, 0, null));
@@ -1430,7 +1452,7 @@ public sealed class PartyService
         return members.Count == 0 ? (ushort)0 : (ushort)(members.Sum(m => (int)m.Level) / members.Count);
     }
 
-    private static PartyType TypeOf(Party party) => TypeOf(party.Online.Select(m => (m.Kind, m.Level)).ToArray());
+    private static PartyType TypeOf(Party party) => TypeOf(party.Online.Concat(party.Offline).Select(m => (m.Kind, m.Level)).ToArray());
 
     private static List<PartyDivisionShare> LevelShares(Party party) =>
         LevelShares(party.Online.Select(m => (m.MemberId, m.Level)).ToArray()).ToList();

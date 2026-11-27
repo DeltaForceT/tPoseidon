@@ -21,7 +21,7 @@ public sealed record PetCollectionStartRequest(
     int MapId,
     int BagCount);
 
-public sealed record PetCollectionPlan(int PetItemId, int PetLevel, PetDigPetEntry Pet, PetDigFoodEntry Food, PetDigExEntry? ExRow, bool PetDigsMines, bool FoodDigsMines)
+public sealed record PetCollectionPlan(int PetItemId, int PetLevel, PetDigPetEntry Pet, PetDigFoodEntry Food, PetDigExEntry? ExRow, bool PetDigsMines, bool FoodDigsMines, int MapId)
 {
     public TimeSpan TickPeriod => TimeSpan.FromSeconds(Food.SpeedSeconds);
 }
@@ -106,7 +106,7 @@ public static class PetCollectionRules
         if (!tables.Foods.TryGetValue(food.Id, out var feed)) return NotFood;
         if (foodSlot.Stack < 1) return Unknown;
         var candidate = new PetCollectionPlan(pet.Id, petLevel, collector, feed, tables.ExItems.GetValueOrDefault(pet.Id),
-            DigsMines(pet), DigsMines(food));
+            DigsMines(pet), DigsMines(food), request.MapId);
         var areaCode = CheckArea(tables, request.MapId, candidate);
         if (areaCode != Ok) return areaCode;
         if (IsFull(request.BagCount, collector)) return BagFull;

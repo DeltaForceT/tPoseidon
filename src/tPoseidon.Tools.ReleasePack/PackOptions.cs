@@ -1,6 +1,6 @@
 namespace tPoseidon.Tools.ReleasePack;
 
-internal sealed record PackOptions(string Version, IReadOnlyList<string> Rids, string? Output, string? Cache)
+internal sealed record PackOptions(string Version, IReadOnlyList<string> Rids, string? Output, string? Cache, string? SignKey)
 {
     public static readonly IReadOnlyList<string> AllRids = new[] { "win-x64", "linux-x64", "linux-arm64", "osx-x64", "osx-arm64" };
 
@@ -9,6 +9,7 @@ internal sealed record PackOptions(string Version, IReadOnlyList<string> Rids, s
         string? version = null;
         string? output = null;
         string? cache = null;
+        string? signKey = null;
         var rids = new List<string>();
         for (var i = 0; i < args.Count; i++)
         {
@@ -31,6 +32,9 @@ internal sealed record PackOptions(string Version, IReadOnlyList<string> Rids, s
                     break;
                 case "--cache":
                     cache = value;
+                    break;
+                case "--sign-key":
+                    signKey = value;
                     break;
                 default:
                     return null;
@@ -58,12 +62,14 @@ internal sealed record PackOptions(string Version, IReadOnlyList<string> Rids, s
             return null;
         }
 
-        return new PackOptions(version, rids, output, cache);
+        return new PackOptions(version, rids, output, cache, signKey);
     }
 
     public static void PrintUsage()
     {
-        Console.Error.WriteLine("Usage: dotnet run --project src/tPoseidon.Tools.ReleasePack -- --version <0.55.0-beta> [--rid all|win-x64,linux-x64,...] [--output <folder>] [--cache <folder>]");
+        Console.Error.WriteLine("Usage: dotnet run --project src/tPoseidon.Tools.ReleasePack -- --version <0.55.0-beta> [--rid all|win-x64,linux-x64,...] [--output <folder>] [--cache <folder>] [--sign-key <release-key.json>]");
+        Console.Error.WriteLine("       ... -- make-key --output <folder outside the repository>");
+        Console.Error.WriteLine("       ... -- sign --key <release-key.json> --input <folder with the packages> [--output <folder>]");
         Console.Error.WriteLine($"Runtime identifiers: {string.Join(", ", AllRids)}");
     }
 }

@@ -16,6 +16,7 @@ public static class NpcFunctionFrames
     public const ushort ZoneCommand = 0x03AC;
     public const string ReEnterRemainCommand = "CMD_PPZ_RE_ENTER_REMAIN";
     public const string ZoneClosingCommand = "CMD_ZONECLOSING_NOTIFY";
+    public const string PartyZoneBossTalkCommand = "CMD_PARTYZONEBOSS_TALK";
 
     public static ushort? GuildWindow(int functionId) => functionId switch
     {
@@ -44,6 +45,15 @@ public static class NpcFunctionFrames
     public static byte[] ReEnterRemain(int minutes) => ZoneCommandBody(ReEnterRemainCommand, minutes);
 
     public static byte[] ZoneClosingNotify(int secondsLeft) => ZoneCommandBody(ZoneClosingCommand, secondsLeft);
+
+    public static byte[] PartyZoneBossTalk(int monsterType, bool spawned)
+    {
+        var w = new tPoseidon.Core.Net.PacketWriter(PartyZoneBossTalkCommand.Length + 6);
+        w.WriteNulTerminated(PartyZoneBossTalkCommand, System.Text.Encoding.ASCII);
+        w.WriteUInt32((uint)Math.Max(0, monsterType));
+        w.WriteByte(spawned ? (byte)1 : (byte)0);
+        return w.ToArray();
+    }
 
     private static byte[] ZoneCommandBody(string command, int value)
     {

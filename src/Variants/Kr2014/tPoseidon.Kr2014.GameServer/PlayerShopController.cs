@@ -11,6 +11,7 @@ internal sealed class PlayerShopController
 {
     private readonly MasterTrade _master;
     public Func<Item, IReadOnlyList<ItemProperty>>? FullProperties { get; init; }
+    public Func<InGameSessionState, int, Task>? SeedEvent { get; init; }
 
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
@@ -18,6 +19,8 @@ internal sealed class PlayerShopController
     private readonly Func<Item, bool> _exchangeable;
     private readonly Func<ushort, ushort, InGameSessionState?> _playerOnMap;
     private readonly Func<ushort, int> _zoneType;
+    private readonly Func<ushort, ZoneGeometry?> _geometry;
+    private readonly Func<InGameSessionState, (int X, int Y)> _position;
     private readonly Func<InGameSessionState, Opcode, byte[], Task> _sendToArea;
     private readonly Action<InGameSessionState> _stopMover;
     private readonly Func<IReadOnlyCollection<InGameSessionState>> _players;
@@ -34,6 +37,8 @@ internal sealed class PlayerShopController
         Func<Item, bool> exchangeable,
         Func<ushort, ushort, InGameSessionState?> playerOnMap,
         Func<ushort, int> zoneType,
+        Func<ushort, ZoneGeometry?> geometry,
+        Func<InGameSessionState, (int X, int Y)> position,
         Func<InGameSessionState, Opcode, byte[], Task> sendToArea,
         Action<InGameSessionState> stopMover,
         Func<IReadOnlyCollection<InGameSessionState>> players,
@@ -48,6 +53,8 @@ internal sealed class PlayerShopController
         _exchangeable = exchangeable ?? throw new ArgumentNullException(nameof(exchangeable));
         _playerOnMap = playerOnMap ?? throw new ArgumentNullException(nameof(playerOnMap));
         _zoneType = zoneType ?? throw new ArgumentNullException(nameof(zoneType));
+        _geometry = geometry ?? throw new ArgumentNullException(nameof(geometry));
+        _position = position ?? throw new ArgumentNullException(nameof(position));
         _sendToArea = sendToArea ?? throw new ArgumentNullException(nameof(sendToArea));
         _stopMover = stopMover ?? throw new ArgumentNullException(nameof(stopMover));
         _text = text ?? throw new ArgumentNullException(nameof(text));
@@ -65,6 +72,16 @@ internal sealed class PlayerShopController
             Log(keeper, $"shop refused on map {keeper.MapId} (zone type {_zoneType(keeper.MapId)})");
             await SendAsync(keeper, Opcode.S2C_PLAYER_SHOP_OPEN_REFUSED, PlayerShopFrames.Code(PlayerShopRules.WrongZone)).ConfigureAwait(false);
             return;
+        }
+        if (_geometry(keeper.MapId) is { } geometry)
+        {
+            var (keeperX, keeperY) = _position(keeper);
+            if (PlayerShopPlacement.RefusalCode(geometry, keeperX, keeperY) is { } placement)
+            {
+                Log(keeper, $"shop refused on map {keeper.MapId} at {keeperX},{keeperY} (code {placement})");
+                await SendAsync(keeper, Opcode.S2C_PLAYER_SHOP_OPEN_REFUSED, PlayerShopFrames.Code(placement)).ConfigureAwait(false);
+                return;
+            }
         }
         keeper.Stall = new PlayerShopStall(keeper.PlayerEntityId);
         await SendAsync(keeper, Opcode.S2C_PLAYER_SHOP_OPENED, Array.Empty<byte>()).ConfigureAwait(false);
@@ -147,6 +164,12 @@ internal sealed class PlayerShopController
     {
         ArgumentNullException.ThrowIfNull(buyer);
         if (buyer.Stall is not null || buyer.VisitingKeeper is not null || !PlayerShopFrames.TryReadVisit(payload.Span, out var keeperId)) return;
+        if (!PlayerShopRules.VisitorMayEnter(buyer.Posture.State))
+        {
+            Log(buyer, $"visit refused while {buyer.Posture.State}");
+            await SendAsync(buyer, Opcode.S2C_PLAYER_SHOP_VISIT_REFUSED, PlayerShopFrames.Code(PlayerShopRules.VisitRefused)).ConfigureAwait(false);
+            return;
+        }
         var keeper = keeperId == 0 ? null : _playerOnMap(buyer.MapId, keeperId);
         if (keeper is not { Stall: { } stall, Character: { } keeperCharacter })
         {
@@ -222,6 +245,7 @@ internal sealed class PlayerShopController
             await SendAsync(buyer, Opcode.S2C_PLAYER_SHOP_BOUGHT, PlayerShopFrames.Bought(bought.Money, Operation(bought.Changes[0]))).ConfigureAwait(false);
             await SendAsync(keeper, Opcode.S2C_PLAYER_SHOP_SOLD, PlayerShopFrames.Sold(paid.Money, purchase.Count, Operation(paid.Changes[0]))).ConfigureAwait(false);
             Log(buyer, $"buys item {purchase.ItemId} x{purchase.Count} from 0x{purchase.KeeperId:X4} for {total}");
+            if (SeedEvent is { } boughtEvent) await boughtEvent(buyer, tPoseidon.Core.Game.SoulSeed.SoulSeedRules.PlayerShopBuyEvent).ConfigureAwait(false);
             Leave(buyer);
         }
         finally
@@ -407,6 +431,7 @@ internal sealed class PlayerShopController
                 PlayerShopSearchFrames.Bought(bought.Money, Operation(bought.Changes[0]), buy.WireUid, (ushort)(listed.Count - buy.Count))).ConfigureAwait(false);
             await SendAsync(keeper, Opcode.S2C_PLAYER_SHOP_SOLD, PlayerShopFrames.Sold(paid.Money, buy.Count, Operation(paid.Changes[0]))).ConfigureAwait(false);
             Log(buyer, $"buys item {listed.ItemId} x{buy.Count} from 0x{buy.KeeperId:X4} through the search for {buy.TotalPrice}");
+            if (SeedEvent is { } searchBoughtEvent) await searchBoughtEvent(buyer, tPoseidon.Core.Game.SoulSeed.SoulSeedRules.PlayerShopBuyEvent).ConfigureAwait(false);
         }
         finally
         {

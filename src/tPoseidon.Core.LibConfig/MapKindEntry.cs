@@ -37,6 +37,8 @@ public readonly record struct MapKindEntry(int Id, int Type, int Class, int Opti
 
     public bool RefillsMonsters => !(Class == ParallelClass && Group == MonsterQuestGroup);
 
+    public bool RefillsBosses => RefillsMonsters && !IsPartyRoom;
+
     public bool AllowsLoverMove => Class != NoLoverMoveClass && (Option & NoLoverMoveOption) == 0;
 
     public bool AllowsRebirthItem =>

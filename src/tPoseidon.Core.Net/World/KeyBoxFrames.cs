@@ -4,6 +4,7 @@ namespace tPoseidon.Core.Net.World;
 
 public static class KeyBoxFrames
 {
+    public const ushort CloseRequest = 0x0515;
     public const int OpenRequestSize = sizeof(ulong);
     public const int ConfirmRequestSize = 2 * sizeof(ulong);
 

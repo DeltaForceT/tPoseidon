@@ -56,6 +56,12 @@ public static class CompoundRules
         return roll100() < level ? 40 : roll100() < level ? 30 : roll100() < level ? 20 : 10;
     }
 
+    public static int Percent(CompoundRecipe? recipe, int stat, Random rng) =>
+        Percent(recipe, stat, () => KrRand.Below(rng, 100));
+
+    public static CompoundRoll? Roll(byte mode, int percent, int count, Random rng) =>
+        Roll(mode, percent, count, () => KrRand.Below(rng, 100));
+
     public static int Percent(CompoundRecipe? recipe, int stat, Func<int> roll100) =>
         recipe is null ? 0 : Math.Min(MaxPercent, recipe.Probability + Bonus(stat, roll100));
 

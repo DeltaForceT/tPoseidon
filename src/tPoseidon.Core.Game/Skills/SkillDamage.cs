@@ -6,7 +6,7 @@ public readonly record struct SkillAttacker(long Ap, long Ac, long Ma, long Lk, 
 
 public readonly record struct SkillTarget(long Dp, long Hv, long Md, long Lk, long Hp, int Level, int Resist, long MaxHp = 0, long BaseDp = 0, double DamageShare = 1.0);
 
-public readonly record struct SkillHit(long Damage, int Type, int Kind, int Element, long Healed, int Flags = 0);
+public readonly record struct SkillHit(long Damage, int Type, int Kind, int Element, long Healed, int Flags = 0, ushort GuardLeft = 0);
 
 public static class SkillDamage
 {
@@ -15,6 +15,7 @@ public static class SkillDamage
 
     public const int KindHit = 0;
     public const int KindMiss = 1;
+    public const int KindGuarded = 2;
     public const int KindCritical = 3;
     public const int KindFinishingFlag = 0x80;
     public const int KindMask = 0x7F;
@@ -75,6 +76,8 @@ public static class SkillDamage
         return AfterResist(WithDarkBonus(MagicDamage(power, magicAttack, target.Md), attacker, element), MagicType, KindHit, target, element);
     }
 
+    public static SkillHit Guarded(SkillHit hit) => new(0, hit.Type, KindGuarded, 0, 0);
+
     public static bool IsCritical(SkillAttacker attacker, SkillTarget target, Random rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
@@ -88,7 +91,7 @@ public static class SkillDamage
             : damage;
 
     public static long MagicDamage(long power, long magicAttack, long magicDefence) =>
-        Math.Max(0L, WireLimits.Saturate((float)(power * (magicAttack / MagicAttackScale)) - (float)(magicDefence * MagicDefenceShare)));
+        Math.Max(0L, WireLimits.Saturate((double)(float)(power * (magicAttack / MagicAttackScale)) - (double)(float)(magicDefence * MagicDefenceShare)));
 
     private static long SaturatingAdd(long left, long right) =>
         right > 0 && left > long.MaxValue - right ? long.MaxValue : left + right;

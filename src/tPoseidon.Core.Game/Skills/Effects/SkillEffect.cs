@@ -49,6 +49,11 @@ public sealed class SkillEffect
 
     public void EndNow() => EndRequested = true;
 
+    public void CasterChecked(bool casterAlive)
+    {
+        if (Kind.EndsWithCaster && !HeldByAnother && !casterAlive) EndRequested = true;
+    }
+
     public bool EndsWithKill => !Kind.EndsWithOwner;
 
     public void OwnerDied()

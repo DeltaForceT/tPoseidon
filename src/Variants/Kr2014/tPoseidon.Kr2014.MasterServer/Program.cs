@@ -14,43 +14,12 @@ void Log(string message) => Console.WriteLine($"{LogTag} {message}");
 
 var bootTime = DateTimeOffset.UtcNow;
 
-ZoneRoutingTable? zoneTable = null;
-IniFile? masterIni = null;
-{
-    var iniPath = ServerIniLocator.Resolve(ServerIniLocator.ServerKind.Master, ServerIniLocator.Variant.Kr2014);
-    var jsonPath = RepoRoot.Data("master-zone-routing.json");
-    if (File.Exists(iniPath))
-    {
-        try
-        {
-            masterIni = IniFile.LoadFromFile(iniPath);
-            zoneTable = ZoneRoutingTable.LoadFromIni(masterIni);
-            Log($"MasterServer.ini loaded from {iniPath}: {zoneTable.Count} zone routes parsed");
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            Log($"MasterServer.ini load FAILED ({ex.GetType().Name}: {ex.Message}); falling through to JSON");
-            masterIni = null;
-            zoneTable = null;
-        }
-    }
-    if (zoneTable is null && File.Exists(jsonPath))
-    {
-        try
-        {
-            zoneTable = ZoneRoutingTable.LoadFromFile(jsonPath);
-            Log($"zone-routing JSON loaded from {jsonPath}: {zoneTable.Count} explicit zones, default=idx{zoneTable.DefaultServerIndex}");
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            Log($"zone-routing JSON load FAILED ({ex.GetType().Name}: {ex.Message}); falling back to legacy odd/even stub");
-        }
-    }
-    if (zoneTable is null)
-    {
-        Log("no zone-routing config found; using legacy odd/even stub (gserver1=odd, gserver2=even)");
-    }
-}
+var zoneLoad = ZoneRoutingConfig.Load(
+    ServerIniLocator.Resolve(ServerIniLocator.ServerKind.Master, ServerIniLocator.Variant.Kr2014),
+    RepoRoot.Data("master-zone-routing.json"),
+    Log);
+var zoneTable = zoneLoad.Table;
+var masterIni = zoneLoad.MasterIni;
 
 var expectedSiblingPasswords = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 var uniqueItemControl = false;
@@ -79,10 +48,7 @@ if (masterIni is not null)
     Log($"inter-server password registry: {expectedSiblingPasswords.Count} sibling(s) loaded; mesh-login enforcement {(expectedSiblingPasswords.Count > 0 ? "ON" : "OFF")}");
 }
 
-ServerIdentity ResolveGameServer(ushort zoneId) =>
-    zoneTable is not null
-        ? zoneTable.ResolveGameServer(zoneId)
-        : ZoneRouter.ResolveGameServer(zoneId);
+ServerIdentity ResolveGameServer(ushort zoneId) => ZoneRoutingConfig.ResolveGameServer(zoneTable, zoneId);
 
 IGuideHistoryStore guideHistoryStore = new InMemoryGuideHistoryStore();
 IQuestStore questStore = new InMemoryQuestStore();

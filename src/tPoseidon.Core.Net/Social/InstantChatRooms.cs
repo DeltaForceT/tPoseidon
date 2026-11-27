@@ -38,10 +38,11 @@ public sealed class InstantChatRooms
     private readonly Dictionary<ushort, Room> _rooms = new();
     private readonly Dictionary<ulong, ushort> _roomOf = new();
     private readonly Dictionary<ulong, PendingJoin> _pending = new();
-    private ushort _lastRoomId = LobbyRoomId;
+    private readonly ChatRoomIdIssuer _ids;
 
-    public InstantChatRooms(Encoding text, ushort makeLimitLevel, ushort joinLimitLevel)
+    public InstantChatRooms(Encoding text, ushort makeLimitLevel, ushort joinLimitLevel, ChatRoomIdIssuer? ids = null)
     {
+        _ids = ids ?? new ChatRoomIdIssuer(LobbyRoomId);
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _makeLimitLevel = makeLimitLevel;
         _joinLimitLevel = joinLimitLevel;
@@ -403,6 +404,7 @@ public sealed class InstantChatRooms
             outbox.Orders.Add(StateOrder(member.CharacterId, master: null));
         }
         _rooms.Remove(room.Id);
+        _ids.Release(room.Id);
         outbox.Notes.Add($"room {room.Id} '{room.Title}' closed");
     }
 
@@ -424,21 +426,5 @@ public sealed class InstantChatRooms
         return outbox;
     }
 
-    private ushort? NextRoomId()
-    {
-        var start = _lastRoomId;
-        var candidate = start;
-        do
-        {
-            candidate++;
-            if (candidate is 0 or LobbyRoomId) continue;
-            if (!_rooms.ContainsKey(candidate))
-            {
-                _lastRoomId = candidate;
-                return candidate;
-            }
-        }
-        while (candidate != start);
-        return null;
-    }
+    private ushort? NextRoomId() => _ids.Issue();
 }

@@ -13,7 +13,7 @@ public static class ProfileViewRules
     public const int ResistSlots = 22;
     public const int GrowthGroups = 4;
     public const uint UnknownPlayerCode = 1;
-    public const byte CoverLetterRefusedCode = 1;
+    public const uint CoverLetterRefusedCode = 1;
     public const byte Apostrophe = 0x27;
     public const byte ApostropheReplacement = 0x60;
     public const int MostCollectionRecords = byte.MaxValue;

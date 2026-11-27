@@ -2,6 +2,150 @@
 
 Every release is listed here, newest first. Versions look like `0.MINOR.PATCH-beta`; [BETA.md](docs/beta/BETA.md) explains what the numbers mean. Back up your database before every update. A release that changes the database says so at the top.
 
+## 0.90.0-beta
+
+This release adds updating from the panel with signed releases, channel chat rooms, party boss rooms, a longer card battle and a large round of fixes found by reading the KR Server again. Almost every report below comes from kurotabi-dev, who went through the game server, the system server and the client one system at a time. Thank you, kurotabi-dev. This release changes the database: migration 098 runs by itself when the server starts. If two characters already share a name (compared without regard to capital letters), the one that was made later gets a number added to the end of its name and the change is written to the name history, then names are unique from there on. Back up your database before you update; the updater also backs it up before it replaces anything.
+
+### Added
+
+- Update from the panel. The panel looks at the tPoseidon releases on GitHub when it starts and every six hours. When a newer release exists, a bar shows what is new with Update now and Later. The updater downloads the package for your system, checks it against the signed checksum list, warns the players in game with a countdown (5 minutes by default), stops the servers, backs up the database, swaps the program files and starts the new version. Your own files are never replaced: tposeidon.json, server-data, log, backups, updates, db, pgsql, run and the launcher key and history. If the new version does not come up, the old program and the database backup are put back and the panel tells you. Open the panel menu and choose Updates > Update settings to pick how it works: notify only, one click (the default) or automatic at an hour you choose, the Stable or Beta channel, the countdown, and the game master character that sends the notice. Servers without the panel use `tposeidon update check`, `tposeidon update install`, `tposeidon update status` and `tposeidon update recover`. The page is [docs/install/updating.md](docs/install/updating.md).
+- Signed releases. Every release now carries `SHA256SUMS` and `SHA256SUMS.sig`. The signature proves the checksum list comes from the tPoseidon release key, whose public half is built into the panel, so an update that does not match is refused before anything on your computer changes. People who build their own packages can make a key and sign with `make-key`, `sign` and `--sign-key` of the ReleasePack tool; the steps are in the same page.
+- Channel chat rooms (issue 373, reported by kurotabi-dev): the make button of the channel chat window only closed the window. Rooms now work as in the original: the list, making a room with a title, a limit and a password, entering, chatting, leaving, the master handing the room over or closing it, kicking, and the block list, for the room kinds 2 to 6. A character below the level needed to make a room is refused with the original message, and a player can only be in one room at a time. Instant rooms and channel rooms share one room number counter so they never clash.
+- Party boss rooms (issue 23, suggested by kurotabi-dev, reopened by him): a party that changes zone keeps its party, so all members now land in the same copy of the boss room. The boss talk panel shows when a party boss appears and when it falls.
+- Card battle goes on as in the original (issues 366, 367, 368, 394 and 395, found in the source by kurotabi-dev): a battle that is still tied after the fifth card goes on with extra cards, and the winner's card is made by the card generator instead of copying a card of the loser's deck. After a battle both players stay together and play again, until one of them reserves the exit or eight battles are played. Every step has a 40 second limit and the waiting player is told when it runs out. Disconnecting from a battle from the third round on is counted, so the over-dis limit can apply.
+- Soul Seed events: the Soul Seed now gathers points from the same actions as on the KR Server. Spending stat points, critical hits within twenty levels, being missed or blocked, killing a boss, using items that carry the seed option, dying, spending bullets and throwing items, refining, maturing compounds, drill results, starting a crazy drill, buying and selling in shops, exchanges, compounding, opening a camp, viewing a profile and picking up money all add points. The points are saved when you leave, not only for every full 1000, a seed is no longer reloaded over the points of the live session, the rare type check and the growth rules follow the original order, and the angel's return message raises its own event.
+- Online guild members are told when another member comes online.
+- Level-up gift mails now reach the second job Cat, Raccoon and Polar Bear characters.
+
+### Fixed
+
+#### Parties and party quests
+
+- A party was not broken when its members logged out (issue 329, kurotabi-dev): the last member to leave now breaks it, and so does an offline member whose keep time runs out when that leaves fewer than two.
+- Party follow never stopped because of distance (issue 330, kurotabi-dev): it now stops when the followed player is out of sight and walks the route one leg at a time, so the client draws the same walk the server holds.
+- A party member was sometimes shown grey (offline) and without a level while online (issue 344, kurotabi-dev): a logout reported by the game server the character just left no longer marks the member as away.
+- Party experience (issues 350, 351 and 352, kurotabi-dev): with experience sharing set to off the party type bonus (for example BEGINNER +30%) no longer drops to 0, the experience from drilling is shared with the party, and the party type is decided from every member, offline ones included.
+- A Polar Bear has a class and a gender in the party type check (issue 353, kurotabi-dev), so parties with one can be Same Gender, Royal or Type.
+- Party quests (issues 354 to 359, kurotabi-dev): a quest cannot be started while a member is offline or in another map, so one character can no longer run it alone. A member who still holds a quest that is not reported yet keeps the party from starting another one, and the client is told it is busy. A running quest is cancelled when the party breaks up or when a member leaves or is kicked, and the rest keep it when only one member leaves. The master can cancel a running quest with the x button. When the time runs out the client is told, so the quest leaves the list and the progress window closes. A member who logs out and back in during a quest gets the progress window again.
+
+#### Guilds
+
+- A newly created guild showed on the character only after logging in again (issue 337, kurotabi-dev): the master now gets the guild at once.
+- The guild window and the guild detail window showed wrong or empty values (issue 339, kurotabi-dev): the guild point, the member count, the level, the founding date, the introduction and the cafe address are now where the client reads them.
+- A character without a guild got no apply button in the guild detail window (issue 340, kurotabi-dev).
+- The full guild list showed garbage in every column (issue 341, kurotabi-dev): every row now has the code, point, name, master, master level, founding date, member count and wins in the places the client reads, and dates are shown in the server's local time.
+- A guild memo written from the member management window never arrived (issue 342, kurotabi-dev): it is delivered to each listed member and the sender gets the guild sms point.
+- The history button in the guild detail window did nothing (issue 343, kurotabi-dev): it now shows the guild log.
+
+#### Card battle
+
+- The requesting client crashed when the other player accepted, and a sitting character could start a battle (issues 364 and 365, kurotabi-dev): the game server now checks both players first, the reply carries the player's money and entity id, and making a battle answers the requester with its own record before the other player's answer.
+- A player in a card battle, a shop keeper or a shop visitor is refused for a card battle and a trade (issue 376, kurotabi-dev).
+- The record sent to the client had its values in the wrong places (issue 369, kurotabi-dev): it now carries win points, wins, battles, losses, grade, dis, special dis and the two daily counts.
+- Win points never changed, so the grade and the ranking never moved (issue 370, kurotabi-dev): the winner gains 3 and the loser loses 2, adjusted by the grade gap, never below 0, and nothing is given at the daily limit.
+- The daily limits were never applied (issue 371, kurotabi-dev): the over-dis flag and the no-experience flag are set from the stats loaded when the battle starts.
+- Four replies were never sent (issue 372, kurotabi-dev): request sent, deck accepted, player left and player disconnected.
+
+#### My Camp, player shops and trading
+
+- Out from My Camp left the camp invisible (issues 208 and 333, reported on Discord by Dumb, and again by kurotabi-dev, who found the cause): the camp house was announced with the packet for a player appearing after a warp. It now uses the typed object packet, so the client creates the camp, and the owner who leaves with Out sees his standing camp, can enter it and can close it.
+- A My Camp could be opened right next to a portal or an NPC, but was refused in places with no portal or NPC nearby (issue 377, kurotabi-dev): the refusal now follows the original areas, with code 6 near a portal and the new code 7 near an NPC, shop or skill shop.
+- A My Camp could be opened on the O and X floors of the OX quiz place (issue 378, kurotabi-dev) and by a sitting character (issue 379, kurotabi-dev). Both are refused now, and a sitting or lying player cannot enter a camp either.
+- A player shop's sign was shown only to players who saw it being opened (issue 335, kurotabi-dev): the sign is now part of the player's appear data, so anyone who arrives later sees it.
+- A player shop could be opened right next to a portal, an NPC, a shop or a skill shop (issue 374, kurotabi-dev).
+- A sitting character could visit a player shop and then could not walk after leaving it (issue 375, kurotabi-dev).
+- A trade could be requested from a player who runs or visits a player shop (issue 376, kurotabi-dev).
+- The monster quest time limit kept running while My Shop was open (issue 397, kurotabi-dev).
+
+#### Logging in, maps and the world
+
+- During a map change the player could still be hit on the old map (issue 326, kurotabi-dev): a player who is loading the next map is out of reach of the monsters of the old one, so he can no longer die while loading.
+- Missions from Antares did not run (issue 327, kurotabi-dev): the mission is carried across the warp, so the waves, the timer, the result and the trip back work.
+- Pressing Z again and again never picked up an item that was a few steps away (issue 328, kurotabi-dev): a repeated request keeps the walk that is already running.
+- A player who logged out vanished at once (issue 346, kurotabi-dev): he now leaves with the warp effect.
+- Two characters on different accounts could have the same name (issue 348, kurotabi-dev): names are unique across all accounts, and characters that already share a name are renamed with a number at the end by migration 098.
+- After logging in on a map that the other game server hosts the player was alone on a separate copy of the map (issue 349, kurotabi-dev): the login is handed to that game server.
+- /시세 (item price) knew only the trades made since the system server started (issue 338, kurotabi-dev): the price board is saved and loaded again.
+- A character without a guardian was told the guardian soul gauge state (issue 345, kurotabi-dev).
+- A dropped item stayed reserved for its owner after the owner left the map (issue 363, kurotabi-dev): the reservation ends when the owner leaves.
+- Imprints (issues 412 and 419, kurotabi-dev): the imprint list is sent on login and map change even when empty, so switching to a character without an imprint clears the previous character's, and expiry also runs for characters who carry imprints or a Shadow World reward bonus but no timed items.
+- Expired Shadow World reward bonuses are dropped while the character stays online, and the stats are recalculated (issue 413, kurotabi-dev).
+- Current HP and MP are clamped when a Soul Seed buff or a skill effect that raised the maximum ends (issue 414, kurotabi-dev).
+- After the Episode 6 ending scene the mouse cursor was gone and the game could not be controlled (issue 296, kurotabi-dev): the end of the scene is answered when the new game connection takes over after the zone change.
+- Fiesta (issues 404 and 418, reported by LHH295 and kurotabi-dev): players get the 10 minute and 5 minute notices before a Fiesta opens, and when it starts and ends. Using a Fiesta ticket while the Fiesta zones are closed no longer locks the client, and a refused use of a treasure map, a teleport map or a soul potion answers the client too.
+
+#### Drilling and treasure maps
+
+- While drilling, the idle motion started and ended the drilling motion (issue 276, kurotabi-dev).
+- The item detection scrolls and their EV versions could not be used (issue 286, kurotabi-dev): they now list the buried items around where they are used.
+- Items that an active quest needs are dug up at the quest rate (issue 386, kurotabi-dev).
+- A treasure map's spot could be dug with a drill that cannot reach the map's depth (issue 387, kurotabi-dev).
+- A treasure map's spot did not move when the player entered its map again (issue 388, kurotabi-dev).
+- A normal dig can be replaced by an item of an active drop event, as in the original (issue 389, kurotabi-dev).
+- After using a skill while drilling the character could not drill any more (issue 390, kurotabi-dev), and the drill sometimes stopped working for no clear reason (issue 392, reported on Discord by Sky): a drill that ends without a dig in progress is answered with the nothing-found result.
+- Going through a treasure map's crevice moved the player at once and cut the warp effect (issue 393, kurotabi-dev): the zone change now comes 2 seconds after the answer.
+- Surprise spot treasure (issues 415 and 416, kurotabi-dev): the reward count uses the Daily Fortune value of whole elapsed days with the weekday parameter, it includes the Polar Bear, and the drops land on free walkable cells 4 to 8 cells from the digger instead of on blocked tiles.
+- Pet collection drew from the map the player was on now, not from where it was started, so in a town the pet found nothing (issue 396, kurotabi-dev).
+
+#### Monsters and bosses
+
+- Any number of monsters could attack one player at the same time (issue 35, kurotabi-dev): every weak swing now counts toward the attacker limit, misses included, and a monster starts counting again with each fight.
+- The advanced Harcon turret used only a fast normal attack (issue 84, kurotabi-dev): every arrow of a Shower of Arrows volley is now sent, even after the target has died.
+- The Electric Field debuff icon never went away and several fields stacked on one player (issue 215, kurotabi-dev): one field at a time stays on a player and its icon is removed when it ends.
+- Guardians always did 0 damage (issue 257, kurotabi-dev): empty stat points are filled from the base row of the owner's level, as in the original.
+- The boss skill M Guard did not guard against players and the client was not told (issue 263, kurotabi-dev): the charges left reach the hit result, and a guarded hit is blocked, magic included, and is not reflected.
+- Nepetri defence on map 616: the statue's life gauge showed only part of the damage (issue 268, kurotabi-dev): Harcon monsters have the spare life bars of the original class.
+- The memory puzzle and the slide puzzle of the Tabasco boss room started wrong (issues 269 and 270, kurotabi-dev): the statues are held until the countdown ends, appear with their birth frame, and the result is shown before the zone change.
+- When a skill such as Hammer Wheel killed the target of a normal attack while the player was walking to it, the client stayed in the attack (issue 282, kurotabi-dev): the attack order ends.
+- 어둠에 잠식된 돈 주반니 (monster 2962) (issue 293, reopened by kurotabi-dev): the KR monster attack posts one hit per swing and the KR client's own picture of the monster has no hit marks, so it lands one hit per swing like every other monster. The eight hits came from the Japanese data. `HitsPerSwing` in `monster_overrides.json` still sets any count on your own server.
+- The warp circle of the monster skill M Warp stayed on the screen after it fired (issue 295, kurotabi-dev, reopened): it now ends like every other effect, and so does the self-destruct circle of M Suicide.
+- The escort NPC of scenario quest 1269 (issue 297, kurotabi-dev, reopened): aggressive monsters in an escort zone take the escorted NPC as their target before any player, so the escort can fail as in the original.
+- 도플갱어 (2633) swung without the wind-up of its attack (issue 331, kurotabi-dev): its hit result now carries the value the client uses to play it.
+- Bosses (issues 380, 381, 382, 384 and 385, kurotabi-dev): they run out of MP so their heal and boss skills stop, they use the later skills of their boss table in a round, M Bloodsucker heals the right amount and across a gauge bar, boss skills wait their CoolTime, and M Buff Canceler works on the first six players in range instead of nothing when more are present.
+- A party zone boss came back right after it was killed and could kill the player while the zone moved them out (issue 383, kurotabi-dev): it spawns once and is not refilled.
+- The monster skill M Impelling Rage (5124) had no effect (issue 391, kurotabi-dev): it now runs its charge, damage and push.
+- Monster debuffs such as M Guard Break did not end when the casting monster died (issue 402, kurotabi-dev), and the three seconds of protection after entering a zone did not apply to monster skills (issue 403, kurotabi-dev).
+- Melee attacks and Magic Soul sometimes killed monsters without the death animation (issue 361, reported on Discord by Dumb): the server no longer sends a remove packet for a killed monster, as the original does, and keeps the corpse for 2 seconds so the client can finish its fade.
+- Deadly Fen and the other field skills look only at the first victims of the area, track a victim only when its slow starts, and end the slow of every tracked victim when the field ends.
+- The guardian wind rune 12000 names the guardian first and the monster second in its effect, and a rune cast waits its cooldown unchanged. A guardian that finishes hatching is put on the map at once and its soul status is synced.
+
+#### Combat and skills
+
+- The critical hit that follows a missed normal attack was cut by the monster's resistances, but in the original it ignores them (issue 398, kurotabi-dev).
+- Skills in PvP (issues 399 and 401, kurotabi-dev): Shield Breaker and the other hostile skills (the debuffs, the direct attacks, and the ground, field, mine and area skills) can target and affect other players, and defensive buffs such as Bunker, Shield of Heaven, Guard, Bodyguard, Sumo Suit, Mana Reflector, Dark Barrier, the elemental blessings and Hinder Snare now act on a player who is hit.
+- Magic skill damage could be one point too high (issue 400, kurotabi-dev): the defence term is taken off the attack term before the number is cut to a whole.
+- Shadow weapon attack and the player's Shadow resistance had no effect against Shadow monsters (issue 405, kurotabi-dev), and the status-prevention buffs Lightning Rod, Gas Mask and Leg Training did not resist their debuffs (issue 406, kurotabi-dev).
+- Icey Shackles lacked its invulnerability, Entrancing Wink did not silence magic and Botulism Cloud did not halve hits on players (issue 407, kurotabi-dev).
+- A pet recovery bonus multiplied the bonus from Aura of Mana (issue 408, kurotabi-dev): both now add their bonus to the natural amount.
+- Withering Disease did not stop a monster's natural HP recovery (issue 409, kurotabi-dev), and some missed monster skills did not pause the recovery of the player (issue 410, kurotabi-dev).
+- Forgetting a stat passive skill (Bottle of Mana, Heavy Carrier, Physical Training) did not update the stat shown in the client (issue 411, kurotabi-dev).
+- A character with a negative DX swings at the base delay scaled the way the KR Server does it, and a very high DX has no cap on its swing speed (follow-up of issue 323, kurotabi-dev).
+
+#### Items, refining and reforming
+
+- Using an item checks the character type and job tier when the item carries the restriction, which covers the class-restricted hair dyes (issue 435, kurotabi-dev).
+- Phantom Academy refining no longer charges the normal fee on Neo equipment when the client shows 0 Galder (issue 420, kurotabi-dev), high-level Neo equipment (level 215 and 275) can be repaired and low-level Neo equipment is no longer refused at the normal refine NPCs (issue 421, kurotabi-dev), and Neo equipment exchange keeps the refine stat bonus and takes the refine type of the target (issue 422, kurotabi-dev).
+- The refine success roll follows the original's single-precision threshold and 15-bit random number (issue 423, kurotabi-dev), and repair counts the Repair Powder of all your stacks instead of one (issue 424, kurotabi-dev).
+- Reforming (issues 425 to 431, kurotabi-dev): an item with appearance composing or growth compounding keeps its appearance, option flags and growth data, stats with descending ranges (such as DX 0 to -2) roll across the whole range, a Gold Tempering Gem on a negative DX stat no longer rounds toward 0, each stat follows its own value curve, a 100% reform discount is accepted, the materials, the money and the item are saved in one transaction, and the reformed values no longer differ by a point or two from the original.
+- Item compounding counts your live DA, with active DA buffs, skill scrolls and Soul Seed DA buffs, for the success rate (issue 432, kurotabi-dev), and draws its numbers like the original (issue 433, kurotabi-dev).
+- Newly generated random-stat equipment can roll its maximum stat value and the fastest DX (issue 434, kurotabi-dev).
+
+#### Trick Fortune
+
+- A paid result is saved when the client closes before the result is accepted (issue 436, kurotabi-dev).
+- A title that was earned is also set as your profile title and announced to the area, and the previous award is released first (issue 437, kurotabi-dev).
+- The EXP bonus is added to the experience you earn and shows in the experience rate slots (issue 438, kurotabi-dev), and the DROP bonus gives a chance at one extra item draw from a monster (issue 439, kurotabi-dev).
+- Staying logged in after an award ends no longer keeps the previous day's fee (issue 440, kurotabi-dev), and logging in after it ends no longer sends the expired title again (issue 441, kurotabi-dev).
+- The roulette gave some draw values to a different card (issue 442, kurotabi-dev).
+
+#### Found by my own test runs
+
+I now run the game against the server screen by screen to look for requests that nobody answers. These were found that way:
+
+- A refused NPC selection and the character select information request are answered, so the client no longer waits.
+- The cover letter refusal, the pet speech, the pet composing window close, the key box cancel and the wedding vow message are answered and stored as the original does, and the gift list rows carry the values the client expects.
+- The card generation counts for the day are kept in memory only and start again with the first generation of a new day.
+
 ## 0.89.0-beta
 
 ### Fixed

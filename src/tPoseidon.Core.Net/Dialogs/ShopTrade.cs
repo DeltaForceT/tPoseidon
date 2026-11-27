@@ -42,6 +42,7 @@ public sealed record ShopPlayer
     public required Func<int> MaxWeight { get; init; }
     public required Func<ushort> MapId { get; init; }
     public Func<IReadOnlyList<TimedItem>, CancellationToken, Task>? TimedItemsGranted { get; init; }
+    public Func<int, Task>? SeedEvent { get; init; }
 }
 
 public sealed class ShopTrade
@@ -146,6 +147,7 @@ public sealed class ShopTrade
             await announce(granted, ct).ConfigureAwait(false);
         }
         Console.WriteLine($"{_logTag} {_ctx.Remote}   shop 0x{shopEntityId:X4}: bought {string.Join(", ", orders.Select(o => $"{o.ItemId} x{o.Count}"))} for {total}, money {stats.Money}");
+        if (_player.SeedEvent is { } boughtEvent) await boughtEvent(tPoseidon.Core.Game.SoulSeed.SoulSeedRules.ShopTradeEvent).ConfigureAwait(false);
         return null;
     }
 
@@ -207,6 +209,7 @@ public sealed class ShopTrade
         stats.GrantMoney(total, StatChangeSource.Item);
         await SendAsync(Opcode.S2C_SHOP_SOLD, ShopFrames.Traded(stats.Money, operations), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   shop 0x{shopEntityId:X4}: sold {string.Join(", ", sales.Select(s => $"{s.Held.ItemIndex} x{s.Count}"))} for {total}, money {stats.Money}");
+        if (_player.SeedEvent is { } soldEvent) await soldEvent(tPoseidon.Core.Game.SoulSeed.SoulSeedRules.ShopTradeEvent).ConfigureAwait(false);
         return null;
     }
 

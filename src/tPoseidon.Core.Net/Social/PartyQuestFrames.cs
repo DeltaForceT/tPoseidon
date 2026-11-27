@@ -7,6 +7,7 @@ public static class PartyQuestFrames
     public const ushort Succeeded = 0x0367;
     public const ushort Rewarded = 0x0369;
     public const ushort MembersBusy = 0x036C;
+    public const ushort CancelRequest = 0x055B;
     public const ushort Cancelled = 0x04A8;
     public const ushort Given = 0x04A9;
     public const ushort Timer = 0x04AA;

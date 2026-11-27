@@ -34,6 +34,9 @@ public sealed class DropEventItems
         return null;
     }
 
+    public (int ItemId, int Count) DrillDrop(DateTime now, int roll, int itemId, int count) =>
+        DrillReplacement(now, roll) is { } eventItem ? (eventItem, 1) : (itemId, count);
+
     private sealed class Row
     {
         private readonly DateTime? _start;

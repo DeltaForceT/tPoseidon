@@ -15,6 +15,7 @@ public readonly record struct MyCampModeRequest(ushort ObjectId, byte Mode, MyCa
 public static class MyCampFrames
 {
     public const byte HouseKind = 0x0C;
+    public const Opcode HouseSpawnOpcode = Opcode.S2C_OP_0180_TBD;
     public const int SystemTimeSize = 16;
     public const byte GuestView = 1;
 

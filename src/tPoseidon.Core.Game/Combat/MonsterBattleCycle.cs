@@ -97,7 +97,6 @@ public sealed class MonsterBattleCycle
     public const int WeakHitsToLimit = 0x18;
     public const int WeakHitStep = 2;
     public const int DisabledWeakHitCounter = -1;
-    public const int MissWeakHitStep = 1;
     public static readonly TimeSpan LimitRecordAfterLeaving = TimeSpan.FromMilliseconds(300000);
     public static readonly TimeSpan UnreachableMemory = TimeSpan.FromSeconds(20);
 
@@ -200,10 +199,7 @@ public sealed class MonsterBattleCycle
     public static bool IsWeakHit(long damage, long targetMaxHp) =>
         targetMaxHp > 0 && damage < WeakHitThreshold(targetMaxHp);
 
-    public static int WeakHitStepFor(byte result) =>
-        (result & MeleeResolution.ResultKindMask) == MeleeResolution.ResultMiss ? MissWeakHitStep : WeakHitStep;
-
-    private bool CountWeakHit(MonsterEntity monster, ushort targetEntityId, byte result, long damage, long targetMaxHp)
+    private bool CountWeakHit(MonsterEntity monster, ushort targetEntityId, long damage, long targetMaxHp)
     {
         _weakHitCounters.TryGetValue(monster.EntityId, out var counter);
         var key = (monster.MapId, _characterOf(targetEntityId), monster.MonsterParamId);
@@ -219,7 +215,7 @@ public sealed class MonsterBattleCycle
             return true;
         }
 
-        _weakHitCounters[monster.EntityId] = counter + WeakHitStepFor(result);
+        _weakHitCounters[monster.EntityId] = counter + WeakHitStep;
         return false;
     }
 
@@ -316,6 +312,27 @@ public sealed class MonsterBattleCycle
         }
     }
 
+    public bool IsSkillCooling(ushort monsterEntityId, int skillId, DateTimeOffset now)
+    {
+        lock (_gate) return IsCooling(monsterEntityId, skillId, now);
+    }
+
+    public bool HasPendingCast(ushort monsterEntityId)
+    {
+        lock (_gate) return _fights.TryGetValue(monsterEntityId, out var fight) && fight.PendingCast is not null;
+    }
+
+    public bool CanBeginCast(ushort monsterEntityId)
+    {
+        lock (_gate) return _fights.TryGetValue(monsterEntityId, out var fight) && fight.PendingCast is null;
+    }
+
+    public void StartSkillCooldown(ushort monsterEntityId, int skillId, int coolMs, DateTimeOffset now)
+    {
+        if (coolMs < 1) return;
+        lock (_gate) _skillCooling[(monsterEntityId, skillId)] = now.AddMilliseconds(coolMs);
+    }
+
     public Action<MonsterBattleReachSample>? Observer { get; set; }
 
     public MonsterBattleHalted? Engage(MonsterEntity monster, ushort targetEntityId, DateTimeOffset now, TimeSpan? chase = null)
@@ -330,6 +347,7 @@ public sealed class MonsterBattleCycle
 
             var (x, y) = monster.GetInterpolatedPosition(now);
             monster.InitPosition(x, y);
+            _weakHitCounters.Remove(monster.EntityId);
             _fights[monster.EntityId] = new Fight
             {
                 MapId = monster.MapId,
@@ -645,7 +663,7 @@ public sealed class MonsterBattleCycle
         var outcome = (Damage: totalDamage, Result: rolls[^1].Result);
         var fatal = hpLeft == 0;
         hpLeftByTarget[fight.TargetEntityId] = hpLeft;
-        var limitReached = !target.Monster && CountWeakHit(monster, fight.TargetEntityId, rolls[0].Result, outcome.Damage, target.MaxHp);
+        var limitReached = !target.Monster && CountWeakHit(monster, fight.TargetEntityId, outcome.Damage, target.MaxHp);
         fight.Settled = true;
         fight.NextSwingAt = now.AddMilliseconds(reach.MonsterSwingDelayMs(definition.DxLv + monster.StatDelta(MonsterStat.Dx)));
         Observer?.Invoke(new MonsterBattleReachSample(

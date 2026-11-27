@@ -22,6 +22,14 @@ public sealed class PartyShareBook
     public IReadOnlyList<(ulong CharacterId, int Gain)>? SplitTm(ulong earner, int amount) =>
         Split(earner, amount, e => e.TmPercent, e => e.TmBonus);
 
+    public async Task<bool> ShareExpAsync(ulong earner, int amount, Func<ulong, int, Task> deliver)
+    {
+        ArgumentNullException.ThrowIfNull(deliver);
+        if (SplitExp(earner, amount) is not { } gains) return false;
+        foreach (var (characterId, gain) in gains) await deliver(characterId, gain).ConfigureAwait(false);
+        return true;
+    }
+
     public static int GainFor(int amount, float bonus, ushort percent)
     {
         var share = Math.Min(percent * PercentUnit, 1f);

@@ -161,7 +161,7 @@ public sealed partial class ItemUseService
     private async Task ReviveTargetAsync(
         Item item, ItemParamEntry definition, StatManager stats, ulong wireUid, ushort targetId, Func<ushort, Item, CancellationToken, Task<bool>> revive, CancellationToken ct)
     {
-        if (ItemUseRules.Check(definition, stats.Level) is { } refusal)
+        if (ItemUseRules.Check(definition, stats.Level, CharacterTypeOf()) is { } refusal)
         {
             await RefuseAsync($"item {item.ItemIndex}: {refusal}", ct).ConfigureAwait(false);
             return;
@@ -185,12 +185,13 @@ public sealed partial class ItemUseService
 
     private async Task UseHeldAsync(Item item, ItemParamEntry definition, StatManager stats, ulong wireUid, ReadOnlyMemory<byte> data, CancellationToken ct)
     {
-        if (ItemUseRules.Check(definition, stats.Level) is { } refusal)
+        if (ItemUseRules.Check(definition, stats.Level, CharacterTypeOf()) is { } refusal)
         {
             await RefuseAsync($"item {item.ItemIndex}: {refusal}", ct).ConfigureAwait(false);
             return;
         }
 
+        var refusalsBefore = _refusals;
         switch (ItemUseRules.HelperOf(definition.Type))
         {
             case ItemUseHelper.NoHelper:
@@ -222,24 +223,32 @@ public sealed partial class ItemUseService
             case ItemUseHelper.Use when definition.SubType == tPoseidon.Core.Game.Soul.SoulRules.PotionSubType && _player.SoulPotion is { } soulPotion:
                 if (!await soulPotion(item, definition, ct).ConfigureAwait(false))
                 {
-                    Console.WriteLine($"{_logTag} {_remote()}   soul potion {item.ItemIndex} not used");
+                    await RefuseAsync($"soul potion {item.ItemIndex} not used", ct).ConfigureAwait(false);
                 }
                 break;
             case ItemUseHelper.Use when definition.Effect == tPoseidon.Core.Game.Fiesta.FiestaRules.TicketEffect && _player.FiestaTicket is { } fiestaTicket:
                 if (await fiestaTicket(definition, ct).ConfigureAwait(false) is not { } ticketUse)
                 {
-                    Console.WriteLine($"{_logTag} {_remote()}   fiesta ticket {item.ItemIndex} refused");
+                    await RefuseAsync($"fiesta ticket {item.ItemIndex} refused", ct).ConfigureAwait(false);
                     break;
                 }
                 await UseWarpTicketAsync(item, definition, wireUid, ticketUse, ct).ConfigureAwait(false);
                 break;
             case ItemUseHelper.Use when definition.Effect == tPoseidon.Core.Game.Drilling.SurpriseSpotRules.TeleportMapEffect && _player.TeleportMap is { } teleportMap:
-                if (!await teleportMap(definition, ct).ConfigureAwait(false)) break;
+                if (!await teleportMap(definition, ct).ConfigureAwait(false))
+                {
+                    await RefuseAsync($"teleport map {item.ItemIndex} refused", ct).ConfigureAwait(false);
+                    break;
+                }
                 await SendAsync(Opcode.S2C_ITEM_USED, ItemUseFrames.Consumed(wireUid), ct).ConfigureAwait(false);
                 Consume(item, definition);
                 break;
             case ItemUseHelper.Use when definition.Effect == tPoseidon.Core.Game.Drilling.SurpriseSpotRules.TreasureMapEffect && _player.TreasureMap is { } treasureMap:
-                if (!await treasureMap(definition, ct).ConfigureAwait(false)) break;
+                if (!await treasureMap(definition, ct).ConfigureAwait(false))
+                {
+                    await RefuseAsync($"treasure map {item.ItemIndex} refused", ct).ConfigureAwait(false);
+                    break;
+                }
                 await SendAsync(Opcode.S2C_ITEM_USED, ItemUseFrames.Consumed(wireUid), ct).ConfigureAwait(false);
                 Consume(item, definition);
                 break;
@@ -298,6 +307,10 @@ public sealed partial class ItemUseService
             default:
                 await RefuseAsync($"item {item.ItemIndex}: type {definition.Type} ({ItemUseRules.HelperOf(definition.Type)}) is not implemented", ct).ConfigureAwait(false);
                 break;
+        }
+        if (_refusals == refusalsBefore && (definition.Options & ItemParamEntry.SeedEventOption) != 0 && _player.SeedEvent is { } seedEvent)
+        {
+            await seedEvent(tPoseidon.Core.Game.SoulSeed.SoulSeedRules.ItemUseEvent).ConfigureAwait(false);
         }
     }
 
@@ -464,8 +477,14 @@ public sealed partial class ItemUseService
         Console.WriteLine($"{_logTag} {_remote()}   gift box {box.ItemIndex} opened: {string.Join(", ", grants.Select(grant => $"{grant.ItemId} x{grant.Count}"))}");
     }
 
+    private int _refusals;
+
+    private int CharacterTypeOf() =>
+        _player.Character() is { } character ? tPoseidon.Core.Game.Characters.LookChangeRules.BodyTypeOf(character) : 0;
+
     private async Task RefusePresentAsync(string reason, CancellationToken ct)
     {
+        _refusals++;
         Console.WriteLine($"{_logTag} {_remote()}   item use refused: {reason}");
         await SendAsync(Opcode.S2C_PRESENT_REFUSED, ItemUseFrames.PresentRefused(), ct).ConfigureAwait(false);
     }
@@ -480,6 +499,7 @@ public sealed partial class ItemUseService
 
     private async Task RefuseAsync(string reason, CancellationToken ct)
     {
+        _refusals++;
         Console.WriteLine($"{_logTag} {_remote()}   item use refused: {reason}");
         await SendAsync(Opcode.S2C_ITEM_USE_REFUSED, Array.Empty<byte>(), ct).ConfigureAwait(false);
     }

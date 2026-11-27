@@ -5,6 +5,8 @@ using tPoseidon.Core.Game.Characters;
 
 namespace tPoseidon.Kr2014.Wire;
 
+public sealed record PlayerSpawnShopSign(string Title, byte Style);
+
 [WireOpcode((ushort)Opcode.PLAYER_SPAWN_LOGIN)]
 [WireOpcode((ushort)Opcode.S2C_PLAYER_SPAWN_POST_WARP)]
 public sealed class PlayerSpawnLoginPacket
@@ -22,6 +24,8 @@ public sealed class PlayerSpawnLoginPacket
     public const uint DefaultEntityFlags = EntityFlagBlock;
     public const uint ObserverEntityFlags = EntityFlagBlock | EntityStateFastMove | EntityFlagInvisible | EntityFlagObserver;
     public const int GmFlagsOffset = 20;
+    public const int SignFlagsOffset = 25;
+    public const byte SignFlagShop = 0x04;
     public const byte GmEagleFlag = 0x01;
     public const byte GmEagleWingsFlag = 0x08;
     public const int AngelWingTailBytes = 3;
@@ -65,6 +69,7 @@ public sealed class PlayerSpawnLoginPacket
     public byte GmFlags { get; init; }
     public byte PostureCode { get; init; }
     public bool AngelWing { get; init; }
+    public PlayerSpawnShopSign? ShopSign { get; init; }
 
     public IReadOnlyDictionary<byte, uint> LookItems { get; init; } = new Dictionary<byte, uint>();
 
@@ -88,7 +93,8 @@ public sealed class PlayerSpawnLoginPacket
         GuildTag? guild = null,
         uint entityFlags = DefaultEntityFlags,
         bool angelWing = false,
-        Func<Item, IReadOnlyList<ItemProperty>>? itemProperties = null)
+        Func<Item, IReadOnlyList<ItemProperty>>? itemProperties = null,
+        PlayerSpawnShopSign? shopSign = null)
     {
         ArgumentNullException.ThrowIfNull(character);
         var makeUp = LookChangeRules.MakeUpOf(character, OccupationRules.LookStateOf(character))
@@ -132,6 +138,7 @@ public sealed class PlayerSpawnLoginPacket
             GmFlags = gmFlags,
             PostureCode = postureCode,
             AngelWing = angelWing,
+            ShopSign = shopSign,
             EntityFlags = entityFlags,
             Guild = guild ?? new GuildTag(string.Empty, string.Empty, default),
             LookItems = looks,
@@ -173,7 +180,9 @@ public sealed class PlayerSpawnLoginPacket
         var overrideMask = LookOverrideMask;
         var guildBytes = ClientText.Encoding.GetBytes(Guild.GuildName);
         var aliasBytes = ClientText.Encoding.GetBytes(Guild.Alias);
-        var footerLen = LookMaskOffset + 4 + 4 * CountBits(lookMask) + 4 + 4 * CountBits(overrideMask) + LookRestBytes + guildBytes.Length + aliasBytes.Length;
+        var signBytes = ShopSign is null ? Array.Empty<byte>() : ClientText.Encoding.GetBytes(ShopSign.Title);
+        var signLen = ShopSign is null ? 0 : signBytes.Length + 1;
+        var footerLen = signLen + LookMaskOffset + 4 + 4 * CountBits(lookMask) + 4 + 4 * CountBits(overrideMask) + LookRestBytes + guildBytes.Length + aliasBytes.Length;
         var buf = new byte[HeaderBytes + nameBytes.Length + 1 + footerLen];
 
         WriteUInt16Le(buf, 0x00, EntityId);
@@ -197,8 +206,14 @@ public sealed class PlayerSpawnLoginPacket
         WriteUInt32Le(buf, f + 7, UnknownB);
         buf[f + GmFlagsOffset] = GmFlags;
         WriteUInt32Le(buf, f + 21, ClassChainMirror);
+        if (ShopSign is not null)
+        {
+            buf[f + SignFlagsOffset] = SignFlagShop;
+            Array.Copy(signBytes, 0, buf, f + LookMaskOffset, signBytes.Length);
+            buf[buf.Length - 1] = ShopSign.Style;
+        }
 
-        var at = f + LookMaskOffset;
+        var at = f + LookMaskOffset + signLen;
         at = WriteLooks(buf, at, LookBits, lookMask, LookItems);
         at = WriteLooks(buf, at, LookOverrideBits, overrideMask, LookOverrides);
         buf[at++] = Hair;
@@ -229,6 +244,17 @@ public sealed class PlayerSpawnLoginPacket
         var name = nul == 0 ? string.Empty : ClientText.Encoding.GetString(payload.Slice(HeaderBytes, nul));
         var f = HeaderBytes + nul + 1;
         var at = f + LookMaskOffset;
+        PlayerSpawnShopSign? shopSign = null;
+        var signFlags = payload[f + SignFlagsOffset];
+        if ((signFlags & ~SignFlagShop) != 0)
+        {
+            throw new InvalidPacketException($"Kr2014 PlayerSpawnLogin sign flags 0x{signFlags:X2} carry texts this reader does not decode.");
+        }
+        if ((signFlags & SignFlagShop) != 0)
+        {
+            var title = ReadTerminated(payload, ref at);
+            shopSign = new PlayerSpawnShopSign(title, payload[^1]);
+        }
         var looks = ReadLooks(payload, ref at, LookBits);
         var overrides = ReadLooks(payload, ref at, LookOverrideBits);
         if (payload.Length - at < LookRestBytes)
@@ -264,6 +290,7 @@ public sealed class PlayerSpawnLoginPacket
             ClassChainMirror = ReadUInt32Le(payload, f + 21),
             GmFlags = payload[f + GmFlagsOffset],
             AngelWing = payload[^(1 + AngelWingTailBytes)] != 0,
+            ShopSign = shopSign,
             Guild = guild,
             LookItems = looks,
             LookOverrides = overrides,
@@ -288,7 +315,7 @@ public sealed class PlayerSpawnLoginPacket
         var length = payload[at..].IndexOf((byte)0);
         if (length < 0)
         {
-            throw new InvalidPacketException("Kr2014 PlayerSpawnLogin guild text has no NUL terminator.");
+            throw new InvalidPacketException("Kr2014 PlayerSpawnLogin text field has no NUL terminator.");
         }
         var text = ClientText.Encoding.GetString(payload.Slice(at, length));
         at += length + 1;

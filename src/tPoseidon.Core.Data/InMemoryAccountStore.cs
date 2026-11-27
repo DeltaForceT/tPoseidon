@@ -19,6 +19,7 @@ public sealed class InMemoryAccountStore : IAccountStore
     private readonly ConcurrentDictionary<uint, short> _gameAccess = new();
     private readonly ConcurrentDictionary<uint, PenaltyNotice> _penalties = new();
 
+    private readonly object _nameGate = new();
     private long _nextAccountId = 1000;
 
     private readonly TimeProvider _clock;
@@ -148,10 +149,18 @@ public sealed class InMemoryAccountStore : IAccountStore
                 $"Cannot add character {character.CharacterId}: " +
                 $"owner account {character.OwnerAccountId} does not exist.");
         }
-        if (!_charactersById.TryAdd(character.CharacterId, character))
+        lock (_nameGate)
         {
-            throw new InvalidOperationException(
-                $"Character ID {character.CharacterId} already exists.");
+            if (_charactersById.Values.Any(c => c.CharacterId != character.CharacterId
+                && string.Equals(c.Name, character.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new CharacterNameTakenException(character.Name);
+            }
+            if (!_charactersById.TryAdd(character.CharacterId, character))
+            {
+                throw new InvalidOperationException(
+                    $"Character ID {character.CharacterId} already exists.");
+            }
         }
     }
 

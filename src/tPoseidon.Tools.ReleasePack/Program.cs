@@ -1,6 +1,11 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Tools.ReleasePack;
 
+if (args.Length > 0 && args[0] is "make-key" or "sign")
+{
+    return SigningCommands.Run(args);
+}
+
 var options = PackOptions.Parse(args);
 if (options is null)
 {
@@ -40,6 +45,15 @@ try
     var manifestPath = Path.Combine(builder.Output, ReleaseManifest.FileName(ReleaseManifest.FilePrefix, options.Version));
     new ReleaseManifest(builder.Identity, packages).Write(manifestPath, DateTimeOffset.UtcNow);
     Console.WriteLine($"manifest: {manifestPath}");
+    if (options.SignKey is { } keyFile)
+    {
+        var files = packages.Select(package => package.Path).Append(manifestPath).ToList();
+        foreach (var written in ReleaseSigning.Sign(files, builder.Output, keyFile))
+        {
+            Console.WriteLine($"signed: {written}");
+        }
+    }
+
     return 0;
 }
 catch (Exception ex) when (ex is InvalidDataException or IOException or HttpRequestException or InvalidOperationException)

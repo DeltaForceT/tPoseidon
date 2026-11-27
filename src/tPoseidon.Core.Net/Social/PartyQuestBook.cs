@@ -89,6 +89,7 @@ public sealed class PartyQuestBook
         _text = text ?? throw new ArgumentNullException(nameof(text));
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _link.OrderReceived += ApplyOrderAsync;
+        _link.CharacterClosed += characterId => _items.TryRemove(characterId, out _);
     }
 
     public PartyQuestCatalog Catalog => _catalog;
@@ -103,6 +104,8 @@ public sealed class PartyQuestBook
 
     public bool IsRunning(ulong characterId) => Held(characterId) is { Success: false };
 
+    private bool Occupied(PartyQuestPlayer member) => member.Hunting || Held(member.CharacterId) is not null;
+
     public static uint NowMs() => unchecked((uint)(DateTime.UtcNow.ToFileTimeUtc() / TimeSpan.TicksPerMillisecond));
 
     public async Task<int> CheckAsync(PartyQuestPlayer me, int questId, CancellationToken ct)
@@ -114,7 +117,7 @@ public sealed class PartyQuestBook
         if (mirror.MasterCharacterId != me.CharacterId) return PartyQuestResults.NotMaster;
         if (MembersHere(me, mirror) is not { } members) return PartyQuestResults.NotInZone;
         if (!LevelsFit(quest, members)) return PartyQuestResults.LevelOutOfRange;
-        var busy = members.Where(m => m.Hunting || IsRunning(m.CharacterId)).Select(m => m.Name).ToArray();
+        var busy = members.Where(Occupied).Select(m => m.Name).ToArray();
         if (busy.Length > 0)
         {
             await me.Context.SendFrameAsync(PartyQuestFrames.MembersBusy, PartyQuestFrames.MembersBusyFor(busy, _text), NextKey(), ct).ConfigureAwait(false);
@@ -131,7 +134,7 @@ public sealed class PartyQuestBook
         if (mirror.MasterCharacterId != me.CharacterId) return PartyQuestResults.AcceptNotMaster;
         if (MembersHere(me, mirror) is not { } members) return PartyQuestResults.AcceptNotInZone;
         if (!LevelsFit(quest, members)) return PartyQuestResults.AcceptLevelOutOfRange;
-        if (members.Any(m => m.Hunting || IsRunning(m.CharacterId))) return PartyQuestResults.AcceptMembersBusy;
+        if (members.Any(Occupied)) return PartyQuestResults.AcceptMembersBusy;
         return 0;
     }
 
@@ -145,7 +148,7 @@ public sealed class PartyQuestBook
         var targetCount = (ushort)(quest.Targets[0].Count * memberCount);
         var limitMs = (uint)(quest.TimeMinutes * 60_000);
         var start = await _master.AcceptAsync(me.CharacterId, (uint)questId, monsterId, targetCount, memberIds, ct).ConfigureAwait(false);
-        if (start is null || MembersHere(me, mirror) is not { } members || members.Any(m => IsRunning(m.CharacterId)))
+        if (start is null || MembersHere(me, mirror) is not { } members || members.Any(m => Held(m.CharacterId) is not null))
         {
             await AbortAsync(me, (uint)questId, ct).ConfigureAwait(false);
             return false;
@@ -187,6 +190,13 @@ public sealed class PartyQuestBook
     {
         if (_items.TryGetValue(characterId, out var item) && item.QuestId == questId) _items.TryRemove(characterId, out _);
         await _link.SendAsync(SystemLinkFrames.GuildPointForQuest, SystemLinkFrames.Character(characterId), ct).ConfigureAwait(false);
+    }
+
+    public async Task RequestCancelAsync(ulong characterId, uint questId, CancellationToken ct)
+    {
+        if (Held(characterId) is not { Success: false } item || item.QuestId != questId) return;
+        if (_link.MirrorOf(characterId) is not { } mirror || mirror.MasterCharacterId != characterId) return;
+        await _link.SendAsync(SystemLinkFrames.RemovePartyQuest, SystemLinkFrames.Character(characterId), ct).ConfigureAwait(false);
     }
 
     public Task KilledAsync(ulong characterId, int monsterType, CancellationToken ct)
@@ -241,6 +251,7 @@ public sealed class PartyQuestBook
             if (player is null) continue;
             await player.Context.SendFrameAsync(PartyQuestFrames.Timer, PartyQuestFrames.TimerFor(0, item.LimitMs), NextKey(), ct).ConfigureAwait(false);
             await player.Context.SendFrameAsync(PartyQuestFrames.TimedOut, PartyQuestFrames.Quest(item.QuestId), NextKey(), ct).ConfigureAwait(false);
+            await player.Context.SendFrameAsync(PartyQuestFrames.Cancelled, PartyQuestFrames.CancelledFor(item.QuestId, SystemLinkFrames.QuestCancelByTimeout), NextKey(), ct).ConfigureAwait(false);
             if (_link.MirrorOf(characterId)?.MasterCharacterId == characterId)
             {
                 await _link.SendAsync(SystemLinkFrames.CancelPartyQuest, SystemLinkFrames.CharacterAndQuest(characterId, item.QuestId), ct).ConfigureAwait(false);
@@ -274,7 +285,7 @@ public sealed class PartyQuestBook
     private async Task RecoverAsync(PartyQuestRecovery recovery, CancellationToken ct)
     {
         if (_players(recovery.RecipientCharacterId) is not { } player) return;
-        if (Held(recovery.RecipientCharacterId) is { } held && (!held.Success || held.QuestId == recovery.QuestId)) return;
+        if (Held(recovery.RecipientCharacterId) is { } held && (held.Success ? held.QuestId == recovery.QuestId : held.QuestId != recovery.QuestId || held.PartyUid != recovery.PartyUid)) return;
         var item = new PartyQuestItem
         {
             QuestId = recovery.QuestId,

@@ -30,6 +30,7 @@ internal static class HelpCommand
         Console.WriteLine("  server-file  write the file friends open in the launcher to join this server");
         Console.WriteLine("  launcher  publish the update folder for players' launchers (launcher publish, launcher folder)");
         Console.WriteLine("  client    scan the game client folder and fix what the emulator needs (client check, client fix)");
+        Console.WriteLine("  update    check for a new release and install it (run 'tposeidon update --help' for the options)");
         Console.WriteLine("  version   print the version");
         Console.WriteLine();
         Console.WriteLine("start options:");
@@ -75,6 +76,8 @@ internal static class HelpCommand
         Console.WriteLine("  (none)   list the goods");
         Console.WriteLine("  --add <code> --name <text> --items <id>[x<count>][@<class>],... --price <cash> [--hours <n>] [--category 0|1] [--desc <text>]   add or replace goods; a set is several items; hours 0 is permanent; category 1 is My Camp; class defaults to 2 (shop item)");
         Console.WriteLine("  --remove <code>   remove goods (goods already sold are only taken off sale)");
+        Console.WriteLine();
+        UpdateCommand.WriteHelp();
         Console.WriteLine();
         AccountCommand.WriteHelp();
         Console.WriteLine();

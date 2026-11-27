@@ -91,6 +91,11 @@ public static class GuardianCastRules
 
     public static float CooldownSeconds(float? coolTime) => coolTime is { } seconds ? seconds * CooldownFactor : DefaultCooldownSeconds;
 
+    public static float RuneCooldownSeconds(float? coolTime) => coolTime ?? DefaultCooldownSeconds;
+
+    public static float CooldownSeconds(float? coolTime, GuardianSkillType type) =>
+        type == GuardianSkillType.Special ? RuneCooldownSeconds(coolTime) : CooldownSeconds(coolTime);
+
     public static GuardianCastKind KindOf(int actionId, GuardianCastTarget target)
     {
         if (target == GuardianCastTarget.Owner) return actionId == SkillActions.Cure ? GuardianCastKind.Cure : GuardianCastKind.None;

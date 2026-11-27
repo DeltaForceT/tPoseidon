@@ -1,6 +1,7 @@
 using tPoseidon.Core.Common;
 using tPoseidon.Core.Data;
 using tPoseidon.Core.Game.Fortune;
+using tPoseidon.Core.Game.Progression;
 using tPoseidon.Core.Game.Quests;
 using tPoseidon.Core.InterServer;
 using tPoseidon.Core.LibConfig;
@@ -11,12 +12,17 @@ internal sealed class FortuneHold
     public required FortuneInfo Info { get; set; }
     public FortuneBonus Bonus { get; set; } = FortuneBonus.None;
     public bool Active { get; set; }
+    public bool Recorded { get; set; }
     public FortuneRound Round { get; } = new();
-    public bool DayChecked { get; set; }
+    public FortuneDayCheck Day { get; } = new();
 
     public IReadOnlyList<int> ActiveStats => Active ? Bonus.Stats : FortuneBonus.None.Stats;
 
     public int ActiveRefine => Active ? Bonus.Refine : 0;
+
+    public int ActiveExp => Active ? Bonus.Exp : 0;
+
+    public int ActiveDrop => Active ? Bonus.Drop : 0;
 
     public bool Presented { get; set; } = true;
 
@@ -25,7 +31,7 @@ internal sealed class FortuneHold
 
 internal sealed class FortuneController
 {
-    public const ushort FortuneProfileTitleType = 2;
+    public const ushort FortuneProfileTitleType = FortuneHouse.FortuneProfileTitleType;
     public const int NotEnoughMoney = 1;
 
     private readonly MasterFortune _master;
@@ -34,6 +40,7 @@ internal sealed class FortuneController
     private readonly IItemStore _items;
     private readonly IItemParamLookup _catalog;
     private readonly Func<InGameSessionState, int, Task> _seedEvent;
+    private readonly Func<InGameSessionState, Task> _sendRates;
     private readonly string _logTag;
     private readonly Random _rng = new();
     private readonly object _rngGate = new();
@@ -45,6 +52,7 @@ internal sealed class FortuneController
         IItemStore items,
         IItemParamLookup catalog,
         Func<InGameSessionState, int, Task> seedEvent,
+        Func<InGameSessionState, Task> sendRates,
         string logTag)
     {
         _master = master ?? throw new ArgumentNullException(nameof(master));
@@ -53,6 +61,7 @@ internal sealed class FortuneController
         _items = items ?? throw new ArgumentNullException(nameof(items));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _seedEvent = seedEvent ?? throw new ArgumentNullException(nameof(seedEvent));
+        _sendRates = sendRates ?? throw new ArgumentNullException(nameof(sendRates));
         _logTag = logTag ?? throw new ArgumentNullException(nameof(logTag));
     }
 
@@ -69,17 +78,19 @@ internal sealed class FortuneController
         var hold = new FortuneHold { Info = info };
         if (!FortuneRules.StoredAwardUsable(info.ItemAttrString))
         {
-            hold.Info = info with { ViewCount = 0 };
+            hold.Info = info with { ViewCount = 0, TitleId = 0 };
             hold.Presented = false;
             return hold;
         }
         if (!FortuneRules.IsActive(now, info.ExpiresAt))
         {
-            hold.Info = hold.Info with { ItemAttrString = string.Empty };
+            hold.Info = FortuneHouse.AfterExpiry(hold.Info);
+            hold.Recorded = hold.Info.ViewCount != 0;
             return hold;
         }
         hold.Bonus = FortuneRules.Parse(hold.Info.ItemAttrString);
         hold.Active = true;
+        hold.Recorded = hold.Info.ViewCount != 0;
         Console.WriteLine($"{_logTag} [fortune] char 0x{characterId:X16} award '{hold.Info.ItemAttrString}' until {info.ExpiresAt:u}, title {info.TitleId}");
         return hold;
     }
@@ -103,23 +114,41 @@ internal sealed class FortuneController
         return true;
     }
 
-    public async Task<bool> ReleaseEndedAsync(InGameSessionState player, DateTimeOffset now, Func<byte[], Task> announceToOthers, Func<Task> clearProfileTitle)
+    public async Task<bool> ReleaseEndedAsync(InGameSessionState player, DateTimeOffset now, Func<byte[], Task> announceToOthers, Func<ProfileTitle, Task> setProfileTitle)
     {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(announceToOthers);
-        ArgumentNullException.ThrowIfNull(clearProfileTitle);
-        if (player.Fortune is not { Active: true } hold || FortuneRules.IsActive(now, hold.Info.ExpiresAt)) return false;
-        hold.Active = false;
-        hold.Bonus = FortuneBonus.None;
-        hold.Info = hold.Info with { TitleId = 0 };
-        player.RecomputeStats?.Invoke();
-        var announce = FortuneFrames.TitleAnnounce(player.PlayerEntityId, 0);
-        await SendAsync(player, Opcode.GAME_ENTITY_ANNOUNCE_3D1, announce).ConfigureAwait(false);
-        await announceToOthers(announce).ConfigureAwait(false);
-        if (player.ProfileTitle.TitleType == FortuneProfileTitleType) await clearProfileTitle().ConfigureAwait(false);
-        await SendAsync(player, Opcode.S2C_FORTUNE_APPLIED, FortuneFrames.Applied(FortuneFrames.AppliedByAward, FortuneBlock.Released, now)).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(setProfileTitle);
+        if (player.Fortune is not { Active: true } hold) return false;
+        if (FortuneRules.IsActive(now, hold.Info.ExpiresAt))
+        {
+            hold.Day.Tick(now);
+            return false;
+        }
+        await ReleaseAsync(player, hold, now, announceToOthers, setProfileTitle).ConfigureAwait(false);
         Log(player, $"award ended at {hold.Info.ExpiresAt:u}");
         return true;
+    }
+
+    private async Task ReleaseAsync(InGameSessionState player, FortuneHold hold, DateTimeOffset now, Func<byte[], Task> announceToOthers, Func<ProfileTitle, Task> setProfileTitle)
+    {
+        hold.Active = false;
+        hold.Recorded = false;
+        hold.Bonus = FortuneBonus.None;
+        hold.Info = hold.Info with { TitleId = 0 };
+        hold.Day.Release();
+        player.RecomputeStats?.Invoke();
+        await AnnounceTitleAsync(player, 0, announceToOthers, setProfileTitle).ConfigureAwait(false);
+        await SendAsync(player, Opcode.S2C_FORTUNE_APPLIED, FortuneFrames.Applied(FortuneFrames.AppliedByAward, FortuneBlock.Released, now)).ConfigureAwait(false);
+        await _sendRates(player).ConfigureAwait(false);
+    }
+
+    private async Task AnnounceTitleAsync(InGameSessionState player, int titleId, Func<byte[], Task> announceToOthers, Func<ProfileTitle, Task> setProfileTitle)
+    {
+        var announce = FortuneFrames.TitleAnnounce(player.PlayerEntityId, (uint)titleId);
+        await SendAsync(player, Opcode.GAME_ENTITY_ANNOUNCE_3D1, announce).ConfigureAwait(false);
+        await announceToOthers(announce).ConfigureAwait(false);
+        if (FortuneHouse.ProfileTitleAfterAward(titleId, player.ProfileTitle) is { } change) await setProfileTitle(change).ConfigureAwait(false);
     }
 
     public Task SendAppliedAsync(InGameSessionState player) =>
@@ -219,9 +248,9 @@ internal sealed class FortuneController
         lock (_rngGate)
         {
             before = FortuneRules.Draw(request.Power, request.Picks, hold.Round.Cards, needle, myCard,
-                card => tables.Cards.TryGetValue((int)card.CardId, out var row) ? row.Prob : 0f, _rng.Next);
+                card => tables.Cards.TryGetValue((int)card.CardId, out var row) ? row.Prob : 0f, range => tPoseidon.Core.Game.KrRand.Scaled(_rng, 0, range));
             var ranges = FortuneHouse.JokerRanges(tables.CardsInRowOrder);
-            final = FortuneHouse.ExchangeJokers(before, current => FortuneHouse.JokerCard(ranges, _rng.Next) ?? current);
+            final = FortuneHouse.ExchangeJokers(before, current => FortuneHouse.JokerCard(ranges, range => tPoseidon.Core.Game.KrRand.Scaled(_rng, 0, range)) ?? current);
         }
         var award = FortuneRules.Award(final.Results, tables, _catalog, stats.Level);
         hold.Round.Rolled(award);
@@ -258,30 +287,29 @@ internal sealed class FortuneController
         Log(player, $"plays again (use {hold.Info.ViewCount}); the last roll is discarded");
     }
 
-    public async Task LeaveAsync(InGameSessionState player, DateTimeOffset now, Action recompute, CancellationToken ct)
+    public async Task LeaveAsync(InGameSessionState player, DateTimeOffset now, Action recompute, Func<byte[], Task> announceToOthers, Func<ProfileTitle, Task> setProfileTitle, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(recompute);
+        ArgumentNullException.ThrowIfNull(announceToOthers);
+        ArgumentNullException.ThrowIfNull(setProfileTitle);
         if (player.Fortune is not { Round.InHouse: true } hold) return;
         if (hold.Round.Step is not (FortuneStep.Rolled or FortuneStep.Dealt))
         {
             Log(player, $"[!!Exception!!] LeaveTrickFortuneHouse() at step {hold.Round.Step}");
             return;
         }
-        if (hold.Round is { Step: FortuneStep.Rolled, Pending: { } award })
+        if (hold.Round.AwardToSave is { } award)
         {
-            hold.Info = hold.Info with
-            {
-                TitleId = award.TitleId,
-                ItemAttrString = award.Text,
-                ExpiresAt = now.AddSeconds(award.DurationSeconds),
-                UpdatedAt = now,
-            };
+            if (hold.Recorded) await ReleaseAsync(player, hold, now, announceToOthers, setProfileTitle).ConfigureAwait(false);
+            hold.Info = FortuneHouse.Awarded(hold.Info, award, now);
             hold.Bonus = FortuneRules.Parse(award.Text);
             hold.Active = FortuneRules.IsActive(now, hold.Info.ExpiresAt);
+            hold.Recorded = hold.Info.ViewCount != 0;
             recompute();
-            await SendAsync(player, Opcode.GAME_ENTITY_ANNOUNCE_3D1, FortuneFrames.TitleAnnounce(player.PlayerEntityId, (uint)award.TitleId)).ConfigureAwait(false);
+            await AnnounceTitleAsync(player, award.TitleId, announceToOthers, setProfileTitle).ConfigureAwait(false);
             await SendAsync(player, Opcode.S2C_FORTUNE_APPLIED, FortuneFrames.Applied(FortuneFrames.AppliedByAward, hold.Block(), now)).ConfigureAwait(false);
+            await _sendRates(player).ConfigureAwait(false);
             foreach (var eventType in FortuneHouse.StatEvents(hold.Bonus)) await _seedEvent(player, eventType).ConfigureAwait(false);
             await _master.UpdateAsync(hold.Info, ct).ConfigureAwait(false);
             Log(player, $"award '{award.Text}' applied until {hold.Info.ExpiresAt:u}, title {award.TitleId}");
@@ -289,6 +317,16 @@ internal sealed class FortuneController
         hold.Round.Close();
         await SendAsync(player, Opcode.S2C_FORTUNE_LEFT, Array.Empty<byte>()).ConfigureAwait(false);
         Log(player, "leaves the fortune house");
+    }
+
+    public async Task SaveRolledAsync(InGameSessionState player, DateTimeOffset now, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(player);
+        if (player.Fortune is not { Round.InHouse: true } hold || hold.Round.AwardToSave is not { } award) return;
+        hold.Info = FortuneHouse.Awarded(hold.Info, award, now);
+        hold.Round.Close();
+        await _master.UpdateAsync(hold.Info, ct).ConfigureAwait(false);
+        Log(player, $"disconnected after roll {hold.Info.ViewCount}: award '{award.Text}' saved until {hold.Info.ExpiresAt:u}, title {award.TitleId}");
     }
 
     private async Task EnterAsync(InGameSessionState player, FortuneHold hold, long money)
@@ -312,11 +350,7 @@ internal sealed class FortuneController
         lock (_rngGate) cards = FortuneHouse.Deal(_basicCards(), _rng.Next);
         var entering = hold.Round.Step == FortuneStep.Closed;
         hold.Round.Deal(cards);
-        if (entering && !hold.DayChecked)
-        {
-            hold.DayChecked = true;
-            if (FortuneHouse.IsAnotherDay(hold.Info.UpdatedAt, DateTimeOffset.UtcNow)) hold.Info = hold.Info with { ViewCount = 0 };
-        }
+        if (entering) hold.Info = hold.Day.Enter(hold.Info, DateTimeOffset.UtcNow);
         var uses = (byte)Math.Clamp(hold.Info.ViewCount, 0, byte.MaxValue);
         await SendAsync(player, Opcode.S2C_FORTUNE_CARDS, FortuneFrames.Cards(uses, FortuneToday.Exchange(tables, (int)character.Species, character.GenTime, DateTimeOffset.UtcNow), cards)).ConfigureAwait(false);
         return true;

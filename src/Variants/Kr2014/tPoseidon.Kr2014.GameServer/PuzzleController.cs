@@ -259,7 +259,7 @@ internal sealed class PuzzleController : IDisposable
             return;
         }
         run.Shown(statue.EntityId);
-        await _sendToMap(run.MapId, Opcode.NPC_SPAWN, _spawnFrame(statue)).ConfigureAwait(false);
+        await _sendToMap(run.MapId, MobSpawnFrames.BirthOpcode, _spawnFrame(statue)).ConfigureAwait(false);
     }
 
     private async Task EndAsync(ushort mapId, MemoryPuzzleRun run, InGameSessionState? owner)
@@ -284,7 +284,7 @@ internal sealed class PuzzleController : IDisposable
         {
             if (owner.RequestZoneChange is { } leaveZoneChange)
             {
-                await leaveZoneChange(new ZoneChangeRequest(PuzzleRules.FailureMap, TeleportArrival.ChangeZoneType, null, TimeSpan.Zero), default).ConfigureAwait(false);
+                await leaveZoneChange(new ZoneChangeRequest(PuzzleRules.FailureMap, TeleportArrival.ChangeZoneType, null, TimeSpan.FromMilliseconds(PuzzleRules.ResultScreenMs)), default).ConfigureAwait(false);
             }
             return;
         }
@@ -297,7 +297,7 @@ internal sealed class PuzzleController : IDisposable
         }
         if (portalMap != 0 && owner.RequestZoneChange is { } requestZoneChange)
         {
-            await requestZoneChange(new ZoneChangeRequest((ushort)portalMap, TeleportArrival.ChangeZoneType, null, TimeSpan.Zero), default).ConfigureAwait(false);
+            await requestZoneChange(new ZoneChangeRequest((ushort)portalMap, TeleportArrival.ChangeZoneType, null, TimeSpan.FromMilliseconds(PuzzleRules.ResultScreenMs)), default).ConfigureAwait(false);
         }
     }
 

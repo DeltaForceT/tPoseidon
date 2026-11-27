@@ -103,6 +103,7 @@ public sealed record ItemParamEntry
         tableCount > 0 || ReformableTypes.Contains(type) ? tableOptions : tableOptions | NotReformOption;
 
     public const int UsableOption = 0x2;
+    public const int SeedEventOption = 0x2000;
     public const int KeptWhenUsedExtendedOption = 0x40;
     public const int OnlyDropperTakesOption = 0x800;
     public const int KeptInBagOption = 0x1000;

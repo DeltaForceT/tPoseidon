@@ -1,3 +1,5 @@
+using tPoseidon.Core.Game.Fortune;
+using tPoseidon.Core.Game.Monsters;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Drilling;
@@ -10,20 +12,9 @@ public static class TreasureLoot
     public const int CountSpread = 5;
     public const int MaxAttempts = 100;
     public const int RandRange = 32768;
-    public const double DefaultMultiplier = 1.0;
 
-    private static readonly (int Period, bool Positive)[] Cycles =
-    [
-        (23, false), (23, true), (33, false), (33, true), (38, false), (38, true), (28, false), (28, true),
-    ];
-
-    public static int TodayValue(int characterType, double secondsSinceBirth, double multiplier)
-    {
-        if (characterType < 1 || characterType > Cycles.Length) return 0;
-        var (period, positive) = Cycles[characterType - 1];
-        var value = (int)Math.Round(2 * Math.PI * Math.Sin(secondsSinceBirth / period) * multiplier, MidpointRounding.AwayFromZero);
-        return positive ? value : -value;
-    }
+    public static int TodayValue(FortuneTables tables, int characterType, DateTimeOffset createdAt, DateTimeOffset now) =>
+        FortuneToday.CardId(tables, characterType, createdAt, now);
 
     public static int Count(TreasureItemEntry row, int todayValue)
     {
@@ -63,17 +54,17 @@ public static class TreasureLoot
 
     public static int SideCount(int min, int max, int rand) => min + rand * (max - min) / RandRange;
 
-    public const int RingInnerCells = 4;
-    public const int RingOuterCells = 8;
+    public const int ScatterFirstRing = 4;
+    public const int ScatterReach = 8;
 
-    public static (ushort X, ushort Y) RingPosition(int centreX, int centreY, int index, int total)
+    public static IReadOnlyList<(ushort X, ushort Y)> Scatter(ZoneGeometry? geometry, ushort originX, ushort originY, int count, Random rng)
     {
-        var angle = 2 * Math.PI * index / Math.Max(1, total);
-        var cells = RingInnerCells + index % (RingOuterCells - RingInnerCells + 1);
-        var radius = cells * ZoneGeometry.CellSize;
-        var x = centreX + (int)Math.Round(Math.Cos(angle) * radius);
-        var y = centreY + (int)Math.Round(Math.Sin(angle) * radius);
-        return ((ushort)Math.Clamp(x, 0, ushort.MaxValue), (ushort)Math.Clamp(y, 0, ushort.MaxValue));
+        ArgumentNullException.ThrowIfNull(rng);
+        var takenCells = new HashSet<(int X, int Y)>();
+        var positions = new List<(ushort X, ushort Y)>(count);
+        for (var index = 0; index < count; index++)
+            positions.Add(DropPlacement.Place(geometry, originX, originY, ScatterFirstRing, ScatterReach, takenCells, rng));
+        return positions;
     }
 
     private static int WeightedSlot(IReadOnlyList<TreasureLootSlot> slots, double pick)

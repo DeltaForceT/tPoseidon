@@ -154,6 +154,9 @@ public sealed class PartyServer
     public Task QuestKillAsync(ulong characterId, ushort monsterId, CancellationToken ct) =>
         DeliverAsync(_parties.QuestKill(characterId, monsterId), ct);
 
+    public Task RemoveQuestAsync(ulong characterId, CancellationToken ct) =>
+        DeliverAsync(_parties.TearDownQuest(characterId), ct);
+
     public void CancelQuest(ulong characterId, uint questId) => _parties.CancelQuest(characterId, questId);
 
     public Task ZoneLeftAsync(ulong characterId, CancellationToken ct) =>

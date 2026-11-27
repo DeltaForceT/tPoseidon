@@ -14,6 +14,7 @@ public sealed record CompoundPlayer
     public required Func<Character?> Character { get; init; }
     public required Func<StatManager?> Stats { get; init; }
     public required Func<int> Da { get; init; }
+    public Func<int, Task>? SeedEvent { get; init; }
 }
 
 public sealed class CompoundService
@@ -101,8 +102,8 @@ public sealed class CompoundService
         CompoundRoll? roll;
         lock (_rng)
         {
-            percent = CompoundRules.Percent(recipe, _player.Da(), () => _rng.Next(100));
-            roll = CompoundRules.Roll(mode, percent, count, () => _rng.Next(100));
+            percent = CompoundRules.Percent(recipe, _player.Da(), _rng);
+            roll = CompoundRules.Roll(mode, percent, count, _rng);
         }
         if (roll is not { } rolled)
         {
@@ -161,6 +162,7 @@ public sealed class CompoundService
         await SendAsync(Opcode.S2C_COMPOUND_RESULT,
             CompoundFrames.Result(results, wasteItem, roll.Successes, roll.Failures, operations), ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   compound {recipe.Id} x{pending.Count}: {roll.Successes} made, {roll.Failures} failed, fee {fee}, {operations.Count} bag changes");
+        if (_player.SeedEvent is { } seedEvent) await seedEvent(tPoseidon.Core.Game.SoulSeed.SoulSeedRules.CompoundEvent).ConfigureAwait(false);
     }
 
     public async Task CloseAsync(CancellationToken ct)

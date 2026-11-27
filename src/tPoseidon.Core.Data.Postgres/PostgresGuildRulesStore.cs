@@ -596,6 +596,51 @@ public sealed class PostgresGuildRulesStore : IGuildRulesStore
         return GuildRules.Ok;
     }
 
+    public IReadOnlyList<GuildLogEntry> History(uint guildCode)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        return Rows(conn, tx, """
+            SELECT log_seq, log_at, log_type, log_msg
+            FROM guild_log
+            WHERE guild_code = @g
+            ORDER BY log_at DESC, log_seq DESC
+            LIMIT 100
+            """, r => new GuildLogEntry
+        {
+            LogSeq = r.GetInt64(0),
+            LogAt = new DateTimeOffset(r.GetDateTime(1), TimeSpan.Zero),
+            LogType = (byte)r.GetInt16(2),
+            GuildCode = guildCode,
+            LogMsg = r.GetString(3),
+        }, ("g", (long)guildCode));
+    }
+
+    public int AddMemberSmsPoint(ulong characterId)
+    {
+        using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var tx = conn.BeginTransaction();
+        var character = (long)characterId;
+        var guilds = Rows(conn, tx, """
+            SELECT g.guild_code, g.guild_sms_point
+            FROM guild_member m JOIN guild g ON g.guild_code = m.guild_code
+            WHERE m.char_uid = @c
+            """, r => (Guild: r.GetInt64(0), Point: (int)r.GetInt16(1)), ("c", character));
+        if (guilds.Count != 1) return GuildRules.MissingGuild;
+        var changed = Execute(conn, tx, "UPDATE guild_member SET member_point = LEAST(member_point + @p, 99999) WHERE char_uid = @c", ("p", guilds[0].Point), ("c", character));
+        if (changed != 1) return GuildRules.MemberNotFound;
+        Execute(conn, tx, """
+            UPDATE guild_member m SET grade_code = CASE
+                WHEN m.member_point >= (SELECT grade_point FROM guild_grade WHERE guild_code = m.guild_code AND grade_code = 4) THEN 4
+                WHEN m.member_point >= (SELECT grade_point FROM guild_grade WHERE guild_code = m.guild_code AND grade_code = 5) THEN 5
+                WHEN m.member_point >= (SELECT grade_point FROM guild_grade WHERE guild_code = m.guild_code AND grade_code = 6) THEN 6
+                ELSE 7 END
+            WHERE m.char_uid = @c AND m.grade_code >= 4
+            """, ("c", character));
+        tx.Commit();
+        return GuildRules.Ok;
+    }
+
     public int UpdateAuth(uint guildCode, byte[] table)
     {
         ArgumentNullException.ThrowIfNull(table);

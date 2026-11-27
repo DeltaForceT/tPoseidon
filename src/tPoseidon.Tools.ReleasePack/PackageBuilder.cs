@@ -34,6 +34,7 @@ internal sealed class PackageBuilder
         "docs/install/postgresql.md",
         "docs/install/hosting-securely.md",
         "docs/install/launcher-updates.md",
+        "docs/install/updating.md",
         "docs/scripting/README.md",
         "docs/scripting/examples/daily_login_reward.tscript",
         "docs/scripting/examples/fetch_quest.tscript",

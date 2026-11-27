@@ -13,6 +13,7 @@ public sealed class PanelTools
     public const string CharacterSlotsKey = "character-slots";
     public const string LauncherKey = "launcher";
     public const string LauncherChannelKey = "launcher-channel";
+    public const string UpdateSettingsKey = "update-settings";
 
     private readonly Dictionary<string, Window> _open = [];
     private readonly Window _main;
@@ -78,6 +79,9 @@ public sealed class PanelTools
 
     public Window? EditCharacterSlots() =>
         Host.Settings is null ? null : Present(CharacterSlotsKey, () => new CharacterSlotsWindow(Host));
+
+    public Window? EditUpdateSettings() =>
+        Host.Settings is null ? null : Present(UpdateSettingsKey, () => new UpdateSettingsWindow(Host));
 
     public Window? ShareServerFile() =>
         Host.Settings is { } settings ? Present(ServerFileKey, () => new ServerFileWindow(settings)) : null;

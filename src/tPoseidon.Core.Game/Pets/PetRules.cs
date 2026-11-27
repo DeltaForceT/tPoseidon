@@ -95,9 +95,9 @@ public static class PetRules
         return TimeSpan.FromMilliseconds(rng.Next(IdleEmoteMinMs, IdleEmoteMaxMs + 1));
     }
 
-    public static RecoveryAmounts WithRecoveryBonus(RecoveryAmounts amounts, PetRecovery bonus) => new(
+    public static RecoveryAmounts WithRecoveryBonus(RecoveryAmounts amounts, PetRecovery bonus, float manaSkillRatio = 0f) => new(
         amounts.Hp + amounts.Hp * bonus.HpRate,
-        amounts.Mp + amounts.Mp * bonus.MpRate);
+        amounts.Mp + amounts.Mp * bonus.MpRate + (manaSkillRatio > 0f ? (int)Math.Truncate(amounts.Mp * (double)manaSkillRatio) : 0));
 }
 
 public readonly record struct PetRecovery(int HpRate, int MpRate);

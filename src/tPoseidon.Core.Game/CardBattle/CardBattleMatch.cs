@@ -1,3 +1,5 @@
+using tPoseidon.Core.Data;
+using tPoseidon.Core.Game.Posture;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.CardBattle;
@@ -30,6 +32,15 @@ public sealed class ScoreBlock
     public short LastDelta { get; set; }
     public byte Streak { get; set; }
     public byte ChanceAvailable { get; set; }
+
+    public void Reset()
+    {
+        Wins = 0;
+        Score = 0;
+        LastDelta = 0;
+        Streak = 0;
+        ChanceAvailable = 0;
+    }
 }
 
 public enum BattleState
@@ -39,13 +50,29 @@ public enum BattleState
     SelectCard,
     Battle,
     Result,
+    Extra,
+}
+
+public enum CardBattleTimer
+{
+    None,
+    Rule,
+    Deck,
+    Drop,
+}
+
+public enum CardBattleCheckKind
+{
+    None,
+    Make,
+    Ask,
 }
 
 public enum RoundOutcome
 {
     NextRound,
-    ExtraRound,
-    Draw,
+    FinalCard,
+    ExtraCards,
     Won,
 }
 
@@ -59,6 +86,9 @@ public static class CardBattleRules
     public const int MaxSameNumber = 2;
     public const int MaxSameType = 2;
     public const int RegularRounds = 4;
+    public const int FirstRound = 1;
+    public const int MaxExtraCards = 10;
+    public const byte ExtraCardFailed = 0x14;
     public const int StealPercent = 10;
     public const uint ResultUnused = 0;
     public const uint ResultWon = 1;
@@ -66,7 +96,13 @@ public static class CardBattleRules
     public const uint ResultDraw = 3;
     public const byte StealFlag = 1;
     public const int PerfectWins = 3;
+    public const int DisCheckMinBattles = 20;
+    public const float DisCheckMinPercent = 5.0f;
+    public const int DailyLimit = 15;
     public const ushort FirstPlayCount = 1;
+    public const int PhaseTimerMs = 40000;
+    public const int MaxPlays = 8;
+    public const int DisCheckMinRound = 3;
 
     public const byte CodeOk = 0;
     public const byte CodeNoBattle = 1;
@@ -109,6 +145,18 @@ public static class CardBattleRules
         ArgumentNullException.ThrowIfNull(deck);
         if (chanceUsed || !deck.Any(card => card.CardType == ChanceCardType && card.Result == ResultUnused)) return false;
         return (ownWins, otherWins) is (0, 1) or (1, 2) or (0, 2);
+    }
+
+    public static int WinPointsWon(int ownGrade, int opponentGrade)
+    {
+        var change = opponentGrade > ownGrade ? opponentGrade - ownGrade + 1 : 1;
+        return change + 2;
+    }
+
+    public static int WinPointsLost(int ownGrade, int opponentGrade)
+    {
+        if (ownGrade == opponentGrade) return -2;
+        return opponentGrade < ownGrade ? -(ownGrade - opponentGrade + 2) : -1;
     }
 
     public static bool Steals(int roll) => roll < StealPercent;
@@ -178,6 +226,9 @@ public sealed class BattleSide
     public ushort ClientId { get; }
     public string Name { get; }
     public int Level { get; }
+    public ushort GameLevel { get; set; }
+    public uint GameMoney { get; set; }
+    public uint GameEntityId { get; set; }
     public BattleCard[] Deck { get; set; } = Array.Empty<BattleCard>();
     public int? Dropped { get; set; }
     public bool ChanceUsed { get; set; }
@@ -186,12 +237,58 @@ public sealed class BattleSide
     public bool StatusReported { get; set; }
     public CardSpecialSetEntry? Set { get; set; }
     public CardBattlePayout Payout { get; set; }
+    public BattleCard? Extra { get; set; }
+    public List<BattleCard> ExtraCards { get; } = new();
+    public CardBattleStats Stats { get; set; } = CardBattleStats.Empty;
+
+    public bool OverDis => Stats.BattleCount >= CardBattleRules.DisCheckMinBattles
+        && (float)Stats.Dis / Stats.BattleCount * 100.0f >= CardBattleRules.DisCheckMinPercent;
+
+    public bool NoExperience => Stats.TotalBattleToday >= CardBattleRules.DailyLimit || Stats.OtherBattleToday >= CardBattleRules.DailyLimit;
 
     public uint ChanceCardItemId => ChanceUsed
         ? Deck.FirstOrDefault(card => card.CardType == CardBattleRules.ChanceCardType && card.Steal == CardBattleRules.StealFlag).ItemId
         : 0;
     public CardBattleRewardBlock Reward { get; set; } = CardBattleRewardBlock.None;
     public ScoreBlock Score { get; } = new();
+    public bool ResultPending { get; set; }
+    public CardBattleTimer TimerKind { get; private set; }
+    public int TimerMs { get; private set; }
+
+    public void StartTimer(CardBattleTimer kind)
+    {
+        TimerKind = kind;
+        TimerMs = kind == CardBattleTimer.None ? 0 : CardBattleRules.PhaseTimerMs;
+    }
+
+    public void StopTimer() => StartTimer(CardBattleTimer.None);
+
+    public void ResetForNextBattle()
+    {
+        Deck = Array.Empty<BattleCard>();
+        Dropped = null;
+        ChanceUsed = false;
+        ExitReserved = false;
+        ResultSeen = false;
+        StatusReported = false;
+        Set = null;
+        Payout = default;
+        Extra = null;
+        ExtraCards.Clear();
+        Reward = CardBattleRewardBlock.None;
+        Score.Reset();
+        StopTimer();
+    }
+
+    public CardBattleTimer Elapse(int elapsedMs)
+    {
+        if (TimerKind == CardBattleTimer.None) return CardBattleTimer.None;
+        TimerMs -= elapsedMs;
+        if (TimerMs >= 1) return CardBattleTimer.None;
+        var expired = TimerKind;
+        StopTimer();
+        return expired;
+    }
 }
 
 public sealed class CardBattleMatch
@@ -209,6 +306,33 @@ public sealed class CardBattleMatch
     public byte Rule { get; set; }
     public int Round { get; private set; }
     public BattleSide? Winner { get; private set; }
+    public CardBattleCheckKind Pending { get; set; }
+    public ushort PlayCount { get; set; } = CardBattleRules.FirstPlayCount;
+    public ushort ExitReservedBy { get; set; }
+    public ushort NoDeckClient { get; set; }
+    public ushort NextChooser { get; set; }
+    public ushort ExtraArrivedFrom { get; set; }
+
+    public bool CanContinue => NoDeckClient == 0 && ExitReservedBy == 0 && PlayCount < CardBattleRules.MaxPlays;
+
+    public void ResetForNextBattle()
+    {
+        Round = 0;
+        Winner = null;
+        Rule = 0;
+        NoDeckClient = 0;
+        NextChooser = 0;
+        ExtraArrivedFrom = 0;
+        State = BattleState.SelectRule;
+        Master.ResetForNextBattle();
+        Opponent?.ResetForNextBattle();
+    }
+
+    public void StartBattle()
+    {
+        State = BattleState.Battle;
+        Round = CardBattleRules.FirstRound;
+    }
 
     public BattleSide? Side(ulong characterId) =>
         Master.CharacterId == characterId ? Master : Opponent?.CharacterId == characterId ? Opponent : null;
@@ -232,36 +356,9 @@ public sealed class CardBattleMatch
     public (BattleSide? RoundWinner, RoundOutcome Outcome) Resolve()
     {
         if (Opponent is not { } opponent || Master.Dropped is not { } masterSlot || opponent.Dropped is not { } opponentSlot) throw new InvalidOperationException("Both cards are needed.");
-        var masterCard = Master.Deck[masterSlot];
-        var opponentCard = opponent.Deck[opponentSlot];
-        var compared = CardBattleRules.Compare(Rule, masterCard, opponentCard);
-        BattleSide? winner = compared > 0 ? Master : compared < 0 ? opponent : null;
-        if (winner is null)
-        {
-            Master.Deck[masterSlot] = masterCard with { Result = CardBattleRules.ResultDraw };
-            opponent.Deck[opponentSlot] = opponentCard with { Result = CardBattleRules.ResultDraw };
-            Master.Score.Streak = 0;
-            opponent.Score.Streak = 0;
-            Master.Score.LastDelta = 0;
-            opponent.Score.LastDelta = 0;
-        }
-        else
-        {
-            var loser = Other(winner)!;
-            var winnerCard = winner == Master ? masterCard : opponentCard;
-            var difference = (short)Math.Abs(masterCard.Number - opponentCard.Number);
-            winner.Score.Score += difference;
-            loser.Score.Score -= difference;
-            winner.Score.LastDelta = difference;
-            loser.Score.LastDelta = (short)-difference;
-            winner.Score.Wins++;
-            winner.Score.Streak++;
-            loser.Score.Streak = 0;
-            if (winnerCard.Steal == CardBattleRules.StealFlag && loser.Score.Wins > 0) loser.Score.Wins--;
-            if (winner.Score.Streak > 1) winner.Score.Score += (short)(winner.Set is null ? winner.Score.Streak : winner.Score.Streak * winner.Score.Streak);
-            Master.Deck[masterSlot] = masterCard with { Result = winner == Master ? CardBattleRules.ResultWon : CardBattleRules.ResultLost };
-            opponent.Deck[opponentSlot] = opponentCard with { Result = winner == opponent ? CardBattleRules.ResultWon : CardBattleRules.ResultLost };
-        }
+        var winner = Compare(Master.Deck[masterSlot], opponent.Deck[opponentSlot], out var masterCard, out var opponentCard);
+        Master.Deck[masterSlot] = masterCard;
+        opponent.Deck[opponentSlot] = opponentCard;
         Master.Dropped = null;
         opponent.Dropped = null;
         var outcome = Advance();
@@ -273,23 +370,88 @@ public sealed class CardBattleMatch
         return (winner, outcome);
     }
 
+    public bool BothExtraCards => Master.Extra is not null && Opponent?.Extra is not null;
+
+    public (BattleSide? RoundWinner, RoundOutcome Outcome) ResolveExtra()
+    {
+        if (Opponent is not { } opponent || Master.Extra is not { } masterExtra || opponent.Extra is not { } opponentExtra) throw new InvalidOperationException("Both extra cards are needed.");
+        var winner = Compare(masterExtra, opponentExtra, out var masterCard, out var opponentCard);
+        Master.Extra = masterCard;
+        opponent.Extra = opponentCard;
+        ExtraArrivedFrom = 0;
+        if (winner is null)
+        {
+            Round++;
+            Master.Extra = null;
+            opponent.Extra = null;
+            return (null, RoundOutcome.ExtraCards);
+        }
+        Winner = Master.Score.Wins > opponent.Score.Wins ? Master : opponent;
+        State = BattleState.Result;
+        return (winner, RoundOutcome.Won);
+    }
+
+    private BattleSide? Compare(BattleCard masterCard, BattleCard opponentCard, out BattleCard masterMarked, out BattleCard opponentMarked)
+    {
+        var opponent = Opponent!;
+        var compared = CardBattleRules.Compare(Rule, masterCard, opponentCard);
+        BattleSide? winner = compared > 0 ? Master : compared < 0 ? opponent : null;
+        if (winner is null)
+        {
+            masterMarked = masterCard with { Result = CardBattleRules.ResultDraw };
+            opponentMarked = opponentCard with { Result = CardBattleRules.ResultDraw };
+            Master.Score.Streak = 0;
+            opponent.Score.Streak = 0;
+            Master.Score.LastDelta = 0;
+            opponent.Score.LastDelta = 0;
+            return null;
+        }
+        var loser = Other(winner)!;
+        var winnerCard = winner == Master ? masterCard : opponentCard;
+        var difference = (short)Math.Abs(masterCard.Number - opponentCard.Number);
+        winner.Score.Score += difference;
+        loser.Score.Score -= difference;
+        winner.Score.LastDelta = difference;
+        loser.Score.LastDelta = (short)-difference;
+        winner.Score.Wins++;
+        winner.Score.Streak++;
+        loser.Score.Streak = 0;
+        if (winnerCard.Steal == CardBattleRules.StealFlag && loser.Score.Wins > 0) loser.Score.Wins--;
+        if (winner.Score.Streak > 1) winner.Score.Score += (short)(winner.Set is null ? winner.Score.Streak : winner.Score.Streak * winner.Score.Streak);
+        masterMarked = masterCard with { Result = winner == Master ? CardBattleRules.ResultWon : CardBattleRules.ResultLost };
+        opponentMarked = opponentCard with { Result = winner == opponent ? CardBattleRules.ResultWon : CardBattleRules.ResultLost };
+        return winner;
+    }
+
     private RoundOutcome Advance()
     {
         var opponent = Opponent!;
-        var extraRoundPlayed = Round >= CardBattleRules.RegularRounds;
-        if (!extraRoundPlayed)
-        {
-            Round++;
-            if (Round < CardBattleRules.RegularRounds) return RoundOutcome.NextRound;
-        }
+        var played = Round;
+        Round++;
+        if (played <= CardBattleRules.RegularRounds - 1) return RoundOutcome.NextRound;
         if (Master.Score.Wins == opponent.Score.Wins)
         {
-            if (!extraRoundPlayed) return RoundOutcome.ExtraRound;
-            State = BattleState.Result;
-            return RoundOutcome.Draw;
+            if (played == CardBattleRules.RegularRounds) return RoundOutcome.FinalCard;
+            State = BattleState.Extra;
+            return RoundOutcome.ExtraCards;
         }
         Winner = Master.Score.Wins > opponent.Score.Wins ? Master : opponent;
         State = BattleState.Result;
         return RoundOutcome.Won;
     }
+}
+
+public static class CardBattleCheckRules
+{
+    public const int MinLevel = 10;
+    public const int BagLimit = 0x12A;
+
+    public static bool Normal(PostureState posture, bool keepsShop, bool visitsShop, bool trading, bool dead, bool inCardBattle) =>
+        posture == PostureState.Standing && !keepsShop && !visitsShop && !trading && !dead && !inCardBattle;
+
+    public static bool LevelAllowed(int level) => level >= MinLevel;
+
+    public static bool MapAllowed(MapKindEntry? map) => map is { } kind && kind.Type is 1 or 2 or 5 && kind.Class != MapKindEntry.ParallelClass;
+
+    public static bool BagFull(int slotsInUse) => slotsInUse > BagLimit;
 }

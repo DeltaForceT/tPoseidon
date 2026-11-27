@@ -14,6 +14,7 @@ public sealed record ExchangePlayer
     public required Func<Character?> Character { get; init; }
     public required Func<StatManager?> Stats { get; init; }
     public Func<IReadOnlyList<TimedItem>, CancellationToken, Task>? TimedItemsGranted { get; init; }
+    public Func<int, Task>? SeedEvent { get; init; }
 }
 
 public sealed class ExchangeShopService
@@ -112,6 +113,7 @@ public sealed class ExchangeShopService
         await SendAsync(Opcode.S2C_EXCHANGED, ExchangeFrames.Exchanged(operations), ct).ConfigureAwait(false);
         if (_exchange.TakeTimedGrants() is { Count: > 0 } timedGrants && _player.TimedItemsGranted is { } announce) await announce(timedGrants, ct).ConfigureAwait(false);
         Console.WriteLine($"{_logTag} {_ctx.Remote}   exchange {offerId}: fee {offer.Fee}, {operations.Count} bag changes");
+        if (_player.SeedEvent is { } seedEvent) await seedEvent(tPoseidon.Core.Game.SoulSeed.SoulSeedRules.ExchangeEvent).ConfigureAwait(false);
     }
 
     public async Task CloseAsync(CancellationToken ct)

@@ -39,7 +39,7 @@ tPoseidon is in beta. These are the rules that matter. The full text is in [BETA
 
 ## Where it stands
 
-**Latest release: [0.89.0-beta](https://github.com/DeltaForceT/tPoseidon/releases/tag/v0.89.0-beta)** (2026-11-18): fixes from your reports and pull requests: My Camp's Out button, the Guardian Egg Bond Aura, Star Gazing (Fortune) bonuses, titles and expiry, Card Identification, Scorching Earth, Mana Web and Hinder Snare, fast attackers running ahead of the screen, skill cooldowns, Don Juvanni's eight-hit attack, the escort quest NPC, the O/X quiz, Full House, a monster sound that never stopped, and per-party boss rooms. Every change is in the [CHANGELOG](CHANGELOG.md).
+**Latest release: [0.90.0-beta](https://github.com/DeltaForceT/tPoseidon/releases/tag/v0.90.0-beta)** (2026-11-27): the panel can now update tPoseidon by itself, with signed releases, plus channel chat rooms, party boss rooms, a longer card battle, Soul Seed events and about 120 fixes from your reports: parties and party quests, guilds, card battle, My Camp and player shops, drilling and treasure maps, bosses and monster skills, PvP skills, refining and reforming, and Trick Fortune. Every change is in the [CHANGELOG](CHANGELOG.md).
 
 You can make a character and play through a good part of the game, but you will hit bugs and missing systems. [docs/beta/SYSTEMS.md](docs/beta/SYSTEMS.md) lists what works, what is built but needs testing, and what isn't built yet. Read it before you start. When something breaks, [How to report a bug](docs/beta/how-to-report-a-bug.md) explains what I need from you.
 
@@ -144,6 +144,14 @@ To give your players news, a banner and your own content files, drop them in the
 `tposeidon stop` shuts the servers down. Your settings are in `tposeidon.json` next to the program, and you can run `tposeidon setup` again whenever you want to change them.
 
 Opening your server to the internet? Read [Hosting securely](docs/install/hosting-securely.md) first: which ports to open, why floods need protection in front of the server, and how the connection guard and `tposeidon security` work.
+
+### Updating tPoseidon itself
+
+The panel checks for a new release when it starts and then every six hours. When there is one, a bar at the top of the panel says so and shows what is new. Click **Update now**: the panel warns your players in the game with a countdown, stops the servers, backs up the database, replaces the program files, starts everything again and checks that it works. If the new version does not start, it puts the old version and your backup back by itself. Your settings, database, server data, logs and backups are never touched.
+
+I sign every release. The panel only installs an update that is signed with my release key and whose files match the signed checksums, so a changed or fake download is refused before anything on your computer is changed.
+
+By default the panel only tells you and waits for your click. In **Updates > Update settings** you can turn that into notify only, or into automatic updates at an hour you choose, and pick the stable or the beta channel. On Linux or a headless server use `tposeidon update check` and `tposeidon update install`. [Updating tPoseidon](docs/install/updating.md) has the whole story.
 
 ## The control panel
 

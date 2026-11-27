@@ -4,6 +4,8 @@ namespace tPoseidon.Core.Data.Postgres;
 
 public sealed class PostgresCharStore : ICharStore
 {
+    public const string NameIndex = "characters_name_lower_key";
+
     private const string CharacterSelectColumns =
         "character_id, account_id, slot, name, species, ftype, job_tier, " +
         "hair, money, level, position_x, position_y, map_id, " +
@@ -74,6 +76,16 @@ public sealed class PostgresCharStore : ICharStore
     {
         ArgumentNullException.ThrowIfNull(character);
         using var conn = _dataSource.OpenConnectionForActiveSchema();
+        using var transaction = conn.BeginTransaction();
+        using (var lockCmd = new NpgsqlCommand("SELECT pg_advisory_xact_lock(hashtext('characters.name'))", conn, transaction))
+        {
+            lockCmd.ExecuteNonQuery();
+        }
+        using (var taken = new NpgsqlCommand("SELECT 1 FROM characters WHERE lower(name) = lower(@name) LIMIT 1", conn, transaction))
+        {
+            taken.Parameters.AddWithValue("name", character.Name);
+            if (taken.ExecuteScalar() is not null) throw new CharacterNameTakenException(character.Name);
+        }
         using var cmd = new NpgsqlCommand(
             """
             INSERT INTO characters
@@ -89,7 +101,8 @@ public sealed class PostgresCharStore : ICharStore
                  @pts_p, @pts_m, @pts_s, @pts_c,
                  @hp, @mp, @home)
             """,
-            conn);
+            conn,
+            transaction);
         cmd.Parameters.AddWithValue("character_id", unchecked((long)character.CharacterId));
         cmd.Parameters.AddWithValue("account_id", (long)character.OwnerAccountId);
         cmd.Parameters.AddWithValue("slot", (short)character.Slot);
@@ -116,6 +129,11 @@ public sealed class PostgresCharStore : ICharStore
         try
         {
             cmd.ExecuteNonQuery();
+            transaction.Commit();
+        }
+        catch (PostgresException ex) when (ex.SqlState == "23505" && ex.ConstraintName == NameIndex)
+        {
+            throw new CharacterNameTakenException(character.Name, ex);
         }
         catch (PostgresException ex) when (ex.SqlState == "23505")
         {

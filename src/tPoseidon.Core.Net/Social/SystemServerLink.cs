@@ -8,6 +8,7 @@ public sealed class SystemServerLink
 {
     private readonly ConcurrentDictionary<ulong, (ushort OrderId, PartyMirror Mirror)> _mirrors = new();
     private readonly ConcurrentDictionary<TridentSessionContext, ulong> _present = new();
+    private readonly ConcurrentDictionary<ulong, (DateTimeOffset At, ushort PartyId)> _departed = new();
     private readonly Func<IPAddress, bool> _isTrusted;
     private readonly Action<string> _log;
     private TridentSessionContext? _system;
@@ -23,6 +24,8 @@ public sealed class SystemServerLink
     public event Func<OfficerOrder, CancellationToken, Task>? OrderReceived;
 
     public event Func<ushort, OfficerOrder, CancellationToken, Task>? ZonedOrderReceived;
+
+    public event Action<ulong>? CharacterClosed;
 
     public event Func<ushort, ReadOnlyMemory<byte>, CancellationToken, Task>? MessageReceived;
 
@@ -92,6 +95,7 @@ public sealed class SystemServerLink
         if (_present.TryRemove(ctx, out var characterId))
         {
             _mirrors.TryRemove(characterId, out _);
+            CharacterClosed?.Invoke(characterId);
             await SendAsync(SystemLinkFrames.LoggedOut, SystemLinkFrames.Character(characterId), ct).ConfigureAwait(false);
         }
     }
@@ -106,8 +110,17 @@ public sealed class SystemServerLink
         return SendAsync(SystemLinkFrames.EnterZone, SystemLinkFrames.CharacterAndZone(characterId, zone), ct);
     }
 
-    public Task LeftZoneAsync(ulong characterId, ushort nextZone, CancellationToken ct) =>
-        SendAsync(SystemLinkFrames.LeaveZone, SystemLinkFrames.CharacterAndZone(characterId, nextZone), ct);
+    public ushort PartyIdOf(ulong characterId, DateTimeOffset now, TimeSpan timeToLive)
+    {
+        var departed = _departed.TryRemove(characterId, out var carried) && now - carried.At <= timeToLive ? carried.PartyId : (ushort)0;
+        return MirrorOf(characterId)?.PartyId ?? departed;
+    }
+
+    public Task LeftZoneAsync(ulong characterId, ushort nextZone, CancellationToken ct)
+    {
+        if (MirrorOf(characterId) is { PartyId: not 0 } mirror) _departed[characterId] = (DateTimeOffset.UtcNow, mirror.PartyId);
+        return SendAsync(SystemLinkFrames.LeaveZone, SystemLinkFrames.CharacterAndZone(characterId, nextZone), ct);
+    }
 
     public Task LevelChangedAsync(ulong characterId, uint level, CancellationToken ct) =>
         SendAsync(SystemLinkFrames.LevelChanged, SystemLinkFrames.CharacterAndLevel(characterId, level), ct);
@@ -140,6 +153,8 @@ public sealed class SystemServerLink
             return false;
         }
     }
+
+    internal Task ReceiveOrderAsync(ushort zone, OfficerOrder order, CancellationToken ct) => HandleAsync(zone, order, ct);
 
     private async Task HandleAsync(ushort zone, OfficerOrder order, CancellationToken ct)
     {

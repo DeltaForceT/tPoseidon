@@ -1,3 +1,5 @@
+using tPoseidon.Core.Data;
+using tPoseidon.Core.Game.Progression;
 using tPoseidon.Core.LibConfig;
 
 namespace tPoseidon.Core.Game.Fortune;
@@ -32,6 +34,8 @@ public sealed class FortuneRound
     public FortuneStep Step { get; private set; }
 
     public FortuneAward? Pending { get; private set; }
+
+    public FortuneAward? AwardToSave => Step == FortuneStep.Rolled ? Pending : null;
 
     public IReadOnlyList<ulong> JokerUids => _jokerUids;
 
@@ -86,6 +90,33 @@ public sealed class FortuneRound
 
 public static class FortuneHouse
 {
+    public static FortuneInfo Awarded(FortuneInfo info, FortuneAward award, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        ArgumentNullException.ThrowIfNull(award);
+        return info with
+        {
+            TitleId = award.TitleId,
+            ItemAttrString = award.Text,
+            ExpiresAt = now.AddSeconds(award.DurationSeconds),
+            UpdatedAt = now,
+        };
+    }
+
+    public const ushort FortuneProfileTitleType = 2;
+
+    public static ProfileTitle? ProfileTitleAfterAward(int titleId, ProfileTitle current)
+    {
+        if (titleId != 0) return new ProfileTitle(FortuneProfileTitleType, (ulong)titleId);
+        return current.TitleType == FortuneProfileTitleType ? ProfileTitle.None : null;
+    }
+
+    public static FortuneInfo AfterExpiry(FortuneInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        return info with { TitleId = 0, ItemAttrString = string.Empty };
+    }
+
     public const int BasicCardType = 35;
     public const int BasicCardSubType = 70;
     public const int MaxBasicCardNum = 3;
@@ -135,13 +166,14 @@ public static class FortuneHouse
     {
         ArgumentNullException.ThrowIfNull(rowsInOrder);
         var rows = rowsInOrder.Where(row => row.JokerProb > 0f).ToArray();
-        var sum = rows.Sum(row => (double)row.JokerProb);
+        var sum = 0f;
+        foreach (var row in rows) sum += row.JokerProb;
         var ranges = new List<FortuneJokerRange>(rows.Length);
         var lo = 0;
         foreach (var row in rows)
         {
-            var weight = sum > 1 ? row.JokerProb / sum : row.JokerProb;
-            var hi = lo + (int)Math.Round(weight * FortuneRules.RangeScale, MidpointRounding.AwayFromZero);
+            var weight = sum > 1f ? row.JokerProb / sum : row.JokerProb;
+            var hi = lo + (int)Math.Truncate((double)weight * FortuneRules.RangeScale);
             ranges.Add(new FortuneJokerRange(row.Id, lo, hi));
             lo = hi;
         }
